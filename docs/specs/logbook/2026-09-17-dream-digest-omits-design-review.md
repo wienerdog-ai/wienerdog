@@ -426,3 +426,88 @@ it had been applied at round 2 rather than round 5.
 **Nothing in this round was ruled on by the owner.** O1, O2 and O3 remain open;
 O3's text changed again and the rulings record still carries the pre-round-4
 wording, deliberately unedited.
+
+## Round 6 — the placement is corrected a second time: back under the lock
+
+| Field | Value |
+|-------|-------|
+| Backend / model | Codex plugin 1.0.6 adversarial-review, **`gpt-6-astra`** |
+| Tip reviewed | `b85f5496` · Base `2d5e2465` |
+| Raw output | `docs/specs/logbook/2026-09-17-dream-digest-omits-design-r6-astra-raw.json`, committed in **`1eb9c6d0`** before adjudication |
+| Verdict | `needs-attention`, 2 product + 1 machinery |
+| Confirmed | the **no-guard control-flow argument holds**; round 5's `readAlerts` and O3 corrections are supported; **step-19 bytes matched `main`** in the tested fixture; key citations resolve |
+| What it EXECUTED | production `run()` **with the proposed wiring**, the renderer and ledger functions, `readAlerts`, `clearAlerts`, `failLoud`, supervisor completion code, and `writeFilePrivate` — all with mocked I/O |
+
+### The second placement correction, recorded honestly
+
+**Round 5 moved the filtered render OUT of the dream lock in order to escape the
+recovery mechanism. Round 6 showed the lock was load-bearing.** Both rounds were
+right about what they were looking at and neither saw the whole: round 5 was
+solving "how do we stop needing a recovery render", round 6 asked "what does
+leaving the lock cost". **Option L′ keeps both gains** — the render is the last
+statement of `try A`'s BODY, after `finally B`'s `destroyWorkspace` and **before**
+`finally A`'s `ownsLock → cleanScratch → releaseLock`. No recovery mechanism, and
+no unlocked window.
+
+I re-read `run()` to check the new position rather than assuming it transferred:
+
+- **The no-guard property still holds**, and for the same reason — a `return`
+  inside `try A` jumps to `finally A` and skips the end of the body.
+- **The hoist is no longer needed.** At the end of `try A`'s body,
+  `regenerateDigest` (l.641) and `ledger` (l.618) are in the **same block**.
+  Round 5 needed a hoisted binding only because its statement sat after
+  `finally A`; L′ deletes that plumbing along with the problem it existed for.
+- **My round-5 exit inventory was incomplete, and the reviewer was right.**
+  `dream.js:740` — the dry-run arm inside step 6 — is a `return` I missed. Cause:
+  I generated that inventory with an **indentation-bounded** `awk` scan
+  (`^( {2}| {4}| {6})`), and l.740 sits four levels in at eight spaces, so the
+  scan silently excluded it. **A depth-bounded scan is not an inventory**; the
+  inventory in Table A is re-derived with no depth bound and now lists every
+  `return`/`throw` in `run()`: l.573, l.596, l.602 before `try A`; l.740, l.742,
+  l.756, l.767, l.785, l.871, l.899, l.932, l.980 inside it.
+
+### Findings, bands, weight, dispositions
+
+| # | Band | Weight | Finding | Disposition | Rationale and what changed |
+|---|------|--------|---------|-------------|----------------------------|
+| R6-1 | **A** | **HEAVY** | The unlocked render can erase a newer quarantine warning. `regenerateDigest` closes over **this run's** `ledger` (l.618, read at l.644) rather than re-reading state. Executed interleaving: A releases its lock; B records a new quarantine, publishes its banner, then fails for incomplete input; A's final render overwrites that banner from its older ledger. The quarantine stays active but vanishes from the injected digest. `main`'s serialized renders do not permit this ordering | **FIXED BY PLACEMENT** | Under the lock **no second dream can interleave at all**, so the closed-over ledger is current by construction. Stated in Table A, "Why the lock is load-bearing". The reviewer's requested regression is kept as a **placement** test: **AC7e** asserts `ownsLock(paths.state)` is still true at the moment the filtered write occurs, which makes "no second dream can interleave" a checked claim rather than an argument |
+| R6-2 | **A** | **HEAVY** | Ordinary concurrent writers can trigger false job failures, and **the claimed temp-substitution prerequisite is false**. Executing `writeFilePrivate` with a rename followed by a competing **legitimate** whole-file write before the lstat throws `WD_F10_POST_RENAME` with no attacker and no substituted temp. Measured supervisor consequence at exit 1: `last_success` unchanged, `last_status: error`, `clearAlerts` skipped, `job "dream" exited 1` appended | **FIXED BY PLACEMENT for dream-to-dream; the `sync` case is PRICED** | Dream-to-dream overlap is gone with the lock. What remains is `sync`, which is attended and **takes no dream lock** (my own round-5 measurement, now load-bearing in the other direction). Round 5's temp-substitution claim is **WITHDRAWN** in Table A, the residual bullet and O4. The exposure is stated as **pre-existing** — step 19 races the same writer today — with this WP adding **one more render per fully successful supervised run, hence one more window**. New owner item **O4** carries it; routed under **Discovered**; `writeFilePrivate` is not touched |
+| R6-3 | **B** | LIGHT (machinery) | Operative instructions still required the rejected design: the Deliverables row still said filter at step 19 / arm recovery / add two recovery sites; AC6c said step 19 omits the callout, contradicting AC7e's byte-identical unfiltered first write; and "exactly two writes" is not universal — a successful run with a newly quarantined input performs **three** | **FIX** | **And the cause is mine, worth recording.** My round-5 edit ran several replacements in one script; one assertion failed mid-script and the process exited **before writing the file**, so the three replacements ahead of it silently never landed. I then saw a later script print `ok` and treated the whole pass as applied. **A multi-edit script that aborts loses its earlier edits, and a later success does not certify an earlier one** — the same shape as the runbook's "read the value the tool produced, not the value the pipeline last touched". Every edit in this round was applied and **verified individually**. Deliverables, AC6/AC7 and the checklist are reconciled with L′; "exactly two" is replaced by **ONE ADDITIONAL filtered write**, with the total (two or three) depending on whether the early quarantine refresh ran, and AC7d asserts the count **against `main`'s for the same fixture** rather than against a literal |
+
+### Mirror walk
+
+Swept for every term the reviewer named — `exactly two`, `after the lock is
+released`, `last statement of run()`, `arming`, `two recovery sites`, `temp
+substitution` — and not for any one wording of them. Stale hits found and fixed:
+the top note's "last statement of `run()`", the Deliverables `dream.js` cell, the
+checklist's acceptance-criteria bullet and its operative-prose (e) entry. Two new
+mirrors registered: **O4** (mirrors Table A's *Residual 2*) and the
+write-count rule. Remaining matches for "exactly two" are unrelated (trailing
+newlines in the literal digest, the two digest feeders, the two uses of
+`WIENERDOG_JOB`).
+
+### Mechanical re-verification
+
+| Gate | absent | violating | compliant |
+|------|--------|-----------|-----------|
+| V3 | guarded by `test -f` | **rc 1** | **rc 0** |
+| V4a / V4b | **rc 1** (V4b) | **rc 1** | **rc 0** |
+| V5 | — | — | **rc 0** |
+| V6 (seven ids, unchanged this round) | **rc 1** | **rc 1** (renamed id) **and rc 1** on the round-4 list | **rc 0** |
+
+### Lesson
+
+Round 4: *reading is not evidence.* Round 5: *when a mechanism generates a finding
+every round, the finding is the mechanism.* Round 6 adds a third, and it is about
+my own method rather than the design: **a measurement is only as complete as the
+sweep that produced it, and a sweep with an unstated bound produces a confident
+wrong answer.** The exit inventory was the load-bearing evidence for "no guard is
+needed"; it was generated by a scan bounded to three indentation levels, and the
+bound was invisible in the result. The same class produced R6-3, where a script
+that died mid-way left edits unapplied and a later `ok` was read as covering
+them. Both are the runbook's existing rule — *read the value the tool produced* —
+applied to the tool being my own shell one-liner.
+
+**Nothing in this round was ruled on by the owner.** O1, O2, O3 and now **O4**
+are open. The rulings record still carries the pre-round-4 wording of O3 and is
+deliberately unedited by this pass.

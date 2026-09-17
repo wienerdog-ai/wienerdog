@@ -46,12 +46,23 @@ adrs: [ADR-0004, ADR-0012, ADR-0031, ADR-0042]
 > stderr diagnostic, a withdrawn preservation guarantee, compound-failure
 > handling, and a conservative alert-set fallback — because a recovery render
 > whose `readAlerts` silently returns `[]` **publishes an alert-free digest and
-> erases other jobs' callouts**. **That mechanism is REMOVED.** The filtered
-> render is now the **last statement of `run()`**, reached only by falling through
-> the whole function, so there is no window between it and a failure and nothing
-> to recover. Round 1's F2 disposition is reversed on five rounds of evidence, and
-> the reversal is recorded in the design-review logbook rather than quietly
-> applied.
+> erases other jobs' callouts**. **That mechanism is REMOVED.** Round 1's F2
+> disposition is reversed on five rounds of evidence, and the reversal is recorded
+> in the design-review logbook rather than quietly applied.
+>
+> **Round 6 (same reviewer, tip `b85f5496`) then corrected the PLACEMENT that
+> removal chose.** Round 5 put the filtered render after the outer `finally`, so
+> it ran **outside the dream lock**; round 6 measured that the lock was
+> load-bearing — unlocked, a second dream could record a new quarantine and
+> publish its banner while this run's stale closed-over `ledger` then overwrote
+> it, and dream-to-dream digest write races became possible where `main` has none.
+> **The render is therefore the last statement of `try A`'s BODY, under the
+> lock** — after the workspace teardown, before `cleanScratch`/`releaseLock` —
+> which keeps round 5's gain (no recovery mechanism) and restores the serialization
+> `main` has always had. Round 6 also found **`dream.js:740` missing from round 5's
+> exit inventory**: that inventory came from an indentation-bounded scan that
+> silently skipped anything nested more than three levels. A depth-bounded scan is
+> not an inventory, and the one in Table A is now re-derived with no depth bound.
 >
 > **The lesson, recorded because it is about the process and not this package:**
 > three rounds of one model approved a design whose two load-bearing assumptions
@@ -282,7 +293,7 @@ would fix it.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/dream.js | per Table A: give `regenerateDigest` a per-call flag defaulting to UNFILTERED; filter its alerts input at the step-19 site ONLY, under all THREE conjuncts including the per-record date test; capture the process start instant at the top of `run()`; **arm the recovery BEFORE the filtered render call** and add the second recovery site wrapping `finally A`'s body (l.1213-1222), plus the `catch A` that does not exist today; and add the `require('../scheduler/jobs')` the cross-check needs. The existing `WIENERDOG_DREAM_RUN_TOKEN` read at l.827-828 is re-used, not moved. No other behavior changes |
+| modify | src/cli/dream.js | per Table A: give `regenerateDigest` a per-call flag defaulting to UNFILTERED; **leave the l.724 refresh and step 19 (l.1182) UNFILTERED, byte-identical to `main`**; add ONE filtered call as **the last statement of `try A`'s body** — after the inner `try`/`finally` closes at l.1212, before `finally A` at l.1213 — so it runs while this process still holds the dream lock; apply all THREE conjuncts including the per-record date test; capture the process start instant at the top of `run()`; and add the `require('../scheduler/jobs')` the cross-check needs. **No `catch`, no arming flag, no second render site, no stderr diagnostic, no write counting, and no hoisted binding** (Table A, "No hoist is needed"). The existing `WIENERDOG_DREAM_RUN_TOKEN` read at l.827-828 is re-used, not moved. No other behavior changes |
 | modify | src/core/alert-ack.js | **comment only, zero code lines**: narrow the stale universal in `unacknowledgedAlerts`' JSDoc per Table B |
 | modify | tests/unit/dream-pipeline.test.js | cover the dream-layer acceptance criteria below (the implementer designs the cases) |
 | modify | tests/unit/scheduler-runjob.test.js | cover the run-job-layer acceptance criteria below |
@@ -321,13 +332,13 @@ The call sites, and the whole of the placement contract:
 | Call site | Flag | Why |
 |-----------|------|-----|
 | l.724, the quarantine-only refresh | **unfiltered** | unchanged from `main`; this run may still fail, and a record hidden here would be a genuine unresolved failure |
-| l.1182, step 19 | **unfiltered — unchanged from `main`, byte for byte** | the run has not finished: `destroyWorkspace`, `cleanScratch` and `releaseLock` are all still ahead of it and any of them can throw |
-| **NEW: after `finally A` closes (l.1222) and before `run()`'s brace (l.1223)** | **filtered** | the only statement reachable solely by falling through the whole of `run()`, so reaching it means the body AND both finalizers succeeded |
+| l.1182, step 19 | **unfiltered — unchanged from `main`, byte for byte** | the run has not finished: `destroyWorkspace` is still ahead of it and can throw |
+| **NEW: the last statement of `try A`'s body** — after the inner `try`/`finally` closes (l.1212), before `finally A` (l.1213) | **filtered** | reached only by falling out of the whole body, so the dream's work AND the workspace teardown both succeeded — **and it runs while this process still holds the dream lock** |
 
-The implementer hoists one binding to make the last call possible — `regenerateDigest`
-and `ledger` are both declared inside `try A` (l.641, l.618) — and adds no `catch`,
-no arming flag, no second site and no write counting (Table A, "The one real
-obstacle" and "Why there is no recovery render").
+`regenerateDigest` (l.641) and `ledger` (l.618) are declared in that same block,
+so the new statement sees both: **no hoisted binding, no `catch`, no arming flag,
+no second site, no write counting** (Table A, "No hoist is needed" and "Why there
+is no recovery render").
 
 Worked example. `config.yaml` defines `- name: dream / run: builtin:dream`;
 `state/alerts.jsonl` holds
@@ -388,14 +399,15 @@ declarations' `why` fields, the JSDoc in `alert-ack.js`).
 | Fact / rule | Value |
 |-------------|-------|
 | **THE PRINCIPLE** | **when in doubt the stale callout is SHOWN; a genuine one is never hidden.** Every unresolved question resolves to rendering the record: an unresolved name, an absent or malformed run token, an unreadable config, a lookup that throws, a render reached before this run's success is established, a failure after that render. The principle governs what **this process's own renders** show, which is all a render in `dream.js` can govern. It does **not** promise that a failure recorded after this process exits reaches the digest at all — that is a separate, pre-existing property of the product, stated in the "What reaches the digest for the dream's OWN failures" row and unresolved as owner item O3. Every other row of this table is an application of one of those two |
-| Where applied — **the filtered render is the LAST STATEMENT of `run()`** | the `regenerateDigest` closure in `src/cli/dream.js` and nowhere else. The closure takes an **explicit per-call flag whose default is UNFILTERED**, so a call site added later is safe by construction and a filtering call must say so at the call. **Step 19 (l.1182) stays exactly as it is on `main`: UNFILTERED**, as does the quarantine-only refresh (l.724). The filtering call is a **new, single call placed AFTER the outer `try`/`finally` block closes** — after `finally A` at l.1213-1222, before `run()`'s closing brace at l.1223. `src/cli/sync.js` is unchanged; **no third feeder of the digest's alerts array is created** |
-| When it may omit — **reached only by falling through, which means everything succeeded** | The filtered render runs only when control reaches the end of `run()` normally. That happens **only** when the whole body completed: steps 11-21, then `finally B`'s `destroyWorkspace` (l.1206-1212), then `finally A`'s `ownsLock → cleanScratch → releaseLock` (l.1213-1222), all without throwing. Nothing before that point omits anything, because until then the run may still fail and leave the record genuine |
-| **Why NO guard is needed, verified by reading the whole of `run()`** | Every other exit from `run()` is a `return` or a `throw`, and **neither falls through to a statement after a `try`/`finally`** — a `return` inside `try` executes the `finally` and then returns from the function; it does not resume after it. The complete exit inventory, measured on this tree: `throw` l.573 (mechanics-root entry gate) and l.596 (`owner-unknown` lock) and `return` l.602 (declined lock) are all **before** `try A` opens at l.608; inside it there are exactly three explicit exits — `throw` l.742 (no complete session admitted), `return` l.756 (nothing new to dream), `return` l.767 (dry-run) — plus any throw from deeper code (the step-8b containment halt, the brain, promotion, the finalizers). **The end of `try A`'s body is the end of the inner `try`/`finally`, whose last statement is step 21's summary**, so reaching it IS full success. A boolean success flag would therefore be redundant; the implementer adds none |
-| **The one real obstacle, and it is scope not control flow** | `regenerateDigest` is defined at l.641 **inside** `try A`, and it closes over `ledger`, declared at l.618 also inside `try A`. A statement after `finally A` cannot see either. So the implementer hoists **one binding** — declare it (e.g. `let renderFiltered = null;`) **before** `try A` and assign it where the closure exists — and the final statement calls it. This is the whole of the plumbing: no `catch`, no arming semantics, no second site, no counting. `paths`, `vaultDir` and `layout` are already outside the try (l.564, l.581, l.582) and need nothing |
-| **Two digest writes per fully successful supervised run — stated, and why it is acceptable** | A successful supervised dream now renders `digest.md` twice: step 19's write, **byte-identical to what `main` writes today**, and then the filtered write. The cost is one extra whole-file render — a handful of state reads plus one atomic temp+rename — at the end of a job that has just run a model for minutes. The correctness argument is that **both writes are whole-file atomic renders of current state through the same renderer**, differing only in the alerts array, so no partial or blended state is ever observable and the second simply supersedes the first. If a session's SessionStart hook reads the file in the window between them it sees **today's content** — the unfiltered, safe direction |
-| **The filtered render happens after the dream lock is released — what that does and does not change** | `finally A` releases the lock at l.1221, so the final render is unlocked. **Measured: `src/cli/sync.js` takes no dream lock at all** (no `acquireLock`/`ownsLock`/`releaseLock` anywhere in it), so an attended `sync` could always race a dream's digest write and this WP does not change that class. What is new is a narrow window in which another dream may already hold the lock while this one renders. In every combination the outcome is the same and is benign: **last writer wins**, each writer publishes a whole-file render of the state it read, and nothing partial is observable because `writeFilePrivate` is temp+rename. A loser's content is superseded, never corrupted, and the next render of either writer reconciles |
-| **If the final filtered render itself throws** | Two cases, and only the second is a residual. **(i) It throws before publishing** — the digest on disk is still what step 19 left: **unfiltered, today's bytes, the safe direction.** `run()` throws, the supervisor fails the job loud and appends a record, and that record is not in the digest — which is exactly the pre-existing property the "What reaches the digest" row already states. **(ii) It throws AFTER publishing** — `writeFilePrivate` renames at `src/core/private-fs.js` l.360 and only then verifies destination identity, throwing `WD_F10_POST_RENAME` at l.372 — the **filtered bytes are on disk** and the run still exits non-zero. **Named residual, and the only one this mechanism has:** a job certified failed whose digest is the successful-run digest. It is the same shape as B1 (a run whose work succeeded but which is certified failed because a write was refused), it needs a same-owner concurrent substitution of the temp file to occur at all, and no recovery is attempted — see "Why there is no recovery render" |
-| **Why there is no recovery render** (the mechanism rounds 1-4 built, now REMOVED) | Round 1's F2 asked for an unfiltered re-render on any post-filter failure. Across rounds 2-5 that one mechanism required: two call sites, an exactly-once guarantee spanning them, arming before the render, a fixed-text stderr diagnostic, a withdrawn preservation guarantee, compound-failure handling, and — round 5's finding — a conservative alert-set fallback, because an unfiltered re-render whose `readAlerts` silently returns `[]` **publishes an alert-free digest and erases OTHER jobs' callouts**. That is a mechanism whose surface grew every round, which `docs/runbooks/codex-review.md` names as the treadmill condition. **Placing the filtered render last removes the need for it entirely**: there is no window between the filtered write and a failure, because the filtered write is the last thing the run does |
+| Where applied — **the filtered render is the LAST STATEMENT OF `try A`'s BODY, under the dream lock** | the `regenerateDigest` closure in `src/cli/dream.js` and nowhere else. The closure takes an **explicit per-call flag whose default is UNFILTERED**, so a call site added later is safe by construction. **Step 19 (l.1182) and the quarantine-only refresh (l.724) stay exactly as `main` has them: UNFILTERED.** The filtering call is a **new, single statement placed after the inner `try`/`finally` closes at l.1212 and before `finally A` at l.1213** — i.e. the last thing `try A`'s body does. **It therefore runs while this process still holds the dream lock**, which `finally A` releases at l.1221. `src/cli/sync.js` is unchanged; **no third feeder of the digest's alerts array is created** |
+| When it may omit — **the body AND the workspace teardown both succeeded** | The filtered render runs only when control reaches the end of `try A`'s body normally: steps 11-21 completed, then `finally B`'s `destroyWorkspace` (l.1206-1212) completed, neither throwing. Nothing earlier omits anything, because until then the run may still fail and leave the record genuine. What is still AHEAD of it is only `finally A` — see "What can still fail after it" |
+| **Why the lock is load-bearing, and why round 5's placement was wrong** | Round 5 put this render **after** `finally A`, outside the lock. Round 6 measured two consequences and both are removed by moving it back inside. **(i) A stale ledger could erase a newer quarantine banner.** `regenerateDigest` closes over **this run's** `ledger` (declared l.618, read into the render at l.644) rather than re-reading state. Unlocked, a second dream could acquire the lock, record a new quarantine, publish its banner and then fail — and this run's later render would overwrite that banner from its older ledger, leaving the quarantine active but invisible. Under the lock **no second dream can interleave at all**, so the closed-over ledger is by construction still current: nothing else has changed it. **(ii) Dream-to-dream write races disappear**, because there is no concurrent dream to race. `main`'s serialized dream renders never permitted either ordering, and this WP must not introduce them |
+| **No hoist is needed** (round 5's obstacle is gone with the placement) | At the END of `try A`'s body, `regenerateDigest` (l.641) and `ledger` (l.618) are **in the same block** and therefore in scope, so the implementer declares nothing before `try A` and hoists nothing. `paths`, `vaultDir` and `layout` are outside the try anyway (l.564, l.581, l.582). Round 5's design needed a hoisted binding only because the statement sat after `finally A`; **L′ removes that plumbing along with the problem it existed for** |
+| **Why NO guard is needed — the COMPLETE exit inventory of `run()`** | Every other exit is a `return` or a `throw`, and **neither falls through to the end of the enclosing `try` body**: a `return` inside `try A` jumps straight to `finally A`, skipping the new statement. Measured on this tree, at **every** nesting depth: **before `try A`** (opens l.608) — `throw` l.573 (mechanics-root entry gate), `throw` l.596 (`owner-unknown` lock), `return` l.602 (declined lock). **Inside `try A`** — `return` **l.740** (the dry-run arm of step 6), `throw` l.742 (no complete session admitted), `return` l.756 (nothing new to dream), `return` l.767 (dry-run plan), `throw` l.785 (containment halt), `throw` l.871, `throw` l.899, `throw` l.932, `throw` l.980, plus any throw from deeper code. **l.740 was MISSING from round 5's inventory** — that inventory was produced by an indentation-bounded scan which silently excluded anything nested more than three levels, and l.740 sits four levels in. A depth-bounded scan is not an inventory; this one is re-derived with no depth bound. A success boolean would still be redundant: reaching the end of `try A`'s body already means everything before it succeeded |
+| **How many digest writes a run performs — NOT "exactly two"** | The rule is **ONE ADDITIONAL filtered write**, and the total depends on what else ran. A fully successful supervised run with **no** newly quarantined input writes **twice**: step 19, then the filtered render. A fully successful supervised run **with** a newly quarantined input writes **three** times, because the existing early refresh at l.724 also fires. Any run that does not reach the end of `try A`'s body writes whatever `main` would write and **nothing additional**. Round 5's spec asserted "exactly two" as a universal; **that is withdrawn** — round 6 measured the three-write case. The first write is byte-identical to `main`'s in every case, and every write is a whole-file atomic render through the same renderer, so no partial or blended state is observable |
+| **What can still fail AFTER the filtered render** | Only `finally A` (l.1213-1222), and its three statements were read: `ownsLock` (`src/core/dream/lock.js` l.96-103) catches everything and returns `false` on any error — **cannot throw**; `releaseLock` (l.77-85) wraps its body in `try`/`catch` and its JSDoc at l.74 says **"Never throws"** — confirmed by reading it; `cleanScratch` (`src/core/dream/scratch.js` l.163-165) is a **bare `fs.rmSync(scratchDirOf(stateDir), { recursive: true, force: true })` with no `try`/`catch`**, and `force: true` suppresses only ENOENT — so **EACCES, EBUSY or EPERM propagate**. **Residual 1, and it is the main one:** if `cleanScratch` throws after the filtered render, the run exits non-zero with the filtered digest already on disk. The dream's work succeeded, the digest reflects that, and the supervisor certifies the job failed — the same shape as B1 |
+| **Residual 2 — an ordinary concurrent `sync` can make a successful render throw** | Round 5 claimed a **temp substitution by a same-owner attacker** was the prerequisite for `WD_F10_POST_RENAME`. **That is false and is withdrawn.** `writeFilePrivate` renames at `src/core/private-fs.js` l.360 and lstats the destination at l.365; **any** writer that publishes its own whole-file render into `digest.md` in that window makes the identity check fail, with **no attacker and no substituted temp**. The writer that can do it is `wienerdog sync`, which **takes no dream lock at all** (measured: no `acquireLock`/`ownsLock`/`releaseLock` anywhere in `src/cli/sync.js`), so the lock does not exclude it. **This exposure is PRE-EXISTING**: step 19's render has exactly the same race with the same writer today. What this WP adds is **one more render per fully successful supervised run, and therefore one more window**. The consequence, as measured: the render throws → `run()` exits 1 → `last_success` is left unchanged, `last_status` becomes `error`, `clearAlerts` is **skipped**, and `job "dream" exited 1` is appended — a false failure for a run whose work succeeded. **Not fixed here**: the fix is in `writeFilePrivate`'s detection, which this WP does not own and which is deliberately detection-not-prevention. Owner item **O4**; routed under Discovered |
+| **Why there is no recovery render** (the mechanism rounds 1-4 built, now REMOVED) | Round 1's F2 asked for an unfiltered re-render on any post-filter failure. Across rounds 2-5 that one mechanism required two call sites, an exactly-once guarantee spanning them, arming before the render, a fixed-text stderr diagnostic, a withdrawn preservation guarantee, compound-failure handling, and — round 5's finding — a conservative alert-set fallback, because a re-render whose `readAlerts` silently returns `[]` **publishes an alert-free digest and erases OTHER jobs' callouts**. A mechanism that grows its surface every round is the treadmill `docs/runbooks/codex-review.md` names. **Making the filtered render the last statement of the locked body removes the need for it**: almost nothing runs after it, and what does is enumerated in the row above |
 | **A silent `readAlerts` failure renders an alert-free digest — on EVERY render, today included** | `readAlerts` returns `[]` when it cannot open the file (`src/core/alerts.js` l.157) **and** when `fstat`/`read` fails after opening (l.200, `catch { return []; }`). So any render whose alert read fails transiently publishes a digest with **no callouts at all**, for every job, while every record remains stored. **This is pre-existing and unchanged by this WP** — step 19 and `sync` have always had it — and what this WP does is expose it on **one more render per fully successful supervised run**. It is stated rather than fixed: making it fail closed would change `readAlerts`' contract and every caller's behaviour, which is a different work package. Routed under **Discovered** |
 | Filter position | applied to the **result** of `unacknowledgedAlerts(paths, readAlerts(paths))`, leaving that expression textually intact. Both orders yield the same set; this order is required so `alert-ack.js`'s standing claim that *both callers pass `readAlerts`* stays true (Table B narrows only the sentence that this WP actually falsifies) |
 | Resolved job name | **two conjuncts about the RUN, both required** (a third conjunct about each RECORD is the next row). (1) `process.env.WIENERDOG_JOB` names a job that `jobsLib.findJob(paths, thatValue)` returns with `run` exactly the string `builtin:dream`; AND (2) `process.env.WIENERDOG_DREAM_RUN_TOKEN` is present and passes **the same validation dream.js already applies to it** — `typeof === 'string'` and `/^[a-f0-9]{16}$/` (l.827-828), re-applied, not re-invented. Every other case resolves to **no name**: either variable absent, not a string, empty or malformed; a name `config.yaml` does not define; a job whose `run` is anything else |
@@ -471,9 +483,11 @@ added here on the spot:
       THREE conjuncts of its resolution rule (the two run-level ones and the
       per-record date test, AC5/AC6f), its failure direction, its per-site
       placement (AC6), the out-of-process class including the ordinary failure
-      (AC6c/AC6d/AC6e), and the recovery contract — armed early, both finalizers,
-      exactly once, no preservation claim (AC7a-AC7e); Table B's diff shape;
-      Table C's ids, MEASURED expectRed sets, criteria and count
+      (AC6c/AC6d/AC6e), and the last-statement-under-the-lock placement — not
+      reached on any early return or throw, reached exactly once on full success,
+      ONE ADDITIONAL filtered write, step 19 byte-identical to `main`, and
+      `ownsLock` still true at the moment it renders (AC7a-AC7g); Table B's diff
+      shape; Table C's ids, MEASURED expectRed sets, criteria and count
 - [ ] Verification commands (V3/V4 assert Table B, V5 asserts Table A's frozen
       template, V2/V6 assert Table C — V6's `want` array is the literal mirror of
       Table C's id column, **seven ids as of round 4**, and must be re-sorted
@@ -509,7 +523,10 @@ added here on the spot:
       out-of-process one (Table A, *What reaches the digest for the dream's OWN
       failures* and *Out-of-process failures are ONE class*, including its
       explicit withdrawal of round 1's sole-narrowing and finite-bound claims)
-      and the failed-recovery-render one (Table A, *Late in-process failure*);
+      and the TWO placement residuals — `cleanScratch` throwing after the render
+      (Table A, *What can still fail AFTER the filtered render*) and the ordinary
+      concurrent `sync` write (Table A, *Residual 2*, mirrored again in O4 and
+      under Discovered);
       (f) Implementation notes' "Named consequence" and Definition of done item
       3, which requires it in "Decisions made" (Table A, last row);
       (g) Implementation notes' "Config edited mid-run" and the
@@ -531,16 +548,19 @@ added here on the spot:
       fact, they record why two designs outside every table were refused.
 - [ ] "Dispatch precondition — owner items" O1, which mirrors Table A's
       *Supervisor correlate* and *Why this channel at all* rows, and whose
-      residual (a)/(b)/(c) mirror that row's two limits; and **O3, which mirrors
+      residual (a)/(b)/(c) mirror that row's two limits; **O3, which mirrors
       the whole of *What reaches the digest for the dream's OWN failures*,
-      including the `doctor` measurement and the no-finite-bound statement**
+      including the `doctor` measurement and the no-finite-bound statement**; and
+      **O4, which mirrors *Residual 2* — the rename/lstat window, `sync` holding
+      no dream lock, the withdrawal of the temp-substitution prerequisite, and the
+      measured exit-1 consequence**
 - [ ] Context: the WP-041 quote and the statement that its accepted lag is
       withdrawn while its prohibition is kept
 
 ## Dispatch precondition — owner items
 
-Three decisions in this package are the owner's. **The owner has ruled on none
-of them directly.** Each is dispatched under this repo's standing process — *the
+Four decisions in this package are the owner's. **The owner has ruled on none of
+them directly.** Each is dispatched under this repo's standing process — *the
 maturing architect records a recommendation with the cost of overruling it, the
 session may dispatch under that recommendation, and the owner reverses any of
 them by dated amendment* — settled in
@@ -744,6 +764,40 @@ class to the alert record so survivor alerts can be excluded from omission" — 
 second is the honest fix for (b) and is a schema change to `alerts.jsonl` with its
 own migration question.
 
+### O4 — is one more `digest.md` write per successful dream an acceptable added race window?
+
+**The question.** `writeFilePrivate` renames into place (`src/core/private-fs.js`
+l.360) and then lstats the destination to confirm it is the inode it wrote
+(l.365), throwing `WD_F10_POST_RENAME` if not. That check is
+**detection-not-prevention** by design, and it does not distinguish a hostile
+temp substitution from an ordinary writer that legitimately published its own
+render in the same window. `wienerdog sync` is exactly such a writer and **takes
+no dream lock**, so no lock excludes it. **The race is pre-existing** — step 19's
+render has it today — and this WP adds **one more render per fully successful
+supervised run**, therefore one more window. When it fires the run exits 1, and
+the measured consequence is `last_success` unchanged, `last_status: error`,
+`clearAlerts` skipped, and `job "dream" exited 1` appended: **a false failure
+alert for a run whose work succeeded**. Is the added window acceptable?
+
+**Recommendation: yes, accept it here and fix it where it belongs, if at all.**
+It requires an attended `sync` to land inside a sub-millisecond window at the end
+of a nightly dream; the failure is loud rather than silent; the dream's work is
+already committed and the vault is unaffected; and the next successful run clears
+the alert. The honest fix is to make `writeFilePrivate` tolerate a legitimate
+concurrent replacement — a change to a security-relevant detector used by every
+private writer in the product, which is its own work package with its own threat
+argument. Doing it inside this WP would mean editing a file that is not a
+Deliverable and weakening a check this WP did not design.
+
+**Overrule cost.** If the owner rules the added window unacceptable, the smallest
+honest fix is not in this WP either: it is either the `writeFilePrivate` change
+above, or making `sync` take the dream lock — which changes the locking contract
+for an attended command and can make `sync` refuse while a dream runs, a
+user-visible behaviour change. Either way this WP's Table A placement rows and
+AC7 survive unchanged; what changes is whether it may add a second render at all,
+and if the answer is no the WP reverts to a single filtered render at step 19 and
+re-acquires all of round 5's problems.
+
 ## Implementation notes & constraints
 
 - Zero new dependencies; plain Node ≥ 18; JSDoc types; no build step (CLAUDE.md).
@@ -771,17 +825,26 @@ own migration question.
   3. **Step 19 reverts to the UNFILTERED call** — byte-identical to `main`'s
      `regenerateDigest();` at l.1182. Your `regenerateDigest({omitOwnJobAlerts:true})`
      there is removed.
-  4. **One new call goes AFTER the outer `finally`** (after l.1222, before
-     l.1223), passing the filtering flag. To make it reachable, hoist one binding
-     before `try A` and assign it where `regenerateDigest` is defined — that is
-     the only plumbing (Table A, "The one real obstacle").
-  5. **AC7 is entirely different**: it no longer counts recovery attempts; it
-     proves the filtered render is NOT reached on six failure/early-return paths
-     and IS reached exactly once on full success, with step 19's write
-     byte-identical to `main`'s.
+  4. **One new call becomes the LAST STATEMENT OF `try A`'s BODY** — after the
+     inner `try`/`finally` closes at l.1212, before `finally A` at l.1213 —
+     passing the filtering flag. **It must run while the dream lock is still
+     held**; `finally A` releases it at l.1221. **No hoisted binding is needed**:
+     `regenerateDigest` (l.641) and `ledger` (l.618) are in that same block.
+     (If you already built round 5's "after `finally A`" placement plus a hoisted
+     binding, remove both — round 6 measured that the lock is load-bearing.)
+  5. **AC7 is entirely different**: it no longer counts recovery attempts. It
+     proves the filtered render is NOT reached on the early returns and throws —
+     including **l.740**, the step-6 dry-run arm, which round 5's exit inventory
+     missed — IS reached exactly once on full success as **one ADDITIONAL write**
+     measured against `main` for the same fixture, happens while `ownsLock` is
+     still true, and still happens when `cleanScratch` later throws.
   6. **Table C's `expectRed` sets are the measured ones**, including the AC4+AC8
      pair your run surfaced; `dream-digest-no-recovery-render` is replaced by
      `dream-digest-filter-at-step-nineteen`.
+  7. **Two claims the earlier text made are withdrawn** and must not reappear in
+     your tests: "exactly two digest writes" (a run with a newly quarantined input
+     performs three) and "a temp substitution is the prerequisite for
+     `WD_F10_POST_RENAME`" (an ordinary concurrent `sync` write suffices).
   Your measured red sets for the five declarations that survive are unchanged and
   are carried into Table C as measurements.
 - **Test seams that bracket the render exactly**, measured on the paused branch:
@@ -834,17 +897,32 @@ own migration question.
   widen this WP to chase it — the honest fix is supervisor-side, rejected
   alternative A forbids the obvious one, and whether the change is acceptable at
   all is owner item **O3**.
-- **Named residual — the final filtered render can publish and then throw**
-  (Table A, "If the final filtered render itself throws", case (ii)). Rounds 2-4
-  built a recovery mechanism for the much larger class this used to be; **that
-  mechanism is removed** and the class has shrunk to one narrow case: the filtered
-  render renames successfully and `writeFilePrivate`'s post-rename identity check
-  then throws (`src/core/private-fs.js` l.360 → l.372), leaving the filtered bytes
-  on disk while the run exits non-zero. It needs a same-owner concurrent
-  substitution of the temp file to happen at all, it is the same shape as B1 (work
-  succeeded, run certified failed because a write was refused), and no recovery is
-  attempted. Everything else that used to be in this residual is gone by
-  construction: a failure anywhere else means the filtered render never ran.
+- **Named residual 1 — `cleanScratch` can throw after the filtered render**
+  (Table A, "What can still fail AFTER the filtered render"). Under L′ the only
+  code left after the filtered write is `finally A`, and of its three statements
+  only one can throw: `cleanScratch` is a bare
+  `fs.rmSync(scratchDirOf(stateDir), { recursive: true, force: true })`
+  (`src/core/dream/scratch.js` l.163-165) with no `try`/`catch`, and `force: true`
+  suppresses only ENOENT — EACCES, EBUSY and EPERM propagate. `ownsLock`
+  (`src/core/dream/lock.js` l.96-103) and `releaseLock` (l.77-85, JSDoc l.74
+  "Never throws") both catch everything. So: the dream's work succeeded, the
+  filtered digest is on disk, and the supervisor certifies the job failed — the
+  same shape as B1, and AC7g pins it. Not fixed here: making `cleanScratch`
+  best-effort changes teardown semantics this WP does not own.
+- **Named residual 2 — an ordinary concurrent `sync` can make a successful render
+  throw** (Table A, "Residual 2"). **Round 5's claim that a same-owner attacker's
+  temp substitution was the prerequisite is WITHDRAWN**: `writeFilePrivate`
+  renames at `src/core/private-fs.js` l.360 and lstats at l.365, and **any**
+  writer publishing its own whole-file render into `digest.md` in that window
+  fails the identity check. `wienerdog sync` is such a writer and **takes no dream
+  lock at all**, so the lock does not exclude it. The exposure is **pre-existing**
+  — step 19's render races the same writer today — and this WP adds one more
+  render per fully successful supervised run, hence one more window. Measured
+  consequence: exit 1, `last_success` unchanged, `last_status: error`,
+  `clearAlerts` skipped, `job "dream" exited 1` appended. Whether that added
+  window is acceptable is **owner item O4**; the fix would be in
+  `writeFilePrivate`, which is deliberately detection-not-prevention and which
+  this WP does not own.
 - **Named consequence — the managed-policy hook warning loses its banner**
   (Table A, last row). Today `run-job` l.953 appends it under the job's own name
   before the spawn and the job's success clears it, so on a managed machine its
@@ -968,33 +1046,39 @@ Numbered so Table C's declarations and the verification steps can name them.
       record whose `at` is missing or unparseable is **shown**, and a record whose
       `at` equals the start instant is **shown**.
 
-- [ ] **AC7 — the filtered render is the last statement, and only a fully
-      successful run reaches it** (Table A, "Where applied" / "When it may omit"
-      / "Why NO guard is needed"). Each sub-criterion asserts the CONTENT of
-      `state/digest.md` at the end of the run, and the ones that say "not
-      reached" assert the digest still carries the own-job callout.
-      **NOT reached** — inject a failure at each of these and assert the digest
-      is the unfiltered one step 19 (or l.724) left:
+- [ ] **AC7 — the filtered render is the last statement of the locked body, and
+      only a fully successful run reaches it** (Table A, "Where applied", "Why the
+      lock is load-bearing", "Why NO guard is needed"). Each sub-criterion
+      asserts the CONTENT of `state/digest.md` at the end of the run; the
+      "not reached" ones assert the digest still carries the own-job callout.
+      **NOT reached** — inject each of these and assert **no additional digest
+      write happens** and the digest is the unfiltered one `main` would leave:
       **(AC7a)** the body throws after step 19 (steps 20-21);
       **(AC7b)** `destroyWorkspace` throws (`src/cli/dream.js` l.1211, inside
       `finally B` at l.1206-1212);
-      **(AC7c)** `cleanScratch` or `releaseLock` throws (l.1220 / l.1221, inside
-      `finally A` at l.1213-1222);
-      **(AC7d)** the run returns early — *nothing new to dream* (l.756), the
-      dry-run return (l.767), and the declined-lock return (l.602): in each the
-      filtered render performs **no digest write at all**.
+      **(AC7c)** the run returns early — the step-6 dry-run arm (**l.740**), the
+      no-complete-input throw (l.742), *nothing new to dream* (l.756), the
+      dry-run plan return (l.767), and the declined-lock return (l.602).
       **Reached** —
-      **(AC7e)** on a fully successful supervised run the filtered render happens
-      **exactly once**: observe the actual digest WRITES and assert there are
-      exactly two for the run, the first byte-identical to what this same fixture
-      produces on `main` (Table A, "Two digest writes per fully successful
-      supervised run") and the second the filtered one.
-      **(AC7f)** a compound failure — the body AND a finalizer both throw —
-      still performs **no** filtered write, and the error that propagates is the
-      one the unmodified code would propagate. This case exists because round 5
-      found that a two-site recovery mechanism could fire twice and swallow the
-      first error; the last-statement design has no second site to disagree with,
-      and this criterion is what proves that claim rather than asserting it.
+      **(AC7d)** on a fully successful supervised run the filtered render happens
+      **exactly once**, observed as actual digest WRITES: **one ADDITIONAL write**
+      beyond what `main` performs for the same fixture, with the step-19 write
+      byte-identical to `main`'s. Assert the count against `main`'s for the SAME
+      fixture rather than against a literal — a run with a newly quarantined input
+      performs three writes and one without performs two (Table A, "How many
+      digest writes a run performs").
+      **(AC7e)** **the render happens while the lock is still held**: at the
+      moment the filtered write occurs, `ownsLock(paths.state)` is still true.
+      This is the regression for round 6's stale-ledger finding and it is what
+      makes "no second dream can interleave" a checked claim rather than an
+      argument.
+      **(AC7f)** a compound failure — the body AND `destroyWorkspace` both throw —
+      still performs **no** additional write, and the error that propagates is the
+      one the unmodified code would propagate.
+      **(AC7g)** `cleanScratch` throws (`src/core/dream/scratch.js` l.163-165,
+      inside `finally A`): the filtered write **did** happen, the digest on disk
+      is the filtered one, and the run still exits non-zero. This pins Table A's
+      Residual 1 rather than leaving it unstated.
       **Verified by V1.**
 - [ ] **AC8 — nothing throws out of the filter** (Table A, failure direction): a
       run whose config is missing or unreadable still renders a digest, and
@@ -1132,6 +1216,21 @@ node scripts/boundary-check.js docs/specs/WP-dream-digest-omits-own-job-alerts.m
   is to expose it on one additional render per fully successful supervised run.
   A separate WP should decide whether `readAlerts` should distinguish "no alerts"
   from "could not read alerts", and what the digest should say in the second case.
+- **`writeFilePrivate`'s post-rename identity check cannot tell a hostile temp
+  substitution from an ordinary concurrent writer.** `src/core/private-fs.js`
+  renames at l.360 and lstats at l.365, throwing `WD_F10_POST_RENAME` (l.372)
+  whenever the destination is no longer the inode it wrote — which is equally
+  true when `wienerdog sync` legitimately publishes its own whole-file render in
+  that window. Design round 6 reproduced this by executing `writeFilePrivate`
+  with a competing legitimate write between the rename and the lstat: no
+  attacker, no substituted temp, and the competing writer's bytes correctly on
+  disk. The check is deliberately detection-not-prevention, so this is a known
+  design limit rather than a bug, but the **consequence** — a false job-failure
+  alert for a run whose work succeeded — is worth its own decision. **Pre-existing
+  and not introduced here**; this WP only adds one more render per fully
+  successful supervised run, and prices that as owner item **O4**. A separate WP
+  should decide whether the detector can distinguish the two cases, or whether
+  the writers that can collide should be serialized instead.
 
 ## Definition of done
 
