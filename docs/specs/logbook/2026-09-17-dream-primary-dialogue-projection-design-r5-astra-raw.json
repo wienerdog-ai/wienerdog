@@ -1,0 +1,23 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b132-a060-7f63-9781-2211e46fa171",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c94e0e66664e482a16e7ff820a9ba87d20a5dae7",
+    "baseRef": "c94e0e66664e482a16e7ff820a9ba87d20a5dae7",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "approve",
+    "summary": "Approve the design: the round-4 flaw is substantively fixed. No assistant-false counterexample outside the named residuals and owner items was demonstrated.",
+    "findings": [],
+    "next_steps": [
+      "Executed real parseWithOutcome, both harness parsers and streamLines using an in-memory filesystem shim. Missing-type and type=7 paired results disappear silently in today's parser; the valid control survives as tool_result. The revised independent model marks the following conclusion true in all three cases.",
+      "Verified step-2 suppression: malformed Claude and Codex answer records emit no dialogue, even alongside valid answer text; subsequent conclusions are tainted. The governing clauses are docs/specs/WP-dream-primary-dialogue-projection.md:359–362.",
+      "An independently reconstructed 35-case set reproduces the reported V0/V1/V2 mismatch counts of 8/2/0, including every named failure and control. Another 245 adversarial combinations and 14 real-reader gap probes found no uncovered bypass. Three existing golden comparisons and wrapper-equality checks passed.",
+      "Machinery limitation, nonblocking: the logbook preserves aggregate results but not the authors' complete inputs or executable model. Exact agreement on every original sequence cannot be certified. Preserve those artifacts for reproducible comparison.",
+      "Read the scoped diff, round-4 raw, parser/reader code and cited gate/prompt sections. Checked file:line citations resolve on this tree. parsePrimaryWithOutcome remains absent: proposed behavior was executed only in the independent model. No full suite, private-transcript sampling or file changes."
+    ]
+  }
+}
