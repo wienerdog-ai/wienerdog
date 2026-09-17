@@ -25,6 +25,11 @@ const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
 const { unacknowledgedAlerts } = require('../core/alert-ack');
+
+// How far past its own deadline a `busy` lock may sit before the dream fails
+// loud instead of quietly exiting 0 (Table S4, WP-dream-lock-stale-owner-loud).
+// Internal name only; the user-facing diagnosis is "overdue" (S5).
+const STALE_LOCK_ALERT_MS = 6 * 60 * 60 * 1000;
 const {
   makeGates,
   assertGitRepo,
@@ -535,7 +540,8 @@ async function runBrainWithWatchdog(o) {
  * wienerdog dream [--dry-run] [--yes]
  * Exit 0 = success, "another dream running", or "nothing to dream".
  * Exit 1 = expected failure (WienerdogError): no vault, dirty tree, brain
- *          failure/timeout, git error.
+ *          failure/timeout, git error, an unverifiable lock owner, or a
+ *          dream lock overdue past its stale-alert bound.
  * @param {string[]} argv
  * @param {{skipContainmentProbe?:boolean, probeCmd?:string, now?:Date,
  *          platform?:NodeJS.Platform,
@@ -596,6 +602,20 @@ async function run(argv, opts = {}) {
       throw new WienerdogError(
         'dream lock owner could not be verified; no takeover was attempted. ' +
           'Check whether an earlier dream is still running before arranging lock recovery.'
+      );
+    }
+    if (lock.staleForMs > STALE_LOCK_ALERT_MS) {
+      const hours = Math.min(Math.floor(lock.staleForMs / 3600000), 9999);
+      const lockFile = path.join(paths.state, 'dream.lock');
+      throw new WienerdogError(
+        `dream lock is overdue: it has been held for more than ${hours} hours past its own time limit, ` +
+          'so this dream did not start. The dream that took the lock may still be working, or it may have ' +
+          'stopped without releasing it — Wienerdog cannot tell which from here. If it is still working it ' +
+          'will release the lock when it finishes, and these messages will stop on their own. If they keep ' +
+          'coming, restarting this computer ends whatever is holding the lock — including a dream that is ' +
+          'still working — and Wienerdog normally clears the lock by itself the next time it runs. The lock ' +
+          `is the file ${lockFile}. Removing it by hand is only safe while no dream is running, so have ` +
+          'someone check that first rather than deleting it on a guess.'
       );
     }
     console.log('wienerdog: another dream holds the lock.');

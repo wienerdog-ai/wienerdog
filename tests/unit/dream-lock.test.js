@@ -35,7 +35,14 @@ test('dream-lock: an expired live local owner keeps its lock on repeated attempt
   const file = path.join(state, 'dream.lock');
   const before = fs.readFileSync(file);
   for (let i = 0; i < 2; i++) {
-    assert.deepEqual(acquireLock(state, 60_000), { acquired: false, stolen: false, reason: 'busy' });
+    // Real clock (not mocked): staleForMs is a small non-negative number, not
+    // a fixed value, so its shape is checked rather than deep-equalled.
+    const result = acquireLock(state, 60_000);
+    assert.equal(result.acquired, false);
+    assert.equal(result.stolen, false);
+    assert.equal(result.reason, 'busy');
+    assert.equal(typeof result.staleForMs, 'number');
+    assert.ok(result.staleForMs >= 0);
     assert.deepEqual(fs.readFileSync(file), before);
   }
 });
@@ -73,11 +80,52 @@ for (const deadline of [FIXED_NOW, FIXED_NOW + 1]) {
     const file = seedLock(state, bytes);
     t.mock.method(Date, 'now', () => FIXED_NOW);
     const probe = t.mock.method(process, 'kill', () => { throw new Error('must not probe'); });
-    assert.deepEqual(acquireLock(state, 60_000), { acquired: false, stolen: false, reason: 'busy' });
+    assert.deepEqual(acquireLock(state, 60_000),
+      { acquired: false, stolen: false, reason: 'busy', staleForMs: FIXED_NOW - deadline });
     assert.equal(probe.mock.callCount(), 0);
     assert.equal(fs.readFileSync(file, 'utf8'), bytes);
   });
 }
+
+const FAR_FUTURE_DEADLINE = FIXED_NOW + 86400001; // 24h + 1ms ahead: refused, not trusted as busy.
+const AT_CAP_DEADLINE = FIXED_NOW + 86400000; // exactly 24h ahead: not refused (comparison is strict).
+
+test('dream-lock: a deadline more than 24h ahead is refused as owner-unknown, unprobed', (t) => {
+  const state = tempState();
+  const bytes = JSON.stringify({ host: os.hostname(), pid: 12345, deadline: FAR_FUTURE_DEADLINE });
+  const file = seedLock(state, bytes);
+  t.mock.method(Date, 'now', () => FIXED_NOW);
+  const probe = t.mock.method(process, 'kill', () => { throw new Error('must not probe'); });
+  assert.deepEqual(acquireLock(state, 60_000), { acquired: false, stolen: false, reason: 'owner-unknown' },
+    'a deadline more than 24h ahead must be refused as owner-unknown, not trusted as busy');
+  assert.equal(probe.mock.callCount(), 0);
+  assert.equal(fs.readFileSync(file, 'utf8'), bytes);
+});
+
+test('dream-lock: a deadline exactly 24h ahead is not refused', (t) => {
+  const state = tempState();
+  const bytes = JSON.stringify({ host: 'foreign', pid: 0, deadline: AT_CAP_DEADLINE });
+  const file = seedLock(state, bytes);
+  t.mock.method(Date, 'now', () => FIXED_NOW);
+  assert.deepEqual(acquireLock(state, 60_000),
+    { acquired: false, stolen: false, reason: 'busy', staleForMs: FIXED_NOW - AT_CAP_DEADLINE },
+    'a deadline exactly 24h ahead must not be refused — the S3 comparison is strict');
+  assert.equal(fs.readFileSync(file, 'utf8'), bytes);
+});
+
+test('dream-lock: the 24h refusal is unaffected by a large configured timeoutMs', (t) => {
+  const state = tempState();
+  const bytes = JSON.stringify({ host: os.hostname(), pid: 12345, deadline: FAR_FUTURE_DEADLINE });
+  const file = seedLock(state, bytes);
+  t.mock.method(Date, 'now', () => FIXED_NOW);
+  const probe = t.mock.method(process, 'kill', () => { throw new Error('must not probe'); });
+  // dream_timeout_minutes 28,800 = 20 days, in ms — the contender's own timeoutMs
+  // is used only for its own future deadline, never for this refusal (S3).
+  assert.deepEqual(acquireLock(state, 28_800 * 60_000), { acquired: false, stolen: false, reason: 'owner-unknown' },
+    'the 24h refusal must not depend on the contender\'s own configured timeoutMs');
+  assert.equal(probe.mock.callCount(), 0);
+  assert.equal(fs.readFileSync(file, 'utf8'), bytes);
+});
 
 const unknownRecords = [
   ['malformed JSON', 'not json'], ['null', 'null'], ['array', '[]'],
@@ -137,7 +185,11 @@ for (const [outcome, reason] of [[null, 'busy'], ['EPERM', 'busy'], ['ESRCH', nu
       calls.push([pid, signal]);
       if (outcome !== null) throw Object.assign(new Error('probe failed'), { code: outcome });
     });
-    const expected = reason ? { acquired: false, stolen: false, reason } : { acquired: true, stolen: true };
+    const expected = !reason
+      ? { acquired: true, stolen: true }
+      : reason === 'busy'
+        ? { acquired: false, stolen: false, reason, staleForMs: FIXED_NOW - localOwner.deadline }
+        : { acquired: false, stolen: false, reason };
     assert.deepEqual(acquireLock(state, 60_000), expected);
     assert.deepEqual(calls, [[12345, 0]]);
     if (reason) assert.equal(fs.readFileSync(file, 'utf8'), bytes);
@@ -151,7 +203,8 @@ for (const pid of [1, 2147483647]) {
     seedLock(state, JSON.stringify({ ...localOwner, pid }));
     t.mock.method(Date, 'now', () => FIXED_NOW);
     const probe = t.mock.method(process, 'kill', () => {});
-    assert.deepEqual(acquireLock(state, 60_000), { acquired: false, stolen: false, reason: 'busy' });
+    assert.deepEqual(acquireLock(state, 60_000),
+      { acquired: false, stolen: false, reason: 'busy', staleForMs: FIXED_NOW - localOwner.deadline });
     assert.deepEqual(probe.mock.calls.map((c) => c.arguments), [[pid, 0]]);
   });
 }

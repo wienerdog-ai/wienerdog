@@ -1,0 +1,45 @@
+{
+  "suite": "tests/unit/dream-lock.test.js",
+  "proofs": [
+    {
+      "id": "s3-cap-removed",
+      "wp": "WP-dream-lock-stale-owner-loud",
+      "criterion": "3",
+      "why": "removing S3's absolute 24h refusal outright lets a far-future deadline fall through to the ordinary now<=deadline busy branch, which the far-future test and the large-timeoutMs test both catch — the latter proves the refusal is independent of the contender's own configured timeout, not merely of the default one",
+      "file": "src/core/dream/lock.js",
+      "find": "  if (existing.deadline - now > 86400000) return unknown;",
+      "replace": "  // RP_MUT_S3_CAP_REMOVED: if (existing.deadline - now > 86400000) return unknown;",
+      "marker": "RP_MUT_S3_CAP_REMOVED",
+      "occurrences": 1,
+      "testNamePattern": "24h",
+      "expectRed": [
+        {
+          "test": ["dream-lock: a deadline more than 24h ahead is refused as owner-unknown, unprobed"],
+          "signal": "a deadline more than 24h ahead must be refused as owner-unknown, not trusted as busy"
+        },
+        {
+          "test": ["dream-lock: the 24h refusal is unaffected by a large configured timeoutMs"],
+          "signal": "the 24h refusal must not depend on the contender's own configured timeoutMs"
+        }
+      ]
+    },
+    {
+      "id": "s3-boundary-loosened",
+      "wp": "WP-dream-lock-stale-owner-loud",
+      "criterion": "3",
+      "why": "S3's comparison is strict (>), so a deadline exactly 24h ahead is not refused; widening it to >= refuses that exact boundary instead, which only the exactly-24h test observes",
+      "file": "src/core/dream/lock.js",
+      "find": "  if (existing.deadline - now > 86400000) return unknown;",
+      "replace": "  if (existing.deadline - now >= 86400000) return unknown; // RP_MUT_S3_BOUNDARY_LOOSENED",
+      "marker": "RP_MUT_S3_BOUNDARY_LOOSENED",
+      "occurrences": 1,
+      "testNamePattern": "24h",
+      "expectRed": [
+        {
+          "test": ["dream-lock: a deadline exactly 24h ahead is not refused"],
+          "signal": "a deadline exactly 24h ahead must not be refused — the S3 comparison is strict"
+        }
+      ]
+    }
+  ]
+}

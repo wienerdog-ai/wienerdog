@@ -440,3 +440,98 @@ No dream report extension is introduced. All unrelated lifecycle, secret-revert,
 quarantine-surface and part-6 live-owner lock provisions remain unchanged,
 including the owner-accepted simultaneous stale-claimant race and recovery
 policy. This amendment adds no process or service (ADR-0004).
+
+## Amendment (2026-09-17): a stale lock must be loud, and an implausible deadline is not trusted — WP-dream-lock-stale-owner-loud
+
+Status: **ACCEPTED under standing authorization 2026-09-17 — owner signature pending.**
+
+**Decision (amends part 6 again, after the 2026-09-15 live-owner amendment).**
+Table S in `docs/specs/WP-dream-lock-stale-owner-loud.md` is canonical. The
+2026-09-15 amendment above stands in full: **which** locks may be taken over is
+unchanged by this amendment, and nothing here weakens the retention of a live
+local owner.
+
+That amendment accepted, in one clause, that PID reuse "can delay recovery". It
+did not examine that the delay is **silent**: a declined-as-busy dream prints one
+line and exits 0, so the supervisor records success and clears the job's alerts,
+and consolidation can stop indefinitely behind a healthy-looking digest.
+
+**A stale busy lock is loud.** A declined acquisition whose deadline passed more
+than six hours ago no longer returns exit 0. It raises a `WienerdogError` through
+the existing job-failure path, so the supervisor fails loud, records a durable
+alert and sends its best-effort self-email. `busy` within the bound — including
+every unexpired lock — keeps today's quiet exit 0 exactly. The message names how
+many whole hours the lock has been held past its limit and that this run did not
+start. It states **only what the decline observed**: the lock is past its
+deadline and a local process answered the existence probe. It does **not** claim
+that nothing has been written to the vault — the run promotes into the vault
+while still holding the lock, and releases only afterwards, so a held lock is
+consistent with a healthy owner that has already written — and it does **not**
+claim that recovery is impossible, because the owner may finish and release, or
+the probed process may exit and the unchanged automatic takeover then applies.
+The message names both possibilities and says Wienerdog cannot tell which from
+there. A restart is offered as an **option**, conditioned on the messages
+continuing and stated together with its cost: it ends whatever holds the lock,
+including a dream that is still working. Deleting the lock file, whose path the
+message names, is **not** instructed. The 2026-09-15 prohibition on suggesting blind lock
+deletion stands unamended: there is no moment a non-developer can identify at
+which deletion is known to be safe. A restart is the worst of them, because the
+catch-up entry starts a dream at boot on all three platforms and that boot dream
+is the one whose existence probe takes a dead owner's lock over; a repeated
+message identifies nothing, since it is read from a log after the fact; and no
+start-time heuristic survives, because a scheduled dream may be configured to run
+for hours. The message therefore names the file as information, states that
+removing it is safe only while no dream is running, and says plainly that
+Wienerdog cannot establish that from where it stands — so the condition should be
+checked rather than guessed. Recovery from this state is consequently not
+self-service; an attended command that compares the diagnosed record with the
+current one and re-probes its owner immediately before removal would make it so,
+and is not introduced here. No transcript text, PID, host or raw lock byte appears
+in the message.
+
+**The gate can fire on a legitimately live dream.** Neither the scheduled
+watchdog nor the preprocessing deadline is bounded, and the lock's own deadline
+is set from `dream_timeout_minutes` alone, so an installation configured to let a
+dream run more than six hours past that deadline will make a contender loud while
+its owner is healthy. Under the default configuration that cannot happen. The
+consequence in every case is an alert: the live owner keeps its lock, nothing is
+overwritten and no scratch is touched.
+
+That message reaches the per-run log under `~/.wienerdog/logs/dream/` and an
+attended run's terminal. The durable alert and the email carry the supervisor's
+own generic exited-non-zero reason and point at that log; no job body can put its
+own sentence into them today, and this amendment does not change that.
+
+**Latency, stated plainly.** Because a quiet decline still records success, the
+catch-up mechanism skips the job for the remainder of that schedule day. For a
+lock that is already expired when the first contender sees it, the first loud
+result is therefore the next day's scheduled run — one lost night — and from then
+on every hourly catch-up fails loud until a person clears the lock. That is the
+realistic case, and the only one the default twenty-minute timeout can produce.
+A record that still claims a future deadline is quiet until that deadline passes,
+which the next paragraph bounds at twenty-four hours. Because a quiet decline
+records success, those bounds are only sampled once a day, so the true maximum is
+twenty-four hours of unexpired life, plus the six-hour bound, plus up to a full
+day until the next run observes it: on a machine that stays on at a stable UTC
+offset, **fifty-four hours, with three scheduled runs lost before the loud one.**
+That is a worked case and not a wall-clock maximum: the third term is one local
+schedule day, so a daylight-saving fall-back inside the window adds an hour (55
+hours on a Europe/Budapest host), and any time the machine is off or asleep adds
+its own length. What this amendment fixes is the sampling rule, not a number. The repeat cadence is not new: the unverifiable-owner
+error introduced on 2026-09-15 already behaves this way.
+
+**An implausible deadline is not trusted.** A record whose finite deadline lies
+more than twenty-four hours ahead of now is refused as unverifiable ownership
+rather than honoured as busy — the existing loud path, with no probe, no takeover
+and no mutation. The bound is absolute and independent of configuration,
+deliberately: `dream_timeout_minutes` has no validated maximum, so a bound
+derived from it would inherit that and let a record silence the dream for as long
+as its own timeout claims. The cost is that an installation configuring a dream
+timeout longer than a day has its own lock refused by a contender for the part of
+its life that is more than a day ahead — loud, never silent, and never a
+takeover. Giving that setting a supported maximum, and reconciling it with the
+supervisor's independently configured watchdog, is separate work.
+
+No heartbeat, lease renewal, automatic kill, new lock field, new decline reason
+or recovery command is introduced, and no takeover rule changes. Part 7 and the
+unrelated lifecycle and capacity amendments remain in force.

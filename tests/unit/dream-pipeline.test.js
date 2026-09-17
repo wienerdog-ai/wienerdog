@@ -918,7 +918,7 @@ test('dream-pipeline: expired-owner checks protect collection, brain, finalizati
       Date.now = () => Number(process.argv[3]);
       process.stdout.write(JSON.stringify(require(process.argv[1]).acquireLock(process.argv[2], 60000)));
     `, lockModule, ctx.state, String(record.deadline + 1)], { encoding: 'utf8' });
-    assert.deepEqual(JSON.parse(output), { acquired: false, stolen: false, reason: 'busy' }, phase);
+    assert.deepEqual(JSON.parse(output), { acquired: false, stolen: false, reason: 'busy', staleForMs: 1 }, phase);
     assert.deepEqual(fs.readFileSync(lockFile), before, phase);
     phases.push(phase);
   };
@@ -964,7 +964,10 @@ test('dream-pipeline: EPERM and unknown owners decline before collection or tear
     const scratch = path.join(ctx.state, 'dream-scratch');
     fs.mkdirSync(scratch, { recursive: true });
     fs.writeFileSync(path.join(scratch, 'input.md'), 'held input');
-    const bytes = JSON.stringify({ pid: process.pid, host: os.hostname(), deadline: 0 });
+    // Recently expired, not zero: a deadline of 0 would make the EPERM/'busy'
+    // case's staleForMs huge and trip the new S4 stale-lock gate, which this
+    // test does not exercise (see the dedicated S4 tests below).
+    const bytes = JSON.stringify({ pid: process.pid, host: os.hostname(), deadline: Date.now() - 1000 });
     fs.writeFileSync(lockFile, bytes);
     const kill = t.mock.method(process, 'kill', () => { throw Object.assign(new Error('private probe detail'), { code }); });
     const rm = fs.rmSync;
@@ -992,6 +995,55 @@ test('dream-pipeline: EPERM and unknown owners decline before collection or tear
     assert.equal(fs.existsSync(workspaceOf(ctx)), false);
     assert.equal(fs.existsSync(path.join(ctx.state, 'transcript-ledger.json')), false);
   }
+});
+
+test('dream-pipeline: a busy lock more than six hours past its deadline is loud, byte-exact (S4/S5)', async (t) => {
+  const ctx = setup();
+  const lockFile = path.join(ctx.state, 'dream.lock');
+  const scratch = path.join(ctx.state, 'dream-scratch');
+  fs.mkdirSync(scratch, { recursive: true });
+  fs.writeFileSync(path.join(scratch, 'input.md'), 'held input');
+  const FIXED_NOW = Date.now();
+  const staleForMs = 6 * 60 * 60 * 1000 + 1; // one ms over S4's six-hour bound
+  const bytes = JSON.stringify({ pid: process.pid, host: os.hostname(), deadline: FIXED_NOW - staleForMs });
+  fs.writeFileSync(lockFile, bytes);
+  t.mock.method(Date, 'now', () => FIXED_NOW);
+  const result = await runDream(ctx);
+  const { WienerdogError } = require('../../src/core/errors');
+  assert.ok(result.thrown instanceof WienerdogError,
+    'a busy lock more than six hours past its deadline must be loud, not exit 0');
+  const hours = Math.floor(staleForMs / 3600000);
+  const expected = `dream lock is overdue: it has been held for more than ${hours} hours past its own time limit, ` +
+    'so this dream did not start. The dream that took the lock may still be working, or it may have ' +
+    'stopped without releasing it — Wienerdog cannot tell which from here. If it is still working it ' +
+    'will release the lock when it finishes, and these messages will stop on their own. If they keep ' +
+    'coming, restarting this computer ends whatever is holding the lock — including a dream that is ' +
+    'still working — and Wienerdog normally clears the lock by itself the next time it runs. The lock ' +
+    `is the file ${lockFile}. Removing it by hand is only safe while no dream is running, so have ` +
+    'someone check that first rather than deleting it on a guess.';
+  assert.equal(result.thrown.message, expected);
+  assert.equal(result.output, '');
+  assert.equal(fs.readFileSync(lockFile, 'utf8'), bytes);
+  assert.deepEqual(fs.readdirSync(scratch), ['input.md']);
+});
+
+test('dream-pipeline: a busy lock exactly six hours past its deadline is still quiet (S4)', async (t) => {
+  const ctx = setup();
+  const lockFile = path.join(ctx.state, 'dream.lock');
+  const scratch = path.join(ctx.state, 'dream-scratch');
+  fs.mkdirSync(scratch, { recursive: true });
+  fs.writeFileSync(path.join(scratch, 'input.md'), 'held input');
+  const FIXED_NOW = Date.now();
+  const staleForMs = 6 * 60 * 60 * 1000; // exactly S4's bound; the comparison is strict
+  const bytes = JSON.stringify({ pid: process.pid, host: os.hostname(), deadline: FIXED_NOW - staleForMs });
+  fs.writeFileSync(lockFile, bytes);
+  t.mock.method(Date, 'now', () => FIXED_NOW);
+  const result = await runDream(ctx);
+  assert.equal(result.thrown, null,
+    'a busy lock exactly six hours past its deadline must remain quiet — the S4 comparison is strict');
+  assert.equal(result.output, 'wienerdog: another dream holds the lock.');
+  assert.equal(fs.readFileSync(lockFile, 'utf8'), bytes);
+  assert.deepEqual(fs.readdirSync(scratch), ['input.md']);
 });
 
 // ── The round-1 gate findings, each asserted in both directions ──────────────
