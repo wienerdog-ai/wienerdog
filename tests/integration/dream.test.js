@@ -658,6 +658,39 @@ test('dream-integration: an unverifiable owner repeatedly errors without changin
   }
 });
 
+// WP-dream-lock-stale-owner-loud: a busy lock past S4's six-hour bound is loud.
+test('dream-integration: a stale busy lock past the six-hour bound is loud, repeatedly, without mutating lock or scratch', async () => {
+  const ctx = setup();
+  const state = path.join(ctx.core, 'state');
+  const scratch = path.join(state, 'dream-scratch');
+  fs.mkdirSync(scratch, { recursive: true });
+  fs.writeFileSync(path.join(scratch, 'owner-input.md'), 'preserve this input');
+  const lockFile = path.join(state, 'dream.lock');
+  const staleForMs = 7 * 60 * 60 * 1000; // comfortably past S4's six-hour bound
+  const bytes = JSON.stringify({ pid: process.pid, host: os.hostname(), deadline: Date.now() - staleForMs });
+  fs.writeFileSync(lockFile, bytes);
+  const before = commitCount(ctx.vault);
+  const expected = 'dream lock is overdue: it has been held for more than 7 hours past its own time limit, '
+    + 'so this dream did not start. The dream that took the lock may still be working, or it may have '
+    + 'stopped without releasing it — Wienerdog cannot tell which from here. If it is still working it '
+    + 'will release the lock when it finishes, and these messages will stop on their own. If they keep '
+    + 'coming, restarting this computer ends whatever is holding the lock — including a dream that is '
+    + 'still working — and Wienerdog normally clears the lock by itself the next time it runs. The lock '
+    + `is the file ${lockFile}. Removing it by hand is only safe while no dream is running, so have `
+    + 'someone check that first rather than deleting it on a guess.';
+  for (let i = 0; i < 2; i++) {
+    const { output, thrown } = await runDream(ctx, ['--yes']);
+    assert.ok(thrown instanceof WienerdogError);
+    assert.equal(thrown.message, expected);
+    assert.equal(output, '');
+    assert.equal(fs.readFileSync(lockFile, 'utf8'), bytes);
+    assert.deepEqual(fs.readdirSync(scratch), ['owner-input.md']);
+    assert.equal(fs.readFileSync(path.join(scratch, 'owner-input.md'), 'utf8'), 'preserve this input');
+    assert.equal(commitCount(ctx.vault), before);
+    assert.equal(fs.existsSync(path.join(state, 'transcript-ledger.json')), false);
+  }
+});
+
 // ── WP-069: concurrency + watermark-consolidation safety ────────────────────
 
 test('dream-integration: a lock-losing dream is a pure no-op that leaves the winner\'s live scratch byte-for-byte untouched', async () => {

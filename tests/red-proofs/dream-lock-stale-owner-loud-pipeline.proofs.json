@@ -1,0 +1,41 @@
+{
+  "suite": "tests/unit/dream-pipeline.test.js",
+  "proofs": [
+    {
+      "id": "s4-gate-removed",
+      "wp": "WP-dream-lock-stale-owner-loud",
+      "criterion": "4",
+      "why": "disabling S4's loud gate outright makes a lock well past the six-hour bound print the quiet line and exit 0 again, which only the loud test observes; the quiet-at-cap test is unaffected because it was already quiet",
+      "file": "src/cli/dream.js",
+      "find": "    if (lock.staleForMs > STALE_LOCK_ALERT_MS) {",
+      "replace": "    if (false && lock.staleForMs > STALE_LOCK_ALERT_MS) { // RP_MUT_S4_GATE_REMOVED",
+      "marker": "RP_MUT_S4_GATE_REMOVED",
+      "occurrences": 1,
+      "testNamePattern": "six hours past its deadline",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: a busy lock more than six hours past its deadline is loud, byte-exact (S4/S5)"],
+          "signal": "a busy lock more than six hours past its deadline must be loud, not exit 0"
+        }
+      ]
+    },
+    {
+      "id": "s4-boundary-loosened",
+      "wp": "WP-dream-lock-stale-owner-loud",
+      "criterion": "4",
+      "why": "S4's comparison is strict (>), so a lock exactly six hours past its deadline is still quiet; widening it to >= makes that exact boundary loud instead, which only the quiet-at-cap test observes",
+      "file": "src/cli/dream.js",
+      "find": "    if (lock.staleForMs > STALE_LOCK_ALERT_MS) {",
+      "replace": "    if (lock.staleForMs >= STALE_LOCK_ALERT_MS) { // RP_MUT_S4_BOUNDARY_LOOSENED",
+      "marker": "RP_MUT_S4_BOUNDARY_LOOSENED",
+      "occurrences": 1,
+      "testNamePattern": "six hours past its deadline",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: a busy lock exactly six hours past its deadline is still quiet (S4)"],
+          "signal": "a busy lock exactly six hours past its deadline must remain quiet — the S4 comparison is strict"
+        }
+      ]
+    }
+  ]
+}

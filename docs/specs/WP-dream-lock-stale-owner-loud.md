@@ -1,7 +1,7 @@
 ---
 id: WP-dream-lock-stale-owner-loud
 title: Make a stale busy dream lock loud, and refuse an implausible deadline
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-dream-live-owner-lock]

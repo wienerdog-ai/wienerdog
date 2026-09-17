@@ -15,9 +15,11 @@ function lockPath(stateDir) {
  * Existing locks are retained until expired AND their valid local PID is absent.
  * Unknown ownership cannot authorize takeover. Process existence is not a health
  * check; PID reuse can conservatively delay recovery (Table L, WP-dream-live-owner-lock).
+ * A deadline more than 24h ahead of now is refused as owner-unknown rather than
+ * trusted as busy (Table S3, WP-dream-lock-stale-owner-loud).
  * @param {string} stateDir
  * @param {number} timeoutMs  deadline = now + timeoutMs
- * @returns {{acquired:true, stolen:boolean}|{acquired:false, stolen:false, reason:'busy'|'owner-unknown'}}
+ * @returns {{acquired:true, stolen:boolean}|{acquired:false, stolen:false, reason:'busy', staleForMs:number}|{acquired:false, stolen:false, reason:'owner-unknown'}}
  */
 function acquireLock(stateDir, timeoutMs) {
   fs.mkdirSync(stateDir, { recursive: true });
@@ -37,7 +39,6 @@ function acquireLock(stateDir, timeoutMs) {
     if (err && err.code !== 'EEXIST') throw err;
   }
 
-  const busy = { acquired: false, stolen: false, reason: 'busy' };
   const unknown = { acquired: false, stolen: false, reason: 'owner-unknown' };
   let existing;
   try {
@@ -49,6 +50,11 @@ function acquireLock(stateDir, timeoutMs) {
       typeof existing.deadline !== 'number' || !Number.isFinite(existing.deadline)) {
     return unknown;
   }
+  // An implausible far-future deadline is refused rather than trusted as busy
+  // (Table S3): an absolute 24h cap, independent of the contender's own
+  // timeoutMs, so an unbounded configured timeout cannot silence the dream.
+  if (existing.deadline - now > 86400000) return unknown;
+  const busy = { acquired: false, stolen: false, reason: 'busy', staleForMs: now - existing.deadline };
   // The deadline is a not-before threshold for recovery, not proof of death.
   if (now <= existing.deadline) return busy;
   if (typeof existing.host !== 'string' || existing.host !== os.hostname() ||
