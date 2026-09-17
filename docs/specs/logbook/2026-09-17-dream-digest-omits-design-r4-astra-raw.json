@@ -1,0 +1,51 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b038-e744-7163-84c5-6a8394af8e32",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c",
+    "baseRef": "545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch unchanged. Two product assumptions are false: failure recording need not follow child exit, and a failed atomic writer need not preserve previous bytes. One additional machinery finding follows separately. Executed: restricted git diff/status/diff-check, citation checks, and in-memory probes of production function bodies with mocked I/O. Read: scoped spec/logbook entries and supporting source/tests. No unit suite, lint, or RED proofs ran; no files changed.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Product: timeout survivors invalidate the post-exit-only residual",
+        "body": "The assertion that run-job appends failures only after child exit is false. Its watchdog rejects independently of the child's close event (run-job.js:1073-1106); bounded unsuccessful reaping then reaches failLoud at :1257 without awaiting that event. An in-memory execution confirmed an alert appended while the child remained open. If that surviving dream subsequently reaches step 19, its legitimately minted token still passes, and the proposed filter hides the supervisor's already-recorded failure although that supervisor will never clear it. A related case affects previous-run survivor alerts: settleReaps examines only the current run's groups/token (:362-413), so a subsequent success does not establish that an earlier surviving group is gone. O3's premise that every removed callout describes a resolved failure therefore overstates what success proves.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 360,
+        "line_end": 361,
+        "confidence": 0.96,
+        "recommendation": "Add timeout-with-surviving-child and prior-surviving-group cases. Prevent omission when this run has already been failed by its supervisor or the recorded condition remains unresolved. If deferred, explicitly price these cases in O3 and withdraw the post-exit-only and universally-resolved claims."
+      },
+      {
+        "severity": "medium",
+        "title": "Product: recovery assumes a thrown writer could not have published",
+        "body": "writeFilePrivate renames at private-fs.js:360, then checks destination identity and can throw WD_F10_POST_RENAME at :365-376. A concurrent replacement can therefore produce an exception after publication. An in-memory probe reproduced this ordering. The stated residual—any failed recovery leaves the previous filtered bytes intact—is false. This also exposes an unspecified initial-render boundary: an implementation that arms recovery only after regenerateDigest returns misses a filtered write that publishes and then throws. AC7b currently encodes the incorrect universal preservation guarantee.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 359,
+        "line_end": 359,
+        "confidence": 0.98,
+        "recommendation": "Arm recovery before attempting the filtered render and cover exceptions during that attempt. Distinguish pre-publication failure from post-rename verification failure; retain original-error precedence and the fixed diagnostic, but describe destination state as potentially changed after publication. Test both boundaries."
+      },
+      {
+        "severity": "medium",
+        "title": "Machinery: AC7 does not establish finalizer coverage or exactly-once recovery",
+        "body": "AC7a requires only an unspecified post-render throw, final digest content, and original-error propagation. A catch around steps 20-21 that excludes destroyWorkspace and cleanScratch can satisfy that test and the no-recovery RED declaration while leaving genuine alerts hidden when either existing finalizer throws (dream.js:1206-1222). Likewise, two successful recovery renders satisfy the stated final-content assertions; neither AC7 nor the declaration requires counting them.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 784,
+        "line_end": 794,
+        "confidence": 0.97,
+        "recommendation": "Require separate failure injections in the post-render body, workspace teardown, and scratch cleanup. Observe actual digest writes and assert exactly one unfiltered recovery attempt, including when that attempt fails. Ensure the existing recovery RED proof exercises those assertions."
+      }
+    ],
+    "next_steps": [
+      "Revise Table A, O3, AC7, and their mirrors before treating the design gate as closed.",
+      "Carry the counterexamples into implementation tests; the cited source locations resolve, but the disputed behavioral guarantees do not."
+    ]
+  }
+}

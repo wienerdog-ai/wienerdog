@@ -1,0 +1,51 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b05b-d47d-76f1-bdfd-e1c9e32167e6",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 2d5e24654c501b182d61eb28518ca572712712b6",
+    "baseRef": "2d5e24654c501b182d61eb28518ca572712712b6",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not close the gate: the unlocked render can erase newer quarantine warnings and ordinary concurrent writers can falsely fail successful jobs. The no-guard control-flow argument holds; round-5 readAlerts/O3 corrections are supported. Executed production run() with proposed wiring and mocked I/O, production renderer/ledger functions, readAlerts, clearAlerts, failLoud, supervisor completion code and writeFilePrivate. Step-19 bytes matched main in the tested fixture. Read the scoped diff/logbooks and supporting source; no implementation branch or test suites reviewed. Key source citations resolve; the exit inventory omits dream.js:740, which also skips the final statement.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Product: the unlocked render can erase a newer quarantine warning",
+        "body": "regenerateDigest closes over this run's ledger (dream.js:618,644), rather than rereading current state. Executed interleaving: A releases its lock; B records a new quarantine, publishes its banner, then fails for incomplete input; A's final render overwrites that banner using its older ledger. The quarantine remains active, but disappears from the injected digest. Production renderer and ledger functions reproduced this. Main's serialized dream renders do not permit this ordering; atomic publication does not make it benign.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 394,
+        "line_end": 396,
+        "confidence": 0.99,
+        "recommendation": "Coordinate final publication with competing dream state changes and obtain a current ledger within that coordination. Require a regression covering a newer quarantine render between the older run's lock release and final publication."
+      },
+      {
+        "severity": "medium",
+        "title": "Product: ordinary concurrent writers can trigger false job failures",
+        "body": "The claimed temp-substitution prerequisite is false. Executing writeFilePrivate with A's rename followed by B's legitimate whole-file write before A's lstat makes A throw WD_F10_POST_RENAME; B's bytes remain on disk. The new unlocked dream-to-dream overlap therefore introduces a false-failure case classified here as benign. Executed supervisor completion with exit 1 retained the previous last_success, set last_status=error, skipped clearAlerts and appended 'job \"dream\" exited 1'. This needs no attacker or substituted temp file.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 396,
+        "line_end": 397,
+        "confidence": 0.99,
+        "recommendation": "Prevent the new writer overlap or explicitly disposition ordinary-writer collisions, including false failure alerts, unchanged last_success and skipped clearing. Add a deterministic rename→competing write→verification test and correct the destination-state guarantee."
+      },
+      {
+        "severity": "medium",
+        "title": "Machinery: operative instructions still require the rejected design",
+        "body": "The Deliverables row explicitly requires filtering at step 19, arming recovery and adding two recovery sites—the opposite of Table A. AC6c also says step 19 omits the callout, contrary to AC7e's byte-identical unfiltered first write. Additionally, 'exactly two' writes is not universal: executing a successful run with a newly quarantined input produced three writes, including the existing early refresh. These contradictions can direct implementation or acceptance tests back toward rejected behavior.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 285,
+        "line_end": 285,
+        "confidence": 1,
+        "recommendation": "Reconcile Deliverables, AC6, AC7 and mirror checklists with the final-statement design. Assert one additional filtered write, with two total only when the early quarantine refresh does not run."
+      }
+    ],
+    "next_steps": [
+      "Resolve or explicitly disposition the two concurrency consequences before re-dispatch.",
+      "Correct contradictory implementation/test instructions and add dream.js:740 to the exit inventory."
+    ]
+  }
+}
