@@ -1818,3 +1818,68 @@ test('dream-integration: a passing probe result is recorded in the dream run evi
   assert.equal(rec.job, 'dream');
   assert.deepEqual(rec.containmentProbe, { outcome: 'pass', claudeVersion: '9.9.9 (Fake Claude)' });
 });
+
+// ── The run's skip accounting reaches the committed report ──────────────────
+
+/** The section the run appends, byte for byte — hand-written, never composed
+ *  from the formatter under test. */
+const RUN_SKIPS_SECTION = [
+  '## Sessions this run could not consolidate',
+  '',
+  '- 1 session transcript(s) were set aside by this run and will be skipped from now on, until they change.',
+  '- 1 session transcript(s) are too big to dream over on their own. Wienerdog will keep passing over them ' +
+    'until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml ' +
+    'is raised past their size; after any of those it measures them again, and may still find them too big.',
+  '',
+  'Which sessions are being skipped, and why: reports/warnings.md in your vault.',
+  '',
+].join('\n');
+
+test('dream-integration: a mixed run commits a report that accounts for the sessions it could not consolidate', async () => {
+  // One session admitted, one individually oversized, one over the pre-read
+  // ceiling — a MIXED run, which is the only kind that writes a report at all.
+  const ctx = setup({ oversized: 'big', overCeiling: 'huge', maxInputBytes: 100_000 });
+  const before = commitCount(ctx.vault);
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.equal(commitCount(ctx.vault), before + 1);
+
+  const report = fs.readFileSync(path.join(ctx.vault, 'reports/dreams', `${DATE}.md`), 'utf8');
+  assert.ok(report.includes('## Refused by policy (promotion enforcement)'), report);
+  // LAST in the report, after the accounting blocks about what the run refused
+  // to WRITE, and byte-exact.
+  assert.ok(report.endsWith(RUN_SKIPS_SECTION), report);
+  // Counts only. No basename, no path, no session id reaches the section — the
+  // names live in the vault warnings file, which the pointer names.
+  const section = report.slice(report.indexOf('## Sessions this run could not consolidate'));
+  for (const leak of ['huge', '.jsonl', 'claude/', ctx.claude]) {
+    assert.ok(!section.includes(leak), `the section leaked \`${leak}\`: ${section}`);
+  }
+  assert.ok(!/first time|will be retried/.test(section), section);
+  // Committed, not merely written.
+  const committed = git(ctx.vault, ['show', `HEAD:reports/dreams/${DATE}.md`]);
+  assert.equal(committed, report);
+  assert.match(output, /dream committed/);
+});
+
+test('dream-integration: a run that admits nothing writes no report at all, and its failure carries no quarantine count', async () => {
+  // Criterion 12, both zero-admission paths, asserted as they ARE. This WP adds
+  // nothing to either — the boundary is pinned so a later change cannot move it
+  // silently.
+  const quarantineOnly = setup({ withTranscript: false, overCeiling: 'huge' });
+  const r1 = await runDream(quarantineOnly, ['--yes']);
+  assert.equal(r1.thrown, null, r1.thrown && r1.thrown.message);
+  assert.match(r1.output, /nothing new to dream/);
+  assert.equal(
+    fs.existsSync(path.join(quarantineOnly.vault, 'reports/dreams', `${DATE}.md`)), false,
+    'the idle path writes no report, so it carries no skip accounting'
+  );
+
+  const excluded = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
+  const r2 = await runDream(excluded, ['--yes']);
+  assert.ok(r2.thrown instanceof WienerdogError);
+  assert.match(r2.thrown.message, /no complete session was admitted/);
+  assert.match(r2.thrown.message, /individually oversized: 1 session/);
+  assert.ok(!/quarantin/i.test(r2.thrown.message), 'the failure message carries no quarantine count');
+  assert.equal(fs.existsSync(path.join(excluded.vault, 'reports/dreams', `${DATE}.md`)), false);
+});

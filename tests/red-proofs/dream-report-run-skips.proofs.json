@@ -1,0 +1,51 @@
+{
+  "suite": "tests/unit/dream-promote.test.js",
+  "proofs": [
+    {
+      "id": "run-skip-pointer-pinned",
+      "wp": "WP-dream-report-run-skips",
+      "criterion": "2",
+      "why": "the pointer sentence is the one line that promises a destination; an includes-style assertion would stay green under a reworded pointer, and only T1 renders it",
+      "file": "src/core/dream/promote.js",
+      "find": "Which sessions are being skipped, and why: reports/warnings.md in your vault.",
+      "replace": "Which sessions are being skipped: see your vault. RP_MUT_RS_POINTER",
+      "marker": "RP_MUT_RS_POINTER",
+      "occurrences": 1,
+      "testNamePattern": "\\[RS-",
+      "expectRed": [
+        { "test": ["dream-promote: [RS-1] the six-count run-skip section renders byte-exact with its pointer"], "signal": "[RS-1]" }
+      ]
+    },
+    {
+      "id": "run-skip-oversized-names-the-setting",
+      "wp": "WP-dream-report-run-skips",
+      "criterion": "3",
+      "why": "the oversized bullet is the only place a permanently skipped session is named as permanent and the setting that unblocks it is named; both full-string identities render that bullet, so a mutation of it must redden both or one of them is not the pin it claims to be",
+      "file": "src/core/dream/promote.js",
+      "find": "Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.",
+      "replace": "They will be retried on the next run. RP_MUT_RS_OVERSIZED",
+      "marker": "RP_MUT_RS_OVERSIZED",
+      "occurrences": 1,
+      "testNamePattern": "\\[RS-",
+      "expectRed": [
+        { "test": ["dream-promote: [RS-1] the six-count run-skip section renders byte-exact with its pointer"], "signal": "[RS-1]" },
+        { "test": ["dream-promote: [RS-2] a run-skip section with no quarantine count renders no pointer and no skipped"], "signal": "[RS-2]" }
+      ]
+    },
+    {
+      "id": "run-skip-integer-guard-rejects-coercion",
+      "wp": "WP-dream-report-run-skips",
+      "criterion": "7",
+      "why": "round 1 measured the vacuity this closes: a guard that coerces and floors renders 1.5 as a plausible 1, which a forbidden-token scan cannot see. Under this mutation T3's hostile render gains an oversized bullet and a 9, and its unsafe-integer render prints 9007199254740992, so a T3 that pins full strings reddens and a T3 that scans for tokens does not. T1 and T2 pass plain safe integers, which a floor leaves unchanged",
+      "file": "src/core/dream/promote.js",
+      "find": "const int = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);",
+      "replace": "const int = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.floor(Number(v)) : 0); /* RP_MUT_RS_COERCE */",
+      "marker": "RP_MUT_RS_COERCE",
+      "occurrences": 1,
+      "testNamePattern": "\\[RS-",
+      "expectRed": [
+        { "test": ["dream-promote: [RS-3] the run-skip section reads every non-integer count as zero"], "signal": "[RS-3]" }
+      ]
+    }
+  ]
+}

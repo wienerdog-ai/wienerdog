@@ -31,7 +31,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { promote, makeAdmit, spawnGitForMerge } = require('../../src/core/dream/promote');
+const { promote, makeAdmit, spawnGitForMerge, runSkipSummarySection } = require('../../src/core/dream/promote');
 const { isAtOrBeneath } = require('../../src/core/dream/workspace');
 const { captureBaseline, computeDelta } = require('../../src/core/dream/delta');
 const { defaultLayout } = require('../../src/core/layout');
@@ -2195,4 +2195,177 @@ test('dream-promote: a missing gate or malformed input throws rather than promot
     () => run(sc, { gates: gates({ secret: () => ({ maybe: true }) }) }),
     (err) => err instanceof WienerdogError && /unrecognised disposition/.test(err.message)
   );
+});
+
+// ── The run's skip accounting (WP-dream-report-run-skips) ───────────────────
+//
+// EVERY identity below pins its render by FULL-STRING equality against a
+// hand-written literal — never against the formatter's own output, never by a
+// substring `includes`. An `includes` assertion stays green under a reworded
+// bullet, and a forbidden-token scan stays green under a formatter that FLOORS
+// `1.5` to a plausible `1`. Enumerate the expected output, not the outputs you
+// would object to.
+
+const RS_HEAD = '## Sessions this run could not consolidate';
+const RS_PTR = 'Which sessions are being skipped, and why: reports/warnings.md in your vault.';
+const RS_AGAIN =
+  'Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.';
+const RS_B1 = '- 3 session transcript(s) were set aside by this run and will be skipped from now on, until they change.';
+const RS_B2 = '- 191 session transcript(s) were already being skipped and were skipped again.';
+const RS_B3 =
+  '- 1 session transcript(s) are too big to dream over on their own. Wienerdog will keep passing over them ' +
+  'until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is ' +
+  'raised past their size; after any of those it measures them again, and may still find them too big.';
+const RS_B4 = `- 2 session transcript(s) were not reached, because this run had already taken in as much as it could. ${RS_AGAIN}`;
+const RS_B5 = `- 5 session transcript(s) were not reached, because this run ran out of time to prepare them. ${RS_AGAIN}`;
+const RS_B6 = `- 4 session transcript(s) were still being written while this run read them. ${RS_AGAIN}`;
+
+/** The two worked examples, written out rather than composed from parts. */
+const RS_SIX_COUNT = [RS_HEAD, '', RS_B1, RS_B2, RS_B3, RS_B4, RS_B5, RS_B6, '', RS_PTR].join('\n');
+const RS_NO_QUARANTINE = [RS_HEAD, '', RS_B3, RS_B4, RS_B5, RS_B6].join('\n');
+/** The render every hostile count reduces to: the carrier bullet, alone. */
+const RS_CARRIER_ONLY = [RS_HEAD, '', RS_B4].join('\n');
+
+test('dream-promote: [RS-1] the six-count run-skip section renders byte-exact with its pointer', () => {
+  const got = runSkipSummarySection({
+    newlyQuarantined: 3,
+    stillQuarantined: 191,
+    oversized: 1,
+    capacityDeferred: 2,
+    deadlineDeferred: 5,
+    readDeferred: 4,
+  });
+  assert.equal(got, RS_SIX_COUNT, `[RS-1] the six-count section is not byte-exact: ${JSON.stringify(got)}`);
+});
+
+test('dream-promote: [RS-2] a run-skip section with no quarantine count renders no pointer and no skipped', () => {
+  const got = runSkipSummarySection({
+    newlyQuarantined: 0,
+    stillQuarantined: 0,
+    oversized: 1,
+    capacityDeferred: 2,
+    deadlineDeferred: 5,
+    readDeferred: 4,
+  });
+  assert.equal(got, RS_NO_QUARANTINE, `[RS-2] the quarantine-free section is not byte-exact: ${JSON.stringify(got)}`);
+  // The pointer rides the two QUARANTINE counts and nothing else: none of these
+  // four arms leaves a ledger quarantine, so `reports/warnings.md` cannot name
+  // them. `skipped` is absent for the same reason — it is the word that scopes
+  // the pointer's promise to the bullets it rides on.
+  assert.ok(!got.includes('reports/warnings.md'), '[RS-2] a quarantine-free section emitted the warnings pointer');
+  assert.ok(!got.includes('skipped'), '[RS-2] the word skipped leaked outside the two quarantine bullets');
+});
+
+test('dream-promote: [RS-3] the run-skip section reads every non-integer count as zero', () => {
+  // `capacityDeferred` is the carrier that keeps every render non-empty; every
+  // other count is hostile, so no render here carries the oversized bullet or
+  // the pointer. Each is compared WHOLE: a guard that coerced and floored would
+  // render `1.5` as a plausible `1`, which no token scan can see.
+  const hostile = [
+    '../../etc/passwd',
+    1.5,
+    NaN,
+    -1,
+    undefined,
+    { toString() { return '9'; } },
+    Number.MAX_SAFE_INTEGER + 1,
+    Infinity,
+    '7',
+    true,
+  ];
+  for (const v of hostile) {
+    const got = runSkipSummarySection({
+      newlyQuarantined: v,
+      stillQuarantined: v,
+      oversized: v,
+      capacityDeferred: 2,
+      deadlineDeferred: v,
+      readDeferred: v,
+    });
+    assert.equal(got, RS_CARRIER_ONLY, `[RS-3] a count of ${String(v)} did not read as 0: ${JSON.stringify(got)}`);
+  }
+  const zeros = runSkipSummarySection({
+    newlyQuarantined: 0,
+    stillQuarantined: 0,
+    oversized: 0,
+    capacityDeferred: 0,
+    deadlineDeferred: 0,
+    readDeferred: 0,
+  });
+  assert.equal(zeros, '', '[RS-3] an all-zero call must render nothing at all');
+  for (const bad of [undefined, null, 5, 'counts', true, []]) {
+    assert.equal(runSkipSummarySection(bad), '', `[RS-3] a non-object argument of ${String(bad)} must render nothing`);
+  }
+});
+
+test('dream-promote: [RS-4] promote appends the run-skip section beneath the enforcement record', () => {
+  const sc = scenario({ brain: { [NOTE]: 'fresh\n' } });
+  const res = run(sc, { runSkips: { newlyQuarantined: 0, stillQuarantined: 0, oversized: 0, capacityDeferred: 2, deadlineDeferred: 0, readDeferred: 0 } });
+  // The whole accounting, enumerated: the enforcement block always renders, and
+  // the section follows it after exactly one blank line — last, because the
+  // blocks above are about what the run refused to WRITE.
+  assert.deepEqual(
+    res.report.record,
+    [H_ENFORCE, '- none', '', RS_HEAD, '', RS_B4],
+    `[RS-4] the accounting is not the enforcement block then the section: ${JSON.stringify(res.report.record)}`
+  );
+  assert.equal(String(get(sc.vaultDir, REPORT)), sectionOf(res), '[RS-4] the published report carries exactly that');
+});
+
+test('dream-promote: a run with nothing to report appends no run-skip section at all', () => {
+  const zero = { newlyQuarantined: 0, stillQuarantined: 0, oversized: 0, capacityDeferred: 0, deadlineDeferred: 0, readDeferred: 0 };
+  for (const runSkips of [zero, undefined, {}, 'nonsense']) {
+    const sc = scenario({ brain: { [NOTE]: 'fresh\n' } });
+    const res = run(sc, ...(runSkips === undefined ? [] : [{ runSkips }]));
+    // Byte-identical to the accounting this composer produced before the
+    // section existed — no heading, no "none" line, and no throw for a
+    // mis-shaped input either.
+    assert.deepEqual(res.report.record, [H_ENFORCE, '- none'], `runSkips=${JSON.stringify(runSkips)}`);
+    assert.ok(!String(get(sc.vaultDir, REPORT)).includes(RS_HEAD));
+  }
+});
+
+test('dream-promote: a refused report delivers the run-skip section to the caller, one line per element', () => {
+  // The section is part of `report.record`, so the arm that publishes nothing
+  // still hands the complete accounting back — which is what the run prints.
+  const sc = scenario({ brain: { [NOTE]: 'fresh\n' } });
+  const res = run(sc, {
+    runSkips: { newlyQuarantined: 3, stillQuarantined: 191, oversized: 1, capacityDeferred: 2, deadlineDeferred: 5, readDeferred: 4 },
+    writeFile: (call) => (call.rel === REPORT ? { written: false, reason: 'the vault write was refused' } : realWrite(call)),
+  });
+  assert.equal(res.report.outcome, 'refused');
+  assert.deepEqual(res.report.record, [H_ENFORCE, '- none', '', ...RS_SIX_COUNT.split('\n')]);
+  for (const line of res.report.record) assert.ok(!line.includes('\n'), 'every element of the record is exactly one line');
+  assert.equal(get(sc.vaultDir, REPORT), null, 'nothing was published');
+});
+
+test('dream-promote: the run-skip heading is not reserved — a same-day second run appends a second copy', () => {
+  // Criterion 11(a). The composer reserves NOTHING, for this heading exactly as
+  // for the three shipped ones: no scan of the candidate body, no strip of a
+  // prior code-owned block, no dedupe. Pinned, not changed.
+  const skips = { newlyQuarantined: 0, stillQuarantined: 0, oversized: 0, capacityDeferred: 2, deadlineDeferred: 0, readDeferred: 0 };
+  const sc1 = scenario({ brain: { [NOTE]: 'fresh\n' } });
+  const res1 = run(sc1, { runSkips: skips });
+  const after1 = get(sc1.vaultDir, REPORT);
+  assert.equal(String(after1), sectionOf(res1));
+
+  // Run 2 writes no report body of its own, so Table R's fallback appends to
+  // whatever is on disk — run 1's accounting included.
+  const sc2 = scenario({ vault: { [REPORT]: after1 }, brain: { [NOTE]: 'more\n' } });
+  const res2 = run(sc2, { runSkips: skips });
+  assert.equal(res2.report.outcome, 'fallback');
+  assert.equal(String(get(sc2.vaultDir, REPORT)), `${String(after1)}\n${sectionOf(res2)}`);
+  assert.equal(String(get(sc2.vaultDir, REPORT)).split(RS_HEAD).length - 1, 2, 'two copies, because nothing dedupes');
+});
+
+test('dream-promote: a candidate body carrying the run-skip heading publishes unchanged, with the code section under it', () => {
+  // Criterion 11(b). Same (absent) rule as `## Refused by policy (promotion
+  // enforcement)`: the brain's copy survives into the published body.
+  const authored = `# Dream report — 2026-08-29\n\n${RS_HEAD}\n\n- I made this up.\n`;
+  const sc = scenario({ brain: { [REPORT]: authored } });
+  const res = run(sc, { runSkips: { newlyQuarantined: 0, stillQuarantined: 0, oversized: 0, capacityDeferred: 2, deadlineDeferred: 0, readDeferred: 0 } });
+  assert.equal(res.report.outcome, 'promoted');
+  const published = String(get(sc.vaultDir, REPORT));
+  assert.equal(published, `${authored}\n${sectionOf(res)}`);
+  assert.equal(published.split(RS_HEAD).length - 1, 2, 'the brain-authored copy survives beside the code-owned one');
 });

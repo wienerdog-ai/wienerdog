@@ -952,3 +952,200 @@ test('sink-probe: transcripts — a labelled secret in a transcript reaches drea
   const safe = safeOf(artifact);
   assert.equal(safe, true, artifact);
 });
+
+// ── The still-quarantined count (WP-dream-report-run-skips) ─────────────────
+//
+// The count is taken at SELECTION time — the discovered files whose
+// `selectState` answered `'skip-quarantined'` — and NOT from the run-start
+// ledger's active-quarantine set. The four cases below are what separate the
+// two readings; under the run-start reading, three of them miscount.
+
+const { runSkipSummarySection } = require('../../src/core/dream/promote');
+
+/** The six counts the dream report is built from, read off one collection. */
+function sixCounts(result) {
+  return {
+    newlyQuarantined: result.newlyQuarantined.length,
+    stillQuarantined: result.skippedQuarantined,
+    oversized: result.oversized.length,
+    capacityDeferred: result.deferred.length,
+    deadlineDeferred: result.deadlineDeferred.length,
+    readDeferred: result.readDeferred.length,
+  };
+}
+
+/** Every session the collector NAMED, across the five arms it names and the
+ *  admitted entries — one id per contribution, duplicates included. */
+function namedContributions(result) {
+  const idOf = (p) => path.basename(p).replace(/\.[^.]+$/, '');
+  return [
+    ...result.entries.map((e) => e.session_id),
+    ...result.newlyQuarantined.map((d) => idOf(d.path)),
+    ...result.oversized.map((d) => idOf(d.path)),
+    ...result.deferred.map((e) => e.session_id),
+    ...result.deadlineDeferred.map((e) => e.session_id),
+    ...result.readDeferred.map((e) => e.session_id),
+  ];
+}
+
+/** Quarantine `stuck`, memoise `memoised` as individually oversized, and
+ *  measure the budget `fits` fills exactly. */
+function stopFixture(paths) {
+  let ledger = emptyLedger();
+  const byId = Object.fromEntries(
+    transcripts.discover(paths, { since: null })
+      .filter((d) => !path.basename(d.path).startsWith('ceiling'))
+      .map((d) => [path.basename(d.path).replace(/\.[^.]+$/, ''), d])
+  );
+  ledger = ledgerLib.recordQuarantined(ledger, byId.stuck, 'too-many-lines');
+  const memoKey = ledgerLib.foldKey(byId.memoised.path);
+  const memo = memoFor(byId.memoised, 900_000);
+  ledger.oversizedExtracts = { [memoKey]: memo };
+  const fitsExtract = transcripts.parseWithOutcome(byId.fits, transcripts.newRunBudget()).extract;
+  return { ledger, x: compactBytes(fitsExtract), memo, memoKey };
+}
+
+/** Collect with `partial`'s read forced incomplete — `runExhausted` is the
+ *  collector's only evidence for the read-deferred arm. */
+function collectRun(t, paths, ledger, x, options) {
+  const parse = transcripts.parseWithOutcome;
+  t.mock.method(transcripts, 'parseWithOutcome', (d, budget) => {
+    const result = parse(d, budget);
+    if (path.basename(d.path) === 'partial.jsonl') result.parse.runExhausted = true;
+    return result;
+  });
+  return collectExtracts(paths, ledger, x, options);
+}
+
+/** Row B8: no discovered file contributes to two counts, and the six counts
+ *  plus the admitted entries never exceed the number of discovered files. */
+function assertPartition(paths, result) {
+  const named = namedContributions(result);
+  assert.equal(new Set(named).size, named.length, `a session was counted twice: ${named.join(', ')}`);
+  const c = sixCounts(result);
+  const discovered = transcripts.discover(paths, { since: null }).length;
+  const total = result.entries.length + Object.values(c).reduce((a, b) => a + b, 0);
+  assert.ok(total <= discovered, `the partition over-counts: ${total} contributions from ${discovered} discovered files`);
+  assert.equal(named.length + c.stillQuarantined, total, 'every contribution is either named or a quarantine skip');
+}
+
+/** A deferral bullet may promise only that the session is CONSIDERED again. */
+function assertNoRetryPromise(counts) {
+  const section = runSkipSummarySection(counts);
+  assert.ok(!/will be retried/.test(section), `a deferral bullet promised a retry: ${section}`);
+  assert.ok(!/first time/.test(section), `a bullet claimed a first-ever skip: ${section}`);
+  assert.ok(
+    section.includes('Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.'),
+    section
+  );
+}
+
+test('dream-collect: skippedQuarantined counts what this run actually skipped, not the run-start quarantine set', () => {
+  const paths = tempPaths();
+  // (a) an UNCHANGED prior quarantine — the only one skipped for a quarantine.
+  writeClaude(paths, 'stuck', 1, 10, new Date('2026-01-05'));
+  // (b) a prior quarantine whose file CHANGED and now parses — consolidated.
+  writeClaude(paths, 'healed', 1, 10, new Date('2026-01-04'));
+  // (d) a prior quarantine whose file is GONE — discovered by nothing.
+  writeClaude(paths, 'vanished', 1, 10, new Date('2026-01-03'));
+  let ledger = emptyLedger();
+  for (const d of transcripts.discover(paths, { since: null })) {
+    ledger = ledgerLib.recordQuarantined(ledger, d, 'too-many-lines');
+  }
+  assert.equal(Object.keys(ledger.files).length, 3, 'three active quarantines at run start');
+  // Move (b) and (d) away from the fingerprints the ledger recorded.
+  writeClaude(paths, 'healed', 2, 20, new Date('2026-01-02'));
+  fs.rmSync(path.join(paths.claudeDir, 'projects', 'proj', 'vanished.jsonl'));
+
+  const result = collectExtracts(paths, ledger, 400_000);
+  assert.deepEqual(sixCounts(result), {
+    newlyQuarantined: 0, stillQuarantined: 1, oversized: 0,
+    capacityDeferred: 0, deadlineDeferred: 0, readDeferred: 0,
+  }, 'only the unchanged prior quarantine was skipped for a quarantine this run');
+  assert.deepEqual(result.entries.map((e) => e.session_id), ['healed'], 'the changed one was consolidated');
+});
+
+test('dream-collect: a re-quarantined prior quarantine lands in newlyQuarantined ONLY, and its wording claims no first skip', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'reborn', 1, 10, new Date('2026-01-05'));
+  writeClaude(paths, 'stuck', 1, 10, new Date('2026-01-04'));
+  let ledger = emptyLedger();
+  for (const d of transcripts.discover(paths, { since: null })) {
+    ledger = ledgerLib.recordQuarantined(ledger, d, 'too-many-lines');
+  }
+  // `reborn` changes into something the pre-read ceiling refuses: re-selected
+  // (the fingerprint moved), then quarantined again by THIS run.
+  writeOverCeiling(paths, 'reborn', new Date('2026-01-05'));
+
+  const counts = sixCounts(collectExtracts(paths, ledger, 400_000));
+  assert.deepEqual(counts, {
+    newlyQuarantined: 1, stillQuarantined: 1, oversized: 0,
+    capacityDeferred: 0, deadlineDeferred: 0, readDeferred: 0,
+  });
+  // THE SUM, not only the individual counts: under the run-start-ledger reading
+  // `reborn` is counted twice, and this is the assertion that sees it.
+  assert.equal(
+    counts.newlyQuarantined + counts.stillQuarantined, 2,
+    'two quarantined files, two contributions — a re-quarantine is never counted in both'
+  );
+  // The rendered wording is the case that made the old text untrue: `reborn`
+  // was quarantined before, so nothing may say this was its first skip.
+  const section = runSkipSummarySection(counts);
+  assert.ok(
+    section.includes('- 1 session transcript(s) were set aside by this run and will be skipped from now on, until they change.'),
+    section
+  );
+  assert.ok(!/first time/.test(section), 'no bullet may claim a session was skipped for the first time');
+});
+
+test('dream-collect: a capacity stop partitions every discovered file exactly once, memo behind it intact', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'stuck', 1, 10, new Date('2026-01-08'));     // already quarantined
+  writeOverCeiling(paths, 'ceiling', new Date('2026-01-07'));      // newly quarantined
+  writeClaude(paths, 'big', 10, 1000, new Date('2026-01-06'));     // oversized, fresh measurement
+  writeClaude(paths, 'partial', 1, 10, new Date('2026-01-05'));    // read-deferred
+  writeClaude(paths, 'fits', 1, 10, new Date('2026-01-04'));       // admitted, fills X exactly
+  writeClaude(paths, 'memoised', 1, 10, new Date('2026-01-03'));   // memoised oversized, BEHIND the stop
+  writeClaude(paths, 'tail', 1, 10, new Date('2026-01-02'));       // also behind the stop
+  const { ledger, x, memo, memoKey } = stopFixture(paths);
+
+  const result = collectRun(t, paths, ledger, x, {});
+  assert.deepEqual(sixCounts(result), {
+    newlyQuarantined: 1, stillQuarantined: 1, oversized: 1,
+    capacityDeferred: 2, deadlineDeferred: 0, readDeferred: 1,
+  });
+  assertPartition(paths, result);
+  // Row B12: the memoised session is behind the stop, so it is a DEFERRAL this
+  // run — never `oversized` — and its measurement survives untouched.
+  assert.deepEqual(result.deferred.map((e) => e.session_id), ['memoised', 'tail']);
+  assert.deepEqual(result.oversizedExtracts[memoKey], memo, 'the memo behind the stop survives');
+  assertNoRetryPromise(sixCounts(result));
+});
+
+test('dream-collect: a deadline stop partitions every discovered file exactly once, memo behind it intact', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'stuck', 1, 10, new Date('2026-01-08'));
+  writeOverCeiling(paths, 'ceiling', new Date('2026-01-07'));
+  writeClaude(paths, 'big', 10, 1000, new Date('2026-01-06'));
+  writeClaude(paths, 'partial', 1, 10, new Date('2026-01-05'));
+  writeClaude(paths, 'fits', 1, 10, new Date('2026-01-04'));
+  writeClaude(paths, 'memoised', 1, 10, new Date('2026-01-03'));
+  writeClaude(paths, 'tail', 1, 10, new Date('2026-01-02'));
+  const { ledger, x, memo, memoKey } = stopFixture(paths);
+
+  // The clock is read once before the loop and once per iteration. `big`,
+  // `partial` and `fits` are visited on a live clock; the fourth iteration —
+  // `memoised` — finds it expired, so the stop is the DEADLINE's, not capacity's.
+  // X leaves headroom after `fits` so the capacity arm cannot fire first, and
+  // stays far below `big`'s extract so `big` is still individually oversized.
+  let n = 0;
+  const result = collectRun(t, paths, ledger, x + 1000, { preprocessTimeoutMs: 60, now: () => (n++ < 4 ? 0 : 60) });
+  assert.deepEqual(sixCounts(result), {
+    newlyQuarantined: 1, stillQuarantined: 1, oversized: 1,
+    capacityDeferred: 0, deadlineDeferred: 2, readDeferred: 1,
+  });
+  assertPartition(paths, result);
+  assert.deepEqual(result.deadlineDeferred.map((e) => e.session_id), ['memoised', 'tail']);
+  assert.deepEqual(result.oversizedExtracts[memoKey], memo, 'the memo behind the stop survives');
+  assertNoRetryPromise(sixCounts(result));
+});
