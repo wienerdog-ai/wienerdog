@@ -304,3 +304,65 @@ test('descriptor: an app/current resolving OUTSIDE <core>/app records stance dev
     assert.equal(typeof d.appRelease.root, 'string', 'the dev arm still binds the checkout root');
   }
 });
+
+// T1 — WP-dev-descriptor-no-tree-hash: the dev arm no longer computes a tree
+// digest, so it is neither written nor digested. AC1 + AC2.
+test('descriptor: a dev appRelease has exactly {root, stance, version} — no treeDigest (AC1)', () => {
+  const { paths } = setupDevOutside();
+  const d = descriptor.buildDescriptor(paths, DREAM_JOB);
+  assert.deepEqual(Object.keys(d.appRelease).sort(), ['root', 'stance', 'version']);
+});
+
+test('descriptor: injecting a treeDigest back into a dev appRelease cannot change the digest (AC2)', () => {
+  const { paths } = setupDevOutside();
+  const d = descriptor.buildDescriptor(paths, DREAM_JOB);
+  const withTreeDigest = { ...d, appRelease: { ...d.appRelease, treeDigest: `sha256:${'0'.repeat(64)}` } };
+  assert.equal(
+    descriptor.descriptorDigest(d),
+    descriptor.descriptorDigest(withTreeDigest),
+    'reduceForDigest rebuilds {stance, root} from scratch — no dev entry needs re-minting'
+  );
+});
+
+// T2 — WP-dev-descriptor-no-tree-hash: the dev derivation must not walk/hash the
+// live checkout at all (AC3), and writeDescriptor must therefore stay idempotent
+// across a tracked-source edit (AC4).
+test('descriptor: dev deriveDescriptorDigest reads no file under the checkout src/bin/node_modules/.git (AC3)', () => {
+  const { paths, checkout } = setupDevOutside();
+  const nodeFs = require('node:fs');
+  const original = nodeFs.readFileSync;
+  const reads = [];
+  nodeFs.readFileSync = function (p, ...rest) {
+    reads.push(p);
+    return original.call(this, p, ...rest);
+  };
+  try {
+    descriptor.deriveDescriptorDigest(paths, DREAM_JOB);
+  } finally {
+    nodeFs.readFileSync = original;
+  }
+  // Reads are seen through fs.realpathSync'd paths (appTreeDigest resolves
+  // `app/current` with realpathSync), so compare against the checkout's own
+  // realpath — on macOS `/var` is itself a symlink to `/private/var`, and a
+  // raw-path comparison here would silently never match.
+  const realCheckout = fs.realpathSync(checkout);
+  const offender = reads.find((p) => {
+    if (typeof p !== 'string' || !p.startsWith(realCheckout)) return false;
+    const rel = path.relative(realCheckout, p).split(path.sep).join('/');
+    return /(^|\/)(src|bin|node_modules|\.git)\//.test(`${rel}/`);
+  });
+  assert.equal(offender, undefined, `no file under the bound checkout's src/bin/node_modules/.git should be read; got ${offender}`);
+});
+
+test('descriptor: dev writeDescriptor stays idempotent across a tracked-source edit (AC4)', () => {
+  const { paths, checkout } = setupDevOutside();
+  const first = descriptor.writeDescriptor(paths, DREAM_JOB);
+  assert.equal(first.changed, true);
+  const bytes = fs.readFileSync(first.path);
+
+  fs.appendFileSync(path.join(checkout, 'bin', 'wienerdog.js'), '// dev edit\n');
+  const second = descriptor.writeDescriptor(paths, DREAM_JOB);
+  assert.equal(second.changed, false, 'a tracked-source edit must not rewrite the dev descriptor file');
+  assert.equal(second.digest, first.digest);
+  assert.ok(fs.readFileSync(first.path).equals(bytes));
+});

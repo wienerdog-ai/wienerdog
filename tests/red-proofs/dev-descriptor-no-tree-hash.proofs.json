@@ -1,0 +1,65 @@
+{
+  "suite": "tests/unit/descriptor.test.js",
+  "proofs": [
+    {
+      "id": "dev-arm-recomputes-tree-digest",
+      "wp": "WP-dev-descriptor-no-tree-hash",
+      "criterion": "AC1",
+      "why": "the dev arm's ternary member is independently revertible from the digest-side reduction (mutation 2) and from the prod arm (mutation 3): re-adding a treeDigest computation to the dev arm alone puts an extra key back into the written appRelease, which the AC1 key-set assertion catches directly. testNamePattern scopes the phase to that one test, because the same mutation also makes appTreeDigest read the checkout tree again (AC3's own concern) and makes the dev descriptor file non-idempotent across a tracked-source edit (AC4's own concern) — both true side effects of this one-line change, not independent criteria, so they are not declared here (see the spec's Implementation notes)",
+      "file": "src/scheduler/descriptor.js",
+      "find": "          { version: readVersion(appRoot), stance: 'dev', root: appRoot }",
+      "replace": "          { version: readVersion(appRoot), /* RP_MUT_DEV_ARM_RECOMPUTES_TREE_DIGEST */ treeDigest: appTreeDigest(paths), stance: 'dev', root: appRoot }",
+      "marker": "RP_MUT_DEV_ARM_RECOMPUTES_TREE_DIGEST",
+      "occurrences": 1,
+      "testNamePattern": "no treeDigest",
+      "expectRed": [
+        {
+          "test": [
+            "descriptor: a dev appRelease has exactly {root, stance, version} — no treeDigest (AC1)"
+          ],
+          "signal": "treeDigest"
+        }
+      ]
+    },
+    {
+      "id": "reduce-for-digest-spreads-app-release",
+      "wp": "WP-dev-descriptor-no-tree-hash",
+      "criterion": "AC2",
+      "why": "reduceForDigest's own construction — building {stance, root} from scratch — is the whole migration argument (AC2): if it instead spread the dev appRelease as-is, an injected treeDigest would flow into the digest input and change the digest, so a dev entry minted under the old shape would need re-minting. testNamePattern isolates the one test that exercises this by injecting a treeDigest and comparing digests, independent from the dev arm's own computation (mutation 1) and from the prod arm (mutation 3)",
+      "file": "src/scheduler/descriptor.js",
+      "find": "    return { ...d, appRelease: { stance: 'dev', root: d.appRelease.root } };",
+      "replace": "    return { ...d, /* RP_MUT_REDUCE_FOR_DIGEST_SPREADS_APP_RELEASE */ appRelease: { ...d.appRelease } };",
+      "marker": "RP_MUT_REDUCE_FOR_DIGEST_SPREADS_APP_RELEASE",
+      "occurrences": 1,
+      "testNamePattern": "injecting a treeDigest back",
+      "expectRed": [
+        {
+          "test": [
+            "descriptor: injecting a treeDigest back into a dev appRelease cannot change the digest (AC2)"
+          ],
+          "signal": "reduceForDigest rebuilds"
+        }
+      ]
+    },
+    {
+      "id": "prod-arm-loses-tree-digest",
+      "wp": "WP-dev-descriptor-no-tree-hash",
+      "criterion": "AC5",
+      "why": "Table A's prod row is a preservation requirement, not a no-op: this WP must not silently widen the dev-only removal to prod. Deleting treeDigest from the prod arm too is independently revertible from the dev-side changes (mutations 1 and 2, which touch different lines) and reddens the existing, unmodified prod assertion at descriptor.test.js:234 — the same mutation also reddens tests/unit/scheduler-schedule.test.js:1410, a different suite this declaration cannot name (one suite per declaration), so that half is proved manually and pasted into the PR body per the spec",
+      "file": "src/scheduler/descriptor.js",
+      "find": "        : { version: readVersion(appRoot), treeDigest: appTreeDigest(paths), stance: 'prod' },",
+      "replace": "        : /* RP_MUT_PROD_ARM_LOSES_TREE_DIGEST */ { version: readVersion(appRoot), stance: 'prod' },",
+      "marker": "RP_MUT_PROD_ARM_LOSES_TREE_DIGEST",
+      "occurrences": 1,
+      "testNamePattern": "buildDescriptor fields",
+      "expectRed": [
+        {
+          "test": [
+            "descriptor: buildDescriptor fields — schema, profile, stance, exec identity only"
+          ],
+          "signal": "Received type undefined"
+        }
+      ]
+    }
+  ]
+}
