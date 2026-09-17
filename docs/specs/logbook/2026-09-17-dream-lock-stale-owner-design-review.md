@@ -78,9 +78,76 @@ in the bound. The same shape as round 2's lesson one level up: round 2 asked wha
 constrains each input to a limit, round 3 asks what constrains when the limit is
 evaluated.
 
+## Round 4 — disposition and closure
+
+Reviewed tip `b31c03ac`, verdict `needs-attention`, one finding, no
+review-machinery findings. The round confirmed R3-A1 substantively fixed —
+*"the operative contract withdraws record-identity claims and truthfully prices
+deletion as resting on a fallible human check"* — and accepted the explicitly
+superseded historical text above as historical. Raw artifacts are committed
+beside this entry as `2026-09-17-dream-lock-stale-owner-design-r4-raw.json`,
+`-focus.txt` and `-meta.txt`. Nothing below records an owner decision.
+
+| Finding | Band | Weight | Disposition | Rationale |
+|---|---|---|---|---|
+| R4-B1 — the claimed 54-hour maximum assumes every local schedule day is 24 hours | B | **light** | **Fix the claim** | The dream is scheduled at 03:30 *local* time, so one sampling interval is one local schedule day, which is 25 hours across a daylight-saving fall-back. The reviewer's Europe/Budapest walk is exact and was re-derived here (below): the alert arrives at 55 hours, not 54. The finding changes nothing an implementer builds — no rule, no constant, no test — so under `docs/runbooks/codex-review.md`'s weighted-closure rule it is LIGHT: fixed, verified mechanically, and the loop closes without another external round. No schedule-aware bound is specified. Every operative surface — the timeline, Table S3 and S4, O2, the mirrored-surface rule, the out-of-scope test description and the ADR amendment block — now says plainly that the spec states **no hard wall-clock maximum**: it states the sampling rule (S3's cap + S4's bound + one *local* schedule day) and two worked cases, 54 h while the machine stays on at a stable UTC offset and 55 h across a fall-back, with downtime adding its own length. |
+
+### The fall-back arithmetic, re-derived
+
+Run here rather than taken on the reviewer's word (`TZ=Europe/Budapest node`,
+explicit UTC instants, S3's cap 24 h, S4's bound 6 h, both comparisons strict):
+
+```text
+t0       2026-10-22T19:30:00.000Z = 21:30 CEST 22 Oct   (catch-up, first observation)
+deadline 2026-10-23T19:30:00.000Z (t0 + 24h, exactly at S3's cap -> not refused)
+23/10/2026, 03:30:00   stale=  -18.00 h quiet  elapsed since t0 =  6.00 h
+24/10/2026, 03:30:00   stale=    6.00 h quiet  elapsed since t0 = 30.00 h
+25/10/2026, 03:30:00   stale=   31.00 h LOUD   elapsed since t0 = 55.00 h
+```
+
+The 24 → 25 October interval is 25 hours because the EU fall-back lands inside
+it; the 24 October run is quiet at exactly the bound because S4's comparison is
+strict; so the first loud run is 55 elapsed hours after the first observation,
+one hour later than the figure round 3 recorded.
+
+**The reusable lesson of round 4** completes the series: *a sampling interval is
+a calendar quantity, not a duration.* Round 2 asked what constrains each input to
+a bound; round 3 asked what constrains when the bound is evaluated; round 4 asks
+in whose clock. Three rounds, one root — a bound stated as a number when the
+honest statement was a rule.
+
+## Closure
+
+**The loop is closed at round 4**, per `docs/runbooks/codex-review.md`'s
+weighted-closure rule: round 4's single finding is LIGHT — it changes nothing the
+work package builds — it is fixed, and its arithmetic is verified mechanically
+above, so no further external round is required.
+
+Four rounds on one channel: **4 findings, then 3, then 2, then 1.** Every finding
+is dispositioned in the tables above; none was dropped, and none was accepted as
+a residual without being written into the spec. Each round's raw reviewer output
+was committed **before** adjudication — post-rebase `ba19772e` (round 1),
+`46061d59` (round 2), `e7856efb` (round 3), `83e658d8` (round 4).
+
+What the reviewer executed, each round: **static readings only** — repository
+history and status queries, a whitespace check, and `nl`/`sed`/`rg` over the two
+design documents and the source, test, ADR, milestone and runbook regions they
+cite. Round 1 additionally did read-only web research into `os.uptime()` platform
+semantics; rounds 3 and 4 additionally ran Node schedule arithmetic. **`npm
+test`, the targeted suites, `npm run lint` and `npm run red-proofs` were NOT run
+in any round**, and the reviewer said so each time: this is a design-only branch,
+the implementation and the declared RED proofs do not exist yet, and
+both-directions evidence is the implementer's obligation at PR time (Verification
+steps, AC7).
+
+The spec moves to `status: Ready`. Owner items O1–O6 are recorded as
+recommendations adopted under the standing authorization in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`, each with
+its overrule cost, none of them a direct ruling.
+
 ## Resulting shape
 
-Size drops from M to S after round 1 and stays S after round 2. Table S is seven
+Size drops from M to S after round 1 and stays S through round 4. Table S is seven
 rows (result shape, `staleForMs`, implausible-deadline refusal, the loud gate,
 the message and its real delivery surface, the exit-code doc-comment errata, the
 ADR amendment). Six owner items, renumbered once in round 1.

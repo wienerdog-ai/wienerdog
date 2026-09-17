@@ -1,7 +1,7 @@
 ---
 id: WP-dream-lock-stale-owner-loud
 title: Make a stale busy dream lock loud, and refuse an implausible deadline
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-dream-live-owner-lock]
@@ -12,6 +12,34 @@ adrs: [ADR-0004, ADR-0012, ADR-0031, ADR-0042]
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template gives
   the skeleton, the runbook the rules. Read both.
+
+> **The design gate ran 2026-09-17 against `545df8bd` / `2d5e2465` and CLOSED at
+> round 4** — four rounds on one channel, **4 findings, then 3, then 2, then 1**.
+> Round 1 (band A HEAVY + three band B HEAVY): the boot-time death proof was not
+> proof at all, because nothing binds the lock's `startedAt` to the PID the probe
+> found — it was removed rather than repaired; the promised hourly alert latency
+> was contradicted by `run-job`'s own success watermark; the byte-exact message
+> never reaches the durable alert or the email; a far-future deadline defeated
+> both takeover and loudness indefinitely. Round 2 (band A HEAVY + two band B):
+> restart-then-delete could delete a lock the automatic takeover had just
+> acquired; the deadline cap still multiplied an unvalidated config value; the
+> result-shape change reached a test outside the permission boundary. Round 3
+> (band A HEAVY + band B): a repeated message does not identify the record it
+> diagnosed; the silence bound ignored that the gate is only sampled when a run
+> happens. Round 4 (band B, LIGHT): 54 hours is not a wall-clock maximum, because
+> a local schedule day can be 25 hours. **Every finding is dispositioned — none
+> dropped, none accepted as a residual without being written into this spec** —
+> and each round's raw reviewer output was committed BEFORE adjudication
+> (`ba19772e`, `46061d59`, `e7856efb`, `83e658d8`). Round 4's verdict on the
+> round-3 repair: *"R3-A1 is substantively fixed: the operative contract
+> withdraws record-identity claims and truthfully prices deletion as resting on a
+> fallible human check."* The per-round tables, the `>`/`>=` sweep, the
+> daylight-saving arithmetic and the mirror walks are
+> `docs/specs/logbook/2026-09-17-dream-lock-stale-owner-design-review.md`; the
+> round-zero conformance pass is
+> `docs/specs/logbook/2026-09-17-dream-lock-silent-stall.md`.
+> **This spec is `Ready`.** Owner items **O1–O6** are recorded under the standing
+> process — see "Dispatch precondition — owner items".
 
 ## Context (read this, nothing else)
 
@@ -132,11 +160,11 @@ canonical**; every other surface in this spec cites it rather than restating it.
 |---|---|---|
 | S1 | Result shape | Only the `busy` result changes: it gains `staleForMs` (S2). `owner-unknown` and both `acquired` results keep their exact current fields, and no new reason code is introduced. Exported signatures, the lock path and the lock payload bytes are unchanged. **This work package changes no takeover decision**: Table L4's alive/`EPERM` retention and Table L5's `ESRCH` takeover behave exactly as shipped, as do L1 ordinary acquisition, L3 local-owner identity and the L5 non-atomic stale-claimant residual. |
 | S2 | `staleForMs` | `now - existing.deadline`, computed from the same `now` and the same `deadline` that Table L2 already validated as a finite number, so it is never `NaN`. It is returned on **both** `busy` branches: `<= 0` on the unexpired branch (L2's `now <= deadline`, which still returns before any identity check or probe), `> 0` on the expired-and-alive branch. It is a number on every `busy` result; no caller may treat its absence as meaningful. |
-| S3 | Implausible-deadline refusal | After L2 validates `deadline` as a finite number and **before** L2's `now <= deadline` busy branch: if `existing.deadline - now > 86400000` — an **absolute** twenty-four hours, with no multiplication, so no overflow and no dependence on the contender's own `timeoutMs` — the record is refused as **`owner-unknown`**, the existing loud path, with no takeover, no probe and no mutation of the lock or scratch. The cap is deliberately independent of configuration: `readDreamConfig` accepts any finite positive `dream_timeout_minutes` (C5), so a cap derived from it inherits that unboundedness and a twenty-day deadline stays silently unexpired for twenty days. This bounds how long any record — crafted, copied, or written under a configured timeout longer than a day — can read as unexpired. **Consequence, stated:** an installation that legitimately sets `dream_timeout_minutes` above 1,440 has its own lock refused by a contender for the part of its life that is more than 24 h ahead. That is loud, never silent, and never a takeover; O2 prices it. |
-| S4 | The loud gate (`src/cli/dream.js`) | On `!lock.acquired`, in order: (1) `reason === 'owner-unknown'` throws the existing Table L6 `WienerdogError` with its text unchanged; (2) otherwise, if `lock.staleForMs > STALE_LOCK_ALERT_MS` — a module constant in `src/cli/dream.js` equal to `6 * 60 * 60 * 1000` — throw a `WienerdogError` carrying S5's text; (3) otherwise print the existing `wienerdog: another dream holds the lock.` and `return`. All three branches keep L6 intact: none collects, none touches `state/dream-scratch`, none rewrites, deletes or releases the lock. Branch (3) is byte-identical to today's behavior, including its exit 0. The bound is measured past the deadline, which already contains the whole configured `dream_timeout_minutes`. The comparison is **strict** (`>`): making it `>=` was evaluated against the worst case in "The alert latency, walked" and moves it by one minute rather than by a whole run, so the simpler existing form stands. |
+| S3 | Implausible-deadline refusal | After L2 validates `deadline` as a finite number and **before** L2's `now <= deadline` busy branch: if `existing.deadline - now > 86400000` — an **absolute** twenty-four hours, with no multiplication, so no overflow and no dependence on the contender's own `timeoutMs` — the record is refused as **`owner-unknown`**, the existing loud path, with no takeover, no probe and no mutation of the lock or scratch. The cap is deliberately independent of configuration: `readDreamConfig` accepts any finite positive `dream_timeout_minutes` (C5), so a cap derived from it inherits that unboundedness and a twenty-day deadline stays silently unexpired for twenty days. This bounds how long any record — crafted, copied, or written under a configured timeout longer than a day — can read as *unexpired*. It does not bound how long it can stay *quiet*: that also takes S4's bound and one local schedule day of sampling, which "The alert latency, walked" owns. **Consequence, stated:** an installation that legitimately sets `dream_timeout_minutes` above 1,440 has its own lock refused by a contender for the part of its life that is more than 24 h ahead. That is loud, never silent, and never a takeover; O2 prices it. |
+| S4 | The loud gate (`src/cli/dream.js`) | On `!lock.acquired`, in order: (1) `reason === 'owner-unknown'` throws the existing Table L6 `WienerdogError` with its text unchanged; (2) otherwise, if `lock.staleForMs > STALE_LOCK_ALERT_MS` — a module constant in `src/cli/dream.js` equal to `6 * 60 * 60 * 1000` — throw a `WienerdogError` carrying S5's text; (3) otherwise print the existing `wienerdog: another dream holds the lock.` and `return`. All three branches keep L6 intact: none collects, none touches `state/dream-scratch`, none rewrites, deletes or releases the lock. Branch (3) is byte-identical to today's behavior, including its exit 0. The bound is measured past the deadline, which already contains the whole configured `dream_timeout_minutes`. The comparison is **strict** (`>`): making it `>=` was evaluated against the bound in "The alert latency, walked" and moves it by one minute rather than by a whole run, so the simpler existing form stands. **How long a record can stay quiet is a sampling rule, not a fixed number** — S3's cap, plus this bound, plus one *local* schedule day — and "The alert latency, walked" owns it, including the two worked figures and their conditions. No surface states a wall-clock maximum. |
 | S5 | The stale-lock message and where it is actually read | One code-owned string with exactly two interpolations: `` `dream lock is stale: a dream has held it for more than ${hours} hours past its own time limit, so no later dream has run and nothing new has been written to your vault since then. Restart this computer — that ends whatever run left the lock behind, and Wienerdog normally clears the lock by itself the next time it runs. Only if you see this same message again after a restart: first make sure no dream is running at that moment — none that you started yourself in a terminal, and none that Wienerdog started on its own in the last half hour (it runs overnight, and hourly while it is catching up) — and only then delete the file ${lockFile}. The next dream will run normally after that.` `` where `hours = Math.min(Math.floor(lock.staleForMs / 3600000), 9999)` (decimal digits only; the cap keeps a "more than N" claim true) and `lockFile = path.join(paths.state, 'dream.lock')`. No `pid`, no `host`, no `startedAt` and no byte read from the lock file appears in the text — Table L6's no-interpolation rule is kept. **Restart first, delete only on repeat:** after a restart the recorded PID is normally gone, so the next run's probe returns `ESRCH` and Table L5's existing takeover clears the lock unattended — the restart is usually the whole cure, and the deletion is both unnecessary and the only destructive step. Deletion is therefore conditioned on the message *reappearing*. **Repetition is a trigger, never an identification:** a second message does not establish that the file is the same record the first one diagnosed. Between the two, Table L5's takeover may have replaced it, and a fresh attended dream may be the legitimate owner of the new record, overrunning its own deadline exactly as O1 admits. The only thing that makes the deletion safe is the user's own check that no dream is running at that moment, which is why the message requires it in those terms rather than asking only whether one is about to start. **Named residual:** the instruction rests on that human check. If the user deletes while a dream is in fact running — because the check was wrong, or because a scheduled or catch-up run acquired the lock between the check and the `rm` — a later run can acquire and destructively rebuild the shared scratch directory underneath the live one. O4 prices it. No scheduler-disable procedure is prescribed. **Delivery, stated truthfully:** under the scheduler this text reaches the per-run log under `~/.wienerdog/logs/dream/` via the child's piped stderr and nothing else; the durable alert and the self-email carry `run-job`'s generic `` `job "dream" exited 1` `` plus that log hint. The byte-exact text is what an attended `wienerdog dream` prints, and what a user or their assistant finds in the log the alert points at. This is exactly the surface the `owner-unknown` throw shipped by `WP-dream-live-owner-lock` already has; no structured stderr channel is introduced. |
 | S6 | Exit-code doc-comment errata | `src/cli/dream.js:534-538`'s `Exit 1` list must name every `WienerdogError` this function can raise on the lock path: the unverifiable-owner throw shipped by `WP-dream-live-owner-lock` (today omitted, C3) **and** S4's stale-lock throw. The `Exit 0` line keeps "another dream running" for branch (3) of S4 only. |
-| S7 | ADR amendment | Append the block under "ADR-0012 amendment text" below to `docs/adr/0012-dream-run-lifecycle.md`, byte-for-byte, after the existing `## Amendment (2026-09-15): admit complete filtered sessions …` section. Every existing amendment, including both 2026-09-15 ones, stays intact. Its Status line reads exactly `Status: **PROPOSED — awaiting owner signature.**` — nothing in the amendment may say the owner approved, ratified, accepted or signed it. |
+| S7 | ADR amendment | Append the block under "ADR-0012 amendment text" below to `docs/adr/0012-dream-run-lifecycle.md`, byte-for-byte, after the existing `## Amendment (2026-09-15): admit complete filtered sessions …` section. Every existing amendment, including both 2026-09-15 ones, stays intact. Its Status line reads exactly `Status: **ACCEPTED under standing authorization 2026-09-17 — owner signature pending.**`, byte-for-byte. The implementer writes that line and nothing stronger: `OWNER-SIGNED` and `OWNER-RATIFIED` are the owner's own words, and the owner adds his signature line to this amendment himself. Nothing in the amendment may say the owner approved, ratified, accepted or signed it. |
 
 ### The alert latency, walked
 
@@ -173,8 +201,9 @@ it expires must it also exceed S4's six-hour bound. Those two are **not**
 additive on their own: a quiet decline writes `last_success`, so `catchUp`
 stops sampling for the rest of that schedule day and the next observation is
 normally the following 03:30. The true maximum is therefore
-**24 h (S3's cap) + 6 h (S4's bound) + up to 24 h of sampling interval = 54
-hours, with three scheduled runs lost before the loud one.**
+**24 h (S3's cap) + 6 h (S4's bound) + one sampling interval.** Under the
+qualification below that is **54 hours, with three scheduled runs lost before
+the loud one.**
 
 The alignment that attains it: a catch-up at 21:30 on day 1 observes a deadline
 exactly 24 h ahead (S3 permits exactly 24 h, so this is quiet); day 2's 03:30 run
@@ -185,10 +214,32 @@ redden that one knife-edge alignment, but shifting the first observation by a
 minute restores a 53 h 59 m worst case, because the bound is set by the sampling
 interval and not by the comparison. The strict form stands (S4).
 
-**The realistic case is the walked one above: one lost night.** Reaching 54 hours
-requires a record whose deadline is nearly a day in the future, which the default
-20-minute `dream_timeout_minutes` never produces. Before S3 there was no bound at
-all: a twenty-day deadline stayed quiet for twenty days (C5).
+**54 hours is not a wall-clock maximum, and this spec states none.** The third
+term is *one sampling interval*, and a sampling interval is one local schedule
+day — not 24 hours. The 54-hour figure holds **only while the computer stays on
+and its UTC offset does not change**. Two things stretch it:
+
+- **A daylight-saving fall-back inside the window adds an hour.** On a
+  continuously available Europe/Budapest host, a catch-up at 21:30 CEST on
+  2026-10-22 (19:30Z) may accept a deadline exactly 24 h ahead; the 03:30 run on
+  2026-10-23 is 18 h early and quiet; the 03:30 run on 2026-10-24 is exactly 6 h
+  stale and quiet, because S4's comparison is strict; the next 03:30 falls after
+  the offset change, is 31 h stale and is loud — **55 hours** after the first
+  observation. Verified arithmetic is recorded in
+  `docs/specs/logbook/2026-09-17-dream-lock-stale-owner-design-review.md`.
+- **Any time the machine is off or asleep adds its own length**, because nothing
+  is sampled while it is down. A laptop closed for a week delays the alert by a
+  week.
+
+So the contract is **the sampling rule, not a number**: a record is quiet until
+some run observes it past both bounds, and runs happen at the local schedule
+time (plus catch-up on days with no recorded success). The two figures above are
+worked cases under stated conditions, not guarantees.
+
+**The realistic case is the walked one above: one lost night.** Reaching even 54
+hours requires a record whose deadline is nearly a day in the future, which the
+default 20-minute `dream_timeout_minutes` never produces. Before S3 there was no
+bound at all: a twenty-day deadline stayed quiet for twenty days (C5).
 
 The repeat cadence is not new: the `owner-unknown` throw shipped in PR #245
 already behaves this way (O3).
@@ -239,17 +290,22 @@ the same pass.
   - "The alert latency, walked", steps 1–5 and the paragraphs after them:
     applies **S4** branch (3) and its strict comparison for the one-night
     realistic case, and **S3**'s cap plus the sampling interval for the
-    fifty-four-hour maximum, over the `run-job`/`catchUp` facts recorded in
-    Context. It decides nothing, it is the only place this spec derives a
-    latency, and it is where S4's `>` versus `>=` question was settled. No other
-    surface may carry an unqualified "one lost night", or any figure other than
-    54 h / three lost runs for the maximum.
+    sampling-rule bound, over the `run-job`/`catchUp` facts recorded in Context.
+    It decides nothing, it is the only place this spec derives a latency, and it
+    is where S4's `>` versus `>=` question was settled. No other surface may
+    carry an unqualified "one lost night", and **no surface may state 54 hours
+    as a maximum without its qualification** — on and at a stable UTC offset, +1 h
+    across a fall-back, plus any downtime.
   - Implementation notes, "Do not add fields to the lock payload": applies
     **S1**.
   - Implementation notes, "The `busy` shape change reaches exactly one test
     outside the lock suite": applies **S1** and mirrors C4's inventory.
-  - Implementation notes, rebase interaction: the named `src/cli/dream.js`
-    regions are the ones **S4** and **S6** edit.
+  - Implementation notes, the dispatch re-derivation note: the named
+    `src/cli/dream.js` regions are the ones **S4** and **S6** edit, and the note
+    is what keeps C2/C3's line numbers from being read as current.
+  - The opening design-gate note and the owner-items preamble: process facts
+    (round counts, raw SHAs, standing-authorization framing). They state no S
+    fact, and the `Ready` claim they carry is a status, not a contract.
   - Dispatch precondition O1 applies **S4**, O2 **S3**, O3 the repeat cadence
     **S4** causes, O4 **S5**'s restart-first, no-dream-running recovery instruction and
     its named human-check residual against Table L6, O5 the recovery consequence
@@ -265,9 +321,11 @@ the same pass.
     `dream_timeout_minutes` validation exclusion applies **S3**. The digest-region exclusion is a work-package boundary, not an S
     fact.
   - The ADR-0012 amendment block: "A stale busy lock is loud" applies **S4** and
-    **S5**, its delivery paragraph **S5**, its latency paragraph **S4** *and*
-    **S3** (both bounds, the sampling interval, and both the realistic and the
-    54-hour figures), "An implausible deadline is not trusted" **S3**, the
+    **S5**, its delivery paragraph **S5**, its Status line **S7** (byte-for-byte,
+    and never strengthened to an owner signature), its latency paragraph **S4**
+    *and* **S3** (both bounds, the sampling interval, and both the realistic and the
+    54-hour figure with its qualification), "An implausible deadline is not
+    trusted" **S3**, the
     closing paragraph **S1**; its Status line is an **S7** fact.
   - The byte-exact user message is decided once, in **S5**. Its paraphrases —
     O4's description and the amendment's summary sentence — describe it and must
@@ -289,8 +347,15 @@ the same pass.
 
 ## Dispatch precondition — owner items
 
-`status: Ready` requires the owner to settle these. Each is a policy call, not
-an implementation detail; none may be resolved silently by the implementer.
+Six items. **None was ruled on directly.** Each is a **recommendation adopted
+under the standing authorization** recorded in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`, reversible
+by dated amendment, and each carries its overrule cost as this spec states it.
+None may be re-resolved silently by the implementer: an implementer who disagrees
+says so in the PR rather than choosing differently.
+
+**O4 is the one most likely to want the owner's eye**, because it is the only
+item that changes what a user is told to do with their own files.
 
 **O1 — The staleness bound. (Table S4)**
 *Question:* how far past its deadline may a lock stay `busy` before the dream
@@ -466,13 +531,16 @@ Recorded here, not done here. Each needs its own work package.
   expand scope to resolve it.
 - No new runtime dependency; plain Node ≥ 18; JSDoc types only; no golden
   fixture changes.
-- **Rebase interaction.** `WP-dream-digest-omits-own-job-alerts` is being
-  revised in parallel and also edits `src/cli/dream.js`, but a different region:
-  it touches the digest regeneration (`regenerateDigest`, step 19, inside the
-  `try` block), this one touches the lock-acquisition block at :593-603 and the
-  doc comment at :534-538. Whichever lands second rebases; expect a textual
-  conflict only if the other work package also edits the `Exit 0`/`Exit 1` doc
-  comment, in which case both lists must survive.
+- **Every `src/cli/dream.js` line number in this spec is pinned to the verified
+  base and MUST be re-derived at dispatch.** `WP-dream-digest-omits-own-job-alerts`
+  is `Ready` and lands in that same file first: it edits `regenerateDigest` and
+  its call sites and adds a recovery render, so every line after its earliest
+  edit shifts. This work package edits a different region — the lock-acquisition
+  block (≈ l.593-603, C2) and the exit-code doc comment (≈ l.536-537, C3) — so the
+  two do not overlap semantically, but the cited numbers will be stale. Locate
+  both regions by their code, not by line number, and expect a textual conflict
+  only if the other work package also edits the `Exit 0`/`Exit 1` doc comment, in
+  which case both lists must survive. The same re-derivation applies to C1–C5.
 
 ## Security checklist
 
@@ -562,8 +630,10 @@ S7 for AC6.
   expected failure, and any change to `src/cli/run-job.js` at all (routed above).
 - An attended conditional-recovery command, and any scheduler-disable /
   re-enable procedure in the message or the docs (both routed above; O4).
-- **An end-to-end scheduler test of the 54-hour latency.** Reproducing it needs
-  `run-job`'s `last_success` watermark and `catchUp`'s due predicate across three
+- **An end-to-end scheduler test of the sampling-rule latency** (54 hours on a
+  machine that stays on at a stable UTC offset; 55 across a fall-back; longer
+  with downtime). Reproducing it needs `run-job`'s `last_success` watermark,
+  `catchUp`'s due predicate and a local-timezone transition across three
   simulated schedule days, and `src/cli/run-job.js` is outside this work
   package's Deliverables boundary. The latency is a stated consequence of S3 and
   S4 over behavior this spec records in Context, not a behavior this spec ships;
@@ -580,12 +650,14 @@ S7 for AC6.
 Append this block verbatim to `docs/adr/0012-dream-run-lifecycle.md`, after the
 existing `## Amendment (2026-09-15): admit complete filtered sessions and report
 exclusion causes` section (Table S7). Do not edit it; do not reword its Status
-line.
+line. That line records adoption under the standing authorization, **not** an
+owner signature: the owner adds his own signature line to this amendment himself,
+and no work package may write `OWNER-SIGNED` or `OWNER-RATIFIED` on his behalf.
 
 ```markdown
 ## Amendment (2026-09-17): a stale lock must be loud, and an implausible deadline is not trusted — WP-dream-lock-stale-owner-loud
 
-Status: **PROPOSED — awaiting owner signature.**
+Status: **ACCEPTED under standing authorization 2026-09-17 — owner signature pending.**
 
 **Decision (amends part 6 again, after the 2026-09-15 live-owner amendment).**
 Table S in `docs/specs/WP-dream-lock-stale-owner-loud.md` is canonical. The
@@ -637,8 +709,12 @@ A record that still claims a future deadline is quiet until that deadline passes
 which the next paragraph bounds at twenty-four hours. Because a quiet decline
 records success, those bounds are only sampled once a day, so the true maximum is
 twenty-four hours of unexpired life, plus the six-hour bound, plus up to a full
-day until the next run observes it: **fifty-four hours, with three scheduled runs
-lost before the loud one.** The repeat cadence is not new: the unverifiable-owner
+day until the next run observes it: on a machine that stays on at a stable UTC
+offset, **fifty-four hours, with three scheduled runs lost before the loud one.**
+That is a worked case and not a wall-clock maximum: the third term is one local
+schedule day, so a daylight-saving fall-back inside the window adds an hour (55
+hours on a Europe/Budapest host), and any time the machine is off or asleep adds
+its own length. What this amendment fixes is the sampling rule, not a number. The repeat cadence is not new: the unverifiable-owner
 error introduced on 2026-09-15 already behaves this way.
 
 **An implausible deadline is not trusted.** A record whose finite deadline lies
@@ -660,8 +736,10 @@ unrelated lifecycle and capacity amendments remain in force.
 
 ## Definition of done
 
-1. Every owner item O1–O6 is settled and the spec is `Ready` before dispatch;
-   re-verify C1–C5 at the dispatch revision.
+1. This spec is `Ready`; owner items O1–O6 are recorded under the standing
+   process and need no further permission to dispatch, but a material change to
+   any of them does. **Re-verify C1–C5 at the dispatch revision** — the
+   `src/cli/dream.js` line numbers will have moved (Implementation notes).
 2. All verification steps pass locally; output pasted into the PR body,
    including both directions of every new assertion.
 3. Branch `wp/dream-lock-stale-owner-loud`; conventional commits; PR titled
