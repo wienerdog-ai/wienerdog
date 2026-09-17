@@ -62,11 +62,11 @@ id names **one call site**.
 
 **The transcript artifact is transient, and the spec says so.**
 `collectExtracts` writes the scratch JSON to disk (`src/core/dream/scratch.js:129`),
-but `src/cli/dream.js:1240` calls `cleanScratch(paths.state)` inside a `finally`
+but `src/cli/dream.js:1328` calls `cleanScratch(paths.state)` inside a `finally`
 block, and `cleanScratch` (`src/core/dream/scratch.js:163-164`) is
 `fs.rmSync(scratchDirOf(stateDir), {recursive: true, force: true})`. Since
 PR #253 that teardown runs only inside `if (ownsLock(paths.state))`
-(`src/cli/dream.js:1239-1241`) — a run that lost its lock to a stale-lock steal
+(`src/cli/dream.js:1327-1329`) — a run that lost its lock to a stale-lock steal
 leaves the cleanup to the stealer. So the file exists on disk during the run and
 is removed at teardown on the ordinary path. Probe P9 therefore proves **transient
 on-disk staging**, not a retained artifact — bytes on disk are bytes on disk, and
@@ -388,12 +388,12 @@ not authenticate.
 **The list is closed, and these are the two `redactOnly` callers deliberately
 left out of it**, so "nine" is a checkable claim rather than a short one:
 
-- `src/core/dream/promote.js:621` and `src/cli/dream.js:320` — `neutralise()`,
+- `src/core/dream/promote.js:621` and `src/cli/dream.js:321` — `neutralise()`,
   `WP-dream-promote-report` Table N's redact-then-sanitise transformation.
   `promote.js` is **not ungated**: the composed record is refused fail-loud at
   `promote.js:770` (`if (redactOnly(text) !== text) throw`), which puts it in the
-  EP2/EP4 gate class this WP excludes. `dream.js:320` feeds `console.log`
-  (`:1145`, `:1148`, `:1214`); on the scheduled path that stdout is teed into the
+  EP2/EP4 gate class this WP excludes. `dream.js:321` feeds `console.log`
+  (`:1222`, `:1225`, `:1291`); on the scheduled path that stdout is teed into the
   routine log by S7/S8, and on the interactive path it reaches no durable file.
 - `src/core/digest.js:146` — a comment, not a call.
 
@@ -556,6 +556,13 @@ review is added here on the spot (register-new-mirrors):
 - Reuse each test file's existing temp-directory / fixture helpers. Add no new
   helper module and no new fixture file. P9's inline JSONL write is the one
   exception and is specified in Table P.
+- **`tests/unit/scheduler-runjob.test.js` now ends with
+  `WP-dream-digest-omits-own-job-alerts`'s three `OWNJOB-AC6*` tests** (PR #257
+  appended them; the file is 3125 lines at base `a47f2546`, the last test
+  starting at `:3105`). This WP's five probes append **after** them. The helpers
+  the probes reuse — `setup()` `:33`, `writeScript()` `:92`, `withRun()` `:102`,
+  `fakeResolve` `:125` — are near the top and were unaffected by that append;
+  re-confirmed on `a47f2546`.
 - For the four STRADDLE-CHUNK probes, the two writes must reach the **same**
   handler in order (`PROBE_HEAD` first) with a real chunk boundary between them
   (see "Exact contracts"). Emitting them on different streams would test nothing,
@@ -858,7 +865,7 @@ block — and the two declarations are enforced by the ADR-0042 lane.
 - Any change to `src/core/secret-scan.js`, including the high-entropy pass.
 - Any change to the EP2 / EP4 gates or their `findings.length > 0` condition.
 - Any probe of the two excluded `redactOnly` callers named under Table S
-  (`promote.js:621`, `dream.js:320`) — they are gated or non-durable, and
+  (`promote.js:621`, `dream.js:321`) — they are gated or non-durable, and
   probing them is a different WP.
 - Adding a sixth sink, a tenth call site, or a new test harness module.
 - Modifying `writeClaude` in `tests/unit/dream-collect.test.js`.
@@ -930,11 +937,22 @@ Definition of done rather than left for the owner.
    Security checklist and Implementation notes, the real-temp-file requirement
    into item 1 below. (c) **THE DISPATCHER RE-DERIVES EVERY `file:NNN`
    CITATION.** They are pinned to the base this spec was verified against —
-   `main` at **`35e00e99`**, all fifty re-confirmed resolving on that tree — and
-   `src/cli/run-job.js` and `src/cli/dream.js` are files sibling packages land
-   in. Table S is where the numbers live, so what a later landing moves is line
-   numbers, not facts; re-derive them into a committed revision of this spec
-   rather than into a dispatch message. (d) Branch `wp/secret-sink-wiring-probes`.
+   `main` at **`a47f2546`**, where all 43 distinct citations were re-confirmed
+   resolving by a mechanical extractor whose output is pasted in the round-zero
+   logbook §10 — and `src/cli/dream.js` and `tests/unit/scheduler-runjob.test.js`
+   are files sibling packages land in. Table S is where the numbers live, so what
+   a later landing moves is line numbers, not facts; re-derive them into a
+   committed revision of this spec rather than into a dispatch message.
+   (d) Branch `wp/secret-sink-wiring-probes`.
+
+   **Dated re-pin, 2026-09-17 (a47f2546).** PR #257 landed
+   `WP-dream-digest-omits-own-job-alerts`, moving six `src/cli/dream.js` line
+   numbers and appending to `tests/unit/scheduler-runjob.test.js`. Every cited
+   construct was re-derived **by grepping for the construct**, and every one of
+   them still exists, unchanged, at a new line. **Nothing but line numbers
+   moved: no construct disappeared, no behaviour changed, no contract in this
+   spec is affected — so this is a mechanical re-pin and no new design round is
+   owed.** The gate stays CLOSED at round 1 and the status stays `Ready`.
 
 1. All verification steps pass locally; output pasted into the PR body, including
    the seven `ok … (KNOWN DEFECT WD-SINK-…)` lines. **All sixteen probes must be
