@@ -1,10 +1,12 @@
 ---
-title: WP-dream-report-run-skips design review round 1 — dispositions
+title: WP-dream-report-run-skips design review — rounds 1 and 2, dispositions and closure
 date: 2026-09-17
 related_wps: [WP-dream-report-run-skips, WP-dream-filtered-input-budget, WP-quarantine-warnings-file, WP-dream-promote-module]
 ---
 
-# WP-dream-report-run-skips design review round 1 — dispositions
+# WP-dream-report-run-skips design review — dispositions
+
+## Round 1
 
 Independent design gate against tip `5dc06883`, verdict **needs-attention**, six
 findings. The raw result is preserved unaltered beside this file as
@@ -14,8 +16,8 @@ anything** — the two questions this round raised for the owner are parked as
 owner items 4 and 5 in the spec, undecided.
 
 All six are fixed or dispositioned in one revision; none is dropped. Four changed
-a contract row, so the surface goes back for a full fresh external round rather
-than a delta read.
+a contract row, so the surface went back for a full fresh external round rather
+than a delta read — that is round 2, below.
 
 | # | Finding | Band | Weight | Disposition |
 |---|---------|------|--------|-------------|
@@ -26,7 +28,7 @@ than a delta read.
 | F5 | The code-owned heading is not reserved from brain-authored content | medium | heavy | **MIRROR THE EXISTING RULE** — which is: no rule. Pinned by fixtures, routed |
 | F6 | The inline integers-only gate accepts plausible coercion bugs | medium | light | **FIX** — full-string expectation, unsafe integer, third RED proof |
 
-## F1 — the claim was false; the product stays the size it was
+### F1 — the claim was false; the product stays the size it was
 
 The reviewer is right and its recommendation is out of scope. The spec's coverage
 boundary said the throw path "carries every exclusion count" and let
@@ -46,7 +48,7 @@ names it; acceptance criterion 12 pins it; it is routed under Discovered issues;
 and owner item 4 asks whether zero-admission runs should get durable accounting,
 recommending yes-but-not-here.
 
-## F2 — the user-facing sentence has to be true
+### F2 — the user-facing sentence has to be true
 
 Row B3 already said the memo is invalidated by a fingerprint **or package-version**
 change and that the skip holds only while the measurement exceeds the **current**
@@ -65,7 +67,7 @@ paragraph, the claim register, acceptance criterion 3, owner item 1 and RED proo
 depends on: no apostrophe, and the word *skipped* still appears only in the two
 quarantine bullets and the pointer.
 
-## F3 — an unsatisfiable criterion
+### F3 — an unsatisfiable criterion
 
 Confirmed by reading: the capacity stop (`scratch.js:91-94`, `:124-127`) and the
 deadline stop (`:95-98`) each `break` the one admission loop, so whichever fires
@@ -74,7 +76,7 @@ partition over **two** runs — one ending in a capacity stop, one in a deadline
 — each exercising the three *continuing* arms (quarantine, oversized, read-deferred)
 before its stop.
 
-## F4 — measured, and the cheap fix is not available
+### F4 — measured, and the cheap fix is not available
 
 `refreshWarnings` never throws; a refused or unreadable `reports/warnings.md` comes
 back as `{written:false, reason}` and the run continues
@@ -92,7 +94,7 @@ surface and ADR-0012's ordering. Recorded as a named residual with its bound (th
 ledger stays ground truth; the next successful refresh repairs the file) and owner
 item 5.
 
-## F5 — the existing rule is that there is no rule
+### F5 — the existing rule is that there is no rule
 
 Measured at `545df8bd`: `ENFORCEMENT_HEADING`, `REDACTION_HEADING` and
 `PRESERVED_HEADING` (`src/core/dream/promote.js:584-591`) appear **only** where they
@@ -108,7 +110,7 @@ containing the exact heading — and routes the shared gap under Discovered issu
 for whichever package owns `composeRecord`'s document model. A later fix now has to
 move a fixture, which is the point of pinning it.
 
-## F6 — the gate was enumerating the bad
+### F6 — the gate was enumerating the bad
 
 The old hostile assertion scanned the render for `passwd|1\.5|-1|NaN`. Measured:
 a guard rewritten as `Number.isFinite(Number(v)) … Math.floor(Number(v))` renders
@@ -121,7 +123,7 @@ never the forbidden set.** Table A also pins the guard as byte-identical to
 `secretRevertSummaryLine`'s (`ledger.js:500`), which is both a no-drift contract and
 the literal that proof 3 mutates.
 
-## Evidence for this revision
+### Evidence for the round-1 revision
 
 Run in a uniquely named scratch subdirectory against a stub exporting the
 formatter, both directions: compliant → exit 0; module absent → exit 1; and four
@@ -132,3 +134,107 @@ and compared byte for byte, and each proof's `find` was checked against both
 renders: proof 1 reaches the six-count render only, proof 2 both, proof 3 neither
 (it is a code mutation, so reaching a render would mean it could redden T1/T2 for
 the wrong reason).
+
+## Round 2
+
+Independent design gate against tip `ea116788` (pre-rebase), verdict
+**needs-attention**, two findings plus one machinery finding. The raw result is
+preserved unaltered beside this file as
+`2026-09-17-report-run-skips-design-r2-raw.json` with its focus and meta notes,
+committed before adjudication at `37ac751a`.
+
+**Round 2 confirmed the round-1 work:** F2, F4, F5 and F6 are substantively
+dispositioned and their runtime claims check out, and **all 43 explicit
+`file:line` citations in the three scoped documents resolve** to existing files
+and in-range lines.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---------|------|--------|-------------|
+| R2-1 | F1 remains contradicted by the spec's opening product claim | medium | light | **FIX THE CLAIM** — qualify both sentences and sweep for others |
+| R2-2 | The read-deferred count cannot reliably observe the condition it promises | high | light | **FIX THE CLAIM + ROUTE THE DEFECT** — B6 says what it counts; the reader bug goes to its own package |
+| R2-M | Criterion 5 can prove read-deferred disjointness only with an unreachable state | medium | light | **FOLDED INTO R2-2** — the criterion now states that it asserts the partition of what the collector CLASSIFIED, and explicitly does not claim production reachability |
+
+**Both are CLAIM fixes. Neither changes what the implementer builds** — no
+Deliverables row, no contract value, no test identity and no RED declaration
+moved — so under `docs/runbooks/codex-review.md`'s weighted-closure rule they are
+LIGHT and the loop closes here without a further external round.
+
+### R2-1 — the opening paragraphs still said every run writes a report
+
+Table A's coverage row was corrected in round 1; the Context section that a reader
+meets first was not, leaving two coverage contracts in one document. Five
+sentences changed, all of them claims and none of them mechanism:
+
+1. the ADR-0004 opening — "a markdown file the dream already writes" → **"on the
+   runs that write one"**, plus "no write on a run that writes nothing today";
+2. the report definition — "Each run writes a **dream report**" → **"A run that
+   admits at least one session writes"**, with the bound stated outright: only a
+   real, non-dry run that admitted at least one session and reached `promote()`
+   composes one, and a run that admitted nothing throws or returns idle;
+3. the motivating example — "A run that skipped 191 sessions produces a report"
+   → **a MIXED run**, one that consolidated some sessions and so wrote a report
+   while skipping 191, with the zero-admission variant named as the harder case
+   that stays out of scope (owner item 4);
+4. the build-history sentence — a gap should be discoverable "from the report of
+   the night it happened" → **"of a night that had one"**, plus the sentence that
+   a night which consolidated nothing left no page to write on;
+5. the idempotence criterion — "a block the run already composes" → **"a block
+   that a report-writing run already composes"**.
+
+### R2-2 — B6 counts a classification, and the reader under-reports it
+
+Verified in `src/core/transcripts/stream.js`: `sizeBytes` is documented at `:71`
+as "the discovery-recorded fs size (avoids a second stat)", and `:129-138`
+declares exhaustion only when `bytesConsumed < sizeBytes`. A transcript at or
+below the 50 MiB discovery ceiling that grows past the 200 MiB per-session
+allowance mid-read therefore consumes 209,715,200 bytes against a recorded size of
+at most 52,428,800, the comparison is false, `runExhausted` stays false, and the
+loop takes the *file fully read* path with a partial extract in hand.
+
+**That is a pre-existing collector defect** — it arrived with the fresh
+per-session allowance in `WP-dream-filtered-input-budget` — **and this package
+neither fixes it nor depends on it.** Row B6 now defines the count as *the number
+of transcripts this run's collector CLASSIFIED as read-deferred*, states the
+direction of the error (**it can under-count and cannot over-count**: every
+transcript it counts really was an incomplete read with unread bytes), and drops
+any coverage claim. Criterion 4's "each count is exact" became "each count equals
+what its row defines", with B1–B5 exact against their sources and B6 exact against
+the classification. **The byte-exact B6 bullet was re-checked and left alone**: it
+speaks only of the transcripts it counts, so an under-count makes it say less,
+never something false. The reader defect is routed under Discovered issues with
+its `file:line`, trigger, consequence and fix direction (decide unread-bytes from
+the open descriptor, not the stale discovery size).
+
+The machinery finding falls out of the same fix: criterion 5 asserts the partition
+of what the collector classified — a transcript the reader failed to classify as
+read-deferred is classified as something else in the same pass and still
+contributes exactly once — and it now says so, and says that a green there is not
+evidence that production coverage is complete.
+
+### Closure
+
+**Round 2 found nothing that changes the product this WP builds. Both items are
+LIGHT, both are fixed, and both fixes are mechanically verified. The design loop
+is closed under `docs/runbooks/codex-review.md`'s weighted-closure rule**, and the
+spec moves to `Ready`. Three rounds ran in total — zero (template conformance, two
+findings), 1 (six) and 2 (two) — ten findings, none dropped, every raw preserved
+before adjudication (`b7f45600`, `37ac751a`).
+
+**What the round-2 reviewer executed**, from its raw result: `git rev-parse HEAD`
+with `git merge-base` against `545df8bd` and the scoped diff (confirmed the target
+and the two-file documentation scope); `git diff --check` over the scoped range
+(no whitespace errors); a read-only Node citation-range checker over the three
+scoped Markdown documents (**all 43 citations resolved**); and a Node inspection of
+the intake constants (`PRE_READ_CEILING_BYTES` = 52,428,800,
+`MAX_RUN_BYTES` = 209,715,200). It ran no product test and no lint, because the
+branch is documentation only and the formatter does not exist yet.
+
+### Evidence for the round-2 revision
+
+Re-run in a uniquely named scratch subdirectory, both directions, after the
+round-2 edits: compliant → exit 0; module absent → exit 1; the four violating
+states (coerce-and-floor guard, pointer tied to the heading, oversized bullet
+reworded, pointer sentence reworded) → exit 1 each; compliant again → exit 0. The
+two worked-example fences and all three proof `find` sets were re-checked against
+the stub renders and still agree. `npm run lint` passes and `git diff --check` is
+clean.

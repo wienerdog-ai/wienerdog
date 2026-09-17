@@ -1,7 +1,7 @@
 ---
 id: WP-dream-report-run-skips
 title: Make the dream report account for the sessions a run could not consume
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-quarantine-warnings-file, WP-quarantine-banner-decay, WP-dream-promote-in-workspace, WP-dream-filtered-input-budget]
@@ -22,35 +22,53 @@ epic: quarantine-surface
 > the count table, two acceptance criteria and the long `node -e` gate were
 > describing code that had been deleted, so the package could not be dispatched
 > and is not `Ready` until the design-review loop says so. Everything below is
-> re-derived against `main` at `545df8bd` (2026-09-17). The previous revision's
+> re-derived against `main` at `2d5e2465` (2026-09-17). The previous revision's
 > PROVISIONAL mechanism is **discharged and removed**: the promotion rewrite it
 > was waiting for has landed, so the Deliverables table below names real files at
 > a real SHA and carries no markers. Five design questions that this
 > re-derivation could not settle alone are parked under **Dispatch precondition —
 > owner items**; three measured gaps are routed under **Discovered issues**.
 >
-> **Design review round 1 (2026-09-17) returned needs-attention with six findings;
-> all six are dispositioned in this revision** and recorded, finding by finding, in
-> `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md` beside the raw
-> result. Four of them changed a contract row, so the surface is expected to be
-> re-reviewed in full. Nothing here records the owner accepting anything.
+> **2026-09-17 — CLOSED AND `Ready`.** Three review rounds ran on this spec: round
+> zero (template conformance, two findings), round 1 (six findings) and round 2
+> (two findings), each by an independent gate. **All ten are dispositioned; none is
+> dropped.** Every round's raw result was committed before adjudication —
+> `b7f45600` for round 1, `37ac751a` for round 2 — and the dispositions are
+> recorded finding by finding in
+> `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`. Round 2
+> confirmed F2, F4, F5 and F6 substantively dispositioned with their runtime claims
+> checking out and all 43 `file:line` citations resolving; its own two findings are
+> **claim** fixes that change nothing the implementer builds, so the loop closes
+> under `docs/runbooks/codex-review.md`'s weighted-closure rule without a further
+> external round. **Nothing in this spec records the owner approving, accepting or
+> ratifying anything** — the five owner items below are recommendations adopted
+> under the standing process, each with its overrule cost, and each reversible.
 
 ## Context (read this, nothing else)
 
 **Wienerdog is just files (ADR-0004).** This package adds counted lines to a
-markdown file the dream already writes. No process, no state, no new command.
+markdown file the dream already writes **on the runs that write one**. No process,
+no state, no new command, and no write on a run that writes nothing today.
 
 The nightly **dreaming** job consolidates the user's **transcripts** into the
-**vault**. Each run writes a **dream report** at `<reports_dir>/<YYYY-MM-DD>.md`
-(`reports/dreams/` by default) — the human-readable account of what the run did.
-Its body is authored by the brain (the model); `promote()` then appends the run's
-own code-owned accounting beneath it, in one composed block
+**vault**. A run that **admits at least one session** writes a **dream report** at
+`<reports_dir>/<YYYY-MM-DD>.md` (`reports/dreams/` by default) — the
+human-readable account of what the run did. **Not every run writes one, and that
+bound is load-bearing for this whole package:** the report exists only on a real,
+non-dry run that admitted at least one session and reached `promote()`. A run that
+admitted nothing writes no report at all — it either throws or returns idle — and
+Table A's coverage row is where that is decided and stated path by path. Its body
+is authored by the brain (the model); `promote()` then appends the run's own
+code-owned accounting beneath it, in one composed block
 (`src/core/dream/promote.js:706-777`). The brain is told, in
 `skills/wienerdog-dream/SKILL.md:410-424`, that it writes the candidate-level
 accounting and that the orchestrator appends the rest.
 
-**What the report does not say: what the run could not read.** A run that skipped
-191 sessions produces a report that does not mention them. Since
+**What the report does not say: what the run could not read.** A **mixed** run —
+one that consolidated some sessions and so wrote a report, while skipping 191
+others — produces a report that does not mention the 191. (A run that skipped
+those 191 and admitted *nothing* writes no report at all; that is the harder case,
+and it stays out of scope here — Table A's coverage row, owner item 4.) Since
 `WP-dream-filtered-input-budget` landed there are **six** distinct facts about
 coverage that no durable surface carries, and they are not interchangeable —
 three of them persist until something changes, three of them resolve themselves
@@ -86,9 +104,11 @@ decided for this package, generalised to the five exclusion arms that exist now.
 This section's three siblings all describe **standing state** — what is
 quarantined *now* (`reports/warnings.md` lists it; `wienerdog doctor` and the
 digest banner count it and point there). This one is the only surface that
-describes **one run**: what *that night* could not see. The dream reports are the
-vault's build history, and a permanent gap in coverage should be discoverable a
-month later from the report of the night it happened.
+describes **one run**: what *that night* could not see — **on the nights that
+wrote a report**. The dream reports are the vault's build history, and a permanent
+gap in coverage should be discoverable a month later from the report of a night
+that had one. A night that consolidated nothing left no page of that history to
+write on, which is the residual this package names rather than closes.
 
 **The section is code-owned and built from integers alone.** No basename, no
 path, no reason string, no session id. The precedent is `secretRevertSummaryLine`
@@ -101,19 +121,20 @@ actually holds (Table A's pointer row).
 
 ## Current state
 
-Re-derived against `main` at `545df8bd` (2026-09-17). Every citation below was
+Re-derived against `main` at `2d5e2465` (2026-09-17). Every citation below was
 read whole at that SHA. (The re-derivation was performed at `b4af715e` and
-re-pinned here: `545df8bd` is docs-only on top of it — `git diff --stat
-b4af715e 545df8bd -- src/ tests/ skills/` is empty — so every citation carries
+re-pinned here: `2d5e2465` is docs-only on top of it — `git diff --stat
+b4af715e 2d5e2465 -- src/ tests/ skills/` is empty — so every citation carries
 over unchanged.)
 
 **`src/cli/dream.js` line numbers are the ones that will move, and two sibling
 packages are queued to move them.** `WP-dream-digest-omits-own-job-alerts` edits
 the `regenerateDigest` function and its two call sites and adds a re-render on a
-late failure; `WP-dream-lock-stale-owner-loud` edits the lock-acquisition block
-and the exit-code doc comment. Both are expected to land in that file **before**
-this package. **Every `src/cli/dream.js:NNN` citation in this spec is pinned to
-`545df8bd` and MUST be re-derived against the then-current tree at dispatch** —
+late failure — it is `Ready` on `main` as of `2d5e2465`;
+`WP-dream-lock-stale-owner-loud` edits the lock-acquisition block and the
+exit-code doc comment. Both are expected to land in that file **before** this
+package. **Every `src/cli/dream.js:NNN` citation in this spec is pinned to
+`2d5e2465` and MUST be re-derived against the then-current tree at dispatch** —
 by a committed revision of this spec, never by a dispatch message, because
 `scripts/boundary-check.js` reads this file's Deliverables table and not the
 message. Nothing either sibling touches is a contract of this package: neither
@@ -136,7 +157,13 @@ canonical statement; the code facts are:
 - **Newly quarantined.** `:58` (over the pre-read ceiling) and `:111` (a
   non-`ok` parse outcome) push onto `newlyQuarantined`; each arm `continue`s.
 - **Read-deferred.** `:114-117` — a `runExhausted` parse discards the partial
-  extract onto `readDeferred` and continues to older candidates.
+  extract onto `readDeferred` and continues to older candidates. **`runExhausted`
+  is the collector's only evidence here, and the reader under-reports it:**
+  `streamLines` declares exhaustion only when `bytesConsumed < sizeBytes` and
+  `sizeBytes` is the DISCOVERY size (`src/core/transcripts/stream.js:71`,
+  `:129-138`), so a file that grew past the allowance mid-read comes back as a
+  complete read. Row B6 defines the count accordingly and claims no coverage; the
+  reader defect is routed under Discovered issues and is not this package's work.
 - **Oversized.** `:102-105` (a matching ledger memo, `cached: true`) and
   `:119-123` (a fresh measurement, `cached: false`) push onto `oversized` and
   continue. The fresh arm also writes the memo into the returned
@@ -234,7 +261,7 @@ truncation is retired (ADR-0012, amendment of 2026-09-15; ADR-0023 Amendment 3).
 |--------|------|-------|
 | modify | src/core/dream/scratch.js | **One addition only:** `collectExtracts` also returns the count **Table B**'s `stillQuarantined` row names. No other returned field changes shape and no selection behaviour changes |
 | modify | src/core/dream/promote.js | the exported formatter of **Table A**, the one optional input of **Table B**, and `composeRecord` emitting the section last. Nothing else in the module changes |
-| modify | src/cli/dream.js | build the six integers **Table B** names from `sel` and pass them to `promote()`; nothing else in the run changes. **Its `:NNN` citations are pinned to `545df8bd` and are re-derived at dispatch** — two sibling packages are queued to edit this file first (Current state) |
+| modify | src/cli/dream.js | build the six integers **Table B** names from `sel` and pass them to `promote()`; nothing else in the run changes. **Its `:NNN` citations are pinned to `2d5e2465` and are re-derived at dispatch** — two sibling packages are queued to edit this file first (Current state) |
 | modify | tests/unit/dream-collect.test.js | cover the new count only (**Table B**); no existing assertion on `collectExtracts`'s return shape is weakened. This is `scratch.js`'s test file (its test names are prefixed `dream-collect:`) |
 | modify | tests/unit/dream-promote.test.js | the four test identities of **Table C**, plus the appended-section coverage. Test names are prefixed `dream-promote:` |
 | modify | tests/integration/dream.test.js | one end-to-end run whose committed report carries the section (`dream-integration:` prefix) |
@@ -335,14 +362,14 @@ Operative prose cites the table and row rather than restating it.
 
 Row order is render order.
 
-| # | Count | Definition | Source in `src/cli/dream.js` at `545df8bd` |
+| # | Count | Definition | Source in `src/cli/dream.js` at `2d5e2465` |
 |---|---|---|---|
 | B1 | `newlyQuarantined` | transcripts this run recorded as `quarantined` for the first time — over the pre-read ceiling, or a non-`ok` parse outcome | `sel.newlyQuarantined.length` |
 | B2 | `stillQuarantined` | **the transcripts this run ACTUALLY skipped for an existing quarantine** — the discovered files for which `selectState` returned `'skip-quarantined'`, counted at selection time. **Not** the run-start ledger's active-quarantine count; row B7 says why that is a different number | `sel.skippedQuarantined` — **a new integer `collectExtracts` returns**, computed from the same `discovered` array and the same `selectState` call that already partitions candidates (`src/core/dream/scratch.js:54`) |
 | B3 | `oversized` | transcripts whose own filtered extract exceeds `dream_max_input_bytes`, measured this run or read from the ledger's `oversizedExtracts` memo. **CANONICAL for what the bullet may promise (ADR-0023 Amendment 3):** the memo is consulted only after ledger eligibility and the discovery ceiling pass, and it permits skipping the parse **only while the measured size exceeds the CURRENT X** — so exactly three things release the session, and none of them is a retry next run: **(i)** the source file's fingerprint changes, **(ii)** the running `package.json.version` changes, **(iii)** X is raised **to or past the measured size** (a smaller rise changes nothing). Each of the three earns a **fresh parse and measurement**, whose outcome may be oversized again. A parser change therefore only helps by riding (ii) | `sel.oversized.length` |
 | B4 | `capacityDeferred` | the capacity stop's unvisited remainder — valid transcripts left over when the run's input budget was spent. No ledger record, so ordinary eligibility retries them next run | `sel.deferred.length` (`sel.dropped` is the same array; `sel.droppedForSize` its length) |
 | B5 | `deadlineDeferred` | the preprocessing deadline's unvisited remainder. No ledger record; retried next run | `sel.deadlineDeferred.length` |
-| B6 | `readDeferred` | transcripts whose read did not complete within the per-session work allowance; the partial extract is discarded. No ledger record; retried next run | `sel.readDeferred.length` |
+| B6 | `readDeferred` | **the number of transcripts THIS RUN'S COLLECTOR CLASSIFIED as read-deferred** — those for which `parseWithOutcome` reported `runExhausted`, whose partial extract is discarded. No ledger record; retried next run. **This is a count of a classification, not a claim of coverage, and the direction of the error is stated:** the reader declares exhaustion only when `bytesConsumed < sizeBytes`, and `sizeBytes` is the DISCOVERY size (`src/core/transcripts/stream.js:71`, `:129-138`), so a file that grew past the per-session allowance after discovery reads partially with `runExhausted` **false** and is never classified here. B6 can therefore **UNDER-count, and cannot over-count**: every transcript it counts really was an incomplete read with unread bytes, so a non-zero B6 never states something false. That reader behaviour is a pre-existing collector defect, routed under Discovered issues; **this package must not claim exact coverage for B6 and must not depend on a fix**. **The byte-exact bullet is UNCHANGED and stays true under this reading** — checked in round 2: it speaks only of the transcripts it counts ("N session transcript(s) were still being written while this run read them"), never of all of them, so an under-count makes it say less, never something false | `sel.readDeferred.length` |
 
 | Fact / rule | Value |
 |---|---|
@@ -485,10 +512,14 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
       the three shipped headings and that nothing scans for them (Table A's
       **ownership** row), why `records` is not the channel (row B11), and the
       return paths that compose no report and what `exclusions` does and does not
-      contain (Table A's **coverage** row) — plus the `545df8bd` pin and the two
+      contain (Table A's **coverage** row) — plus the `2d5e2465` pin and the two
       sibling packages queued into `src/cli/dream.js`, which mirrors the
       `dream.js` Deliverables cell and Definition of done item 0(d)
 - [ ] Operative prose steps that apply it — **walked, in document order**:
+      - the opening ADR-0004 paragraph and the report-definition paragraph →
+        Table A's **coverage** row (only a report-writing run carries the section);
+      - the 191-session paragraph, framed as a MIXED run → Table A's **coverage**
+        row;
       - the Context paragraph naming the oversized gap → Table B row **B3** and
         Table A's oversized bullet;
       - the Context paragraph quoting ADR-0023 Amendment 2 → Table A's **pointer**
@@ -522,8 +553,9 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
         reused → row **B11**; nothing on the throw path → Table A's **coverage**
         row; the `scratch.js` bound → row **B2**;
       - Discovered issues, entry by entry: the default-X gap → Table B row **B3**;
-        the zero-admission gap → Table A's **coverage** row; the unreserved
-        headings → Table A's **ownership** row;
+        the zero-admission gap → Table A's **coverage** row; the stale-discovery-size
+        reader defect → Table B row **B6**; the unreserved headings → Table A's
+        **ownership** row;
       - Dispatch-precondition owner items 4 and 5 → Table A's **coverage** row and
         Table A's **pointer** row (with residual 4's measured ordering);
       - Dispatch-precondition owner items 1, 2 and 3 → row **B3** with Table A's
@@ -556,13 +588,26 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
       `scratch.js` change. **No surface may define it from the run-start ledger's
       active set**
 - [ ] **CLAIM REGISTER — which runs carry the section.** Table A's **coverage** row
-      decides it — only a real run that admitted at least one session — and its
-      mirrors are the Context paragraph's closing clause, the Current-state
+      decides it — only a real, non-dry run that admitted at least one session and
+      reached `promote()` — and its mirrors are the **opening product paragraph**
+      and the **191-session paragraph** (both qualified in round 2), the
+      build-history sentence, the ADR-0004 sentence, the Current-state
       "orchestrator" subsection, residual 2, acceptance criterion 12, the
-      zero-admission Discovered entry, owner item 4, and the Out-of-scope bullet on
-      the throw path. **No surface may say that `reports/warnings.md`, `doctor` or
-      the digest banner carries this run's B1/B2** — they carry the ledger's
-      standing set, which is a different fact (design round 1, finding 1)
+      idempotence criterion, the zero-admission Discovered entry, owner item 4, and
+      the Out-of-scope bullet on the paths that write no report. **No surface may
+      say or imply that every run writes a report** (design round 2, finding 1),
+      and **no surface may say that `reports/warnings.md`, `doctor` or the digest
+      banner carries this run's B1/B2** — they carry the ledger's standing set,
+      which is a different fact (design round 1, finding 1)
+- [ ] **CLAIM REGISTER — what `readDeferred` counts.** Table B row **B6** decides
+      it — the number of transcripts THIS RUN'S COLLECTOR CLASSIFIED as
+      read-deferred, which can under-count and cannot over-count — and its mirrors
+      are the Current-state read-deferred bullet, acceptance criterion 4's
+      B1–B5/B6 split, criterion 5's "partition of what the collector classified"
+      clause, and the routed reader defect under Discovered issues. **No surface
+      may call B6 exact, complete, or a measure of how many incomplete reads
+      occurred**, and no acceptance criterion may depend on the reader defect being
+      fixed (design round 2, finding 2)
 - [ ] **CLAIM REGISTER — who owns the heading.** Table A's **ownership** row decides
       it — nobody, for this heading and for the three shipped ones alike — and its
       mirrors are the Current-state "report's code-appended accounting" subsection,
@@ -647,9 +692,15 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
   (secret quarantine)` unowned and put two rules in one composer, so this package
   applies none and pins the behaviour with criterion 11's two fixtures instead.
   Routed under Discovered issues.
-- **Expect `src/cli/dream.js` to have moved under you.** Two sibling packages are
-  queued into that file ahead of this one (Current state names them and what each
-  edits). None of them touches `collectExtracts`, the `promote()` call site, the
+- **Every `src/cli/dream.js:NNN` citation in this spec is pinned to the base it was
+  verified against — `main` at `2d5e2465` — and MUST be re-derived at dispatch**,
+  because two sibling packages are queued into that file ahead of this one:
+  `WP-dream-digest-omits-own-job-alerts` (`Ready` on `main`; the `regenerateDigest`
+  function, its two call sites, and a re-render on a late failure) and
+  `WP-dream-lock-stale-owner-loud` (the lock-acquisition block and the exit-code
+  doc comment). The re-derivation is a committed revision of this spec, never a
+  dispatch message (Definition of done item 0(d)). None of them touches
+  `collectExtracts`, the `promote()` call site, the
   accounting composer or the report, so if a `:NNN` citation here does not land on
   what it names, the fact is still right and the number is stale — find the named
   construct, say so under "Discovered issues" in the PR body, and do not widen the
@@ -693,8 +744,11 @@ Numbered, because Table C's `criterion` fields reference them.
    earns a fresh measurement that may find the session too big again, and names the
    setting. It never promises a retry next run, and never implies that any smaller
    rise in the limit helps. *(Proved by Table C's second proof.)*
-4. **Each count is exact against Table B**, and a count of 0 omits its bullet while
-   the others render unchanged in row order. **`stillQuarantined` is asserted on
+4. **Each count equals what Table B's row defines**, and a count of 0 omits its
+   bullet while the others render unchanged in row order. B1–B5 are exact against
+   their sources; **B6 is exact against the collector's own classification and is
+   not a coverage claim** (row B6 states the under-count direction and routes the
+   reader defect). **`stillQuarantined` is asserted on
    these four cases, which are what separate the selection reading from the
    run-start-ledger reading (row B7):** (a) an UNCHANGED prior quarantine is counted
    once, in `stillQuarantined` only; (b) a prior quarantine whose FINGERPRINT
@@ -710,12 +764,20 @@ Numbered, because Table C's `criterion` fields reference them.
    each `break` the single admission loop, so whichever fires first prevents the
    other: **a run exercising all five collector arms at once does not exist.** The
    partition is asserted on **two** runs instead, each carrying at least one
-   already-quarantined file and exercising the three CONTINUING arms — quarantine,
+   already-quarantined file and exercising the CONTINUING arms — quarantine,
    oversized, read-deferred — before its stop: **(a)** a run ending in a capacity
    stop (`capacityDeferred` non-zero, `deadlineDeferred` 0); **(b)** a run ending in
    a deadline stop (`deadlineDeferred` non-zero, `capacityDeferred` 0). For **each**
    run: `entries.length` plus the six counts does not exceed the number of
    discovered files, and no discovered file contributes to two counts.
+   **What this criterion asserts, exactly: the partition of what the collector
+   CLASSIFIED.** It is unaffected by row B6's under-count, because a transcript the
+   reader failed to classify as read-deferred is classified as something else in the
+   same pass and still contributes exactly once. **Whether a REAL production run can
+   reach a non-zero `readDeferred` is a separate question, and this criterion does
+   not answer it** — the routed reader defect is why, and closing it is not this
+   package's work. Exercise the arm through the parse outcome the collector reads,
+   and do not read a green here as evidence that production coverage is complete.
 6. **The zero case.** A run with all six counts at 0 appends nothing: the report has
    no `## Sessions this run could not consolidate` heading and its other
    code-appended sections are byte-identical to before this change.
@@ -759,7 +821,8 @@ Numbered, because Table C's `criterion` fields reference them.
 14. `npm test` and `npm run lint` pass. Every file under `tests/golden/` is
     byte-identical and none is edited.
 15. Idempotence: **N/A — this WP ships no command and adds no write to a user
-    machine.** It adds lines to a block the run already composes and writes once.
+    machine.** It adds lines to a block that a report-writing run already composes
+    and writes once.
     Re-running the dream over an unchanged corpus reaches the idle return and
     writes no report at all; a same-day run that DOES admit sessions is criterion
     11(a), not an idempotence claim.
@@ -891,9 +954,32 @@ no commit — or **a change to the failure message**, which is `WP-dream-filtere
 input-budget`'s owner-ratified row A9 text. Each is its own work package; nothing
 is filed here. Owner item 4 states the recommendation.
 
+**The reader decides "were there unread bytes?" from the DISCOVERY size, so a file
+that grows during the read is treated as fully read.** Routed from design round 2,
+finding 2. `streamLines` takes `sizeBytes` as "the discovery-recorded fs size
+(avoids a second stat)" (`src/core/transcripts/stream.js:71`) and, when the
+per-session allowance runs out, declares exhaustion only if
+`bytesConsumed < sizeBytes` (`:129-138`). **Trigger:** a transcript at or below the
+50 MiB discovery ceiling (`PRE_READ_CEILING_BYTES`) that grows past the 200 MiB
+per-session allowance (`MAX_RUN_BYTES`) while the run is reading it — the live
+append case ADR-0023 Amendment 3 already names as an accepted race, now with a
+second consequence. At that point `bytesConsumed` is 209,715,200 and `sizeBytes` is
+at most 52,428,800, so the comparison is false, `runExhausted` stays false, and the
+loop `break`s down the **file fully read** path. **Consequence:** the partial
+extract is treated as complete — admitted and marked processed, or classified by a
+later arm — instead of being discarded and retried, and the session is never
+counted in B6. **Fix direction:** decide unread-bytes from the current
+file-descriptor state at the moment the budget runs out (an `fstat` on the open
+`fd`, or a probe read for one further byte) rather than from the stale discovery
+size, with an integration fixture that grows a file past the allowance mid-read.
+**This arrived with the fresh-per-session allowance in
+`WP-dream-filtered-input-budget` and is not this package's to fix**; row B6 states
+the resulting under-count and claims no coverage, so nothing here depends on the
+fix. It needs its own work package; nothing is filed here.
+
 **No code-owned report heading is reserved from brain-authored content, and this
 predates the new section.** Routed from design round 1, finding 5. Measured at
-`545df8bd`: `ENFORCEMENT_HEADING`, `REDACTION_HEADING` and `PRESERVED_HEADING`
+`2d5e2465`: `ENFORCEMENT_HEADING`, `REDACTION_HEADING` and `PRESERVED_HEADING`
 (`src/core/dream/promote.js:584-591`) appear only in emission (`:708`, `:737`,
 `:751`); nothing scans the candidate body, strips a prior code-owned block or
 dedupes. Two consequences already ship: a brain that writes `## Refused by policy
@@ -907,9 +993,15 @@ criterion 11 so a future fix has to move a fixture. Nothing is filed here.
 
 ## Dispatch precondition — owner items
 
-Five items. Each carries a recommendation and the cost of overruling it. **None
-of them is decided**: nothing in this repo records the owner accepting any of
-them, and this spec asserts no such acceptance. Items 4 and 5 were raised by
+Five items. **None was ruled on directly.** Each is **a recommendation adopted
+under standing authorization, not a direct ruling** — the standing process is
+recorded in `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`
+("Owner items inside those packages"), which carries it forward from
+`2026-09-05-owner-rulings-git-env-pinning-queue.md`: the architect records a
+recommendation with the cost of overruling it, the session may dispatch under
+that recommendation, and **the owner reverses any of them by dated amendment.**
+Nothing in this repo records the owner approving, accepting or ratifying any of
+the five, and this spec asserts no such acceptance. Items 4 and 5 were raised by
 design review round 1 (2026-09-17) and are recorded with their dispositions in
 `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`.
 
@@ -997,22 +1089,22 @@ design review round 1 (2026-09-17) and are recorded with their dispositions in
 
 ## Definition of done
 
-0. **DISPATCH PRECONDITION.** (a) The five owner items above are answered, and the
-   answers are applied to this spec by a committed revision — never by a dispatch
-   message, because `scripts/boundary-check.js` reads the Deliverables table in this
-   file and nothing a message says changes what CI sees. (b) This spec is `Ready`,
-   which only the design-review loop or the owner may make it
-   (`docs/runbooks/codex-review.md`). (c) `WP-dream-filtered-input-budget` is `Done`
-   at `docs/specs/done/WP-dream-filtered-input-budget.md` (merged in PR #245;
-   flipped in PR #246, `545df8bd`), so this spec's new `depends_on` entry is
-   satisfied. (d) **Every `src/cli/dream.js:NNN` citation is re-derived by a
-   committed revision of this spec** if either sibling named in Current state —
+0. **DISPATCH PRECONDITION.** (a) The five owner items above travel with this
+   package as **recommendations adopted under standing authorization**; any the
+   owner reverses by dated amendment is applied to this spec by a committed
+   revision — never by a dispatch message, because `scripts/boundary-check.js`
+   reads the Deliverables table in this file and nothing a message says changes
+   what CI sees. (b) **Design rounds zero, 1 and 2 are closed**: all ten findings
+   dispositioned, raws preserved before adjudication at `b7f45600` and `37ac751a`,
+   the record in `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`.
+   (c) `WP-dream-filtered-input-budget` is `Done` at
+   `docs/specs/done/WP-dream-filtered-input-budget.md` (merged in PR #245; flipped
+   in PR #246), so this spec's new `depends_on` entry is satisfied. (d) **Every
+   `src/cli/dream.js:NNN` citation is re-derived by a committed revision of this
+   spec** if either sibling named in Current state —
    `WP-dream-digest-omits-own-job-alerts`, `WP-dream-lock-stale-owner-loud` — has
-   landed in that file since `545df8bd`, and likewise after any further collector
-   work. The re-derivation changes line numbers, not the tables. (e) **Design
-   review round 1's six findings are all dispositioned** in this revision
-   (`docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`), and the
-   fresh external round that follows those four heavy changes has run.
+   landed in that file since `2d5e2465`, and likewise after any further collector
+   work. The re-derivation changes line numbers, not the tables.
 1. All verification steps pass locally; output pasted into the PR body, including
    the three-state evidence for each new gate and the `red-proofs` roll-up.
 2. Conventional commits; PR titled
