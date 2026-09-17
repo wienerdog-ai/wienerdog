@@ -92,7 +92,7 @@ recognize every historical harness format.
 | modify | src/core/runtime-profile.js | Table D internal read-only profile |
 | modify | src/scheduler/descriptor.js | Bind Table D filter contract to existing prompt hash |
 | modify | src/cli/dream.js | Tables B–D integration and shared supervised lifecycle |
-| modify | skills/wienerdog-dream/SKILL.md | Table A provenance and filtered-input instructions |
+| modify | skills/wienerdog-dream/SKILL.md | Table A provenance and Table B3 dialogue-only learning discovery |
 | modify | src/core/runtime-skill-digests.json | Regenerate the changed dream skill's digest only |
 | create | tests/unit/primary-dialogue.test.js | Table A behavior |
 | create | tests/unit/dream-primary-filter.test.js | Tables C–D behavior |
@@ -171,11 +171,11 @@ authority boundaries change. The tables below own their facts.
 
 | ID | Contract | Rule |
 |----|----------|------|
-| A1 | Scope of retention | Within the existing bounded-read and redaction limits, retain genuine user requests/corrections plus their concluding assistant replies; an unanswered user request remains. This is each exchange, not the last reply of the entire session. No tool-call arguments, tool-result text, reasoning text, or recognized intermediate assistant updates enter the model-visible extract. |
+| A1 | Scope of retention | Within the existing bounded-read and redaction limits, retain genuine user requests/corrections plus their concluding assistant replies; an unanswered user request remains. This is each exchange, not the last reply of the entire session. Source tool-call and tool-result details (including invocation metadata under B3), reasoning text, and recognized intermediate assistant updates do not enter the model-visible extract. |
 | A2 | Claude acceptance | Accept text from non-meta, non-sidechain `type:user` records with `message.role:user`, whether the content is a string or text blocks. Tool-result blocks do not become user text. Accept assistant text on `stop_reason:end_turn`; exclude `tool_use` progress. For legacy assistant records without stop reason, use the last text reply before the next accepted user request or EOF as a best-effort conclusion, marked uncertain. Retain original order and timestamps. |
 | A3 | Codex acceptance | Use the first session header. In response-item messages, accept `input_text` blocks identified by `content_item_kinds:user.text` in the metadata object or its parseable JSON-string form; corresponding per-block metadata must align with content before selecting blocks. Accept assistant `output_text` on `phase:final_answer`; exclude `phase:commentary`. Developer/system instructions are not dialogue. A legacy user message with no provenance metadata, or assistant message with no phase, may use the role/content shape and A2's last-reply fallback, marked uncertain rather than asserted human/verified. Present-but-malformed or unmappable metadata is not an absent-metadata legacy fallback. |
 | A4 | Copied context | A session whose first header explicitly identifies a subagent, or a Claude sidechain, supplies no primary dialogue in this iteration: its parent conversation's reportback is the primary source. Do not infer new humans from copied user-role history or choose a later copied session header. Ordinary forks without an evidenced copied-prefix boundary retain the existing deduplication limitation; do not interpret unverified ordinal fields or claim independent recurrence is solved. |
-| A5 | Provenance | Carry a code-derived `derived_from_untrusted` boolean on each retained message. Verified primary user text is false; legacy/uncertain-origin text is true. A retained assistant conclusion is true if its exchange contains tool output or its source geometry is incomplete/uncertain; otherwise false. This conservative rule includes tool output that was omitted from primary text. The relevance model cannot edit these flags. The dream skill must set a candidate's flag true if any supporting message has true/unknown provenance, retain existing raise-only rules, and never infer false merely from the remaining user/assistant roles. Tool-derived claims are attributed assistant reports, not verified facts. |
+| A5 | Provenance | Compute a code-derived `derived_from_untrusted` boolean over the original source stream before primary projection, message caps, or relevance selection. Verified primary user text is false; legacy/uncertain-origin text is true. An unknown prior context starts assistant taint as true; observing tool output or a source-context gap sets it true from that point through the rest of the session. An assistant conclusion is false only while preceding source context is known and neither condition has occurred. A new user request, dropped exchange, cap, or filter-request boundary never resets this state. The relevance model cannot edit these flags. The dream skill must set a candidate's flag true if any supporting message has true/unknown provenance, retain existing raise-only rules, and never infer false merely from remaining user/assistant roles. Tool-derived claims are attributed assistant reports, not verified facts. This conservative primary-message rule does not replace B2's original invocation-window gate. |
 | A6 | Exchange blocks | Code groups consecutive user messages through their concluding assistant reply into ordered blocks with local IDs `b0`, `b1`, etc. A user-only block is valid. IDs are local integers encoded by code, never transcript strings or filenames. Selecting a block retains its original capped/redacted text, roles, timestamps, and provenance together. No new summary text or model-authored metadata enters scratch. |
 | A7 | Existing caps | Apply the existing per-message cap after secret scanning and the existing newest-message cap to primary messages, setting `truncated` truthfully. A capped boundary block keeps only its retained messages and remains marked truncated; this WP does not restore content lost to those limits. No added model-size truncation is allowed. |
 
@@ -185,7 +185,7 @@ authority boundaries change. The tables below own their facts.
 |----|----------|------|
 | B1 | X admission | X is `dream_max_input_bytes` and measures compact JSON bytes of complete A-series primary extracts, including their metadata, before model filtering. Keep newest-first order, exact-full stop, omit-and-stop on remainder overflow, skip individually oversized extracts, the soft collection deadline, and fresh per-session read allowance. Filtering creates no backfill opportunity. |
 | B2 | Code-only gate input | Before removing/reordering source messages, produce a parent-owned projection of the existing capped raw extract containing session identity, message roles, and unchanged skill-invocation geometry, with message text absent. Pass that projection to the existing `extractsBySession` consumer instead of rebuilding authorization evidence from filtered scratch. It is never written into model-visible directories or supplied to either model. Its lifetime is the run; retain no raw tool text. Existing missing/malformed geometry continues to fail closed. |
-| B3 | Learning evidence | Model-visible primary metadata may name the originally observed skill names and error state without source tool text or misleading indices into filtered messages. The existing `skill_invocations` indexed array belongs only to B2. The dream uses the descriptive metadata to identify possible learnings; it grants no authority. Code still verifies against B2. Filtering cannot create an invocation, lower taint, or convert Codex evidence into qualifying Claude evidence. |
+| B3 | Learning evidence | Neither model receives metadata extracted from source tool records (invocation names, error states, indices, or other tool details); the `skill_invocations` array belongs only to B2. The dream identifies possible skill learnings from retained user/assistant dialogue and must not infer a tool's success or failure from absent evidence. Update the skill's discovery and session-counting instructions to reflect that visible input. Claimed Claude skill usage remains independently checked against B2's actual invocation evidence and original taint geometry. Filtering cannot create an invocation, lower the gate's taint, or convert Codex evidence into qualifying Claude evidence. |
 | B4 | Size memo compatibility | Add optional `extractFormat` to oversized-memo records. The collector recognizes only the code-owned literal `primary-dialogue-v1` for this mode. Missing/other formats invalidate size evidence and trigger ordinary remeasurement even if app version stayed unchanged. Do not reset processed outcomes, baselines, quarantine records, or secret-revert counters. No automatic historical replay. |
 | B5 | Pipeline ordering | Hold the existing dream lock. Collect primary extracts and immutable gate input; honor existing no-input/dry-run exits; pass containment checks; perform the bounded filter; establish the final scratch baseline; then run existing workspace consolidation and promotion. The filter cannot write scratch itself. Code publishes only validated selections and verifies its source files were unchanged while filtering. Tampering aborts rather than becoming a keep-original fallback. |
 | B6 | Empty selections | Keep an extract file and its identity even if the relevance filter selects no blocks. Consolidation receives an empty `messages` array and may decide no memory is warranted. The existing run-level publication/secret outcome still governs selected session ledger updates. Empty selection is not independently recorded as processed before that gate. |
@@ -253,6 +253,11 @@ leave an unregistered restatement for a later review.
   original gate interpretation, not indices renumbered after primary selection.
   A projection optimization is acceptable only if the existing gate verdicts
   remain identical; expanding the validator's authority is outside this WP.
+- Tables A5 and B3 deliberately trade observation for simpler input: later
+  assistant replies may remain conservatively tainted even when independently
+  authored, and skill usages/failures mentioned only in tool records may go
+  unnoticed. Do not restore tool metadata or add lineage machinery to recover
+  those observations in this iteration.
 - Do not add the filter's temporary packets as discovered session transcripts.
   They are mechanics under the dream's existing owned cleanup, never a new
   persisted queue. Preserve the lock-loser's zero-mutation behavior.
@@ -266,14 +271,14 @@ leave an unregistered restatement for a later review.
 ## Security checklist
 
 - [ ] Only code-issued IDs from the current request are accepted; no model value becomes a path or command.
-- [ ] Tables A5 and B2–B3 preserve provenance and skill authorization despite removal of tool text.
+- [ ] Tables A5 and B2–B3 preserve cross-exchange provenance and code-owned skill authorization without model-visible tool details.
 - [ ] Tables B5, C6, and D4 distinguish harmless selection failure from integrity/supervision failure.
 - [ ] Tables B7 and D2–D5 preserve secret handling, private modes, pinning, hermetic capabilities, and authorization binding.
 
 ## Acceptance criteria
 
-- [ ] AC1: Both harnesses follow Table A on supported current and legacy forms; tool text and recognized progress/control records do not enter primary input. Uncertain provenance is never silently cleared.
-- [ ] AC2: Collector behavior follows Table B, including X-before-filter/no-backfill, memo invalidation, immutable code-only gate evidence, and unchanged ledger/publication semantics.
+- [ ] AC1: Both harnesses follow Table A on supported current and legacy forms; tool details and recognized progress/control records do not enter primary input. A later assistant conclusion retains A5 taint when its originating exchange is removed; user/exchange/filter boundaries never clear it.
+- [ ] AC2: Collector behavior follows Table B, including X-before-filter/no-backfill, memo invalidation, dialogue-only learning discovery, immutable code-only gate evidence, and unchanged ledger/publication semantics.
 - [ ] AC3: Filtering follows Table C; accepted output only selects original blocks, and malformed/failing calls cannot silently discard their input or run without a bounded lifecycle.
 - [ ] AC4: Runtime and descriptor integration follow Table D; existing consolidation, unrelated profiles, dry-run, no-input, and outer-supervisor behavior remain valid.
 - [ ] AC5: The offline comparison below records whether important decisions/corrections/preferences survived and whether actual memory changes remain faithful. No observed important loss is left undispositioned; no 100% coverage or unsupported numerical quality claim is required.
@@ -330,7 +335,8 @@ delivered. This is manual evidence; the commands above do not run it.
 
 ## Out of scope (do NOT do these)
 
-- Source tool evidence storage/retrieval, access reporting, Read/Grep tracing,
+- Source tool evidence storage/retrieval or model-visible invocation metadata,
+  access reporting, Read/Grep tracing,
   production judge, exact token accounting, or full-coverage enforcement.
 - Per-session consolidation agents, completion receipts, ledger redesign,
   durable partial-session state, automatic historical replay, and removal of

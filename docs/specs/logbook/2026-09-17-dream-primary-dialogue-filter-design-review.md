@@ -174,3 +174,63 @@ prove the consolidator examined every selected session. No historical replay is
 introduced. The WP remains Draft until feedback and owner sign-off; no
 implementation or deployment has started. Independent design-review results and
 proposed dispositions are recorded in this same logbook entry.
+
+## Independent design review: round 1
+
+Reviewed revision: `15486ec762c09a7bae85225e20bc98f754cc4212`.
+Raw output: [round 1 JSON](2026-09-17-dream-primary-filter-adversarial-r1-raw.json).
+Raw-introduction commit: `56ca368272a9ab72ed0a9a9066acfec2c9bf55a7`.
+The raw artifact was committed before inspection. Native reviewer status was
+empty before and after; no implementation tests or model calls ran in this
+static design review. The raw report discloses unsuccessful ADR-path discovery;
+its supported finding cites the actual WP, validator, and dream skill instead.
+
+Verdict: `needs-attention`. One in-scope product finding, band A. One separately
+routed scope objection. The orchestrator checked the cited Tier-3 flag consumer,
+invocation-window gate, dream provenance instructions, and Claude Skill metadata
+source against the reviewed source.
+
+| Finding | Band | Weight | Proposed disposition | Rationale |
+|---|---|---|---|---|
+| R1-A1: assistant taint resets across exchanges | A | HEAVY | fix | A later tool-free paraphrase can inherit external content; filtering can remove its earlier source. Preserve conservative provenance through later assistant conclusions before selection. |
+| Routed B3 tool-metadata exception | Scope; A/B safety consequence not alleged | HEAVY | fix to existing owner scope | Remove model-visible invocation metadata; retain code-only authorization. No new exception to the owner's no-tool-input direction. |
+
+A separate scope cross-check after the initial coherence pass also identified
+B3's avoidable exception. The architect confirmed it can be removed without
+weakening B2 or adding infrastructure. Learning discovery will have less source
+information; it can only use retained dialogue, with actual invocation checks
+still enforced independently by code.
+
+These are proposed Draft corrections to satisfy existing source/provenance
+requirements, not owner acceptance of a new residual or authorization to build.
+No evidence store, lineage system, new trust gate, or validator-policy expansion
+is proposed. The architect owns the revision; a fresh independent round follows.
+
+### Stop criterion restated for the HEAVY revision
+
+Close when the fresh round has no supported in-scope product finding. Band A/B
+requires a scoped proposed fix or explicit maintainer/owner decision. HEAVY
+product changes require a fresh round; LIGHT machinery corrections are verified
+mechanically and band C alone does not extend the loop. Excluded architecture
+remains routed as scope objections. If the next round finds another gap of the
+same kind/contract family, stop local patching and present the canonical contract
+and open design question for maintainer feedback. The WP stays Draft even if the
+review becomes clean; no implementation dispatch follows.
+
+### Architect revision after round 1
+
+The architect changed A5 to derive primary-message provenance before projection,
+caps, and selection, retaining assistant taint through the rest of the session
+after tool output or uncertain source context. B2's original invocation-window
+interpretation is unchanged. B3 now excludes invocation metadata from both
+models and permits learning discovery only from retained dialogue. The draft
+names the corresponding conservative-assistant and reduced-skill-observation
+tradeoffs. All affected mirrors were updated together; no deliverable or new
+infrastructure was added.
+
+The orchestrator reread the changed canonical cells and mirrors, verified that
+the former per-exchange reset and visible skill/error metadata permission were
+removed, and reran repo-configured markdownlint (2 files, 0 errors), frontmatter
+(275 specs, 4 agents), and `git diff --check` (exit 0). Current product code and
+its already-run baseline tests did not change, so those tests were not repeated.
+A fresh independent round reviews the revised contract below.
