@@ -1,0 +1,42 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b0f1-f445-7710-b1c4-ec4231666a8c",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against a4d19c0c6b174a9d7b8584e396c016c93dba489a",
+    "baseRef": "a4d19c0c6b174a9d7b8584e396c016c93dba489a",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: the provenance contract can label externally derived text false, and its gap handling omits a demonstrated parser drop path. The worked example’s 566-byte intake count, existing goldens, and sampled gate geometry checks passed.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "User-role text bypasses the never-resetting provenance flag",
+        "body": "A5 unconditionally labels accepted user messages false, including after tool output or a context gap; AC3 explicitly requires this. A synthetic sequence of tool output followed by a user quoting that output is accepted by the real parser. Under A5, the quoted external text becomes false even though its provenance is demonstrably external. This also contradicts A5’s definition of false as having no earlier tool output or gap, repeated in the logbook. The successor collection contract lets supporting messages marked false produce candidates marked false. The acknowledged headless-prompt limitation does not cover this observed-tool-to-user laundering path.",
+        "file": "docs/specs/WP-dream-primary-dialogue-projection.md",
+        "line_start": 324,
+        "line_end": 324,
+        "confidence": 0.99,
+        "recommendation": "Apply the monotonic taint state to retained user messages too, and distinguish harness attribution from verified provenance. Add a tool-output → quoted user text fixture and update AC3, the worked example, and the logbook definition consistently."
+      },
+      {
+        "severity": "medium",
+        "title": "Explicitly signal depth-limit drops as provenance gaps",
+        "body": "A5 enumerates oversized records, exhausted budgets and unparseable lines, but both parsers also silently discard valid JSON exceeding MAX_JSON_DEPTH before classification. Executed synthetic tool-output records with ordinary text and deeply nested extra metadata: both parsers discarded the tool record, retained the concluding assistant message, and returned outcome ok, zero oversized records and truncated false. An observer placed after the existing depth guard cannot discover that missing evidence. Following only the enumerated gap cases could therefore label the conclusion false; AC3’s oversized-record fixture would not detect it.",
+        "file": "docs/specs/WP-dream-primary-dialogue-projection.md",
+        "line_start": 324,
+        "line_end": 324,
+        "confidence": 0.9,
+        "recommendation": "Require observer notification before every context-losing parser return, explicitly including depth-limit rejection. Add Claude and Codex depth-limit fixtures asserting that every subsequent retained assistant message remains tainted."
+      }
+    ],
+    "next_steps": [
+      "Executed the actual parsers and streaming reader with synthetic bytes supplied through an in-memory filesystem shim; also checked three existing golden fixtures, wrapper equality, caps, budget exhaustion and the actual gate function. No private transcripts were accessed.",
+      "Read-only assessment: parsePrimaryWithOutcome does not exist yet, so its acceptance, taint and compatibility guarantees were evaluated as contracts, not executed implementation.",
+      "Verification machinery: add explicit A6 redaction/cap tests and B1 single-read assertions. No concrete expectRed sets are present to validate; the spec supplies proposed mutations and instructions to measure them."
+    ]
+  }
+}

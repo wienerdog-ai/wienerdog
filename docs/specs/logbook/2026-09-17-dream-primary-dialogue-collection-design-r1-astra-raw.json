@@ -1,0 +1,32 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b0f1-fbdc-7413-a38f-5919568adaf7",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against a4d19c0c6b174a9d7b8584e396c016c93dba489a",
+    "baseRef": "a4d19c0c6b174a9d7b8584e396c016c93dba489a",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch unchanged: the deadline invalidates the central admission guarantee. Executed collector/ledger probes with mocked I/O and in-memory proposed substitutions, real validation gates, dry-run reporting, and descriptor hashing. Read promotion, cleanup, upgrade, ADR, and report-skip paths; did not run the full suite or offline corpus measurement. Tested gate verdicts survived text removal; Codex evidence remained non-authorizing.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "The preprocessing deadline can admit additional sessions despite identical intake bytes",
+        "body": "C1 guarantees identical admission and exclusion sets, but scratch.js:95 measures elapsed time encompassing parsing, serialization, and scratch writes. Projection changes those costs. Executing the real collector with mocked timing and the prescribed parser/size substitutions admitted one session before the deadline in the baseline and four with projection, using identical intake byte counts and the same limit. This is a timing counterexample, not a performance benchmark. Smaller writes can therefore admit sessions the baseline deferred; those additional sessions can be marked processed without examination, contradicting the claimed protection against worsening F1. Added projection work can also reduce admission. AC7 and the logbook's 'unchanged by construction' argument inherit this false guarantee.",
+        "file": "docs/specs/WP-dream-primary-dialogue-collection.md",
+        "line_start": 261,
+        "line_end": 261,
+        "confidence": 1,
+        "recommendation": "Limit the guarantee to byte-policy equivalence under identical deadline checkpoints and explicitly price deadline-dependent admission as an owner decision, or redesign admission to provide a deterministic bound. Update C1's mirrors, AC1/AC7, and the logbook; add tests where changed preprocessing costs move the deadline boundary in both directions."
+      }
+    ],
+    "next_steps": [
+      "Machinery — medium, confidence 1.0; docs/specs/WP-dream-primary-dialogue-collection.md, lines 466–474: AC4 requires promote to raise the candidate's taint flag. The executed validator instead rejects an understated flag and leaves candidate bytes unchanged; promotion consumes that refusal. Require rejection for false taint, acceptance for correctly declared true taint, and a clean-invocation control that becomes rejected when the map is incorrectly rebuilt from scratch.",
+      "Clarify D2's enforcement boundary: source-message flags are code-produced, but propagating them to ordinary candidates is prompt-only. Explicitly retain unknown/missing provenance → true. The invocation gate does not verify every candidate's supporting messages.",
+      "Document the verified compatibility limits: empty projections remain processed; report-skip bullets remain truthful although deadline-dependent counts can change. The dream skill changes the scheduler prompt hash; normal update/sync rebinds authorization, while stale bindings fail closed. Preserve the final digest render and ownership-checked cleanup order. The inspected file:line citations resolve."
+    ]
+  }
+}
