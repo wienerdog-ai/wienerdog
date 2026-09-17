@@ -476,9 +476,15 @@ I re-read `run()` to check the new position rather than assuming it transferred:
 
 ### Mirror walk
 
-Swept for every term the reviewer named — `exactly two`, `after the lock is
-released`, `last statement of run()`, `arming`, `two recovery sites`, `temp
-substitution` — and not for any one wording of them. Stale hits found and fixed:
+**CORRECTION, round 7:** this sweep was reported as complete and **it was not**.
+Round 7 found three surviving operative statements it missed — the Context
+paragraph saying step 19 is the only filtered render and that failures render
+again unfiltered, the Implementation-notes residual promising an unfiltered
+re-render on post-step-19 throws, and AC6c requiring step-19 omission. The sweep
+below listed the terms it searched but never recorded its own OUTPUT, so "swept
+and fixed" was an assertion rather than evidence; round 7's entry carries the raw
+grep and a classification of every hit, which is what makes the claim checkable.
+What the round-6 sweep did find and fix:
 the top note's "last statement of `run()`", the Deliverables `dream.js` cell, the
 checklist's acceptance-criteria bullet and its operative-prose (e) entry. Two new
 mirrors registered: **O4** (mirrors Table A's *Residual 2*) and the
@@ -511,3 +517,104 @@ applied to the tool being my own shell one-liner.
 **Nothing in this round was ruled on by the owner.** O1, O2, O3 and now **O4**
 are open. The rulings record still carries the pre-round-4 wording of O3 and is
 deliberately unedited by this pass.
+
+## Round 7 — no product finding; the loop CLOSES
+
+| Field | Value |
+|-------|-------|
+| Backend / model | Codex plugin 1.0.6 adversarial-review, **`gpt-6-astra`** |
+| Tip reviewed | `286c288a` (pre-rebase) · Base `2d5e2465` |
+| Raw output | `docs/specs/logbook/2026-09-17-dream-digest-omits-design-r7-astra-raw.json`, committed in **`4fd4315b`** (post-rebase) before adjudication |
+| Verdict | `needs-attention` — **2 findings, both MACHINERY, zero about the product** |
+| Confirmed by execution | ordinary dream-lock exclusion; current-ledger rendering; unchanged step-19 bytes; **one additional write**; both named residuals (cleanup and concurrent `sync`); and the corrected exit inventory **including `:740`** |
+| Citation nit | `alerts.js:200` begins the `catch` whose `return []` is at `:201` — corrected everywhere it is cited |
+
+### Findings and dispositions
+
+| # | Band | Weight | Finding | Disposition | What changed |
+|---|------|--------|---------|-------------|--------------|
+| R7-1 | **C** | **LIGHT** | Operative prose still directed the rejected design in three places: Context (step 19 is the ONLY filtered render; failures render again unfiltered), Implementation notes (post-step-19 throws re-render unfiltered), AC6c (the digest written at step 19 omits the callout). R6-3 was therefore not genuinely fixed | **FIX** | All three rewritten. Context now says step 19 stays UNFILTERED and one filtered render is the last statement of the locked body, with no recovery anywhere. The residual says the in-process half was fixed **by placement**. **AC6c** now states what the digest actually holds at B1: B1 runs in `run-job` after the child exited 0, so the filtered render has already published — the test asserts the digest is **the filtered one** and `alerts.jsonl` holds the new `success-marker-refused` record, and it explicitly makes no claim about step 19's bytes (AC7d's subject). Round 6's "mirror walk complete" claim is **corrected in place** above |
+| R7-2 | **C** | **LIGHT** | The required RED set contradicted revised AC7: the step-19 mutant was declared to redden AC7a/b/**c**, but none of AC7c's early-exit paths reaches step 19; and the mutant DOES change successful step-19 bytes (AC7d), which the declared set omitted. Since observed must equal declared, the contract could reject a correct implementation | **FIX** | Table C re-derived **per declaration against the revised criteria**, with two new columns — *must NOT redden* and *measured or derived*. AC7c removed from the step-19 mutant; **AC7d added**. Five sets are marked **measured on `9d1282cf`**, two **derived** and never run, with the rule stated that **the measurement is authoritative** and the implementer commits what actually reddens |
+
+Both are band **C** and **LIGHT** — they change nothing the product does — so under
+"Weighted closure" the fixes land, are verified mechanically, and the loop closes
+without another external round.
+
+### Mechanical verification (a) — the sweep, with its OUTPUT
+
+Round 6 claimed a complete sweep and recorded only the terms it searched; round 7
+found three survivors. This time the raw output is here and **every hit is
+classified**. Command:
+
+```text
+grep -n -i 'recover\|re-render\|rerender\|armed\|arming\|only filtered\|step 19 omits\|step-19 omits\|after the lock is released\|last statement of .run()\|exactly two' docs/specs/WP-dream-digest-omits-own-job-alerts.md
+```
+
+**29 hits. ZERO operative.**
+
+| Lines | Classification | Why |
+|-------|----------------|-----|
+| 20, 51, 56, 62, 63, 65, 79 | **HISTORY** | inside the dated close / re-open blockquote (every line begins `>`), recording what rounds 2-6 found and removed |
+| 168, 322, 365, 367, 510, 861, 863, 864, 875, 922, 926 | **HISTORY (negative)** | statements that the thing is **absent** or instructions to **delete** it: "there is no recovery render and no second attempt anywhere in this design"; the Deliverables cell's "no `catch`, no arming flag, no second render site"; the resume delta's "The recovery mechanism comes OUT, entirely"; "fixed by PLACEMENT rather than by a recovery render" |
+| 433, 436, 882, 885 | **HISTORY (withdrawal)** | rows and bullets whose subject is the withdrawal itself: `NOT "exactly two"`, "Why there is no recovery render … now REMOVED", the replaced declaration id, and the two claims the implementer must not re-encode |
+| 897, 1219 | **HISTORY (rejected alternative)** | rejected alternative A and its Out-of-scope prohibition — both say `run-job` must **not** re-render |
+| 120, 408, 450, 904, 996 | **UNRELATED** | "**Exactly two** places write `digest.md`" (feeders, not write counts); "exactly two more `\n`" (the literal digest's trailing bytes); "anything `run-job` … cannot **re-render**" (a fact about the product); "there are exactly two and no third feeder"; "used for exactly two things" (`WIENERDOG_JOB`'s two uses) |
+
+### Mechanical verification (b) — Table C, one row per declaration
+
+Reproduced from the spec so this record stands alone. **M** = measured on
+`9d1282cf`; **D** = derived here, never run, implementer measures and corrects.
+
+| mutation | must redden | must NOT redden | M/D |
+|----------|-------------|-----------------|-----|
+| `dream-digest-filter-removed` | AC1, AC6c, AC6d, AC7g | AC2-AC5, AC6a/b/e/f, AC7a-f, AC8 | **D** (AC1 was M) |
+| `dream-digest-filter-ignores-config` | AC4, AC8 | AC1, AC3, AC5, AC6f, all AC7 | **M** |
+| `dream-digest-filter-always-on` | AC3, AC5 | AC1, AC4, AC6f, all AC7 | **M** |
+| `dream-digest-filter-ignores-run-token` | AC5 | AC1, AC3, AC4, AC6f, all AC7 | **M** |
+| `dream-digest-filter-ignores-record-date` | AC6f | AC1, AC2-AC5, all AC7 | **D** |
+| `dream-digest-filter-at-early-render` | AC6a, AC6b | all AC7, AC1-AC5 | **M** |
+| `dream-digest-filter-at-step-nineteen` | AC7a, AC7b, **AC7d** | **AC7c** (removed — no early-exit path reaches step 19), AC6a-d, AC7g, AC1-AC5 | **D** |
+
+### Mechanical verification (c) — every edit confirmed individually
+
+Last round three replacements were lost to a script that exited before writing.
+This round each edit was applied in its own step and grepped for immediately:
+`step 19 is not where it lands` (Context), `fixed it by` (Implementation notes),
+`dream child exited 0` (AC6c), `must NOT redden` (Table C), `its return [] is at
+l.201` (the citation nit), `RESUME, do not restart` (Definition of done),
+`Standing-process status` ×4 (owner items), and `status: Ready`. `git diff --stat`
+shows both the spec and this logbook changed.
+
+### Closure
+
+**The loop is DONE at round 7** under `docs/runbooks/codex-review.md`, "Weighted
+closure": *the loop is DONE when a round finds nothing about the product.* Round
+7's two findings were both about this document's instructions; both are band C
+and LIGHT; both were fixed and verified mechanically above.
+
+**Seven rounds, two reviewer models.** Rounds 1-3 `gpt-5.6-sol` via `codex exec`;
+rounds 4-7 `gpt-6-astra` via the Codex plugin. Findings: **3, 2, 0** — then, after
+the spec had gone `Ready` and an implementation had been dispatched — **3, 3, 3,
+2**. Raws committed before adjudication, post-rebase SHAs: **`d86e1616`** (r1),
+**`2eeba955`** (r2), **`6c96471c`** (r3), **`35114dba`** (r4), **`3170accb`**
+(r5), **`464a26da`** (r6), **`4fd4315b`** (r7).
+
+**The design changed shape twice, on evidence rather than preference**: the
+recovery mechanism was **removed** at round 5 once it had generated a finding in
+three consecutive rounds, and the filtered render was moved **back under the dream
+lock** at round 6 once the unlocked placement was shown to permit a stale-ledger
+overwrite. What survived every round unchanged: the three conjuncts, the single
+filtering call site, and Table A's principle — *when in doubt the stale callout is
+shown; a genuine one is never hidden*.
+
+`WP-dream-digest-omits-own-job-alerts` moves to **`Ready`** in the same commit as
+this entry. The paused implementation on `wp/dream-digest-omits-own-job-alerts` @
+`9d1282cf` **resumes** against the numbered delta; it does not start over.
+
+**Owner items O1, O2, O3 and O4 are recorded under the standing process** — each
+a recommendation **adopted under standing authorization, not a direct ruling**,
+with its overrule cost, reversible by dated amendment. **The owner has ruled on
+none of the four.** `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`
+still carries this WP's **pre-round-4** entry, which is now wrong in its O3
+premise and predates O4 entirely; that file is deliberately **not edited** by this
+pass, and the replacement text was handed to the orchestrator with O3 first.

@@ -1,7 +1,7 @@
 ---
 id: WP-dream-digest-omits-own-job-alerts
 title: Stop the dream's own digest render from re-showing the alerts its success clears
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
@@ -13,8 +13,26 @@ adrs: [ADR-0004, ADR-0012, ADR-0031, ADR-0042]
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template gives
   the skeleton, the runbook the rules. Read both.
 
-> **RE-OPENED 2026-09-17 — the design gate is NOT closed, and this spec is back
-> to `Draft`.** After round 3 closed the loop and this spec went `Ready` (merged
+> **The design gate ran 2026-09-17 against `e545033c` and CLOSED at round 7.**
+> **This spec is `Ready`.** Seven rounds across two reviewer models — rounds 1-3
+> `gpt-5.6-sol` via `codex exec`, rounds 4-7 `gpt-6-astra` via the Codex plugin —
+> with findings **3, 2, 0, then 3, 3, 3, 2**. The design changed shape twice on
+> evidence, not on preference: the recovery mechanism was **removed** at round 5,
+> and the filtered render was moved **back under the dream lock** at round 6.
+> Round 7 found **nothing about the product** — its two findings were both about
+> this document's own instructions — so the loop closes under
+> `docs/runbooks/codex-review.md`, "Weighted closure". Every round's raw output
+> was committed BEFORE adjudication. The per-round tables, dispositions, mirror
+> walks and gate runs are
+> `docs/specs/logbook/2026-09-17-dream-digest-omits-design-review.md`.
+>
+> **The history below is kept because it is the reason the contract reads as it
+> does.** It records a gate that was re-opened AFTER this spec first went
+> `Ready` and after an implementation had been dispatched — that implementation
+> is **paused at `9d1282cf` and must RESUME from there** against the numbered
+> delta in Implementation notes, never start over.
+>
+> **RE-OPENED 2026-09-17 (round 4) — what the confirming round found.** After round 3 closed the loop and this spec went `Ready` (merged
 > as PR #248) **a confirming round by a DIFFERENT reviewer — round 4, Codex
 > plugin adversarial-review, model `gpt-6-astra`, on tip `ebcdda00` — returned
 > `needs-attention` with two product findings and one machinery finding**, each
@@ -138,13 +156,21 @@ session a state this run has already changed"*): by step 19 the dream's work has
 succeeded, so rendering "the dream job has failed" shows the next session a
 state this run has already changed.
 
-**And the same sentence bounds the fix.** Step 19 is the FIRST point at which
-that is true, so it is the ONLY render this WP filters: the dream's earlier
-quarantine-only refresh runs before the run's outcome is known and keeps showing
-every record, and a failure after step 19 renders again, unfiltered. Design
-round 1 found the first draft filtered both sites and could therefore hide a
-genuine unresolved failure; Table A's principle row is the rule that replaced
-it — *when in doubt the stale callout is shown; a genuine one is never hidden*.
+**And the same sentence bounds the fix — but step 19 is not where it lands.**
+Step 19 is the first point at which the dream's *notes* are persisted, yet the
+run is not over there: `destroyWorkspace`, `cleanScratch` and `releaseLock` are
+all still ahead of it and any of them can fail. So **step 19 stays exactly as
+`main` has it, UNFILTERED**, as does the earlier quarantine-only refresh, and
+this WP adds **one filtered render as the last statement of the locked body** —
+after the workspace teardown, before scratch cleanup and lock release (Table A,
+"Where applied"). It is reached only by falling out of the whole body, so
+reaching it *is* the run having succeeded, and **nothing renders after it**:
+there is no recovery render and no second attempt anywhere in this design.
+Design round 1 found the first draft filtered both existing sites and could
+therefore hide a genuine unresolved failure; rounds 5 and 6 then moved the
+filtered render out of the body and back under the lock. Table A's principle row
+is the rule that survived all of it — *when in doubt the stale callout is shown;
+a genuine one is never hidden*.
 
 ## Current state
 
@@ -408,7 +434,7 @@ declarations' `why` fields, the JSDoc in `alert-ack.js`).
 | **What can still fail AFTER the filtered render** | Only `finally A` (l.1213-1222), and its three statements were read: `ownsLock` (`src/core/dream/lock.js` l.96-103) catches everything and returns `false` on any error — **cannot throw**; `releaseLock` (l.77-85) wraps its body in `try`/`catch` and its JSDoc at l.74 says **"Never throws"** — confirmed by reading it; `cleanScratch` (`src/core/dream/scratch.js` l.163-165) is a **bare `fs.rmSync(scratchDirOf(stateDir), { recursive: true, force: true })` with no `try`/`catch`**, and `force: true` suppresses only ENOENT — so **EACCES, EBUSY or EPERM propagate**. **Residual 1, and it is the main one:** if `cleanScratch` throws after the filtered render, the run exits non-zero with the filtered digest already on disk. The dream's work succeeded, the digest reflects that, and the supervisor certifies the job failed — the same shape as B1 |
 | **Residual 2 — an ordinary concurrent `sync` can make a successful render throw** | Round 5 claimed a **temp substitution by a same-owner attacker** was the prerequisite for `WD_F10_POST_RENAME`. **That is false and is withdrawn.** `writeFilePrivate` renames at `src/core/private-fs.js` l.360 and lstats the destination at l.365; **any** writer that publishes its own whole-file render into `digest.md` in that window makes the identity check fail, with **no attacker and no substituted temp**. The writer that can do it is `wienerdog sync`, which **takes no dream lock at all** (measured: no `acquireLock`/`ownsLock`/`releaseLock` anywhere in `src/cli/sync.js`), so the lock does not exclude it. **This exposure is PRE-EXISTING**: step 19's render has exactly the same race with the same writer today. What this WP adds is **one more render per fully successful supervised run, and therefore one more window**. The consequence, as measured: the render throws → `run()` exits 1 → `last_success` is left unchanged, `last_status` becomes `error`, `clearAlerts` is **skipped**, and `job "dream" exited 1` is appended — a false failure for a run whose work succeeded. **Not fixed here**: the fix is in `writeFilePrivate`'s detection, which this WP does not own and which is deliberately detection-not-prevention. Owner item **O4**; routed under Discovered |
 | **Why there is no recovery render** (the mechanism rounds 1-4 built, now REMOVED) | Round 1's F2 asked for an unfiltered re-render on any post-filter failure. Across rounds 2-5 that one mechanism required two call sites, an exactly-once guarantee spanning them, arming before the render, a fixed-text stderr diagnostic, a withdrawn preservation guarantee, compound-failure handling, and — round 5's finding — a conservative alert-set fallback, because a re-render whose `readAlerts` silently returns `[]` **publishes an alert-free digest and erases OTHER jobs' callouts**. A mechanism that grows its surface every round is the treadmill `docs/runbooks/codex-review.md` names. **Making the filtered render the last statement of the locked body removes the need for it**: almost nothing runs after it, and what does is enumerated in the row above |
-| **A silent `readAlerts` failure renders an alert-free digest — on EVERY render, today included** | `readAlerts` returns `[]` when it cannot open the file (`src/core/alerts.js` l.157) **and** when `fstat`/`read` fails after opening (l.200, `catch { return []; }`). So any render whose alert read fails transiently publishes a digest with **no callouts at all**, for every job, while every record remains stored. **This is pre-existing and unchanged by this WP** — step 19 and `sync` have always had it — and what this WP does is expose it on **one more render per fully successful supervised run**. It is stated rather than fixed: making it fail closed would change `readAlerts`' contract and every caller's behaviour, which is a different work package. Routed under **Discovered** |
+| **A silent `readAlerts` failure renders an alert-free digest — on EVERY render, today included** | `readAlerts` returns `[]` when it cannot open the file (`src/core/alerts.js` l.157) **and** when `fstat`/`read` fails after opening (the `catch` opens at l.200; its `return []` is at l.201). So any render whose alert read fails transiently publishes a digest with **no callouts at all**, for every job, while every record remains stored. **This is pre-existing and unchanged by this WP** — step 19 and `sync` have always had it — and what this WP does is expose it on **one more render per fully successful supervised run**. It is stated rather than fixed: making it fail closed would change `readAlerts`' contract and every caller's behaviour, which is a different work package. Routed under **Discovered** |
 | Filter position | applied to the **result** of `unacknowledgedAlerts(paths, readAlerts(paths))`, leaving that expression textually intact. Both orders yield the same set; this order is required so `alert-ack.js`'s standing claim that *both callers pass `readAlerts`* stays true (Table B narrows only the sentence that this WP actually falsifies) |
 | Resolved job name | **two conjuncts about the RUN, both required** (a third conjunct about each RECORD is the next row). (1) `process.env.WIENERDOG_JOB` names a job that `jobsLib.findJob(paths, thatValue)` returns with `run` exactly the string `builtin:dream`; AND (2) `process.env.WIENERDOG_DREAM_RUN_TOKEN` is present and passes **the same validation dream.js already applies to it** — `typeof === 'string'` and `/^[a-f0-9]{16}$/` (l.827-828), re-applied, not re-invented. Every other case resolves to **no name**: either variable absent, not a string, empty or malformed; a name `config.yaml` does not define; a job whose `run` is anything else |
 | **Record date — the THIRD conjunct, and it is per-RECORD not per-run** | Even with a resolved name, a record is omitted **only if its `at` is STRICTLY EARLIER than this dream process's start instant.** The start instant is captured **once, at the top of `run()`** — `src/cli/dream.js` l.557 `async function run(argv, opts = {}) {`, before l.558's first statement — as a wall-clock millisecond value, and it is **not** taken from the `opts.now` seam: that seam exists to resolve the dream's DATE STRING, and letting a test's date injection move this boundary would make a safety property depend on a test seam. Parsing is **strict**: the record is omitted only when `at` is a non-empty string that parses to a finite timestamp AND that timestamp is `< start`. **A missing, empty or unparseable `at` means the record is SHOWN**, as does a timestamp equal to the start instant. Why this conjunct exists: `run-job`'s watchdog rejects independently of the child's close event (`src/cli/run-job.js` l.1086, raced at l.1090), so `failLoud` at l.1257 can append a record **while this dream child is still alive** — a record dated AFTER this process started, describing a failure this run is already being blamed for and which that supervisor will never clear. The run-level conjuncts cannot see that case; the record's own date can |
@@ -443,30 +469,34 @@ declarations' `why` fields, the JSDoc in `alert-ack.js`).
 repo-wide count. The mutation literal, the marker and the `expectRed` identities
 are the implementer's, because the filter's own name and shape are. **Each
 declaration breaks exactly ONE conjunct or placement rule and no other**, so the
-criterion it reddens is the one that owns that rule — round 1 found the previous
-pairing proved a different property than it claimed, and one-rule-per-mutation is
-what stops that recurring.
+criterion it reddens is the one that owns that rule.
 
-| id | breaks exactly | must redden — the MEASURED set | criterion |
-|----|----------------|--------------------------------|-----------|
-| `dream-digest-filter-removed` | the filter itself: the alerts input reaches `renderDigest` unfiltered at every site | **AC1** | `1` |
-| `dream-digest-filter-ignores-config` | **only** the `findJob` + `run: builtin:dream` conjunct; the env conditional, the token conjunct and the date conjunct are retained | **AC4 AND AC8** — measured. AC8 reddens necessarily, not incidentally: it asserts that an unreadable config omits nothing, which is precisely what removing the config conjunct changes. Round 4 found the previous text claiming AC8 was in no set; that claim was **wrong** and is corrected here rather than papered over with a `testNamePattern` | `4` |
-| `dream-digest-filter-always-on` | **both** environment conditionals: the filter omits the configured dream job's records whether or not either variable is set | **AC3 AND AC5** — measured | `3` |
-| `dream-digest-filter-ignores-run-token` | **only** the `WIENERDOG_DREAM_RUN_TOKEN` conjunct | **AC5** — measured | `5` |
-| `dream-digest-filter-ignores-record-date` | **only** the record-date conjunct: records are omitted by name alone, without comparing `at` to this process's start instant | **AC6f** (the timeout survivor's record is hidden, and the missing/unparseable/equal-`at` edges stop being shown) | `6f` |
-| `dream-digest-filter-at-early-render` | **only** the placement rule: the quarantine-only refresh at l.724 passes the filtering value too | **AC6a AND AC6b** — measured | `6a` |
-| `dream-digest-filter-at-step-nineteen` | **only** the placement rule at the other end: step 19's call passes the filtering value, so the omission happens before the finalizers instead of after them | **AC7a, AC7b and AC7c** (each late-failure path now leaves a filtered digest) — the implementer declares the set actually observed, which must EQUAL the declared one | `7a` |
+**Read the last column before using any row.** `scripts/red-proofs.js` requires
+the observed own-body failing set to **EQUAL** the declared set, so a wrong set
+fails the lane just as loudly as a missing proof. Five sets were **measured** by
+the paused implementer against the OLD design; two are **derived** here against
+the revised acceptance tests and have never been run. **Derived rows are
+predictions, and the measurement is authoritative**: the implementer applies each
+mutation, records what actually reddens, and commits THAT set — correcting this
+table in the same PR if it differs. Design round 7 found the previous version of
+this table requiring a mutant to redden criteria it cannot reach, which is the
+failure this column exists to prevent.
 
-`wp` is `WP-dream-digest-omits-own-job-alerts` for all seven.
-`scripts/red-proofs.js` requires the observed own-body failing set to **EQUAL**
-the declared set. **The sets above are the ones the paused implementer measured by
-hand-applying each mutation** (branch `wp/dream-digest-omits-own-job-alerts` @
-`9d1282cf`, suite 2767 pass / 2755 / 0 fail / 12 skipped, lint clean) — they are
-measurements, not predictions, and where a measurement contradicted the earlier
-text the measurement won. AC2 and AC6e remain in no `expectRed` set: AC2 observes
-nothing any mutation changes, and **AC6e pins a PRE-EXISTING product property
-that no mutation of this WP's code can alter**. AC9-AC12 are gate criteria the
-verification steps establish.
+| id | breaks exactly | must redden | must NOT redden | measured or derived |
+|----|----------------|-------------|-----------------|---------------------|
+| `dream-digest-filter-removed` | the filter itself: the alerts input reaches `renderDigest` unfiltered at every site, the call still being made | **AC1**, **AC6c**, **AC6d**, **AC7g** — each asserts a digest that OMITS the own-job callout | AC2-AC5 (they assert nothing is omitted, which a removed filter satisfies); AC6a/AC6b/AC6e/AC6f (same); AC7a-AC7f (the write still happens, so counts and placement are unchanged); AC8 | **derived** — AC1 was measured on `9d1282cf`; AC6c/AC6d/AC7g are new or revised assertions that did not exist then |
+| `dream-digest-filter-ignores-config` | **only** the `findJob` + `run: builtin:dream` conjunct; the env conditional, the token conjunct and the date conjunct are retained | **AC4 AND AC8** — AC8 necessarily, because it asserts an unreadable config omits nothing, which is exactly what this conjunct delivers | AC1 (still omits), AC3 (env conditional retained), AC5 (token conjunct retained), AC6f (date conjunct retained), all of AC7 (placement untouched) | **measured** on `9d1282cf` |
+| `dream-digest-filter-always-on` | **both** environment conditionals: the configured dream job's records are omitted whether or not either variable is set | **AC3 AND AC5** | AC4 (the filter targets the CONFIGURED job's name, and AC4's fixture names a different one), AC1, AC6f, all of AC7 | **measured** on `9d1282cf` |
+| `dream-digest-filter-ignores-run-token` | **only** the `WIENERDOG_DREAM_RUN_TOKEN` conjunct | **AC5** | AC1, AC3, AC4, AC6f, all of AC7 | **measured** on `9d1282cf` |
+| `dream-digest-filter-ignores-record-date` | **only** the record-date conjunct: records are omitted by name alone, without comparing `at` to this process's start instant | **AC6f** — the timeout survivor's record is hidden, and the missing / unparseable / equal-`at` edges stop being shown | AC1 (its record predates the start, so it is omitted either way), AC2-AC5, all of AC7 | **derived** — this declaration post-dates `9d1282cf` and has never been run |
+| `dream-digest-filter-at-early-render` | **only** the placement rule at the early end: the quarantine-only refresh at l.724 passes the filtering value too | **AC6a AND AC6b** | all of AC7 (the l.724 write is not an ADDITIONAL write; counts are unchanged), AC1-AC5 | **measured** on `9d1282cf` |
+| `dream-digest-filter-at-step-nineteen` | **only** the placement rule at the late end: step 19's call passes the filtering value, so the omission happens before the finalizers instead of after them | **AC7a, AC7b and AC7d** — AC7a/AC7b because each asserts the digest left by a late failure is the UNFILTERED one `main` would leave, and AC7d because it asserts step 19's write is byte-identical to `main`'s, which this mutation changes | **AC7c** — *removed in round 7*: none of its early-exit paths (l.602, l.740, l.742, l.756, l.767) reaches step 19, so the mutation cannot change them. Also AC6a/AC6b (they fail before step 19), AC6c/AC6d (the run succeeds, so the final render filters either way), AC7g, AC1-AC5 | **derived** — the mutation is new since `9d1282cf` and AC7 was rewritten twice after it. **AC7f is the one to watch**: if the implementer's compound-failure test also asserts digest CONTENT it will redden too and must be declared; if it asserts only the write count and error identity it will not |
+
+`wp` is `WP-dream-digest-omits-own-job-alerts` for all seven. **AC2 and AC6e are
+in no `expectRed` set**: AC2 observes nothing any mutation changes, and AC6e pins
+a PRE-EXISTING product property that no mutation of this WP's code can alter.
+AC9-AC12 are gate criteria the verification steps establish, not mutation
+targets.
 
 ### Mirrored Surface Checklist
 
@@ -502,7 +532,7 @@ added here on the spot:
       the record shape and ordering facts in `alerts.js` l.46/l.151/l.222, and the
       try/finally topology at `dream.js` l.608/l.815/l.1206/l.1213, the complete
       exit inventory of `run()` that makes the last-statement placement
-      guard-free, `readAlerts`' fail-open at `alerts.js` l.157/l.200, and
+      guard-free, `readAlerts`' fail-open at `alerts.js` l.157/l.201, and
       `sync.js` holding no dream lock**)
 - [ ] The `why` field of each declaration in
       `tests/red-proofs/dream-digest-omits-own-job-alerts.proofs.json`
@@ -789,6 +819,16 @@ private writer in the product, which is its own work package with its own threat
 argument. Doing it inside this WP would mean editing a file that is not a
 Deliverable and weakening a check this WP did not design.
 
+**Standing-process status.** O4's recommendation is **adopted under standing
+authorization, not by a direct ruling** — the process settled in
+`docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md` and carried
+into this session by
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`. It is
+reversible by dated amendment at any time, at the cost below. **O4 post-dates
+that record's entry for this WP**, so the entry there is out of date; the
+replacement text is in this package's hand-off and this section is the current
+wording.
+
 **Overrule cost.** If the owner rules the added window unacceptable, the smallest
 honest fix is not in this WP either: it is either the `writeFilePrivate` change
 above, or making `sync` take the dream lock — which changes the locking contract
@@ -878,10 +918,13 @@ re-acquires all of round 5's problems.
   failures" and "Out-of-process failures are ONE class"). Round 1's version of
   this bullet claimed the exposure was B1/B2 only and finitely bounded; design
   round 2 measured **both claims false** and they are withdrawn. What is true:
-  round 1's in-process half really was fixed — l.724 is unfiltered and a late
-  in-process throw re-renders unfiltered, so the quarantine-then-no-complete-input
-  path, the step-8b containment halt, a brain failure and every post-step-19
-  in-process throw leave the genuine callout on screen. What remains is the
+  round 1's in-process half really was fixed, and rounds 5-6 fixed it by
+  PLACEMENT rather than by a recovery render — **both existing renders (l.724 and
+  step 19) stay unfiltered**, so the quarantine-then-no-complete-input path, the
+  step-8b containment halt and a brain failure all leave the genuine callout on
+  screen, and the filtered render is reached only when the whole body has already
+  succeeded. There is no re-render on any failure path: **the recovery mechanism
+  was removed at round 5** and nothing replaced it. What remains is the
   out-of-process half, and it is **wider than B1/B2**: an ordinary dream-body
   failure is recorded the same way, after the child has exited
   (`src/cli/run-job.js` l.1251 → l.1257 → l.1269), and the failing run made no
@@ -1016,10 +1059,15 @@ Numbered so Table C's declarations and the verification steps can name them.
       **(AC6b)** a supervised run that renders at l.724 and then fails later —
       the step-8b containment halt and a brain failure: same, the callout is
       shown.
-      **(AC6c)** B1, success-marker refused: the digest written at step 19 omits
-      the callout and `alerts.jsonl` holds the new `success-marker-refused`
-      record — an instance of Table A's "Out-of-process failures are ONE class"
-      row, PINNED so a future change to it is visible, not claimed as safe.
+      **(AC6c)** B1, success-marker refused. B1 runs in `run-job` **after the
+      dream child exited 0**, so by then the filtered render — the last statement
+      of the locked body — has already run and published. The test therefore
+      asserts: the digest on disk is **the filtered one** (no `dream` callout),
+      and `alerts.jsonl` holds the new `success-marker-refused` record that the
+      digest does not show. It is an instance of Table A's "Out-of-process
+      failures" row, PINNED so a future change to it is visible, not claimed as
+      safe. Note what this criterion does NOT say: it makes no claim about step
+      19's bytes, which are `main`'s and are AC7d's subject.
       **(AC6d)** B2, alert-cleanup refused: the digest omits the callout and the
       job's earlier records survive in `alerts.jsonl` — same row, same reason.
       **Verified by V1.**
@@ -1204,8 +1252,8 @@ node scripts/boundary-check.js docs/specs/WP-dream-digest-omits-own-job-alerts.m
   **O2** above, and listed in Out of scope. Not restated here.
 - **`readAlerts` fails open to an alert-free digest, on every render, today.**
   `src/core/alerts.js` `readAlerts` returns `[]` both when the file cannot be
-  opened (l.157) and when `fstat`/`read` fails after opening (l.200,
-  `catch { return []; }`). A transient read error therefore makes ANY render —
+  opened (l.157) and when `fstat`/`read` fails after opening (the `catch` opens at l.200 and its
+  `return []` is at l.201). A transient read error therefore makes ANY render —
   step 19's, `sync`'s, and now the final filtered one — publish a digest with no
   callouts for any job, while every record remains stored and `wienerdog alerts`
   still prints them. Design round 5 reproduced this by executing the production
@@ -1234,12 +1282,13 @@ node scripts/boundary-check.js docs/specs/WP-dream-digest-omits-own-job-alerts.m
 
 ## Definition of done
 
-0. This spec is `Draft` (re-opened at round 4). It returns to `Ready` only when
-   the re-opened gate closes; **only the architect or the owner moves it there**,
-   and no implementation PR may be opened before that. Branch
-   `wp/dream-digest-omits-own-job-alerts` — the paused branch, resumed from
-   `9d1282cf`, not re-cut — rebased onto the SHA the dispatcher's
-   re-verification names (Current state). Never commit to `main`.
+0. **RESUME, do not restart.** Branch `wp/dream-digest-omits-own-job-alerts`
+   already exists on `origin` at **`9d1282cf`** with most of this work done
+   against an earlier version of this spec. Continue on that branch — do not
+   re-cut it — rebased onto the SHA the dispatcher's re-verification names
+   (Current state), and work through the **numbered delta** in Implementation
+   notes ("RESUME from `9d1282cf`"), which lists exactly what changed and what
+   to delete. Never commit to `main`.
 1. All verification steps pass locally; output pasted into the PR body,
    including the deliberately-broken red runs for V3-V6.
 2. Conventional commits (`fix|test|docs(dream): … (WP-dream-digest-omits-own-job-alerts)`);
