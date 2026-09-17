@@ -11,7 +11,7 @@ related_wps: [WP-dream-report-run-skips, WP-dream-filtered-input-budget, WP-quar
 equal shares and suffix truncation were retired, and the collector's exclusions
 became five disjoint arms where the spec had assumed three causes and one
 truncation category. The spec has been returned to `Draft` and re-derived against
-`main` at `b4af715e`.
+`main` at `047a202c`.
 
 This is the same failure the 2026-08-30 entry recorded for
 `WP-quarantine-banner-decay`, and the second time it has hit **this** spec: the
@@ -67,3 +67,33 @@ says.
   per-message JSON scaffolding, plus UTF-8 expansion), so the oversized arm can
   fire on a session that broke no cap. Routed to its own work package and ADR
   question under the spec's "Discovered issues"; nothing is filed.
+
+## Round-zero conformance, same day
+
+The re-derived spec failed a clean-context template-conformance read on two
+points, both fixed in the follow-up commit — and both are the same failure mode
+as the rot above, one level up: **a tailored surface that is content-equivalent to
+the template's is not mechanically equivalent to it.**
+
+1. The Mirrored Surface Checklist had eleven tailored bullets and no literal
+   `Operative prose steps that apply it`. The prose WAS registered — under bullets
+   named "Implementation notes" and "Out of scope" — but a reader matching the
+   template's five literal bullets could not see that, and a reader matching by
+   meaning had to decide it. Fixed by leading with all five template bullets in
+   the template's wording, walking the operative-prose one in document order with
+   the row each step applies, and folding the two bullets that duplicated it. The
+   four claim-scoped registers that remain are relabelled `CLAIM REGISTER` and
+   state that they introduce no surface, so nothing is registered twice.
+2. The literal `### Contract table(s)` heading had been replaced by three named
+   `### Table A/B/C` headings. Both shapes exist under `docs/specs/done/`:
+   `WP-dream-denied-object-disposal` keeps the literal heading with `#### Table …`
+   beneath it, and `WP-dream-promote-in-workspace` keeps it with an explicit
+   `N/A — … three NAMED canonical tables` body. Followed the former.
+
+**The rule both point at:** when a tailored surface replaces a template one, keep
+the template's literal token and put the tailoring underneath it. Conformance is
+read mechanically; equivalence that only a careful human can see costs a round.
+
+Also recorded so it is not repeated: a temp file was written as `gate.sh` into the
+session scratchpad **root** and overwrote the orchestrator's driver of the same
+name. Temp files belong in a uniquely named subdirectory of the scratchpad.

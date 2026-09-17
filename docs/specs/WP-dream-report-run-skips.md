@@ -22,7 +22,7 @@ epic: quarantine-surface
 > the count table, two acceptance criteria and the long `node -e` gate were
 > describing code that had been deleted, so the package could not be dispatched
 > and is not `Ready` until the design-review loop says so. Everything below is
-> re-derived against `main` at `b4af715e` (2026-09-17). The previous revision's
+> re-derived against `main` at `047a202c` (2026-09-17). The previous revision's
 > PROVISIONAL mechanism is **discharged and removed**: the promotion rewrite it
 > was waiting for has landed, so the Deliverables table below names real files at
 > a real SHA and carries no markers. Three design questions that this
@@ -91,8 +91,24 @@ actually holds (Table A's pointer row).
 
 ## Current state
 
-Re-derived against `main` at `b4af715e` (2026-09-17). Every citation below was
-read whole at that SHA.
+Re-derived against `main` at `047a202c` (2026-09-17). Every citation below was
+read whole at that SHA. (The re-derivation was performed at `b4af715e` and
+re-pinned here: `047a202c` is docs-only on top of it — `git diff --stat
+b4af715e 047a202c -- src/ tests/ skills/` is empty — so every citation carries
+over unchanged.)
+
+**`src/cli/dream.js` line numbers are the ones that will move, and two sibling
+packages are queued to move them.** `WP-dream-digest-omits-own-job-alerts` edits
+the `regenerateDigest` function and its two call sites and adds a re-render on a
+late failure; `WP-dream-lock-stale-owner-loud` edits the lock-acquisition block
+and the exit-code doc comment. Both are expected to land in that file **before**
+this package. **Every `src/cli/dream.js:NNN` citation in this spec is pinned to
+`047a202c` and MUST be re-derived against the then-current tree at dispatch** —
+by a committed revision of this spec, never by a dispatch message, because
+`scripts/boundary-check.js` reads this file's Deliverables table and not the
+message. Nothing either sibling touches is a contract of this package: neither
+edits `collectExtracts`, the `promote()` call site, the accounting composer or
+the report, so what moves is line numbers, not facts (Definition of done item 0).
 
 ### The collector, after `WP-dream-filtered-input-budget`
 
@@ -188,7 +204,7 @@ truncation is retired (ADR-0012, amendment of 2026-09-15; ADR-0023 Amendment 3).
 |--------|------|-------|
 | modify | src/core/dream/scratch.js | **One addition only:** `collectExtracts` also returns the count **Table B**'s `stillQuarantined` row names. No other returned field changes shape and no selection behaviour changes |
 | modify | src/core/dream/promote.js | the exported formatter of **Table A**, the one optional input of **Table B**, and `composeRecord` emitting the section last. Nothing else in the module changes |
-| modify | src/cli/dream.js | build the six integers **Table B** names from `sel` and pass them to `promote()`; nothing else in the run changes |
+| modify | src/cli/dream.js | build the six integers **Table B** names from `sel` and pass them to `promote()`; nothing else in the run changes. **Its `:NNN` citations are pinned to `047a202c` and are re-derived at dispatch** — two sibling packages are queued to edit this file first (Current state) |
 | modify | tests/unit/dream-collect.test.js | cover the new count only (**Table B**); no existing assertion on `collectExtracts`'s return shape is weakened. This is `scratch.js`'s test file (its test names are prefixed `dream-collect:`) |
 | modify | tests/unit/dream-promote.test.js | the four test identities of **Table C**, plus the appended-section coverage. Test names are prefixed `dream-promote:` |
 | modify | tests/integration/dream.test.js | one end-to-end run whose committed report carries the section (`dream-integration:` prefix) |
@@ -260,7 +276,14 @@ boundary is crossed: the collector observes the exclusions, the orchestrator
 counts them, and the report composer owns the document. Three conditions, so the
 discipline applies.
 
-### Table A — canonical: the emitted section
+### Contract table(s)
+
+Three dense contracts, one canonical table each, named rather than left unnamed so
+a row is addressable by letter across this package's surfaces: **Table A** (the
+emitted section), **Table B** (the six counts) and **Table C** (the RED proofs).
+Operative prose cites the table and row rather than restating it.
+
+#### Table A — canonical: the emitted section
 
 | Fact / rule | Value |
 |---|---|
@@ -277,11 +300,11 @@ discipline applies.
 | Delivery when the vault refuses the write | none of the above changes. The section is part of `report.record`, so on `report.outcome === 'refused'` and on `promoted` with `accounting.published === false` it reaches the user through `src/cli/dream.js:1119-1131` exactly like the enforcement record |
 | The brain is not told about it | `skills/wienerdog-dream/SKILL.md` is **not** a deliverable. The model does not author this section, and telling it the section exists invites it to write one |
 
-### Table B — canonical: the six counts, their sources and their order
+#### Table B — canonical: the six counts, their sources and their order
 
 Row order is render order.
 
-| # | Count | Definition | Source in `src/cli/dream.js` at `b4af715e` |
+| # | Count | Definition | Source in `src/cli/dream.js` at `047a202c` |
 |---|---|---|---|
 | B1 | `newlyQuarantined` | transcripts this run recorded as `quarantined` for the first time — over the pre-read ceiling, or a non-`ok` parse outcome | `sel.newlyQuarantined.length` |
 | B2 | `stillQuarantined` | **the transcripts this run ACTUALLY skipped for an existing quarantine** — the discovered files for which `selectState` returned `'skip-quarantined'`, counted at selection time. **Not** the run-start ledger's active-quarantine count; row B7 says why that is a different number | `sel.skippedQuarantined` — **a new integer `collectExtracts` returns**, computed from the same `discovered` array and the same `selectState` call that already partitions candidates (`src/core/dream/scratch.js:54`) |
@@ -298,7 +321,7 @@ Row order is render order.
 | **B10 — `secret-revert-exhausted` quarantines minted after the commit** | **not** counted in B1. That path runs at `src/cli/dream.js:1150-1163`, after `promote()` has composed the report, and it already has its own dedicated console summary (`secretRevertSummaryLine`) and its own permanent digest banner. Do not reorder the run to reach it |
 | **B11 — the input's name and shape** | `promote({… , runSkips})`, optional, consumed only by Table A's formatter. Absent, `undefined`, or malformed ⇒ no section (Table A's integers-only row). It is **not** `records`, for the reason Current state gives |
 
-### Table C — canonical: the machine-run RED proofs (ADR-0042)
+#### Table C — canonical: the machine-run RED proofs (ADR-0042)
 
 `scripts/red-proofs.js` requires the observed **own-body** failing set to EQUAL
 the declaration's `expectRed`, so the suite's test identities are contract and are
@@ -384,21 +407,69 @@ table and all its mirrors **in the same commit** — no commit exists in which t
 table and a registered mirror disagree. A new mirror found in review is added here
 on the spot.
 
-- [ ] **Deliverables-table cells** — each row cites the table that decides it
-      (`scratch.js` → Table B; `promote.js` → Tables A and B; `dream.js` → Table B;
-      `dream-collect.test.js` → Table B; `dream-promote.test.js` → Tables A and C;
-      `tests/integration/dream.test.js` → Table A; the proofs file → Table C)
-- [ ] **Acceptance criteria** that assert Tables A, B and C, including criterion
-      4's four `stillQuarantined` cases (row B7) and criterion 5's sum (row B8)
-- [ ] **Verification commands** — the `node -e` section gate asserts Table A; the
-      SKILL.md grep asserts Table A's last row; `npm run red-proofs` asserts Table C
-- [ ] **Current-state description** — the five arms, the discarded
-      `skip-quarantined` count, the single composed accounting block, why `records`
-      is not the channel, and the two return paths that compose no report
-- [ ] **The two worked examples under "Exact contracts"** — they are Table A
-      rendered: the all-six case, and the quarantine-free case that carries no
-      pointer
-- [ ] **When the pointer line renders.** Table A's pointer row decides it — if and
+**The first five bullets are the template's, in its wording, and they register the
+SURFACES — every surface is registered under exactly one of them.** The four
+bullets after them are **claim registers**: they cross-index which of those
+already-registered surfaces carry one contested claim, so a finding against that
+claim has a single place to enumerate from. A claim register introduces no new
+surface; if a walk ever finds one there that is not under the five, it moves up.
+
+- [ ] Deliverables-table cells that restate a path or rule — each row cites the
+      table that decides it (`scratch.js` → Table B; `promote.js` → Tables A and B;
+      `dream.js` → Table B; `dream-collect.test.js` → Table B;
+      `dream-promote.test.js` → Tables A and C; `tests/integration/dream.test.js` →
+      Table A; the proofs file → Table C)
+- [ ] Acceptance criteria that assert its facts — criteria 1–3 and 6–9 assert
+      Table A, criteria 4–5 assert Table B (row B7's four cases, row B8's sum),
+      criterion 12 asserts Table C
+- [ ] Verification commands / greps — the `node -e` section gate asserts Table A
+      (heading, both renders, the pointer condition, the lexical-scoping row, the
+      zero case, the integers-only row); the `SKILL.md` grep asserts Table A's
+      brain-is-not-told row; `npm run red-proofs` asserts Table C
+- [ ] Current-state description — the five collector arms and the discarded
+      `skip-quarantined` count (Table B rows B1–B6, B8), the single composed
+      accounting block and its one write (Table A's placement and delivery rows),
+      why `records` is not the channel (row B11), and the two return paths that
+      compose no report (Table A's coverage row) — plus the `047a202c` pin and the
+      two sibling packages queued into `src/cli/dream.js`, which mirrors the
+      `dream.js` Deliverables cell and Definition of done item 0(d)
+- [ ] Operative prose steps that apply it — **walked, in document order**:
+      - the Context paragraph naming the oversized gap → Table B row **B3** and
+        Table A's oversized bullet;
+      - the Context paragraph quoting ADR-0023 Amendment 2 → Table A's **pointer**
+        row;
+      - the Context paragraph "built from integers alone" → Table A's
+        **integers-only** row;
+      - the "Exact contracts" JSDoc and the `promote()`/`composeRecord` sentence
+        under it → Table A's **integers-only** and **placement** rows and Table B
+        row **B11**;
+      - **the two worked examples, whose bullet wordings ARE Table A rendered** →
+        Table A's **heading**, **body**, **pointer**, **lexical-scoping**,
+        **partial-case** and **no-apostrophe** rows, plus Table B's row order;
+      - the "No pointer line" paragraph beneath the second worked example → Table
+        A's **pointer** row;
+      - Implementation notes, bullet by bullet: integers-only → Table A's
+        **integers-only** row; formatter home → Table A's **placement** row and the
+        `promote.js` Deliverables cell; `runSkips` validation → Table A's
+        **integers-only** row and row **B11**; residual 1 → row **B10**; residual 2
+        → Table A's **coverage** row; residual 3 → Table A's **lexical-scoping**
+        row; the moved-`dream.js` bullet → Table B's Source column and Definition
+        of done item 0(d);
+      - Security checklist items 2 and 3 → Table A's **integers-only** and
+        **placement** rows and the three residuals they name;
+      - the Verification-steps commentary (the three-state paragraph and the two
+        provenance lines) → Table A's gate rows and Table C;
+      - Out of scope, item by item: no naming → Table A's **integers-only** row;
+        no `reports/warnings.md` change → Table A's **pointer** row; `records` not
+        reused → row **B11**; nothing on the throw path → Table A's **coverage**
+        row; the `scratch.js` bound → row **B2**;
+      - Discovered issues → Table B row **B3** (what an oversized session is, and
+        that this package only surfaces it);
+      - Dispatch-precondition owner items 1, 2 and 3 → row **B3** with Table A's
+        oversized bullet, Table A's **pointer** and **lexical-scoping** rows, and
+        Table A's **pointer** row respectively;
+      - Definition of done item 0 → the Deliverables table and Table C.
+- [ ] **CLAIM REGISTER — when the pointer line renders.** Table A's pointer row decides it — if and
       only if `newlyQuarantined` or `stillQuarantined` is non-zero — and its mirrors
       are Table A's Body, Lexical-scoping and Partial-case rows, the second worked
       example, the Context paragraph quoting ADR-0023 Amendment 2, the pointer
@@ -406,28 +477,24 @@ on the spot.
       C's T2. **No surface may tie the pointer to the heading, to "any non-zero
       count", or to any of B3–B6** — none of those arms produces a quarantine
       record, so `reports/warnings.md` cannot name them
-- [ ] **What an oversized session is promised.** Table B row B3 and Table A's
+- [ ] **CLAIM REGISTER — what an oversized session is promised.** Table B row B3 and Table A's
       oversized bullet decide it — skipped again every night until the file, the
       package version or `dream_max_input_bytes` changes — and its mirrors are the
       Context paragraph naming the gap, both worked examples, the oversized
       acceptance criterion, Table C's second proof, and owner item 1. **No surface
       may promise that an oversized session is retried next run**
-- [ ] **Where `stillQuarantined` comes from.** Table B row B2 decides it — the
+- [ ] **CLAIM REGISTER — where `stillQuarantined` comes from.** Table B row B2 decides it — the
       discovered files whose `selectState` answered `'skip-quarantined'` — and its
       mirrors are the `scratch.js` and `dream-collect.test.js` Deliverables rows,
       the Current-state bullet naming the discarded count, row B7, row B8, the
       four-case acceptance criterion, and the Out-of-scope bullet bounding the
       `scratch.js` change. **No surface may define it from the run-start ledger's
       active set**
-- [ ] **What validates `runSkips`.** Table A's integers-only row decides it —
+- [ ] **CLAIM REGISTER — what validates `runSkips`.** Table A's integers-only row decides it —
       nothing in `promote()` does, and the formatter reduces every non-integer to 0
       — and its mirrors are the Exact-contracts JSDoc, Table B row B11, the
       Implementation note pricing the alternative, and the integers-only acceptance
       criterion. **No surface may say `promote()` throws for a malformed `runSkips`**
-- [ ] **Implementation notes** — the integers-only rule, the named residuals and
-      the priced alternatives
-- [ ] **Out of scope** — the `reports/warnings.md` renderer, the no-admission throw
-      path, and the bound on the `scratch.js` change
 
 ## Implementation notes & constraints
 
@@ -471,6 +538,13 @@ on the spot.
 - **Named residual — the pointer's neighbours.** With the oversized bullet present,
   a reader could take the pointer to cover it. The lexical-scoping row is the
   mitigation chosen over rewording the pointer; owner item 2 prices the alternative.
+- **Expect `src/cli/dream.js` to have moved under you.** Two sibling packages are
+  queued into that file ahead of this one (Current state names them and what each
+  edits). None of them touches `collectExtracts`, the `promote()` call site, the
+  accounting composer or the report, so if a `:NNN` citation here does not land on
+  what it names, the fact is still right and the number is stale — find the named
+  construct, say so under "Discovered issues" in the PR body, and do not widen the
+  change to compensate.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -707,10 +781,14 @@ them, and this spec asserts no such acceptance.
    message, because `scripts/boundary-check.js` reads the Deliverables table in this
    file and nothing a message says changes what CI sees. (b) This spec is `Ready`,
    which only the design-review loop or the owner may make it
-   (`docs/runbooks/codex-review.md`). (c) `WP-dream-filtered-input-budget` is merged
-   on `main` — PR #245, this spec's base `b4af715e` — though its own spec still
-   reads `In-Review` pending a done-flip; every citation below is against that SHA
-   and is re-checked if this package is dispatched after further collector work.
+   (`docs/runbooks/codex-review.md`). (c) `WP-dream-filtered-input-budget` is `Done`
+   at `docs/specs/done/WP-dream-filtered-input-budget.md` (merged in PR #245;
+   flipped in PR #246, `047a202c`), so this spec's new `depends_on` entry is
+   satisfied. (d) **Every `src/cli/dream.js:NNN` citation is re-derived by a
+   committed revision of this spec** if either sibling named in Current state —
+   `WP-dream-digest-omits-own-job-alerts`, `WP-dream-lock-stale-owner-loud` — has
+   landed in that file since `047a202c`, and likewise after any further collector
+   work. The re-derivation changes line numbers, not the tables.
 1. All verification steps pass locally; output pasted into the PR body, including
    the three-state evidence for each new gate and the `red-proofs` roll-up.
 2. Conventional commits; PR titled
