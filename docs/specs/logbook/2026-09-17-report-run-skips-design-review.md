@@ -1,5 +1,5 @@
 ---
-title: WP-dream-report-run-skips design review — rounds 1, 2 and the confirming round
+title: WP-dream-report-run-skips design review — four rounds, closed at approve
 date: 2026-09-17
 related_wps: [WP-dream-report-run-skips, WP-dream-filtered-input-budget, WP-quarantine-warnings-file, WP-dream-promote-module]
 ---
@@ -324,3 +324,59 @@ those new assertions were RED-tested by restoring the exact sentences this round
 removed**: putting back "were skipped for the first time this run" → exit 1, and
 putting back "They will be retried on the next run." → exit 1, compliant → exit 0.
 `npm run lint` passes and `git diff --check` is clean.
+
+## Round 4 — APPROVE
+
+Codex plugin 1.0.6 adversarial review, model `gpt-6-astra`, against tip
+`98db05c6` with base `2d5e2465`. **Verdict: approve. Zero findings.** Raw preserved
+at `e54b30dc` as `2026-09-17-report-run-skips-design-r4-astra-raw.json`, with focus
+and meta.
+
+> "Approve the design revision: execution confirms A-1 and A-2 are fixed. No
+> additional material product finding beyond the documented residuals and owner
+> items. No material machinery findings."
+
+**It closed the loop the same way it opened it — by running the code.** From its
+own record of what it executed: the real collector and ledger logic with mocked
+discovery, parsing and writes, over **oversized memos behind both capacity-stop
+variants and deadline stops**, the subsequent memo skips, file and version changes,
+limits **below, equal to and above** the memoised size, re-measurement that stays
+oversized, and read-deferral transitions; then **first-quarantine,
+unchanged-quarantine and re-quarantine for all three intake reasons**, plus
+recovery, deletion and the sticky quarantine — with **B1 and B2 remaining disjoint
+and the revised B1 wording holding for both the first quarantine and the
+re-quarantine**. It reproduced the already-routed B6 under-count against
+memory-backed I/O, and noted explicitly that its partition probes used injected
+read-exhaustion outcomes and therefore **do not establish production B6 coverage**
+— which is exactly what criterion 5 already says about itself. Machinery: the
+scoped diff and `diff --check`, **all 52 named `file:line` references resolving to
+existing files and in-range lines**, and the proof JSON, mutation literals,
+worked-example neutralisation and lexical checks. It ran no product suite, no lint
+and no RED-proof runner, because the implementation does not exist yet.
+
+## Closure
+
+**The design loop is closed** per `docs/runbooks/codex-review.md`, and the spec
+moves to `Ready`.
+
+| Round | Reviewer | Findings | Outcome |
+|---|---|---|---|
+| zero | template conformance, clean-context executor | 2 | fixed |
+| 1 | `gpt-5.6-sol` via `codex exec` | 6 | all dispositioned |
+| 2 | `gpt-5.6-sol` via `codex exec` | 2 | all dispositioned |
+| 3 | `gpt-6-astra` via the Codex plugin | 2 | all dispositioned |
+| 4 | `gpt-6-astra` via the Codex plugin | 0 | **approve** |
+
+Four adversarial rounds by **two models through two harnesses**, twelve findings,
+**all dispositioned and none dropped**. Every raw result was committed **before**
+adjudication — `07b29692` (round 1), `38307bef` (round 2), `95a968d1` (round 3),
+`e54b30dc` (round 4) — so no round's verdict can be read as having been written
+after its fixes. Nothing in this record states that the owner approved, accepted or
+ratified anything: the five owner items travel with the package as recommendations
+adopted under standing authorization, reversible by dated amendment.
+
+**The lesson stands and is now measured in both directions.** The second model
+found two untrue sentences that two rounds by the first had passed, because it
+executed the collector instead of reading it; and it is the same execution that
+made round 4's approval worth something — the memo-behind-a-stop and re-quarantine
+cases were not re-read, they were re-run.

@@ -1,7 +1,7 @@
 ---
 id: WP-dream-report-run-skips
 title: Make the dream report account for the sessions a run could not consume
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-quarantine-warnings-file, WP-quarantine-banner-decay, WP-dream-promote-in-workspace, WP-dream-filtered-input-budget]
@@ -29,25 +29,22 @@ epic: quarantine-surface
 > re-derivation could not settle alone are parked under **Dispatch precondition —
 > owner items**; three measured gaps are routed under **Discovered issues**.
 >
-> **2026-09-17 — THE LOOP WAS RE-OPENED BY A CONFIRMING ROUND; BACK TO `Draft`.**
-> Four review rounds have run: round zero (template conformance, two findings),
-> round 1 (six), round 2 (two) — all by one gate — and then a **confirming round by
-> a DIFFERENT reviewer and a different model** (Codex plugin adversarial review,
-> `gpt-6-astra`), which returned needs-attention with **two more**. It confirmed
-> the coverage boundary, the stale-pointer residual and the absent
-> heading-ownership rule against the code, and found no machinery findings; but it
-> **reproduced two untrue sentences with read-only probes that EXECUTED the
-> collector and the ledger**, where two prior rounds had read them. Both were
-> user-visible promises: a deferral bullet promising a retry for a session the
-> collector will pass over from its memo, and a quarantine bullet claiming a
-> first-ever skip for a session quarantined before. Twelve findings across four
-> rounds, **all dispositioned, none dropped**; every raw preserved before
-> adjudication (`b7f45600`, `37ac751a`, `9db06cca`), with the dispositions recorded
-> finding by finding in
-> `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`. The surface is
-> otherwise frozen. **Nothing in this spec records the owner approving, accepting
-> or ratifying anything** — the five owner items below are recommendations adopted
-> under the standing process, each with its overrule cost, and each reversible.
+> **2026-09-17 — DESIGN GATE CLOSED AT ROUND 4; `Ready`.** Five review passes ran
+> on this spec: round zero (template conformance, 2 findings), rounds 1 and 2
+> (`gpt-5.6-sol` via `codex exec`, 6 and 2), and rounds 3 and 4 (`gpt-6-astra` via
+> the Codex plugin, 2 and **0 — approve**). **Twelve findings, all dispositioned,
+> none dropped.** Every raw result was committed **before** adjudication —
+> `07b29692`, `38307bef`, `95a968d1`, `e54b30dc` — and the dispositions are
+> recorded finding by finding in
+> `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`. Round 3 is
+> worth knowing about before you build: a second model, **executing** the collector
+> rather than reading it, found two user-visible sentences that two prior rounds had
+> passed — a deferral bullet promising a retry for a session the collector will pass
+> over from its memo, and a quarantine bullet claiming a first-ever skip for a
+> session quarantined before. Round 4 re-ran those same cases and approved. **Nothing
+> in this spec records the owner approving, accepting or ratifying anything** — the
+> five owner items below are recommendations adopted under standing authorization,
+> each with its overrule cost, each reversible by dated amendment.
 
 ## Context (read this, nothing else)
 
@@ -1052,13 +1049,21 @@ the five, and this spec asserts no such acceptance. Items 4 and 5 were raised by
 design review round 1 (2026-09-17) and are recorded with their dispositions in
 `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`.
 
-1. **Which arms does the report count, and how honest is the oversized bullet?**
+1. **Which arms does the report count, and what may each bullet promise?**
    *Recommendation: all six of Table B, one bullet each, and the oversized bullet
    states all three releases row B3 allows — the session changing, Wienerdog being
    updated, a sufficiently raised limit — and that each earns a fresh measurement
    that may find the session too big again* (its exact wording is Table A's; the
    word *skipped* is reserved to the two quarantine bullets, per Table A's
-   lexical-scoping row). The alternative shapes are (a) four bullets, merging
+   lexical-scoping row). **Two further promises were removed after a reviewer
+   executed the collector and reproduced them as false** (rounds 3 and 4): **no
+   bullet claims a session was skipped for the first time** — a re-quarantine lands
+   in B1 again, so B1 states this run's decision and its consequence — and **no
+   deferral bullet promises a retry**; B4, B5 and B6 say Wienerdog will *consider*
+   the session again and name the oversized outcome as possible, because a session
+   memoised as oversized behind a capacity or deadline stop is counted there and is
+   then passed over from its memo without being parsed. The alternative shapes are
+   (a) four bullets, merging
    B4–B6 into one "considered again next run" line — the promise row B12 allows is
    identical for all three, but the user loses the cause, and with it which
    setting, if any, is the knob; and (b) leaving oversized out, which keeps the
@@ -1145,20 +1150,26 @@ design review round 1 (2026-09-17) and are recorded with their dispositions in
    what CI sees. (b) **All twelve findings from rounds zero, 1, 2 and the
    confirming round are dispositioned** — raws preserved before adjudication at
    `b7f45600`, `37ac751a` and `9db06cca`, the record in
-   `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md` — **and this
-   spec is `Ready`**, which only the design-review loop or the owner may make it
-   (`docs/runbooks/codex-review.md`). It is `Draft` as of the confirming round.
-   (c) `WP-dream-filtered-input-budget` is `Done` at
-   `docs/specs/done/WP-dream-filtered-input-budget.md` (merged in PR #245; flipped
-   in PR #246), so this spec's new `depends_on` entry is satisfied. (d) **Every
-   `src/cli/dream.js:NNN` citation is re-derived by a committed revision of this
-   spec** if either sibling named in Current state —
-   `WP-dream-digest-omits-own-job-alerts`, `WP-dream-lock-stale-owner-loud` — has
-   landed in that file since `2d5e2465`, and likewise after any further collector
-   work. The re-derivation changes line numbers, not the tables.
+   `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md` — **and the
+   design gate is CLOSED at round 4 (approve)**, which is what makes this spec
+   `Ready` (`docs/runbooks/codex-review.md`). (c) `WP-dream-filtered-input-budget`
+   is `Done` at `docs/specs/done/WP-dream-filtered-input-budget.md` (merged in
+   PR #245; flipped in PR #246), so this spec's `depends_on` entry is satisfied.
+   (d) **THE DISPATCHER RE-DERIVES EVERY `src/cli/dream.js:NNN` CITATION.** They
+   are pinned to the base this spec was verified against — `main` at `2d5e2465`,
+   re-confirmed unchanged in `src/`, `tests/` and `skills/` through `c33f1678` —
+   and **two sibling packages land in that file first**:
+   `WP-dream-digest-omits-own-job-alerts` (`Ready`; `regenerateDigest`, its two
+   call sites, a re-render on a late failure) and `WP-dream-lock-stale-owner-loud`
+   (the lock-acquisition block and the exit-code doc comment). Neither touches
+   `collectExtracts`, the `promote()` call site, the accounting composer or the
+   report, so **what moves is line numbers, not facts** — but the re-derivation is a
+   committed revision of this spec, never a dispatch message, because
+   `scripts/boundary-check.js` reads this file's Deliverables table and not the
+   message. The same applies after any further collector work.
 1. All verification steps pass locally; output pasted into the PR body, including
    the three-state evidence for each new gate and the `red-proofs` roll-up.
-2. Conventional commits; PR titled
+2. Branch `wp/dream-report-run-skips`; conventional commits; PR titled
    `feat(dream): account for a run's skipped sessions in its report (WP-dream-report-run-skips)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
