@@ -1,0 +1,33 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const cp = require('node:child_process');
+const root = process.cwd();
+const read = p => fs.readFileSync(path.join(root, p), 'utf8');
+const transcripts = require(path.join(root, 'src/core/transcripts'));
+const ledger = require(path.join(root, 'src/core/dream/ledger'));
+const scratch = require(path.join(root, 'src/core/dream/scratch'));
+
+test('Complete filtered incident corpus is retained after implementation', () => {
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'wd-content-dispatch-'));
+ try {
+ const paths=require(path.join(root,'src/core/paths')).getPaths({HOME:home,WIENERDOG_HOME:path.join(home,'wd'),CLAUDE_CONFIG_DIR:path.join(home,'claude'),CODEX_HOME:path.join(home,'codex')});
+ const dir=path.join(paths.claudeDir,'projects','demo'); fs.mkdirSync(dir,{recursive:true});
+ for(let n=0;n<2;n++){
+ const id='session'+n;
+ const row=JSON.stringify({type:'user',sessionId:id,cwd:'/demo',timestamp:'2026-09-15T10:00:00Z',message:{role:'user',content:'x'.repeat(1000)},unused:'y'.repeat(n===0?8000:250000)})+'\n';
+ fs.writeFileSync(path.join(dir,id+'.jsonl'),row.repeat(n===0?280:10));
+ }
+ const disc=transcripts.discover(paths,{since:null});
+ const full=disc.map(d=>transcripts.parseWithOutcome(d,transcripts.newRunBudget()).extract);
+ const bytes=full.reduce((n,e)=>n+Buffer.byteLength(JSON.stringify(e)),0);
+ assert.ok(bytes<400000,bytes);
+ const result=scratch.collectExtracts(paths,ledger.readLedger(paths.state),400000);
+ const kept=result.wrote.map(p=>JSON.parse(fs.readFileSync(p,'utf8')));
+ assert.equal(kept.reduce((n,e)=>n+e.messages.length,0),290);
+ console.log(JSON.stringify({fullBytes:bytes,fullMessages:290,keptMessages:kept.reduce((n,e)=>n+e.messages.length,0)}));
+ } finally { fs.rmSync(home,{recursive:true,force:true}); }
+});

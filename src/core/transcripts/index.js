@@ -26,7 +26,7 @@ const { Limits, newRunBudget, OVERSIZED_RECORD_MARKER } = require('./stream');
 /** @typedef {import('./stream').StreamOutcome} ParseOutcome
  *  Mirrors StreamOutcome: 'ok' | 'over-ceiling' | 'too-many-lines' | 'read-error'.
  *  Non-'ok' values are the per-file quarantine signal WP-119 consumes; a
- *  runExhausted 'ok' is capacity-deferred (retried next run), NOT quarantined. */
+ *  runExhausted 'ok' is read-deferred (retried next run), NOT quarantined. */
 
 const MAX_MSG_CHARS = 4000;
 const MAX_MESSAGES = 2000;
@@ -126,10 +126,10 @@ function rebaseInvocations(invocations, dropped) {
 /**
  * Parse + redact + size-cap one discovered entry, reporting the streaming
  * outcome. This is the export the quarantine ledger (WP-119) consumes: the
- * shared run `budget` bounds aggregate intake I/O across the whole run, and
- * `parse.outcome` carries the per-file quarantine signal.
+ * caller-owned `budget` bounds intake I/O (the collector supplies a fresh
+ * allowance per session); `parse.outcome` carries the per-file quarantine signal.
  * @param {{harness:'claude'|'codex', path:string, size?:number}} entry
- * @param {{remaining:number}} budget  shared run budget from newRunBudget()
+ * @param {{remaining:number}} budget  caller-owned allowance from newRunBudget()
  * @returns {{extract: Extract, parse: {outcome: ParseOutcome, oversizedRecords: number, runExhausted: boolean}}}
  */
 function parseWithOutcome(entry, budget) {

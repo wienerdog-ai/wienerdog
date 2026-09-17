@@ -351,3 +351,92 @@ constructed `HOME` still resolves.
 a direct owner ruling, and reversible by dated amendment. The overrule cost is
 enumerated in `WP-dream-git-env-pinning`'s owner item O1 and is not
 re-enumerated here.
+
+## Amendment (2026-09-15): preserve live dream lock ownership after expiry — WP-dream-live-owner-lock
+
+**Decision (amends part 6).** The owner approved this separate prerequisite on
+2026-09-15, retaining automatic takeover of an expired, proven-dead local owner.
+Table L in `docs/specs/WP-dream-live-owner-lock.md` is canonical. This decision
+approves neither the successor's transcript-content policy nor its work budget.
+
+The historical part-6 assertion that a stealable deadline proves the prior brain
+is dead is **withdrawn**, along with its broad stale-takeover safety guarantee
+and the associated claim that overlapping dreams cannot overwrite live inputs.
+The lock spans collection/preprocessing, brain execution and finalization, so its
+nominal deadline cannot establish that the owner or its children have stopped.
+
+An existing record is first read and validated as a non-array object with a finite
+numeric deadline. A read/parse failure or invalid record declines as `owner-unknown`,
+including disappearance during the read; a later invocation can acquire normally.
+An unexpired deadline, including equality, declines as `busy` without PID probing.
+After expiry, only an exact local string hostname and an integer PID from 1
+through 2147483647 permit a signal-zero existence probe. Success or `EPERM`
+retains the lock as busy; only `ESRCH` permits the existing automatic overwrite
+recovery. Foreign, malformed or otherwise unverifiable ownership declines as
+unknown. The timestamp `startedAt` remains informational; payload and path stay
+unchanged.
+
+Shared scratch and lock-first ordering remain. Neither declined branch collects,
+cleans scratch, rewrites/deletes the lock or releases it. Busy now prints
+`wienerdog: another dream holds the lock.` Unknown ownership raises the fixed
+error specified by Table L6 through the existing job-failure path; it recommends
+checking for an earlier running dream before arranging recovery. Existing
+`ownsLock`/`releaseLock` behavior and cleanup-before-release remain.
+
+An established local owner observed alive or returning `EPERM` cannot lose its
+lock through that expiry check during preprocessing and its overrun, brain
+execution or finalization/cleanup. This is process-existence protection, not a
+health check, renewed lease or proof of child-process reaping. Hung live owners,
+PID reuse, host changes and unknown ownership can delay recovery. No heartbeat,
+automatic kill or new recovery command is introduced.
+
+**Accepted residual.** On 2026-09-15 the owner explicitly accepted the inherited
+simultaneous stale-claimant race for this narrow correction: read/probe followed
+by overwrite is not atomic, so two contenders observing the same dead owner can
+still overwrite one another. This amendment does not promise complete concurrent
+stale-recovery exclusion. Part 7 and the unrelated lifecycle and capacity
+amendments remain in force.
+
+## Amendment (2026-09-15): admit complete filtered sessions and report exclusion causes — WP-dream-filtered-input-budget
+
+**Decision (replaces capacity parts 4 and 5).** The owner ratified P1–P4,
+including this amendment, on 2026-09-15. Table A rows A2–A4 and A9 in
+`docs/specs/WP-dream-filtered-input-budget.md` are canonical. The previous
+capacity policy remains above as historical context.
+
+Equal shares, the minimum truncation grant, budget-induced suffix truncation,
+recording those truncated selections as processed, and the old floor-based
+wedge guarantee are **retired**. Newest-first admission now selects complete
+filtered extracts within X (`dream_max_input_bytes`, default 8,000,000).
+At exact X, stop. If an extract fits X but exceeds the remaining capacity,
+omit it and stop without searching older sessions for a smaller fit. If it is
+individually larger than X, report and skip it without reserving capacity;
+older candidates may still be admitted. Unused remainder is intentional.
+Whole refers to the existing parser's redacted, message-capped output, not
+every original message. Only admitted extracts can reach the existing
+successful-run and secret-disposition processing gates.
+
+The CLI reports separate nonzero counts for capacity-stop exclusions,
+preprocessing deadline exclusions, individually oversized sessions and
+incomplete reads. New diagnostics contain no transcript text, session IDs or
+paths. Oversized output names X and `dream_max_input_bytes`; deadline output
+names `dream_preprocess_timeout_seconds`. Dry-run shows the same distinctions
+and retains its physical scratch-byte total, without a truncation/floor line.
+
+With selected inputs, normal dreaming continues. With none and any oversized,
+deadline or incomplete-read exclusions, a real run throws an actionable
+`WienerdogError` after persisting changed oversized metadata and quarantine
+state. Mixed causes are reported separately with a summary that no complete
+session was admitted. Dry-run diagnoses and returns without persistence.
+With no selections or exclusions, preserve idle behavior, including the
+quarantine-only path. No default promises backlog drainage or forward progress
+for every possible session; the explicit failure makes an unadmittable run
+visible through the existing failure channel.
+
+ADR-0023 amendment 3 owns the separate content/work/time accounting and optional
+oversized-size memo. Its metadata may persist even if a later brain fails;
+this does not mark a transcript processed or alter its secret-revert counter.
+No dream report extension is introduced. All unrelated lifecycle, secret-revert,
+quarantine-surface and part-6 live-owner lock provisions remain unchanged,
+including the owner-accepted simultaneous stale-claimant race and recovery
+policy. This amendment adds no process or service (ADR-0004).

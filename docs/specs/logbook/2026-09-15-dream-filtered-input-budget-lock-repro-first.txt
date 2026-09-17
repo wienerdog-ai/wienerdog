@@ -1,0 +1,63 @@
+Readable reproduction output; trailing whitespace normalized only.
+Exact original bytes: 122771e12f94e8ad01c098034b06480321f680b1:docs/specs/logbook/2026-09-15-dream-filtered-input-budget-lock-repro-first.txt
+
+
+> wienerdog@0.13.0 test
+> node tests/with-temp-root.js tests/run.js /tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.test.js tests/unit/dream-lock.test.js
+
+✖ review reproduction: a living collector owner loses scratch after the model-only lock deadline (27.278ms)
+✔ dream-lock: acquires on an empty state dir (1.505333ms)
+✔ dream-lock: a second call while the lock is live is refused (0.340042ms)
+✔ dream-lock: a lock past its deadline is stolen (0.304792ms)
+✔ dream-lock: an unparseable lock is stolen (0.5905ms)
+✔ dream-lock: releaseLock removes only our own lock (0.337375ms)
+✔ dream-lock: releaseLock leaves another process lock intact (0.213291ms)
+✔ dream-lock: releaseLock is a no-op when absent (0.140333ms)
+✔ dream-lock: ownsLock is true for our own live lock (0.207209ms)
+✔ dream-lock: ownsLock is false for a foreign-pid lock (superseded holder) (0.209583ms)
+✔ dream-lock: ownsLock is false when the lock is absent (0.128ms)
+✔ dream-lock: ownsLock is false when the lock is unparseable (0.199959ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 11
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 57.571125
+
+✖ failing tests:
+
+test at ../../../../../private/tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.test.js:10:1
+✖ review reproduction: a living collector owner loses scratch after the model-only lock deadline (27.278ms)
+  AssertionError [ERR_ASSERTION]: [eval]:9
+        if (result.acquired) scratch.collectExtracts({"state":"/var/folders/3r/4nvs7jsx1f785ql71bk8tj380000gn/T/wd-testrun-4ljPRM/wd-review-lock-17NtQK/state","claudeDir":"/var/folders/3r/4nvs7jsx1f785ql71bk8tj380000gn/T/wd-testrun-4ljPRM/wd-review-lock-17NtQK/claude","codexDir":"/var/folders/3r/4nvs7jsx1f785ql71bk8tj380000gn/T/wd-testrun-4ljPRM/wd-review-lock-17NtQK/codex"}, ledger.emptyLedger(), 8_000_000);
+                                                                                                                                                                                                                                                                                                                                                                                                  ^
+
+  TypeError: ledger.emptyLedger is not a function
+      at [eval]:9:385
+      at runScriptInThisContext (node:internal/vm:219:10)
+      at node:internal/process/execution:451:12
+      at [eval]-wrapper:6:24
+      at runScriptInContext (node:internal/process/execution:449:60)
+      at evalFunction (node:internal/process/execution:283:30)
+      at evalTypeScript (node:internal/process/execution:295:3)
+      at node:internal/main/eval_string:71:3
+
+  Node.js v24.18.0
+
+
+  1 !== 0
+
+      at TestContext.<anonymous> (/private/tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.test.js:38:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

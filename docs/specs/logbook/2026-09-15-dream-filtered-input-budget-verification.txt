@@ -1,0 +1,42 @@
+COMMAND: npm test -- tests/unit/dream-collect.test.js tests/unit/ledger.test.js tests/unit/dream-pipeline.test.js tests/integration/dream.test.js tests/unit/transcript-stream.test.js tests/unit/transcripts.test.js
+EXIT: 0
+OUTPUT EXCERPT:
+ℹ tests 243
+ℹ suites 0
+ℹ pass 243
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 19814.579
+
+COMMAND: npm test
+EXIT: 0
+OUTPUT EXCERPT:
+ℹ tests 2754
+ℹ suites 0
+ℹ pass 2742
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 12
+ℹ todo 0
+ℹ duration_ms 82881.832292
+
+COMMAND: npm run lint
+EXIT: 0
+OUTPUT EXCERPT:
+> wienerdog@0.13.0 lint
+> node scripts/lint.js
+
+--- markdownlint ---
+markdownlint-cli2 v0.23.0 (markdownlint v0.41.0)
+Finding: docs/**/*.md skills/**/*.md templates/**/*.md tests/**/*.md *.md
+Linting: 664 file(s)
+Summary: 0 error(s)
+--- shellcheck ---
+--- PSScriptAnalyzer ---
+pwsh not found, skipping PSScriptAnalyzer (install PowerShell to run it locally; CI has it)
+--- frontmatter check ---
+frontmatter check passed: 274 spec(s), 4 agent(s)
+
+lint passed

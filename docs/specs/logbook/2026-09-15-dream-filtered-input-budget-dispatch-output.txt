@@ -1,0 +1,20 @@
+
+> wienerdog@0.13.0 test
+> node tests/with-temp-root.js tests/run.js /tmp/wd-dream-lock-design.NApPpv/content-dispatch.test.js
+
+{"fullBytes":306242,"fullMessages":290,"keptMessages":199}
+Verified HEAD 122771e12f94e8ad01c098034b06480321f680b1
+✔ C1-C2: main still allocates raw discovery size, then conditionally truncates (0.473667ms)
+✔ C3: retained reader limits, message caps and complete parse path (0.377416ms)
+✔ C4-C5: scratch representation, processed gate and historical acceptance/ADR (0.37725ms)
+✔ Raw allocation defect remains executable after lock landing (40.827667ms)
+✔ A11: merged lock keeps live/unknown owner and recovers dead local owner (22.262834ms)
+✔ All runtime and test Deliverables match merged main at dispatch (156.393417ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 256.274167

@@ -32,12 +32,13 @@ function readScalar(body, key) {
 
 /**
  * Read the vault path and optional dream knobs from config.yaml.
- * The three `dream_*` keys are OPTIONAL top-level scalars; absent → default.
+ * The `dream_*` keys are OPTIONAL top-level scalars; absent → default.
  * Defaults: `dream_timeout_minutes` 20, `dream_max_input_bytes` 8_000_000
  * (raised from 400_000 per ADR-0012 amendment — provisional, revisitable),
- * `dream_model` null.
+ * `dream_model` null, `dream_preprocess_timeout_seconds` 60 (independent
+ * of the model timeout).
  * @param {string} configFile  paths.config
- * @returns {{vault:string, timeoutMs:number, maxInputBytes:number, model:string|null}}
+ * @returns {{vault:string, timeoutMs:number, maxInputBytes:number, model:string|null, preprocessTimeoutMs:number}}
  */
 function readDreamConfig(configFile) {
   let body = '';
@@ -55,10 +56,12 @@ function readDreamConfig(configFile) {
   const timeoutMinutes = Number(readScalar(body, 'dream_timeout_minutes'));
   const maxInput = Number(readScalar(body, 'dream_max_input_bytes'));
   const model = readScalar(body, 'dream_model');
+  const preprocessMs = Number(readScalar(body, 'dream_preprocess_timeout_seconds')) * 1000;
 
   return {
     vault,
     timeoutMs: (Number.isFinite(timeoutMinutes) && timeoutMinutes > 0 ? timeoutMinutes : 20) * 60_000,
+    preprocessTimeoutMs: Number.isFinite(preprocessMs) && preprocessMs > 0 ? preprocessMs : 60_000,
     maxInputBytes: Number.isFinite(maxInput) && maxInput > 0 ? maxInput : 8_000_000,
     model: model && model !== '' ? model : null,
   };

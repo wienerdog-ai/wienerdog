@@ -1,0 +1,21 @@
+
+> wienerdog@0.13.0 test
+> node tests/with-temp-root.js tests/run.js tests/integration/adopt-e2e.test.js
+
+error: your local changes would be overwritten by revert.
+hint: commit your changes or stash them to proceed.
+fatal: revert failed
+✔ adopt-e2e: init → adopt → sync → dream through mapped tiers, one revertable commit (975.109083ms)
+✔ adopt-e2e: adopting over an ALREADY-scheduled dream rebinds the per-job digest + catch-up map to the ADOPTED vault (no follow-up sync) — A7 hardening fix #3 (600.031375ms)
+✔ adopt-e2e: a FAILED existing-schedule rebind is SURFACED (not silent success) + entries still bind the adopted vault, and a subsequent sync-heal RETRIES the reload — A7 hardening 2 fix #2 (665.797875ms)
+✔ adopt-e2e: A5 pin preflight — claude unresolvable ⇒ adopt ABORTS before any mutation (vault/config/manifest/pin-store byte-identical) (5.8695ms)
+✔ adopt-e2e: symlinked home — TCC guard refuses a Documents vault with zero writes (1.074042ms)
+✔ adopt-e2e: adopt --yes round-trips a dot-prefixed tier candidate through denial (WP-dot-segment-denial, acceptance criterion 4) (474.432458ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2769.823375

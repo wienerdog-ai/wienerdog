@@ -901,27 +901,96 @@ test('dream-pipeline: the counts keep their exact semantics, on the commit messa
   assert.match(r.output, /2 notes, 0 skills/);
 });
 
-test('dream-pipeline: scratch is removed before the lock is released, and a non-owner removes neither (row G5, Table V row V9)', async () => {
+test('dream-pipeline: expired-owner checks protect collection, brain, finalization and cleanup; cleanup precedes release', async (t) => {
   const ctx = setup();
-  /** @type {string[]} */
-  const order = [];
-  const lock = require('../../src/core/dream/lock');
-  const scratch = require('../../src/core/dream/scratch');
-  const realRelease = lock.releaseLock;
-  const realClean = scratch.cleanScratch;
-  lock.releaseLock = (...a) => { order.push('release'); return realRelease(...a); };
-  scratch.cleanScratch = (...a) => { order.push('clean'); return realClean(...a); };
-  try {
-    await runDream(ctx);
-  } finally {
-    lock.releaseLock = realRelease;
-    scratch.cleanScratch = realClean;
-  }
-  // Clean-before-release is what closes the acquire-versus-clean race: a
-  // newly-starting dream must not acquire the freed lock and have its fresh
-  // scratch wiped by our cleanup.
-  if (order.includes('clean') && order.includes('release')) {
-    assert.ok(order.indexOf('clean') < order.indexOf('release'), `saw: ${order.join(',')}`);
+  const lockFile = path.join(ctx.state, 'dream.lock');
+  const scratch = path.join(ctx.state, 'dream-scratch');
+  const lockModule = require.resolve('../../src/core/dream/lock');
+  const phases = [];
+  const teardown = [];
+  const checkContender = (phase) => {
+    const before = fs.readFileSync(lockFile);
+    const record = JSON.parse(before);
+    assert.equal(record.pid, process.pid);
+    // Advance only the contender's clock past the owner's deadline. Its PID
+    // probe is real, against this running pipeline, at each lifecycle boundary.
+    const output = execFileSync(process.execPath, ['-e', `
+      Date.now = () => Number(process.argv[3]);
+      process.stdout.write(JSON.stringify(require(process.argv[1]).acquireLock(process.argv[2], 60000)));
+    `, lockModule, ctx.state, String(record.deadline + 1)], { encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(output), { acquired: false, stolen: false, reason: 'busy' }, phase);
+    assert.deepEqual(fs.readFileSync(lockFile), before, phase);
+    phases.push(phase);
+  };
+  const rm = fs.rmSync;
+  let scratchRemovals = 0;
+  t.mock.method(fs, 'rmSync', (file, ...args) => {
+    if (file === scratch) {
+      const phase = scratchRemovals++ === 0 ? 'collection' : 'cleanup';
+      checkContender(phase);
+      if (phase === 'cleanup') teardown.push('clean');
+    }
+    if (file === lockFile) {
+      assert.equal(fs.existsSync(scratch), false, 'scratch is gone before release');
+      teardown.push('release');
+    }
+    return rm(file, ...args);
+  });
+  const { writeFilePrivate } = require('../../src/core/private-fs');
+  const { reapGroup } = require('../../src/core/reap');
+  const result = await runDream(ctx, ['--yes'], {
+    env: { WIENERDOG_DREAM_RUN_TOKEN: 'abcdef0123456789' },
+    opts: {
+      writeFilePrivate: (...args) => {
+        checkContender('brain');
+        return writeFilePrivate(...args);
+      },
+      reapGroup: async (...args) => {
+        const verdict = await reapGroup(...args);
+        checkContender('finalization');
+        return verdict;
+      },
+    },
+  });
+  assert.equal(result.thrown, null, result.thrown && result.thrown.stack);
+  assert.deepEqual(phases, ['collection', 'brain', 'finalization', 'cleanup']);
+  assert.deepEqual(teardown, ['clean', 'release']);
+});
+
+test('dream-pipeline: EPERM and unknown owners decline before collection or teardown', async (t) => {
+  for (const [code, reason] of [['EPERM', 'busy'], ['EINVAL', 'owner-unknown']]) {
+    const ctx = setup();
+    const lockFile = path.join(ctx.state, 'dream.lock');
+    const scratch = path.join(ctx.state, 'dream-scratch');
+    fs.mkdirSync(scratch, { recursive: true });
+    fs.writeFileSync(path.join(scratch, 'input.md'), 'held input');
+    const bytes = JSON.stringify({ pid: process.pid, host: os.hostname(), deadline: 0 });
+    fs.writeFileSync(lockFile, bytes);
+    const kill = t.mock.method(process, 'kill', () => { throw Object.assign(new Error('private probe detail'), { code }); });
+    const rm = fs.rmSync;
+    const removals = [];
+    const removal = t.mock.method(fs, 'rmSync', (file, ...args) => {
+      if (file === scratch || file === lockFile) removals.push(file);
+      return rm(file, ...args);
+    });
+    const result = await runDream(ctx);
+    kill.mock.restore();
+    removal.mock.restore();
+    if (reason === 'busy') {
+      assert.equal(result.thrown, null);
+      assert.equal(result.output, 'wienerdog: another dream holds the lock.');
+    } else {
+      const { WienerdogError } = require('../../src/core/errors');
+      assert.ok(result.thrown instanceof WienerdogError);
+      assert.equal(result.thrown.message, 'dream lock owner could not be verified; no takeover was attempted. Check whether an earlier dream is still running before arranging lock recovery.');
+      assert.equal(result.output, '');
+    }
+    assert.deepEqual(removals, []);
+    assert.equal(fs.readFileSync(lockFile, 'utf8'), bytes);
+    assert.deepEqual(fs.readdirSync(scratch), ['input.md']);
+    assert.equal(fs.readFileSync(path.join(scratch, 'input.md'), 'utf8'), 'held input');
+    assert.equal(fs.existsSync(workspaceOf(ctx)), false);
+    assert.equal(fs.existsSync(path.join(ctx.state, 'transcript-ledger.json')), false);
   }
 });
 
@@ -2036,4 +2105,116 @@ test('dream-pipeline: AC5 — the positive control: a hook configured through co
   assert.equal(rB.thrown, null, rB.thrown && rB.thrown.message);
   assert.equal(fs.existsSync(hookLogB), false,
     'GIT_CONFIG_COUNT must not run a hook offered only through the launching environment');
+});
+
+// WP-dream-filtered-input-budget: size evidence is durable before any brain work.
+function plantBudgetSession(ctx, name, text, mtime) {
+  const file = path.join(ctx.claude, 'projects', 'proj', `${name}.jsonl`);
+  writeFile(ctx.claude, `projects/proj/${name}.jsonl`, JSON.stringify({
+    type: 'user', sessionId: name, message: { role: 'user', content: text },
+  }) + '\n');
+  fs.utimesSync(file, mtime, mtime);
+  return file;
+}
+
+test('dream-pipeline: mixed zero-input causes preserve memo and quarantine before failure; dry-run persists neither', async (t) => {
+  const ctx = setup({ withTranscript: false });
+  writeFile(ctx.core, 'config.yaml', `vault: ${ctx.vault}\ndream_max_input_bytes: 1000\ndream_preprocess_timeout_seconds: 0.5\n`);
+  plantBudgetSession(ctx, 'private-oversized', 'x'.repeat(2000), 300);
+  const incomplete = plantBudgetSession(ctx, 'private-incomplete', 'message', 200);
+  plantBudgetSession(ctx, 'private-deadline', 'message', 100);
+  const quarantine = plantBudgetSession(ctx, 'private-ceiling', '', 50);
+  const transcripts = require('../../src/core/transcripts');
+  fs.truncateSync(quarantine, transcripts.Limits.PRE_READ_CEILING_BYTES + 1);
+  const performance = require('node:perf_hooks').performance;
+  let elapsed = 0;
+  t.mock.method(performance, 'now', () => elapsed);
+  const parse = transcripts.parseWithOutcome;
+  t.mock.method(transcripts, 'parseWithOutcome', (...args) => {
+    const result = parse(...args);
+    if (args[0].path === incomplete) {
+      elapsed = 500;
+      return { ...result, parse: { ...result.parse, runExhausted: true } };
+    }
+    return result;
+  });
+  for (const dryRun of [true, false]) {
+    elapsed = 0;
+    const r = await runDream(ctx, dryRun ? ['--dry-run'] : ['--yes']);
+    if (dryRun) assert.equal(r.thrown, null);
+    else {
+      assert.equal(r.thrown.constructor.name, 'WienerdogError');
+      assert.match(r.thrown.message, /no complete session was admitted/);
+      assert.match(r.thrown.message, /individually oversized: 1/);
+      assert.match(r.thrown.message, /preprocessing deadline: 1/);
+      assert.match(r.thrown.message, /incomplete reads: 1/);
+    }
+    assert.match(r.output, /dream_preprocess_timeout_seconds/);
+    assert.match(r.output, /dream_max_input_bytes/);
+    assert.doesNotMatch(r.output, /private-oversized|private-incomplete|private-deadline|truncated|floor/);
+    assert.equal(fs.existsSync(ledgerLib.ledgerPath(ctx.state)), !dryRun);
+  }
+  const ledger = ledgerLib.readLedger(ctx.state);
+  assert.equal(Object.keys(ledger.oversizedExtracts).length, 1);
+  assert.equal(Object.keys(ledger.files).length, 1);
+  assert.equal(ledger.files[ledgerLib.foldKey(quarantine)].reason, 'over-ceiling');
+});
+
+test('dream-pipeline: oversized memo is persisted before a later brain failure without resetting secret counters', async (t) => {
+  const ctx = setup();
+  writeFile(ctx.core, 'config.yaml', `vault: ${ctx.vault}\ndream_max_input_bytes: 10000\n`);
+  const oversized = plantBudgetSession(ctx, 'private-large', 'x'.repeat(2000), 300);
+  for (let i = 0; i < 10; i++) fs.appendFileSync(oversized, fs.readFileSync(oversized));
+  const stat = fs.statSync(oversized);
+  const disc = { path: oversized, harness: 'claude', size: stat.size, mtimeMs: stat.mtimeMs, dev: stat.dev, ino: stat.ino };
+  const prior = ledgerLib.recordSecretDeferred(ledgerLib.readLedger(ctx.state), disc, 2);
+  ledgerLib.writeLedger(ctx.state, prior);
+  const writes = [];
+  const write = ledgerLib.writeLedger;
+  t.mock.method(ledgerLib, 'writeLedger', (state, value) => {
+    writes.push(structuredClone(value));
+    return write(state, value);
+  });
+  const r = await runDream(ctx, ['--yes'], { mode: 'crash' });
+  assert.ok(r.thrown);
+  assert.match(r.thrown.message, /dream brain exited 1/);
+  assert.equal(writes.length, 1, 'new size evidence is the only ledger write before brain failure');
+  const after = ledgerLib.readLedger(ctx.state);
+  assert.deepEqual(after.files, prior.files);
+  assert.deepEqual(after.baseline_mtime, prior.baseline_mtime);
+  assert.equal(ledgerLib.secretDeferralCount(after, disc), 2);
+  assert.equal(Object.keys(after.oversizedExtracts).length, 1);
+  assert.deepEqual(writes[0], after);
+});
+
+test('dream-pipeline: identical memo maps do not rewrite the ledger, regardless of key order; pruning does persist on idle', async (t) => {
+  const ctx = setup({ withTranscript: false });
+  writeFile(ctx.core, 'config.yaml', `vault: ${ctx.vault}\ndream_max_input_bytes: 1000\n`);
+  const first = plantBudgetSession(ctx, 'first', 'x'.repeat(2000), 200);
+  const second = plantBudgetSession(ctx, 'second', 'y'.repeat(2000), 100);
+  const initial = await runDream(ctx);
+  assert.ok(initial.thrown);
+  const ledger = ledgerLib.readLedger(ctx.state);
+  ledger.oversizedExtracts = Object.fromEntries(Object.entries(ledger.oversizedExtracts).reverse());
+  ledgerLib.writeLedger(ctx.state, ledger);
+  const before = fs.readFileSync(ledgerLib.ledgerPath(ctx.state));
+  const write = ledgerLib.writeLedger;
+  const writes = t.mock.method(ledgerLib, 'writeLedger', write);
+  const retry = await runDream(ctx);
+  assert.ok(retry.thrown);
+  assert.equal(writes.mock.callCount(), 0);
+  assert.deepEqual(fs.readFileSync(ledgerLib.ledgerPath(ctx.state)), before);
+  fs.unlinkSync(first);
+  fs.unlinkSync(second);
+  const dry = await runDream(ctx, ['--dry-run']);
+  assert.equal(dry.thrown, null);
+  assert.equal(writes.mock.callCount(), 0);
+  assert.deepEqual(fs.readFileSync(ledgerLib.ledgerPath(ctx.state)), before);
+  const idle = await runDream(ctx);
+  assert.equal(idle.thrown, null);
+  assert.match(idle.output, /nothing new to dream/);
+  assert.equal(writes.mock.callCount(), 1, 'pruned size evidence is written even on idle');
+  assert.equal('oversizedExtracts' in ledgerLib.readLedger(ctx.state), false);
+  await runDream(ctx);
+  assert.equal(writes.mock.callCount(), 1, 'absent and empty maps never churn');
 });

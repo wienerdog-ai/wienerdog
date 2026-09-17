@@ -1,0 +1,56 @@
+# Template conformance review — R0
+
+Verdict: FINDING — one template-conformance gap.
+
+## Scope
+
+Fresh review against exactly two document inputs:
+- docs/specs/WP-dream-live-owner-lock.md
+- docs/specs/_TEMPLATE.md
+
+No source files, authoring runbook, ADR, successor specification, or other documents were read. This is a template-conformance review only; it does not validate implementation claims or evaluate the lock design. No tests were run and no repository files were changed.
+
+## Checks
+
+PASS — Metadata and structure. Required frontmatter fields are present, the WP id and title agree, status is Draft, and the allowed model/size values are used. All required top-level sections and Exact contracts are present. Context has three paragraphs and states the files/short-lived-jobs invariant.
+
+PASS — Current state and permission boundary. Current state identifies an inspected executable base, exact paths and exported signatures, and labels the claims for dispatch re-verification. Deliverables explicitly enumerate action/path/notes for implementation, tests, and ADR documentation.
+
+PASS — Exact contracts and examples. acquireLock, ownsLock, and releaseLock signatures and output alternatives are explicit. The concrete PID/hostname/time/timeout input example supplies the complete generated dream.lock file, including the no-trailing-newline condition. Table L and its examples link existing-record inputs and probe outcomes to the declared acquired/busy/owner-unknown outcomes. Diagnostics provide literal text. No new flags, settings, or state fields are introduced.
+
+PASS — Contract activation and canonical authority. Contract reference explicitly activates ADR-0031 for multiple qualifying changes. Table L is declared canonical, covers L1–L8, and examples explicitly defer to it. The checklist includes the register-new-mirrors and same-commit update rules. Checklist completeness has the finding below.
+
+PASS — Constraints and security. Implementation notes give scope limits, known traps, dependency/golden-fixture constraints and decision recording. The Security checklist covers local PID validation, safe probing, unknown ownership, declined-acquisition mutation and stated residual limits. The generic template path-validation example need not be copied into a WP whose changed input handling is a lock record and PID probe.
+
+PASS — Acceptance and second-run coverage. AC1–AC8 are objective contract assertions. AC6 explicitly requires second-run zero changes to retained-lock bytes and scratch. Verification assigns AC1–AC3 to lock tests, AC4–AC6 to pipeline/integration tests, AC7 to ADR review, and AC8 to retained old-red/new-green evidence and the commands. The specification supplies literal verification commands; this review did not execute them.
+
+PASS — Scope and completion. Adjacent work is explicitly excluded; the successor WP id is identified in Implementation notes. Definition of done includes local verification and evidence, conventional commits and PR title, complete PR template with Decisions made and Generated-by, status transition to In-Review, and both review gates. Owner-approved scope is distinguished from completion of the design gate.
+
+## Finding
+
+TC-01 — Mirrored Surface Checklist omits existing operative surfaces.
+
+Location: WP-dream-live-owner-lock.md, Mirrored Surface Checklist.
+
+Template requirement: name every surface in the spec that mirrors the canonical table, register newly identified mirrors, and update canonical facts and all registered mirrors in the same commit.
+
+The checklist registers Deliverables, interfaces/payload/examples, Implementation notes, Security, Acceptance, verification, ADR, historical Current state, and the successor. It does not name the opening scope notice or Context. Both already repeat canonical facts: the scope notice states automatic expired/proven-dead-local takeover and the accepted simultaneous stale-claimant residual (L5); Context repeats deadline-only live-owner protection (L7), the L5 exception, automatic expired-dead-local recovery, and conservative unknown handling (L2–L5).
+
+Required correction: register the opening scope notice and Context as Table L mirrors. Also identify Out of scope as the surface that repeats the no-heartbeat/no-kill/no-atomic-arbitration boundaries, so future changes update that existing surface with the corresponding canonical limits. No design change is requested.
+
+## Executed evidence
+
+Repository: /Users/felho/dev/repos-to-learn-from/wienerdog
+Expected HEAD: 190eec5e0d63b371c1909a66f5fac9a1b819bec2
+
+Before review:
+- git status --porcelain=v1: empty output (clean).
+- git rev-parse HEAD: 190eec5e0d63b371c1909a66f5fac9a1b819bec2
+- Read the two permitted document inputs with cat.
+
+After review:
+- git status --porcelain=v1: empty output (clean).
+- git rev-parse HEAD: 190eec5e0d63b371c1909a66f5fac9a1b819bec2
+- Python assertions verified the final empty status bytes and exact HEAD bytes against the initial clean expected values.
+
+Before/after status and HEAD are byte-identical. The sole output artifact is this file outside the repository. No implementation, source critique, repository edits, tests, or delegated agents were involved.
