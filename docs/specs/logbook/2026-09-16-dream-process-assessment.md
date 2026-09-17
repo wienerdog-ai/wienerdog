@@ -12,6 +12,14 @@ spec. The owner requested a step back to understand the complete dream process
 before selecting further fixes. No runtime, configuration, vault, transcript
 ledger, scheduler, or upstream change was made for this assessment.
 
+**Scope update, 2026-09-17:** the owner chose to exclude tool-call details and
+tool-result content from the first implementation, and to have the dream report
+name occasions when missing tool evidence would have helped. See the
+[decision record](2026-09-17-dream-primary-input-scope.md). It supersedes the
+initial evidence-access recommendations below for the first iteration; the
+historical findings and measurements remain valid. Neither a tool-evidence
+store nor on-demand retrieval is part of that first iteration.
+
 Source baseline: `1c3790de9f88f40aa28202e6f47748500babd555`, the fork's main
 after the filtered-input-budget and live-owner-lock changes. Analysis documents
 live on a separate branch/worktree because the installed application points at
