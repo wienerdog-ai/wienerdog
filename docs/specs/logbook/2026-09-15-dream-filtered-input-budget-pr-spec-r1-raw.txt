@@ -1,0 +1,12 @@
+APPROVE
+
+No findings.
+
+Reviewed HEAD: 216ce0d93b5fc1af22ea785a3beb25cf9d4d9b9b
+Merge base: 81e09414726b81b5f79a98835a48872d1b6a0f6a
+
+Execution: the actual changed-file boundary and every literal verification command were personally executed. Targeted tests passed 243/243. The initial full run failed two unchanged timing-sensitive tests (reap-escape and gws-auth); its complete output is retained. Both files then passed 26/26 in isolation, and one serialized full rerun on the unchanged reviewed HEAD passed: 2,754 tests, 2,742 passed, 12 skipped, zero failures, exit 0. Lint and both boundary/whitespace checks passed. PSScriptAnalyzer was skipped by lint because pwsh is unavailable. Tests used the documented runtime-only Node v24.18.0 PATH.
+
+Closed-Contract Drift Check: complete Table A rows A1-A11 remain canonical. The implementation and registered operative mirrors agree on whole filtered-content admission, remainder-stop versus oversized-skip behavior, soft monotonic preprocessing time, fresh per-session read allowance, independent oversized metadata, disjoint accounting and CLI failure handling. Both dated ADR amendments preserve historical text and unrelated lifecycle/quarantine/lock provisions. Historical alternative designs do not override the accepted table. No missing canonical table, operative mirror drift, or silent change to the inherited lock residual was found.
+
+Read-only verification: git status --porcelain was zero bytes before and after the entire review, including reruns; HEAD remained identical. No repository files changed.

@@ -10,8 +10,9 @@ const { spawnSync } = require('node:child_process');
 const { getPaths } = require('../../src/core/paths');
 const { readDreamConfig } = require('../../src/core/dream/config');
 const { readWatermarks, writeWatermarks } = require('../../src/core/dream/watermarks');
-const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../../src/core/dream/scratch');
+const { collectExtracts, cleanScratch } = require('../../src/core/dream/scratch');
 const ledgerLib = require('../../src/core/dream/ledger');
+const transcripts = require('../../src/core/transcripts');
 const { MAX_MESSAGES, Limits } = require('../../src/core/transcripts');
 
 /** Fresh temp home + resolved paths. */
@@ -91,6 +92,7 @@ test('dream-collect: readDreamConfig returns defaults with only a vault', () => 
   assert.equal(cfg.timeoutMs, 20 * 60_000);
   assert.equal(cfg.maxInputBytes, 8_000_000);
   assert.equal(cfg.model, null);
+  assert.equal(cfg.preprocessTimeoutMs, 60_000);
 });
 
 test('dream-collect: readDreamConfig honors optional knobs', () => {
@@ -202,7 +204,7 @@ test('dream-collect: a matching processed record skips the file; a changed file 
   assert.equal(third.entries.length, 1);
 });
 
-test('dream-collect: capacity defers the oldest sessions past the size cap with no negative record', () => {
+test('dream-collect: oversized sessions are skipped with no negative record', () => {
   const paths = tempPaths();
   // Claude is OLDER and LARGE; codex is NEWER and small.
   writeClaude(paths, 'c1', 5, 4000, new Date('2026-01-02T00:00:00Z'));
@@ -211,29 +213,29 @@ test('dream-collect: capacity defers the oldest sessions past the size cap with 
   // Cap fits the small codex extract but not the large claude one.
   const result = collectExtracts(paths, emptyLedger(), 2000);
 
-  assert.ok(result.droppedForSize > 0);
+  assert.ok(result.oversized.length > 0);
   assert.equal(result.wrote.length, 1);
   assert.equal(result.entries[0].harness, 'codex');
-  // Capacity-deferred: listed in deferred, in NEITHER processed nor newlyQuarantined
+  // Oversized: in NEITHER processed nor newlyQuarantined
   // (no record → naturally retried next run — the WP-048/069 starvation fix).
-  assert.equal(result.deferred.length, 1);
-  assert.equal(result.deferred[0].session_id, 'c1');
+  assert.equal(result.oversized.length, 1);
+  assert.equal(path.basename(result.oversized[0].path), 'c1.jsonl');
   assert.ok(!result.processed.some((d) => d.path.endsWith('c1.jsonl')));
   assert.equal(result.newlyQuarantined.length, 0);
 });
 
-test('dream-collect: a deferred file is selected again on a subsequent larger-budget run', () => {
+test('dream-collect: a oversized file is selected again on a subsequent larger-budget run', () => {
   const paths = tempPaths();
   writeClaude(paths, 'c1', 5, 4000, new Date('2026-01-02T00:00:00Z'));
   writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
 
   const first = collectExtracts(paths, emptyLedger(), 2000);
-  assert.equal(first.deferred.length, 1);
+  assert.equal(first.oversized.length, 1);
   // Record ONLY what a successful run records: the processed files.
   let ledger = emptyLedger();
   for (const d of first.processed) ledger = ledgerLib.recordProcessed(ledger, d);
 
-  // A larger budget next run picks the deferred file up (no watermark gap).
+  // A larger budget next run picks the oversized file up (no watermark gap).
   const second = collectExtracts(paths, ledger, 400_000);
   assert.equal(second.entries.length, 1);
   assert.equal(second.entries[0].session_id, 'c1');
@@ -278,67 +280,28 @@ test('dream-collect: a ledger-quarantined unchanged file is not re-selected', ()
   assert.equal(second.entries.length, 0);
 });
 
-test('dream-collect: capacity incident replay — four oversized sessions are all kept truncated (old loop kept 0)', () => {
+test('dream-collect: newest complete extract wins; remaining-space overflow stops before older fits', () => {
   const paths = tempPaths();
-  // Four fresh Claude sessions, each ~205 KB serialized (100 msgs × 2000 chars),
-  // newest→oldest c4..c1. This is the 2026-07-05 starvation set.
-  writeClaude(paths, 'c1', 100, 2000, new Date('2026-01-02T00:00:00Z'));
-  writeClaude(paths, 'c2', 100, 2000, new Date('2026-01-03T00:00:00Z'));
-  writeClaude(paths, 'c3', 100, 2000, new Date('2026-01-04T00:00:00Z'));
-  writeClaude(paths, 'c4', 100, 2000, new Date('2026-01-05T00:00:00Z'));
-
-  // Budget admits four equal shares (100 000 each) above the floor but below any
-  // single extract → all four truncated. The OLD break loop kept 0 here.
+  writeClaude(paths, 'newest', 100, 2000, new Date('2026-01-05'));
+  writeClaude(paths, 'middle', 100, 2000, new Date('2026-01-04'));
+  writeClaude(paths, 'oldsmall', 1, 10, new Date('2026-01-03'));
   const result = collectExtracts(paths, emptyLedger(), 400_000);
-
-  assert.equal(result.entries.length, 4);
-  assert.equal(result.droppedForSize, 0);
-  assert.equal(result.dropped.length, 0);
-  assert.equal(result.truncated.length, 4);
-  assert.ok(result.entries.every((e) => e.truncatedToFit === true));
-  // A truncated session still counts as consumed → all four are processed.
-  assert.equal(result.processed.length, 4);
-
-  // The kept extracts are actually truncated and keep the NEWEST messages.
-  const one = JSON.parse(fs.readFileSync(path.join(result.scratchDir, 'claude-c4.json'), 'utf8'));
-  assert.equal(one.truncated, true);
-  assert.ok(one.messages.length > 0 && one.messages.length < 100);
+  assert.deepEqual(result.entries.map((e) => e.session_id), ['newest']);
+  assert.deepEqual(result.deferred.map((e) => e.session_id), ['middle', 'oldsmall']);
+  assert.deepEqual(result.truncated, []);
+  assert.equal(result.entries[0].truncatedToFit, false);
+  assert.equal(JSON.parse(fs.readFileSync(result.wrote[0])).messages.length, 100);
 });
 
-test('dream-collect: capacity water-fill keeps a fitting session whole behind an oversized newer one (no shadowing)', () => {
+test('dream-collect: oversized newer extract reserves nothing for a fitting older session', () => {
   const paths = tempPaths();
-  // Newest is huge (~205 KB); an OLDER session is tiny and fits its share whole.
-  writeClaude(paths, 'cbig', 100, 2000, new Date('2026-01-05T00:00:00Z'));
-  const smallMtime = writeClaude(paths, 'csmall', 1, 10, new Date('2026-01-02T00:00:00Z'));
-
+  writeClaude(paths, 'big', 100, 2000, new Date('2026-01-05'));
+  writeClaude(paths, 'small', 1, 10, new Date('2026-01-02'));
   const result = collectExtracts(paths, emptyLedger(), 100_000);
-
-  assert.equal(result.entries.length, 2);
-  assert.equal(result.dropped.length, 0);
-  // The small older session is kept WHOLE despite the oversized newer one ahead.
-  const small = result.entries.find((e) => e.session_id === 'csmall');
-  assert.ok(small);
-  assert.equal(small.truncatedToFit, false);
-  assert.equal(small.mtimeMs, smallMtime);
-  // The big newer session is truncated to fit.
-  const big = result.entries.find((e) => e.session_id === 'cbig');
-  assert.equal(big.truncatedToFit, true);
-  assert.equal(result.truncated.length, 1);
-});
-
-test('dream-collect: capacity sub-floor budget defers the session whole (no record of any kind)', () => {
-  const paths = tempPaths();
-  writeClaude(paths, 'c1', 100, 2000, new Date('2026-01-05T00:00:00Z'));
-
-  // Budget below MIN_TRUNCATE_BYTES → no useful share → deferred whole, kept 0.
-  const result = collectExtracts(paths, emptyLedger(), MIN_TRUNCATE_BYTES - 1);
-
-  assert.equal(result.entries.length, 0);
-  assert.equal(result.dropped.length, 1);
-  assert.equal(result.droppedForSize, 1);
-  assert.equal(result.dropped[0].session_id, 'c1');
-  // Whole-deferred session gets NO record (retried next run).
-  assert.equal(result.processed.length, 0);
+  assert.deepEqual(result.entries.map((e) => e.session_id), ['small']);
+  assert.equal(result.oversized.length, 1);
+  assert.equal(result.oversized[0].cached, false);
+  assert.equal(result.deferred.length, 0);
   assert.equal(result.newlyQuarantined.length, 0);
 });
 
@@ -351,10 +314,9 @@ function discOf(file) {
   return { harness: 'claude', path: file, mtimeMs: st.mtimeMs, size: st.size, dev: st.dev, ino: st.ino };
 }
 
-/** The A/B fixture: two ~103 KB claude transcripts under one 40 000-byte budget,
+/** The A/B fixture: two ~103 KB claude transcripts under one 150 000-byte budget,
  *  with the OFFENDER the NEWER of the two (as an actively-appended transcript
- *  always is). The equal share (20 000) is below MIN_TRUNCATE_BYTES, so the
- *  water-fill defers the oldest whole — only the LEDGER differs between A and B.
+ *  always is). One full extract fits; only the ledger differs between A and B.
  *  @returns {{paths:object, offender:string, fresh:string}} */
 function fairnessFixture() {
   const paths = tempPaths();
@@ -364,19 +326,19 @@ function fairnessFixture() {
   return { paths, offender: path.join(dir, 'offender.jsonl'), fresh: path.join(dir, 'fresh.jsonl') };
 }
 
-test('dream-collect: B — a DEFERRED offender is still a candidate and starves the newer session out of the budget', () => {
+test('dream-collect: B — a DEFERRED offender is still a candidate and starves the older session out of the budget', () => {
   const { paths, offender } = fairnessFixture();
   // A secret-revert deferral at the offender's CURRENT fingerprint. It is not a
   // negative record: the file is re-selected, wins the newest-mtime-first
-  // water-fill, and the genuinely fresh session is capacity-deferred with NO
+  // admission, and the genuinely fresh session is capacity-deferred with NO
   // record. (Before the fix a `deferred` record read as skip-processed, so the
   // offender would not even be a candidate — this is the B5 proof.)
   const ledger = ledgerLib.recordSecretDeferred(emptyLedger(), discOf(offender), 1);
 
-  const result = collectExtracts(paths, ledger, 40_000);
+  const result = collectExtracts(paths, ledger, 150_000);
 
   assert.deepEqual(result.processed.map((d) => path.basename(d.path)), ['offender.jsonl']);
-  assert.equal(result.entries[0].truncatedToFit, true, 'the offender is truncated to its 40 000 grant');
+  assert.equal(result.entries[0].truncatedToFit, false, 'the offender fits whole');
   assert.deepEqual(result.deferred.map((d) => d.session_id), ['fresh'], 'the new session is starved');
   assert.equal(result.newlyQuarantined.length, 0);
 });
@@ -399,7 +361,7 @@ test('dream-collect: A — an EXHAUSTED offender is not a candidate at all, so t
     },
   };
 
-  const result = collectExtracts(paths, ledger, 40_000);
+  const result = collectExtracts(paths, ledger, 150_000);
 
   assert.deepEqual(result.processed.map((d) => path.basename(d.path)), ['fresh.jsonl']);
   assert.equal(result.entries[0].session_id, 'fresh');
@@ -494,9 +456,9 @@ test('dream-collect: a backlog of near-limit files collects under a constrained 
   assert.deepEqual(out, { entries: 10, processed: 10, quarantined: 0, deferred: 0 });
 });
 
-// ---- byte-budget truncation rebases skill_invocations (WP-087) ----
+// ---- admitted extracts preserve parser skill_invocations (WP-087) ----
 
-test('dream-collect: byte-budget truncation rebases skill_invocations and drops ones fallen into the removed prefix', () => {
+test('dream-collect: whole admission preserves early and late skill invocations', () => {
   const paths = tempPaths();
   const sessionId = 'sk1';
   const dir = path.join(paths.claudeDir, 'projects', 'proj');
@@ -529,8 +491,7 @@ test('dream-collect: byte-budget truncation rebases skill_invocations and drops 
   for (let i = 0; i < 30; i++) {
     lines.push(JSON.stringify({ type: 'user', sessionId, cwd: '/p', timestamp: ts, message: { role: 'user', content: big } }));
   }
-  // 'late' is the LAST raw event in the file, so it survives any byte truncation
-  // that keeps at least one message (k >= 1) — robust regardless of exact k.
+  // A second invocation/result window follows the padding; both must survive.
   lines.push(
     JSON.stringify({
       type: 'assistant',
@@ -553,25 +514,25 @@ test('dream-collect: byte-budget truncation rebases skill_invocations and drops 
   const when = new Date('2026-01-05T00:00:00Z');
   fs.utimesSync(file, when, when);
 
-  // ~240KB+ of padding vs. a 60KB budget forces truncation to a small newest-suffix.
-  const result = collectExtracts(paths, emptyLedger(), 60_000);
+  // The full filtered extract fits and must retain both invocation windows.
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
 
   assert.equal(result.entries.length, 1);
-  assert.equal(result.entries[0].truncatedToFit, true);
+  assert.equal(result.entries[0].truncatedToFit, false);
   const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
-  assert.ok(extract.messages.length < 64);
+  assert.equal(extract.messages.length, 64);
 
   const skills = extract.skill_invocations.map((si) => si.skill);
-  assert.ok(!skills.includes('early')); // window fell entirely in the dropped prefix
+  assert.ok(skills.includes('early')); // no budget-induced prefix removal
 
   const late = extract.skill_invocations.find((si) => si.skill === 'late');
-  assert.ok(late, 'late invocation must survive truncation');
+  assert.ok(late, 'late invocation must survive whole admission');
   assert.ok(late.index >= 0 && late.index < extract.messages.length);
   assert.ok(late.resultIndex >= 0 && late.resultIndex < extract.messages.length);
   assert.equal(extract.messages[late.resultIndex].text, 'done-late');
 });
 
-test('dream-collect: byte-budget truncation drops a trailing invocation whose rebased index would equal messages.length (right edge)', () => {
+test('dream-collect: whole admission preserves the parser result for a trailing invocation', () => {
   const paths = tempPaths();
   const sessionId = 'sk2';
   const dir = path.join(paths.claudeDir, 'projects', 'proj');
@@ -583,10 +544,8 @@ test('dream-collect: byte-budget truncation drops a trailing invocation whose re
   for (let i = 0; i < 30; i++) {
     lines.push(JSON.stringify({ type: 'user', sessionId, cwd: '/p', timestamp: ts, message: { role: 'user', content: big } }));
   }
-  // Final raw event: an assistant turn carrying a Skill tool_use with nothing after
-  // it (no paired tool_result, no later message). Its raw index === raw messages
-  // count, so after rebasing it lands on keptMsgs.length — one past the last valid
-  // slot — and must be dropped by the upper-bound filter.
+  // Final raw event: an assistant turn with text and an unpaired Skill tool_use.
+  // Whole admission must preserve the parser's exact invocation representation.
   lines.push(
     JSON.stringify({
       type: 'assistant',
@@ -600,15 +559,17 @@ test('dream-collect: byte-budget truncation drops a trailing invocation whose re
   const when = new Date('2026-01-05T00:00:00Z');
   fs.utimesSync(file, when, when);
 
-  const result = collectExtracts(paths, emptyLedger(), 60_000);
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
 
   assert.equal(result.entries.length, 1);
-  assert.equal(result.entries[0].truncatedToFit, true);
+  assert.equal(result.entries[0].truncatedToFit, false);
   const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
-  assert.deepEqual(extract.skill_invocations, []);
+  const parsed = fullExtracts(paths)[0].extract;
+  assert.deepEqual(extract, parsed);
+  assert.equal(extract.skill_invocations[0].skill, 'bar');
 });
 
-test('dream-collect: a session hitting the MAX_MESSAGES count cap in parse() AND THEN byte-budget truncation keeps its invocation in range', () => {
+test('dream-collect: a session hitting the parser MAX_MESSAGES cap preserves its invocation without further truncation', () => {
   const paths = tempPaths();
   const sessionId = 'sk3';
   const dir = path.join(paths.claudeDir, 'projects', 'proj');
@@ -624,8 +585,7 @@ test('dream-collect: a session hitting the MAX_MESSAGES count cap in parse() AND
     lines.push(JSON.stringify({ type: 'user', sessionId, cwd: '/p', timestamp: ts, message: { role: 'user', content: `pad${i}` } }));
   }
   // The invocation + its result are the LAST raw messages: they survive parse()'s
-  // count cap as the newest tail, remaining the last two messages of the capped
-  // extract, so they also survive any further byte-budget truncation (k2 >= 1).
+  // count cap as the newest tail; collection must preserve that exact result.
   lines.push(
     JSON.stringify({
       type: 'assistant',
@@ -648,14 +608,14 @@ test('dream-collect: a session hitting the MAX_MESSAGES count cap in parse() AND
   const when = new Date('2026-01-05T00:00:00Z');
   fs.utimesSync(file, when, when);
 
-  // Budget well below the ~2000-message capped extract's serialized size, but above
-  // MIN_TRUNCATE_BYTES → forces a SECOND (byte) truncation on top of the count cap.
-  const result = collectExtracts(paths, emptyLedger(), 50_000);
+  // The parser cap remains; the collector must not shorten it again.
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
 
   assert.equal(result.entries.length, 1);
-  assert.equal(result.entries[0].truncatedToFit, true);
+  assert.equal(result.entries[0].truncatedToFit, false);
   const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
-  assert.ok(extract.messages.length < MAX_MESSAGES);
+  assert.equal(extract.messages.length, MAX_MESSAGES);
+  assert.equal(extract.truncated, true);
   assert.equal(extract.skill_invocations.length, 1);
   const mid = extract.skill_invocations[0];
   assert.equal(mid.skill, 'mid');
@@ -675,4 +635,271 @@ test('dream-collect: re-running empties stale scratch, cleanScratch removes it',
 
   cleanScratch(paths.state);
   assert.equal(fs.existsSync(second.scratchDir), false);
+});
+
+// ---- filtered demand, independent work budgets and admission deadline ----
+
+function fullExtracts(paths) {
+  return transcripts.discover(paths, { since: null }).sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .map((d) => ({ d, extract: transcripts.parseWithOutcome(d, transcripts.newRunBudget()).extract }));
+}
+const compactBytes = (extract) => Buffer.byteLength(JSON.stringify(extract));
+
+test('dream-collect: preprocessing scalar accepts fractional seconds and rejects invalid or overflowing conversion', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  for (const [scalar, expected] of [['0.25', 250], ['"2"', 2000], ['2 # seconds', 2000], ['0', 60_000], ['-1', 60_000], ['NaN', 60_000], ['Infinity', 60_000], ['1e308', 60_000], ['', 60_000]]) {
+    fs.writeFileSync(paths.config, `vault: /v\ndream_preprocess_timeout_seconds: ${scalar}\n`);
+    assert.equal(readDreamConfig(paths.config).preprocessTimeoutMs, expected, scalar);
+  }
+  fs.writeFileSync(paths.config, 'vault: /v\nother:\n  dream_preprocess_timeout_seconds: 3\n');
+  assert.equal(readDreamConfig(paths.config).preprocessTimeoutMs, 60_000);
+});
+
+test('dream-collect: filtered complete content from both harnesses fits despite raw padding', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'useful', 200, 1000, new Date('2026-01-03'));
+  writeCodex(paths, 'small', new Date('2026-01-02'));
+  for (const d of transcripts.discover(paths, { since: null })) {
+    fs.appendFileSync(d.path, `${JSON.stringify({ type: 'ignored', padding: 'z'.repeat(900_000) })}\n`.repeat(3));
+  }
+  const full = fullExtracts(paths);
+  assert.ok(full.reduce((sum, { extract }) => sum + compactBytes(extract), 0) < 400_000);
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+  assert.equal(result.entries.length, 2);
+  for (const { extract } of full) {
+    const entry = result.entries.find((e) => e.session_id === extract.session_id);
+    assert.deepEqual(JSON.parse(fs.readFileSync(entry.scratchFile)), extract);
+  }
+  assert.deepEqual(result.truncated, []);
+});
+
+test('dream-collect: compact metadata is charged even when larger than raw source; exact fit stops', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'tiny', 1, 1, new Date('2026-01-03'));
+  const [{ d, extract }] = fullExtracts(paths);
+  const exact = compactBytes(extract);
+  assert.ok(exact > d.size);
+  const tooSmall = collectExtracts(paths, emptyLedger(), exact - 1);
+  assert.equal(tooSmall.entries.length, 0);
+  assert.equal(tooSmall.oversized[0].extractBytes, exact);
+  writeCodex(paths, 'older', new Date('2026-01-02'));
+  const result = collectExtracts(paths, emptyLedger(), exact);
+  assert.equal(result.entries.length, 1);
+  assert.deepEqual(result.deferred.map((e) => e.session_id), ['rollout-older']);
+  assert.equal(fs.readFileSync(result.wrote[0], 'utf8'), JSON.stringify(extract, null, 2));
+  assert.ok(fs.statSync(result.wrote[0]).size > exact, 'physical bytes are deliberately a different measure');
+});
+
+test('dream-collect: equal-mtime admission preserves discovery order', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'one', 1, 1, new Date('2026-01-03'));
+  writeCodex(paths, 'two', new Date('2026-01-03'));
+  const [{ extract }] = fullExtracts(paths);
+  const result = collectExtracts(paths, emptyLedger(), compactBytes(extract));
+  assert.equal(result.entries[0].session_id, extract.session_id);
+  assert.equal(result.deferred.length, 1);
+});
+
+test('dream-collect: deadline includes discovery and scratch setup, equality excludes a parse', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'one', 1, 10, new Date('2026-01-03'));
+  let tick = 0;
+  const discover = transcripts.discover;
+  t.mock.method(transcripts, 'discover', (...args) => { tick += 40; return discover(...args); });
+  const mkdir = fs.mkdirSync;
+  t.mock.method(fs, 'mkdirSync', (...args) => { tick += 20; return mkdir(...args); });
+  const parser = t.mock.method(transcripts, 'parseWithOutcome');
+  const result = collectExtracts(paths, emptyLedger(), 400_000, { preprocessTimeoutMs: 60, now: () => tick });
+  assert.equal(parser.mock.callCount(), 0);
+  assert.equal(result.deadlineDeferred.length, 1);
+  assert.deepEqual(result.oversizedExtracts, {});
+  assert.equal(result.deferred.length, 0);
+});
+
+test('dream-collect: a started parse finishes across expiry, then deadline stops older sessions', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'new', 1, 10, new Date('2026-01-03'));
+  writeCodex(paths, 'old', new Date('2026-01-02'));
+  let tick = 0;
+  const parse = transcripts.parseWithOutcome;
+  t.mock.method(transcripts, 'parseWithOutcome', (...args) => { tick = 100; return parse(...args); });
+  const result = collectExtracts(paths, emptyLedger(), 400_000, { preprocessTimeoutMs: 60, now: () => tick });
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.deadlineDeferred.length, 1);
+  assert.equal(result.deferred.length, 0);
+});
+
+test('dream-collect: post-parse writing time counts before the next admission', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'new', 1, 10, new Date('2026-01-03'));
+  writeCodex(paths, 'old', new Date('2026-01-02'));
+  let tick = 0;
+  const write = fs.writeSync;
+  t.mock.method(fs, 'writeSync', (...args) => { tick = 100; return write(...args); });
+  const result = collectExtracts(paths, emptyLedger(), 400_000, { preprocessTimeoutMs: 60, now: () => tick });
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.deadlineDeferred.length, 1);
+});
+
+test('dream-collect: incomplete reads are discarded and the next candidate receives a fresh budget', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'partial', 1, 10, new Date('2026-01-03'));
+  writeCodex(paths, 'whole', new Date('2026-01-02'));
+  const parse = transcripts.parseWithOutcome;
+  const budgets = [];
+  t.mock.method(transcripts, 'parseWithOutcome', (d, budget) => {
+    assert.equal(budget.remaining, Limits.MAX_RUN_BYTES);
+    budgets.push(budget);
+    const result = parse(d, budget);
+    if (budgets.length === 1) { budget.remaining = 0; result.parse.runExhausted = true; }
+    return result;
+  });
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+  assert.notEqual(budgets[0], budgets[1]);
+  assert.deepEqual(result.entries.map((e) => e.session_id), ['whole']);
+  assert.deepEqual(result.readDeferred.map((e) => e.session_id), ['partial']);
+  assert.equal(result.deferred.length, 0);
+  assert.deepEqual(fs.readdirSync(result.scratchDir), ['codex-whole.json']);
+});
+
+test('dream-collect: raw work can cross 200 MiB across individually bounded sessions', (t) => {
+  const paths = tempPaths();
+  t.after(() => fs.rmSync(path.dirname(paths.core), { recursive: true, force: true }));
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  const padding = `${JSON.stringify({ type: 'ignored', padding: 'x'.repeat(900_000) })}\n`;
+  for (let i = 0; i < 5; i++) {
+    const file = path.join(dir, `work${i}.jsonl`);
+    writeClaude(paths, `work${i}`, 1, 10, new Date('2026-01-03'));
+    const fd = fs.openSync(file, 'a');
+    try { for (let j = 0; j < 48; j++) fs.writeSync(fd, padding); } finally { fs.closeSync(fd); }
+  }
+  const discovered = transcripts.discover(paths, { since: null });
+  assert.ok(discovered.reduce((n, d) => n + d.size, 0) > Limits.MAX_RUN_BYTES);
+  const result = collectExtracts(paths, emptyLedger(), 400_000, { now: () => 0 });
+  assert.equal(result.entries.length, 5);
+  assert.equal(result.readDeferred.length, 0);
+});
+
+test('dream-collect: identical clock decisions reproduce accounting, private scratch bytes and source bytes', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'repeat', 1, 10, new Date('2026-01-03'));
+  const [{ d }] = fullExtracts(paths);
+  const source = fs.readFileSync(d.path);
+  const first = collectExtracts(paths, emptyLedger(), 400_000, { now: () => 0 });
+  const bytes = fs.readFileSync(first.wrote[0]);
+  const second = collectExtracts(paths, emptyLedger(), 400_000, { now: () => 0 });
+  assert.deepEqual(second, first);
+  assert.deepEqual(fs.readFileSync(second.wrote[0]), bytes);
+  assert.deepEqual(fs.readFileSync(d.path), source);
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(second.scratchDir).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(second.wrote[0]).mode & 0o777, 0o600);
+  }
+});
+
+// ---- optional oversized measurements never authorize processing ----
+
+function memoFor(d, extractBytes) {
+  return { fingerprint: ledgerLib.fingerprint(d), appVersion: require('../../package.json').version, extractBytes };
+}
+
+test('dream-collect: oversized memo skips parsing only for matching fingerprint/version and insufficient X', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'large', 10, 1000, new Date('2026-01-03'));
+  const [{ d, extract }] = fullExtracts(paths);
+  const bytes = compactBytes(extract);
+  const first = collectExtracts(paths, emptyLedger(), 1000);
+  assert.deepEqual(first.oversizedExtracts, { [ledgerLib.foldKey(d.path)]: memoFor(d, bytes) });
+  const ledger = { ...emptyLedger(), oversizedExtracts: first.oversizedExtracts };
+  const snapshot = structuredClone(ledger);
+  const parser = t.mock.method(transcripts, 'parseWithOutcome');
+  for (const x of [1000, 500, bytes - 1]) {
+    const result = collectExtracts(paths, ledger, x);
+    assert.equal(result.oversized[0].cached, true);
+    assert.deepEqual(result.oversizedExtracts, first.oversizedExtracts);
+  }
+  assert.equal(parser.mock.callCount(), 0);
+  const retry = collectExtracts(paths, ledger, bytes);
+  assert.equal(parser.mock.callCount(), 1);
+  assert.equal(retry.entries.length, 1);
+  assert.deepEqual(retry.oversizedExtracts, {});
+  assert.deepEqual(ledger, snapshot, 'collector must not mutate input ledger or its memo');
+});
+
+test('dream-collect: changed fingerprint/version or malformed memo forces fresh parsing', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'large', 10, 1000, new Date('2026-01-03'));
+  const [{ d, extract }] = fullExtracts(paths);
+  const valid = memoFor(d, compactBytes(extract));
+  const parser = t.mock.method(transcripts, 'parseWithOutcome');
+  const variants = [
+    { ...valid, fingerprint: 'changed' }, { ...valid, appVersion: 'older' },
+    null, [], { ...valid, extractBytes: '20000' }, { ...valid, extractBytes: 0 },
+    { ...valid, extractBytes: 1.5 }, { ...valid, extractBytes: Number.MAX_SAFE_INTEGER + 1 },
+    { ...valid, fingerprint: 1 }, { ...valid, appVersion: 1 },
+  ];
+  for (const record of variants) {
+    const result = collectExtracts(paths, { ...emptyLedger(), oversizedExtracts: { [ledgerLib.foldKey(d.path)]: record } }, 1000);
+    assert.equal(result.oversized[0].cached, false);
+    assert.deepEqual(result.oversizedExtracts[ledgerLib.foldKey(d.path)], valid);
+  }
+  assert.equal(parser.mock.callCount(), variants.length);
+});
+
+test('dream-collect: memo pruning honors eligibility and retains valid unvisited measurements behind stops', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'newest', 1, 10, new Date('2026-01-05'));
+  writeClaude(paths, 'unvisited', 1, 10, new Date('2026-01-04'));
+  writeClaude(paths, 'processed', 1, 10, new Date('2026-01-03'));
+  writeClaude(paths, 'changed', 1, 10, new Date('2026-01-02'));
+  writeClaude(paths, 'exhausted', 1, 10, new Date('2026-01-01'));
+  const huge = writeOverCeiling(paths, 'ceiling', new Date('2026-01-01'));
+  const full = fullExtracts(paths).filter(({ d }) => d.path !== huge);
+  const byId = Object.fromEntries(full.map((item) => [item.extract.session_id, item]));
+  let ledger = ledgerLib.recordProcessed(emptyLedger(), byId.processed.d);
+  ledger = ledgerLib.recordSecretExhausted(ledger, byId.exhausted.d);
+  const memos = {};
+  for (const { d } of full) memos[ledgerLib.foldKey(d.path)] = memoFor(d, 900_000);
+  memos[ledgerLib.foldKey(huge)] = memoFor(discOf(huge), 900_000);
+  memos[ledgerLib.foldKey(byId.changed.d.path)].fingerprint = 'stale';
+  memos['/absent.jsonl'] = memoFor(byId.newest.d, 900_000);
+  delete memos[ledgerLib.foldKey(byId.newest.d.path)];
+  ledger.oversizedExtracts = memos;
+  const x = compactBytes(byId.newest.extract);
+  const result = collectExtracts(paths, ledger, x);
+  assert.deepEqual(result.oversizedExtracts, { [ledgerLib.foldKey(byId.unvisited.d.path)]: memoFor(byId.unvisited.d, 900_000) });
+  assert.deepEqual(result.deferred.map((e) => e.session_id), ['unvisited', 'changed']);
+  assert.equal(result.oversized.length, 0, 'unvisited is classified by capacity, never inferred oversized');
+  assert.equal(result.newlyQuarantined.length, 1);
+});
+
+test('dream-collect: expired deadline retains valid unvisited memo even when X is now sufficient', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'one', 1, 10, new Date('2026-01-03'));
+  const [{ d, extract }] = fullExtracts(paths);
+  const oversizedExtracts = { [ledgerLib.foldKey(d.path)]: memoFor(d, compactBytes(extract)) };
+  let n = 0;
+  const result = collectExtracts(paths, { ...emptyLedger(), oversizedExtracts }, 400_000,
+    { preprocessTimeoutMs: 60, now: () => n++ === 0 ? 0 : 60 });
+  assert.equal(result.deadlineDeferred.length, 1);
+  assert.deepEqual(result.oversizedExtracts, oversizedExtracts);
+  assert.deepEqual(result.oversized, []);
+});
+
+test('dream-collect: parser quarantine and scratch write errors preserve their existing behavior', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'one', 1, 10, new Date('2026-01-03'));
+  const parse = transcripts.parseWithOutcome;
+  const parser = t.mock.method(transcripts, 'parseWithOutcome', (...args) => {
+    const result = parse(...args); result.parse.outcome = 'too-many-lines'; return result;
+  });
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+  assert.equal(result.newlyQuarantined[0].reason, 'too-many-lines');
+  assert.equal(result.processed.length, 0);
+  assert.deepEqual(fs.readdirSync(result.scratchDir), []);
+  parser.mock.restore();
+  t.mock.method(fs, 'writeSync', () => { throw new Error('scratch write failed'); });
+  assert.throws(() => collectExtracts(paths, emptyLedger(), 400_000), /scratch write failed/);
 });

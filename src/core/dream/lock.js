@@ -10,15 +10,14 @@ function lockPath(stateDir) {
 }
 
 /**
- * Atomically create state/dream.lock so two dreams never overlap.
+ * Create state/dream.lock before touching shared scratch.
  * Contents (JSON): { pid, host, startedAt:<ISO>, deadline:<epoch ms> }.
- * - Create with fs open flag 'wx' (fails if the file exists) → acquired, not stolen.
- * - If it exists: read it. If now > deadline (or unparseable) the previous run is
- *   dead/hung → STEAL (overwrite) and return stolen:true. Otherwise another dream
- *   is genuinely running → acquired:false.
+ * Existing locks are retained until expired AND their valid local PID is absent.
+ * Unknown ownership cannot authorize takeover. Process existence is not a health
+ * check; PID reuse can conservatively delay recovery (Table L, WP-dream-live-owner-lock).
  * @param {string} stateDir
  * @param {number} timeoutMs  deadline = now + timeoutMs
- * @returns {{acquired:boolean, stolen:boolean}}
+ * @returns {{acquired:true, stolen:boolean}|{acquired:false, stolen:false, reason:'busy'|'owner-unknown'}}
  */
 function acquireLock(stateDir, timeoutMs) {
   fs.mkdirSync(stateDir, { recursive: true });
@@ -38,17 +37,34 @@ function acquireLock(stateDir, timeoutMs) {
     if (err && err.code !== 'EEXIST') throw err;
   }
 
-  // Lock exists — decide whether the prior holder is dead/hung.
-  let live = false;
+  const busy = { acquired: false, stolen: false, reason: 'busy' };
+  const unknown = { acquired: false, stolen: false, reason: 'owner-unknown' };
+  let existing;
   try {
-    const existing = JSON.parse(fs.readFileSync(file, 'utf8'));
-    live = typeof existing.deadline === 'number' && now <= existing.deadline;
+    existing = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
-    live = false; // unparseable → treat as dead
+    return unknown;
+  }
+  if (!existing || typeof existing !== 'object' || Array.isArray(existing) ||
+      typeof existing.deadline !== 'number' || !Number.isFinite(existing.deadline)) {
+    return unknown;
+  }
+  // The deadline is a not-before threshold for recovery, not proof of death.
+  if (now <= existing.deadline) return busy;
+  if (typeof existing.host !== 'string' || existing.host !== os.hostname() ||
+      !Number.isInteger(existing.pid) || existing.pid < 1 || existing.pid > 2147483647) {
+    return unknown;
+  }
+  try {
+    process.kill(existing.pid, 0); // Existence probe only; sends no terminating signal.
+    return busy;
+  } catch (err) {
+    if (err && err.code === 'EPERM') return busy;
+    if (!err || err.code !== 'ESRCH') return unknown;
   }
 
-  if (live) return { acquired: false, stolen: false };
-
+  // Retained recovery: this read/probe-to-overwrite sequence is not atomic.
+  // Simultaneous stale claimants may overwrite one another (accepted L5 residual).
   fs.writeFileSync(file, payload); // steal: overwrite
   return { acquired: true, stolen: true };
 }

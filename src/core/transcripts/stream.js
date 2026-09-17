@@ -3,8 +3,8 @@
 // Bounded synchronous transcript line reader — the intake half of ADR-0023
 // (2026-07-15 security audit action A6, findings F1/F6). Transcript content is
 // fully attacker-influenceable, so every read here is bounded: a pre-read file
-// ceiling, a per-line byte cap, a per-file line-count cap, and a shared per-run
-// aggregate byte budget. The whole file is NEVER held in memory.
+// ceiling, a per-line byte cap, a per-file line-count cap, and a caller-scoped
+// byte budget (the dream collector gives each session a fresh allowance). The whole file is NEVER held in memory.
 // Pure except for one fs file handle; no env, no argv, no network.
 
 const fs = require('node:fs');
@@ -18,17 +18,17 @@ const Limits = {
   PRE_READ_CEILING_BYTES: 50 * 1024 * 1024, // a file larger than this is NOT opened → quarantined
   MAX_LINE_BYTES: 1 * 1024 * 1024, // a single line over this → oversized-record marker
   MAX_LINES: 500_000, // per-file line-count cap → quarantine when exceeded
-  MAX_RUN_BYTES: 200 * 1024 * 1024, // aggregate bytes read across ALL files in one run
+  MAX_RUN_BYTES: 200 * 1024 * 1024, // finite read-work allowance; dream collection uses one per session
   READ_CHUNK_BYTES: 64 * 1024, // fixed read buffer size
   MAX_JSON_DEPTH: 64, // nesting-depth pre-check before JSON.parse
 };
 
 /**
- * A shared run-scoped byte budget so MAX_RUN_BYTES bounds the WHOLE run, not each file.
- * The caller creates one per collectExtracts run and threads it through every streamLines
- * call. When the run budget is exhausted mid-file, streaming stops and the file is
- * reported truncated-by-run (its already-emitted lines are kept; it is NOT quarantined —
- * it is capacity-deferred, retried next run).
+ * A caller-scoped read-work budget. The dream collector creates a fresh one per
+ * session; other callers own their budget lifetime. Exhaustion stops streaming
+ * with runExhausted; already-emitted lines are returned to the caller. The dream
+ * collector discards that partial extract as read-deferred, not quarantined.
+ * This is a work bound, not a peak-memory claim (ADR-0023 amendment 3).
  * @returns {{remaining: number}}
  */
 function newRunBudget() {
@@ -69,7 +69,7 @@ const OVERSIZED_RECORD_MARKER = '[wienerdog: oversized record omitted]';
  * with `Buffer.toString('utf8')` (invalid sequences → U+FFFD, never a throw).
  * @param {string} filePath
  * @param {number} sizeBytes  the discovery-recorded fs size (avoids a second stat)
- * @param {{remaining:number}} budget  shared run budget from newRunBudget()
+ * @param {{remaining:number}} budget  caller-owned allowance from newRunBudget()
  * @param {(text:string)=>void} onLine
  * @returns {StreamResult}
  */

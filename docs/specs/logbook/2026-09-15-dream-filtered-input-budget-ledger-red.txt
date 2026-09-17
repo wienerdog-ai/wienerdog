@@ -1,0 +1,140 @@
+Execution evidence; trailing whitespace normalized only.
+Original SHA-256: ad77a7224810df5708518e4ddc386a0e10551fd190e3b3d82d6e01518027a956
+
+
+> wienerdog@0.13.0 test
+> node tests/with-temp-root.js tests/run.js tests/unit/ledger.test.js
+
+✔ ledger: fingerprint is size:mtimeMs:dev:ino and changes when any component changes (0.463459ms)
+✔ ledger: foldKey case-folds and resolves the path (0.051542ms)
+✔ ledger: selectState matches the selection rule table (0.122209ms)
+✔ ledger: an unchanged quarantine is skipped; a changed file is retried (0.050584ms)
+✔ ledger: a record beats the baseline (a changed already-processed file below baseline is reprocessed) (0.042375ms)
+✔ ledger: recordProcessed / recordQuarantined are pure and overwrite the same key (0.26225ms)
+✔ ledger: migration seeds baseline_mtime from watermarks.json once, idempotently (1.292583ms)
+✔ ledger: no watermarks.json → no migration (fresh install) (0.104292ms)
+✔ ledger: a persisted ledger carrying a {null,null} baseline is NOT re-seeded (0.485584ms)
+✔ ledger: readLedger fails closed on missing, corrupt, and mis-shaped files (0.376958ms)
+✔ ledger: writeLedger round-trips and produces a 0600 file (0.28975ms)
+✔ ledger: activeQuarantines returns basename + reason + harness only (secret-free) (0.2065ms)
+✔ ledger: activeQuarantines sanitizes a hostile basename to the [A-Za-z0-9._-] whitelist (review finding) (0.080959ms)
+✔ ledger: displayName is the shared sanitizer (folded + whitelisted) for banner and console (0.023791ms)
+✔ ledger: quarantineSizeBytes reads the size out of a real record fingerprint (0.062333ms)
+✔ ledger: quarantineSizeBytes fails soft on anything it cannot prove is a size (0.034584ms)
+✔ ledger: adding the size reader left activeQuarantines and the banner exactly as they were (0.091458ms)
+✔ ledger: the secret-revert constants are exported and the bound is three (0.017959ms)
+✔ ledger: selectState — a deferred record at a MATCHING fingerprint is selected, not skipped (0.038583ms)
+✔ ledger: selectState — a secret-revert-exhausted quarantine is STICKY across a changed fingerprint (0.078583ms)
+✔ ledger: selectState — an intake quarantine keeps its retry-on-change behaviour (the exception is reason-scoped) (0.030375ms)
+✔ ledger: selectState — an unknown/garbage record is SELECTED, never skip-processed (the switch default) (0.0615ms)
+✔ ledger: secretDeferralCount — one asserted value per record shape (the exhaustive switch) (0.117416ms)
+✔ ledger: secretDeferralCount is INDEPENDENT of the fingerprint (an appended transcript keeps its count) (0.024042ms)
+✔ ledger: recordSecretDeferred writes exactly the deferred shape — no dev, no ino, no file id (0.03525ms)
+✔ ledger: recordSecretDeferred clamps an out-of-range counter to the maximum (0.0525ms)
+✔ ledger: recordSecretExhausted writes the quarantined shape with the exhausted reason and NO deferrals (0.034333ms)
+✔ ledger: both secret writers key at foldKey(path) and touch no other record (no migration, no sweep) (0.051333ms)
+✔ ledger: the decay constants are exported — a 7-day window and the informational reason set (0.023542ms)
+✔ ledger: quarantineBannerLine renders the informational sentence byte for byte — a count and ONE pointer (0.083958ms)
+✔ ledger: the informational sentence does not grow with the number of quarantines (0.461833ms)
+✔ ledger: every informational record older than the window → the sentence retires and nothing else does (0.094583ms)
+✔ ledger: while ONE record is fresh the sentence renders, and <N> counts the stale ones too (0.057959ms)
+✔ ledger: the freshness boundary is exact on BOTH sides of 7 days (0.0485ms)
+✔ ledger: an unreadable or future updated_at keeps the sentence up — fail loud, never silently retired (0.128834ms)
+✔ ledger: an UNRECOGNIZED reason is counted, rendered, and NEVER decays — however old it is (0.05975ms)
+✔ ledger: quarantineBannerLine renders the exhausted sentence, names no command, and states no count (0.08525ms)
+✔ ledger: the ACTIONABLE sentence never decays and renders ALONE once the informational ones are stale (0.059792ms)
+✔ ledger: quarantineBannerLine emits BOTH sentences, informational first, separated by a blank line (0.030291ms)
+✔ ledger: nothing to report → the empty string, and no record shape throws (0.159541ms)
+✔ ledger: opts.now is the ONLY clock, a non-numeric now falls back to the live one, and the render is pure (0.060917ms)
+✔ ledger: secretRevertSummaryLine is built from integers alone (0.0645ms)
+✔ ledger: [QBL-1] the exhausted banner renders the preserved-copies pointer verbatim (0.033875ms)
+✔ ledger: [QBL-2] the secret-revert summary line renders the preserved-copies pointer verbatim (0.02175ms)
+✔ ledger: [QBL-3] the vault warnings document renders the preserved-copies pointer verbatim (0.1225ms)
+✖ ledger: oversized memo round-trips privately without changing outcomes or baselines (0.874292ms)
+✖ ledger: malformed oversized evidence is omitted without invalidating existing records (0.349666ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 45
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 49.744
+
+✖ failing tests:
+
+test at tests/unit/ledger.test.js:758:1
+✖ ledger: oversized memo round-trips privately without changing outcomes or baselines (0.874292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  ... Skipped lines
+
+    {
+      baseline_mtime: {
+        claude: 50,
+        codex: 60
+      },
+  ...
+      },
+  -   oversizedExtracts: {
+  -     '/tmp/wd-ledger-fixture/sess-a.jsonl': {
+  -       appVersion: '0.13.0',
+  -       extractBytes: 9000000,
+  -       fingerprint: '64:1000:7:42'
+  -     }
+  -   },
+      version: 1
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog/tests/unit/ledger.test.js:766:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { version: 1, baseline_mtime: { claude: 50, codex: 60 }, files: { '/tmp/wd-ledger-fixture/sess-a.jsonl': [Object] } },
+    expected: { version: 1, baseline_mtime: { claude: 50, codex: 60 }, files: { '/tmp/wd-ledger-fixture/sess-a.jsonl': [Object] }, oversizedExtracts: { '/tmp/wd-ledger-fixture/sess-a.jsonl': [Object] } },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/ledger.test.js:774:1
+✖ ledger: malformed oversized evidence is omitted without invalidating existing records (0.349666ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  ... Skipped lines
+
+    {
+      baseline_mtime: {
+        claude: 50,
+        codex: 60
+      },
+  ...
+      },
+  -   oversizedExtracts: {
+  -     '/good': {
+  -       appVersion: '0.13.0',
+  -       extractBytes: 7,
+  -       fingerprint: '1:2:3:4'
+  -     }
+  -   },
+      version: 1
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog/tests/unit/ledger.test.js:782:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { version: 1, baseline_mtime: { claude: 50, codex: 60 }, files: { '/tmp/wd-ledger-fixture/sess-a.jsonl': [Object] } },
+    expected: { version: 1, baseline_mtime: { claude: 50, codex: 60 }, files: { '/tmp/wd-ledger-fixture/sess-a.jsonl': [Object] }, oversizedExtracts: { '/good': [Object] } },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

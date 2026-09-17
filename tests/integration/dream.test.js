@@ -5,10 +5,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
+const { once } = require('node:events');
 
 const dream = require('../../src/cli/dream');
-const { acquireLock } = require('../../src/core/dream/lock');
+const LOCK_MODULE = require.resolve('../../src/core/dream/lock');
+const { WienerdogError } = require('../../src/core/errors');
 const idApprovals = require('../../src/core/identity-approvals');
 const { defaultLayout } = require('../../src/core/layout');
 const { Limits } = require('../../src/core/transcripts');
@@ -63,7 +65,7 @@ function commitCount(vault) {
 }
 
 /** Plant an oversized (~205 KB serialized) Claude transcript so the input
- *  assembly must truncate or drop it. @param {string} claudeDir @param {string} sessionId */
+ *  assembly must skip it if its filtered extract exceeds the limit. @param {string} claudeDir @param {string} sessionId */
 function plantOversized(claudeDir, sessionId) {
   const projDir = path.join(claudeDir, 'projects', 'proj');
   fs.mkdirSync(projDir, { recursive: true });
@@ -494,7 +496,7 @@ test('dream-integration: the watchdog kills a hanging brain, exits with a timeou
   assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream.lock')), false);
 });
 
-test('dream-integration: a live concurrent lock yields "another dream in progress" and no commit', async () => {
+test('dream-integration: a live concurrent lock yields "another dream holds the lock" and no commit', async () => {
   const ctx = setup();
   const before = commitCount(ctx.vault);
   // Plant a live foreign lock (future deadline, different pid).
@@ -507,18 +509,19 @@ test('dream-integration: a live concurrent lock yields "another dream in progres
 
   const { output, thrown } = await runDream(ctx, ['--yes']);
   assert.equal(thrown, null);
-  assert.match(output, /another dream is in progress/);
+  assert.match(output, /another dream holds the lock/);
   assert.equal(commitCount(ctx.vault), before);
   // The foreign lock was not deleted.
   assert.equal(fs.existsSync(path.join(state, 'dream.lock')), true);
 });
 
-test('dream-integration: a stale lock past its deadline is stolen with a warning and the run proceeds', async () => {
+test('dream-integration: an expired lock of an exited local process is recovered with a warning', async () => {
   const ctx = setup();
   const before = commitCount(ctx.vault);
   const state = path.join(ctx.core, 'state');
-  // Pre-seed a stale lock (deadline in the past) using the real helper.
-  acquireLock(state, -1);
+  // The child creates the lock and exits; no guessed PID or mocked liveness.
+  execFileSync(process.execPath, ['-e',
+    'require(process.argv[1]).acquireLock(process.argv[2], -1)', LOCK_MODULE, state]);
 
   const { output, thrown } = await runDream(ctx, ['--yes']);
   assert.equal(thrown, null, thrown && thrown.message);
@@ -526,52 +529,133 @@ test('dream-integration: a stale lock past its deadline is stolen with a warning
   assert.equal(commitCount(ctx.vault), before + 1);
 });
 
-test('dream-integration: a capacity-wedged dream (budget below the floor) throws loud, never "nothing new"', async () => {
-  // Only an oversized session, and a budget below MIN_TRUNCATE_BYTES → nothing
-  // can be fed even after truncation. This must FAIL LOUD (exit 1 → run-job alert),
-  // not report success.
+test('dream-integration: only individually oversized input fails actionably and persists size evidence', async () => {
   const ctx = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
   const before = commitCount(ctx.vault);
-
   const { output, thrown } = await runDream(ctx, ['--yes']);
+  assert.ok(thrown instanceof WienerdogError);
+  assert.match(thrown.message, /no complete session was admitted/);
+  assert.match(thrown.message, /1000-byte input limit; raise dream_max_input_bytes/);
+  assert.doesNotMatch(output, /nothing new to dream|truncat|floor/);
+  assert.match(output, /individually oversized: 1 session/);
+  assert.equal(commitCount(ctx.vault), before);
+  const ledger = readLedgerFile(ctx.core);
+  assert.deepEqual(ledger.files, {});
+  const memo = Object.values(ledger.oversizedExtracts);
+  assert.equal(memo.length, 1);
+  assert.ok(memo[0].extractBytes > 1000);
+});
 
-  assert.ok(thrown, 'expected a WienerdogError throw');
-  assert.match(thrown.message, /^dream capacity exhausted:/);
-  // It must NOT masquerade as the genuinely-empty case.
-  assert.ok(!/nothing new to dream/.test(output));
-  // Its capacity drop was surfaced plainly.
-  assert.match(output, /capacity: dropped 1 session/);
-  // No commit; a capacity-deferred session gets NO ledger record (retried next run).
+test('dream-integration: an oversized session is skipped whole while the complete smaller input is processed', async () => {
+  const ctx = setup({ oversized: 'big', maxInputBytes: 100_000 });
+  const before = commitCount(ctx.vault);
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.match(output, /individually oversized: 1 session/);
+  assert.doesNotMatch(output, /truncated|floor|claude\/big/);
+  assert.match(output, /dream committed/);
+  assert.equal(commitCount(ctx.vault), before + 1);
+  const ledger = readLedgerFile(ctx.core);
+  assert.equal(ledgerRecord(ledger, 'big.jsonl'), null);
+  assert.equal(ledgerRecord(ledger, 'inj.jsonl').outcome, 'processed');
+  assert.equal(Object.keys(ledger.oversizedExtracts).length, 1);
+});
+
+test('dream-integration: an oversized dry-run diagnoses without throwing or persisting', async () => {
+  const ctx = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
+  const before = commitCount(ctx.vault);
+  const { output, thrown } = await runDream(ctx, ['--dry-run']);
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.match(output, /individually oversized: 1 session/);
+  assert.match(output, /no complete session was admitted/);
+  assert.doesNotMatch(output, /nothing new to dream|truncated|floor/);
   assert.equal(commitCount(ctx.vault), before);
   assert.equal(readLedgerFile(ctx.core), null);
 });
 
-test('dream-integration: capacity truncation logs plainly and the dream still proceeds to a commit', async () => {
-  // An oversized session plus the normal injection fixture, with a budget above
-  // the floor but below the oversized extract → it is truncated to fit and the
-  // dream proceeds (forward progress restored).
-  const ctx = setup({ oversized: 'big', maxInputBytes: 100_000 });
-  const before = commitCount(ctx.vault);
-
-  const { output, thrown } = await runDream(ctx, ['--yes']);
-  assert.equal(thrown, null, thrown && thrown.message);
-
-  // The truncation was surfaced plainly on stdout.
-  assert.match(output, /truncated claude\/big to fit the input budget/);
-  // And the run actually committed (no wedge, no silent stall).
-  assert.match(output, /dream committed/);
-  assert.equal(commitCount(ctx.vault), before + 1);
+test('dream-integration: capacity-stop counts match dry-run and real run while only complete inputs are processed', async () => {
+  const ctx = setup({ oversized: 'private-first', maxInputBytes: 300_000 });
+  plantOversized(ctx.claude, 'private-second');
+  const proj = path.join(ctx.claude, 'projects', 'proj');
+  for (const [name, time] of [['private-first', 300], ['private-second', 200], ['inj', 100]]) {
+    fs.utimesSync(path.join(proj, `${name}.jsonl`), time, time);
+  }
+  const dry = await runDream(ctx, ['--dry-run']);
+  assert.equal(dry.thrown, null, dry.thrown && dry.thrown.message);
+  assert.match(dry.output, /capacity stop: 2 session\(s\) deferred/);
+  assert.match(dry.output, /claude sessions: 1/);
+  assert.match(dry.output, /total input bytes: [1-9][0-9]+/);
+  assert.doesNotMatch(dry.output.split('  brain argv:')[0], /private-first|private-second|truncated|floor|individually oversized/);
+  assert.equal(readLedgerFile(ctx.core), null);
+  const real = await runDream(ctx, ['--yes']);
+  assert.equal(real.thrown, null, real.thrown && real.thrown.message);
+  assert.match(real.output, /capacity stop: 2 session\(s\) deferred/);
+  const ledger = readLedgerFile(ctx.core);
+  assert.equal(Object.keys(ledger.files).length, 1);
+  assert.equal(ledgerRecord(ledger, 'private-first.jsonl').outcome, 'processed');
+  assert.equal(ledgerRecord(ledger, 'private-second.jsonl'), null);
+  assert.equal(ledgerRecord(ledger, 'inj.jsonl'), null);
 });
 
-test('dream-integration: a capacity dry-run diagnoses exhaustion without throwing', async () => {
-  const ctx = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
+// WP-dream-live-owner-lock: a separate live owner outlasts its deadline.
+test('dream-integration: repeated contenders preserve an expired live owner and its scratch', async (t) => {
+  const ctx = setup();
+  const state = path.join(ctx.core, 'state');
+  const scratch = path.join(state, 'dream-scratch');
+  const sentinel = path.join(scratch, 'owner-input.md');
   const before = commitCount(ctx.vault);
+  const owner = spawn(process.execPath, ['-e', `
+    const fs = require('node:fs');
+    const path = require('node:path');
+    require(process.argv[1]).acquireLock(process.argv[2], -1);
+    fs.mkdirSync(path.dirname(process.argv[3]), { recursive: true });
+    fs.writeFileSync(process.argv[3], 'still reading this input\\n');
+    process.on('message', () => process.exit(0));
+    process.send('ready');
+  `, LOCK_MODULE, state, sentinel], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+  t.after(async () => {
+    if (owner.exitCode === null && owner.signalCode === null) {
+      const exited = once(owner, 'exit');
+      owner.kill();
+      await exited;
+    }
+  });
+  await once(owner, 'message');
+  const lockBytes = fs.readFileSync(path.join(state, 'dream.lock'));
+  const scratchBytes = fs.readFileSync(sentinel);
+  assert.ok(JSON.parse(lockBytes).deadline < Date.now());
+  for (let i = 0; i < 2; i++) {
+    const { output, thrown } = await runDream(ctx, ['--yes']);
+    assert.equal(thrown, null);
+    assert.equal(output, 'wienerdog: another dream holds the lock.');
+    assert.deepEqual(fs.readFileSync(path.join(state, 'dream.lock')), lockBytes);
+    assert.deepEqual(fs.readdirSync(scratch), ['owner-input.md']);
+    assert.deepEqual(fs.readFileSync(sentinel), scratchBytes);
+    assert.equal(commitCount(ctx.vault), before);
+    assert.equal(fs.existsSync(path.join(state, 'transcript-ledger.json')), false);
+  }
+});
 
-  const { output, thrown } = await runDream(ctx, ['--dry-run']);
-  assert.equal(thrown, null, thrown && thrown.message);
-  assert.match(output, /capacity exhausted: no fresh session fits/);
-  assert.ok(!/nothing new to dream/.test(output));
-  assert.equal(commitCount(ctx.vault), before);
+test('dream-integration: an unverifiable owner repeatedly errors without changing lock or scratch', async () => {
+  const ctx = setup();
+  const state = path.join(ctx.core, 'state');
+  const scratch = path.join(state, 'dream-scratch');
+  fs.mkdirSync(scratch, { recursive: true });
+  fs.writeFileSync(path.join(scratch, 'owner-input.md'), 'preserve this input');
+  const lockBytes = '{untrusted owner: do not print this}';
+  fs.writeFileSync(path.join(state, 'dream.lock'), lockBytes);
+  const before = commitCount(ctx.vault);
+  for (let i = 0; i < 2; i++) {
+    const { output, thrown } = await runDream(ctx, ['--yes']);
+    assert.ok(thrown instanceof WienerdogError);
+    assert.equal(thrown.message, 'dream lock owner could not be verified; no takeover was attempted. Check whether an earlier dream is still running before arranging lock recovery.');
+    assert.equal(output, '');
+    assert.equal(fs.readFileSync(path.join(state, 'dream.lock'), 'utf8'), lockBytes);
+    assert.deepEqual(fs.readdirSync(scratch), ['owner-input.md']);
+    assert.equal(fs.readFileSync(path.join(scratch, 'owner-input.md'), 'utf8'), 'preserve this input');
+    assert.equal(commitCount(ctx.vault), before);
+    assert.equal(fs.existsSync(path.join(state, 'transcript-ledger.json')), false);
+  }
 });
 
 // ── WP-069: concurrency + watermark-consolidation safety ────────────────────
@@ -606,7 +690,7 @@ test('dream-integration: a lock-losing dream is a pure no-op that leaves the win
   const { output, thrown } = await runDream(ctx, ['--yes']);
 
   assert.equal(thrown, null);
-  assert.match(output, /another dream is in progress/);
+  assert.match(output, /another dream holds the lock/);
   // No commit, no per-file state advanced.
   assert.equal(commitCount(ctx.vault), before);
   assert.equal(fs.existsSync(path.join(state, 'transcript-ledger.json')), false);
@@ -1599,7 +1683,7 @@ test('dream-integration: the secret-revert summary is printed and carries counts
 test('dream-integration: the bounded episode — three deferrals, then an exhausted quarantine that an append cannot reset', async () => {
   // The L1 test: inj.jsonl is APPENDED TO before every run, so its fingerprint
   // changes every time. A fingerprint-keyed counter would reset to 1 each night
-  // and bound nothing — and because the water-fill is newest-mtime-first, that
+  // and bound nothing — and because input selection is newest-mtime-first, that
   // same file would keep winning the budget.
   const ctx = setup();
   const inj = injPath(ctx);

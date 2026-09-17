@@ -1,0 +1,83 @@
+{
+  "reviewed_sha": "108f57441d4b383018bafac6d15a3dd8bedad2cb",
+  "verdict": "approve",
+  "summary": "No material in-scope design blocker remains. A5 now closes the cross-exchange trust reset, and B3 removes the proposed tool-metadata exception while preserving the original code-owned skill gate. This approves the bounded draft design for maintainer feedback; it does not authorize implementation or establish runtime correctness. The Draft hold, offline evaluation, and maintainer feasibility decision remain.",
+  "prior_findings": [
+    {
+      "id": "R1-A1",
+      "status": "fixed",
+      "reason": "A5 now computes assistant taint on the original source stream before projection, caps, and relevance selection; tool output or uncertain context makes it persist through all later assistant conclusions. Explicit non-reset boundaries and AC1 cover dropping the originating exchange. Verified primary user messages remain separately classified. B2 retains original capped role/invocation geometry and does not substitute the broader message-level taint for its existing gate."
+    },
+    {
+      "id": "R1-B3-scope-objection",
+      "status": "resolved",
+      "reason": "The prior routed objection had no finding ID. Revised A1/B3 and Out of scope prohibit invocation names, error states, indices, and other source tool metadata for both models. B3 requires dialogue-only discovery and updated session-counting instructions while B2 still independently validates actual Claude usage. Reduced observation is explicitly accepted as a proposal tradeoff, not hidden by a metadata exception."
+    }
+  ],
+  "findings": [],
+  "routed_scope_objections": [],
+  "executed_checks": [
+    {
+      "command": "git status --porcelain=v1 && git rev-parse HEAD && cat docs/runbooks/review-prompts/adversarial.md",
+      "result": "EXECUTED, exit 0. Initial status empty; SHA matched. Read the entire frozen vendored prompt."
+    },
+    {
+      "command": "cat CLAUDE.md && nl -ba docs/specs/WP-dream-primary-dialogue-filter.md && cat docs/specs/logbook/2026-09-17-dream-primary-filter-adversarial-r1-raw.json",
+      "result": "EXECUTED, exit 0. Read repository instructions, draft, and prior raw review. Combined display truncated the middle of the draft; Tables B-D were reread separately."
+    },
+    {
+      "command": "sed -n '182,223p' docs/specs/WP-dream-primary-dialogue-filter.md; cat src/core/transcripts/index.js; cat src/core/transcripts/codex.js (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Read complete B-D contracts and current normalization/capping/Codex paths."
+    },
+    {
+      "command": "cat src/core/transcripts/claude.js; cat src/core/dream/scratch.js (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Read Claude invocation geometry and collector admission/memo behavior."
+    },
+    {
+      "command": "cat src/core/runtime-profile.js; cat src/core/dream/brain.js (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Combined display was truncated; targeted runtime/profile/staging sections were reread. Static source inspection only."
+    },
+    {
+      "command": "rg --files docs/adr; rg -n 'runBrainWithWatchdog|extractsBySession|collectExtracts|timeoutMs|ledgerViolation|invocationWindowTainted|promptHash|skill_invocations|derived_from_untrusted' src/cli/dream.js src/core/dream/validate.js src/scheduler/descriptor.js skills/wienerdog-dream/SKILL.md (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Discovered actual ADR names and located authority boundaries."
+    },
+    {
+      "command": "sed -n '130,310p' src/core/runtime-profile.js; sed -n '1,230p' src/core/dream/brain.js; sed -n '330,480p' src/cli/dream.js (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Inspected shared argument composer, environment/staging boundary, pinned handle supervision, PID hand-up, and failure paths."
+    },
+    {
+      "command": "cat src/scheduler/descriptor.js; sed -n '490,660p' src/core/dream/validate.js; sed -n '590,710p' src/cli/dream.js; sed -n '770,860p' src/cli/dream.js; sed -n '930,968p' src/cli/dream.js (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Confirmed descriptor binding, role-only invocation-window interpretation, collector/probe/workspace order, and current scratch-to-gate conversion."
+    },
+    {
+      "command": "cat docs/adr/0020-skill-revision-lifecycle.md; cat docs/adr/0025-hermetic-runtime-profiles.md; cat docs/adr/0030-bounded-user-level-process-supervision.md; cat docs/adr/0031-contract-reference-tables-single-source.md; sed -n '35,60p' docs/runbooks/codex-review.md; sed -n '90,110p' skills/wienerdog-dream/SKILL.md; sed -n '210,240p' skills/wienerdog-dream/SKILL.md; sed -n '286,340p' skills/wienerdog-dream/SKILL.md (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Combined ADR output was truncated: no claim of complete ADR reading. Visible ADR-0020 decision and current skill discovery/provenance rules were inspected; runtime ADR sections were subsequently targeted."
+    },
+    {
+      "command": "rg -n '^#|filter|profile|Read|tools|supervis|hand|reap|residual' docs/adr/0025-hermetic-runtime-profiles.md docs/adr/0030-bounded-user-level-process-supervision.md; sed -n '480,512p' src/cli/dream.js; rg -n 'normalizeOversizedExtracts|oversizedExtracts|extractBytes' src/core/dream/ledger.js; cat docs/specs/logbook/2026-09-17-dream-primary-input-scope.md; cat scripts/boundary-check.js (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Inspected accepted runtime boundaries, checked post-settle reaping, owner scope, and actual deliverable-boundary parser."
+    },
+    {
+      "command": "rg -n 'profileId|function runContainmentProbe|module.exports|permissionMode' src/core/containment-probe.js; sed -n '276,366p' docs/adr/0025-hermetic-runtime-profiles.md; sed -n '508,530p' src/cli/dream.js; sed -n '107,124p' src/core/dream/ledger.js; git diff --check; git diff --exit-code 108f57441d4b383018bafac6d15a3dd8bedad2cb; git status --porcelain=v1 (newline-separated commands)",
+      "result": "EXECUTED. First rg failed because the guessed path did not exist; remaining commands succeeded and overall batch exited 0. Read live-probe ADR requirements, existing platform-scoped reap residual, and memo normalizer. Git checks emitted no differences."
+    },
+    {
+      "command": "git diff 15486ec762c09a7bae85225e20bc98f754cc4212 108f57441d4b383018bafac6d15a3dd8bedad2cb -- docs/specs/WP-dream-primary-dialogue-filter.md; rg --files src | rg 'containment.*probe|probe.*containment'; sed -n '1,25p' src/cli/dream.js (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Verified actual A5/B3 mechanism changes and registered mirrors; located src/core/dream/containment-probe.js."
+    },
+    {
+      "command": "rg -n 'profileId|function runContainmentProbe|module.exports|permissionMode' src/core/dream/containment-probe.js; sed -n '82,125p' docs/adr/0025-hermetic-runtime-profiles.md; git rev-parse HEAD; git status --porcelain=v1; git diff --check; git diff --exit-code 108f57441d4b383018bafac6d15a3dd8bedad2cb (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Confirmed existing profileId probe seam, reviewed profile/staging policy, exact HEAD, empty final status, and no tracked modifications."
+    },
+    {
+      "command": "rg -n 'harness|claude|codex' src/core/dream/config.js src/cli/dream.js; rg -n 'pin|claude|codex' src/core/dream/containment-probe.js; sed -n '366,403p' src/cli/dream.js; git status --porcelain=v1 (newline-separated commands)",
+      "result": "EXECUTED, exit 0. Checked the parent's late Codex-only feasibility question: current production dream already requires the pinned Claude containment probe, and its watchdog calls spawnBrain without selecting the Codex harness; descriptor binding already requires Claude and Git pins. The existing low-level Codex spawn arm therefore does not establish a currently supported Claude-free production dream path. No new optional-filter regression is supported by these sources. Final status remained empty."
+    },
+    {
+      "command": "Product unit/integration tests; npm test; npm run lint; future implementation verification; offline LLM evaluation; live model/probe/installation/scheduler operations; external browsing",
+      "result": "NOT RUN. Static draft-design review only. Baseline 100-pass report was supplied by the parent and was not independently rerun. No private transcripts or excluded directories were read; no reviewed-checkout files were written."
+    }
+  ],
+  "status_before": "",
+  "status_after": ""
+}
