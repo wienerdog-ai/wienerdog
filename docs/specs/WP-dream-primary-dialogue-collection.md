@@ -555,7 +555,11 @@ carries forward from the role-based one it replaces rather than a new one.
       counting the **overwritten** session is refused as not among this run's
       processed extracts, which is what the base commit does; and the same test
       run against a map built without the eviction **accepts** it, so the
-      assertion is not vacuous. Assert also that nothing else moved: both
+      assertion is not vacuous. **Choose the write order so the SURVIVOR is
+      `s_1`**: the round-3 review established that `s.1` fails the existing
+      Session-ID schema in both designs, so a fixture in which `s.1` survives
+      proves less than it looks like — the refusal would be over-determined.
+      Cover the empty-primary-messages case for the survivor too. Assert also that nothing else moved: both
       sessions remain in `entries` and `processed`, and the colliding path
       appears in `wrote` twice.
 - [ ] **AC2 — what is written, and the memo (Table C rows C2, C3).** Each

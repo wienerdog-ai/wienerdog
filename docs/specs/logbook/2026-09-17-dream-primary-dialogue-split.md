@@ -282,36 +282,35 @@ spec's Discovered issues, with the shape a real fix would need.
 
 ### The stale-claim sweep, raw
 
-Run in the worktree after the edits above, and captured **before** this section
-was pasted in — so re-running it now adds this block's own quotations to the
-output and shifts the line numbers below it. Long lines are truncated here at
-200 characters for legibility; nothing else is altered. **Zero operative hits.**
+Re-run after the round-3 edits and captured **before** this section was pasted
+back in, so a further re-run adds this block's own quotations and shifts the
+line numbers below it. Long lines truncated at 165 characters for legibility;
+nothing else altered. **Zero operative hits on the claims this sweep is for.**
 
 ```text
 docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md:42:was "unchanged by construction". It is not. The collector also stops on the soft
-docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md:241:| **P-1** user-role text bypasses the never-resetting flag | A | HEAVY | **keep the rule, fix the contradiction, price the residual**
-docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md:244:| **C-1** the preprocessing deadline can move the admitted set | A | HEAVY | **fix the claim, keep the mechanism** | "Unchanged by con
+docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md:241:| **P-1** user-role text bypasses the never-resetting flag | A | HEAVY | **keep the rule, fix the c
+docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md:244:| **C-1** the preprocessing deadline can move the admitted set | A | HEAVY | **fix the claim, keep
+docs/specs/WP-dream-primary-dialogue-projection.md:356:| A5b | What `false` does and does not claim | `derived_from_untrusted: false` claims exactly one thing: **the
+docs/specs/WP-dream-primary-dialogue-projection.md:547:      the code-supplied `source_path` and `cwd`, bounded unchanged by the
+docs/specs/WP-dream-primary-dialogue-projection.md:639:      byte-identical to the base commit's for the same bytes — the precedence
 docs/specs/WP-dream-primary-dialogue-collection.md:361:  are populated identically to the base commit's — row C1a says a
-docs/specs/WP-dream-primary-dialogue-collection.md:721:   not promise that it cannot worsen F1** — it promises that it does not worsen
-docs/specs/WP-dream-primary-dialogue-projection.md:355:| A5b | What `false` does and does not claim | `derived_from_untrusted: false` claims exactly one thing: **the harness attributed this record to
-docs/specs/WP-dream-primary-dialogue-projection.md:517:      the code-supplied `source_path` and `cwd`, bounded unchanged by the
+docs/specs/WP-dream-primary-dialogue-collection.md:725:   not promise that it cannot worsen F1** — it promises that it does not worsen
 ```
 
 | Hit | Classification |
 |---|---|
 | logbook `:42` | **NEGATION-or-WITHDRAWAL** — names the retired "unchanged by construction" claim and retires it |
-| logbook `:241` | **HISTORY** — the round-1 P-1 disposition row, quoting the wording that was wrong |
-| logbook `:244` | **HISTORY** — the round-1 C-1 disposition row, same |
+| logbook `:241`, `:244` | **HISTORY** — round-1 disposition rows quoting the wording that was wrong |
+| projection `:356` | **NEGATION-or-WITHDRAWAL** — row A5b restricts the clause to assistant messages and forbids the unrestricted form anywhere |
+| projection `:547` | **UNRELATED** — "bounded unchanged by the existing `boundExtractPath`", about metadata-path bounding |
+| projection `:639` | **UNRELATED, and flagged** — new this round: AC3d's requirement that `parse`/`parseWithOutcome` output stay byte-identical to the base commit. That is an operative claim, but about **default parser bytes**, not about the admitted session set or provenance; it is AC5's property, it is true, and it is meant to be there. The sweep's `identical to (today\|the base)` alternation over-matches it. Recorded rather than silently reclassified so the next round can decide whether to narrow the pattern |
 | collection `:361` | **NEGATION-or-WITHDRAWAL** — "They are **not** protected by any claim that the arms are populated identically to the base commit's" |
-| collection `:721` | **NEGATION-or-WITHDRAWAL** — "**this package does not promise that it cannot worsen F1**" |
-| projection `:355` | **NEGATION-or-WITHDRAWAL** — row A5b restricts the clause to assistant messages and forbids the unrestricted form on any surface |
-| projection `:517` | **UNRELATED** — "bounded unchanged by the existing `boundExtractPath`", about metadata-path bounding |
+| collection `:725` | **NEGATION-or-WITHDRAWAL** — "**this package does not promise that it cannot worsen F1**" |
 
-The six **operative** hits that existed before this commit are gone:
-projection `:364` (row B4) and `:647` (owner item 1); collection `:276`
-(row C1a), `:349` (implementation notes) and `:673-674` (owner item 1); logbook
-`:62`. Each is replaced with byte-policy equivalence, with equality conditioned
-on **both** runs avoiding deadline deferral, or with the role-specific wording.
+The six operative hits that existed before round 2 — projection `:364` and
+`:647`; collection `:276`, `:349` and `:673-674`; logbook `:62` — remain gone.
+No new operative admission, F1 or provenance claim was introduced this round.
 
 **Why this sweep is in the record rather than just run.** This is the third spec
 family this session to lose round-N corrections in its mirrors. A checklist that
@@ -320,6 +319,70 @@ survived a walked Mirrored Surface Checklist, because the checklist points at
 *sections* while the stale sentences were clauses inside them. A claim-shaped
 grep finds clauses. Pasting its output with per-hit classifications is what lets
 the next round re-run one command instead of re-reading four documents.
+
+## Design review round 3 — collection APPROVED, projection still open
+
+Two parallel adversarial reviews (Codex plugin 1.0.6, `gpt-6-astra`), tip
+`41e667f4`, base `c94e0e66`. Raws at `1c3a72f0`.
+
+### `WP-dream-primary-dialogue-collection` — `approve`, zero findings
+
+> "Both round-2 findings are substantively fixed; no additional material product
+> or security blocker was demonstrated."
+
+C2-1 was verified by executing the real parsers, collector, CLI disk-map
+rebuild, scratch integrity, validator and ledger with mocked I/O: **48 collision
+scenarios and 480 gate-verdict comparisons matched the baseline**, across 2, 3
+and 5 colliding ids, both write orders, interleaved harnesses, empty final
+projections and clean/tainted invocation windows — and **disabling the eviction
+reproduced the authorization defect**, so the fix is not vacuous. Admission,
+duplicate `wrote` paths, processed accounting and later ledger selection all
+matched. C2-2 was verified with 1→5 and 5→1 deadline shifts including a
+projected run with no deadline deferrals at all, and the scoped sweep found no
+remaining unconditional admission or F1 guarantee. Cites resolve, including
+`promote.js:1397-1400`; the probe block PR `#261` appended to
+`tests/unit/dream-collect.test.js` does not invalidate them.
+
+**A survivor detail worth keeping**, because it changes what the AC1b fixture
+must look like: `s.1` **fails the existing Session-ID schema** in both the
+baseline and the proposed design, so a test that lets `s.1` be the survivor
+proves less than it appears to. Reversing the write order gives a valid
+surviving `s_1`, including when its primary messages are empty, and the harness
+prefix keeps Claude and Codex filenames apart.
+
+**The collection spec stays `Draft`.** It `depends_on`
+`WP-dream-primary-dialogue-projection`, which is not closed, so the status flip
+waits for the pass that closes the projection spec. This section is the record
+of its round-3 approval and of that hold.
+
+### `WP-dream-primary-dialogue-projection` — `needs-attention`, two findings
+
+Confirmed closed by the reviewer: **P2-m1** (mirrors) within both target
+documents, and **P2-m2** — the corrected AC4a now rejects the demonstrated
+double read, where caller debit stayed 46 bytes while stream invocations and
+opens went from one to two and total reads from 46 to 92. The decided Codex list
+covers every type `mapCodexItem` handles; goldens and wrapper equality pass.
+
+| Finding | Band | Weight | Disposition | Rationale |
+|---|---|---|---|---|
+| **P3-1** normal Codex headers satisfy the new gap rule | B | HEAVY | **fix** | Reproduced against the shipped fixture: `tests/fixtures/transcripts/codex-rollout.jsonl`'s `session_meta` payload has keys exactly `id`, `timestamp`, `cwd` and **no `type`**. Round 2's "a discriminator at all three levels" would therefore have tainted **every Codex session from its own header**, shutting even tool-free assistant evidence out of Tier 3 — a far bigger cliff than the one owner item 4 prices. New row **A5c** scopes each check to its enclosing record schema and walks every recognised top-level type of both harnesses, saying what each owes. AC3c gains the normal-header control. |
+| **P3-2** declined Claude envelopes can conceal recognisable tool results | A | HEAVY | **fix** | Reproduced all four: `message.content: [{"type":"tool_result","content":"EXTERNAL"}]` under an `attachment` record, an unfamiliar top-level type, an `assistant` record and an `isMeta: true` user record each vanished with `outcome: 'ok'`, `truncated: false`, leaving the next assistant conclusion `false`. New row **A5d** gives a recognised tool-result block precedence over envelope exclusion, **in the observer only**, bounded to `message.content` at depth one. New AC3d tests all four with byte-identical default parser output, plus benign controls. |
+| **P3-structure** three rounds of boundary findings in prose form | C | LIGHT | **fix** | New row **A5e** is the ordered decision procedure, written to be coded from step by step, with taint stated at each step and monotonicity stated once. The other A5 rows become its definitions. |
+
+**Two decisions this round makes that nobody asked a question about.**
+**`tool_use` does not taint.** A request to run a tool carries no external
+content — only its result does — and every route by which a result reaches the
+transcript is now covered: an accepted envelope (A5), a declined envelope (A5d),
+or a loss (A5a). Tainting on `tool_use` would also fire on ordinary progress
+replies, which carry 1,901 `tool_use` blocks in 3,789 sampled assistant records,
+and would taint nearly every session — the same cliff A5c-why exists to avoid.
+**Codex gets no envelope scan.** Its tool output has a top-level home, so row
+A5c's `response_item` rule already catches it and catches it more strongly than
+Claude's block scan, because an unrecognised `payload.type` taints. The residual
+— a tool payload nested inside a declined Codex envelope such as `event_msg`,
+whose 13,296 `item_completed` events this package did not inspect — is named and
+routed to `docs/runbooks/codex-pin-bump.md` rather than guessed at. Both are
+owner item 5.
 
 ## What round zero does not establish
 
