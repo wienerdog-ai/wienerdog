@@ -216,10 +216,10 @@ function buildDescriptor(paths, job, opts = {}) {
     exec,
     appRelease:
       stance === 'dev'
-        ? // Dev checkouts are live-edited: the digest reduces appRelease to
-          // {stance, root} (excludes treeDigest+version) so a tracked-source edit
-          // stays runnable; every OTHER field is retained + digest-covered.
-          { version: readVersion(appRoot), treeDigest: appTreeDigest(paths), stance: 'dev', root: appRoot }
+        ? // Dev checkouts are live-edited: no tree digest is computed at all (not
+          // just excluded from the digest) because hashing a live checkout is
+          // discarded work whose mid-walk ENOENT would become a fire-time refusal.
+          { version: readVersion(appRoot), stance: 'dev', root: appRoot }
         : { version: readVersion(appRoot), treeDigest: appTreeDigest(paths), stance: 'prod' },
   };
 }

@@ -1,7 +1,7 @@
 ---
 id: WP-dev-descriptor-no-tree-hash
 title: Stop content-addressing the live checkout in the dev job descriptor
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
