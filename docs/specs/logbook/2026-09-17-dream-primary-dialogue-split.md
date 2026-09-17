@@ -35,8 +35,18 @@ is marked processed whether the consolidation agent read it or not (198 marked,
 20 read on the measured night).
 
 The split instead measures the bound against the **raw capped extract**, which
-is byte-identical to what `src/core/dream/scratch.js:118` computes today. The
-admitted session set is then unchanged by construction. Three consequences:
+is byte-identical to what `src/core/dream/scratch.js:118` computes today.
+
+**Corrected by design review round 1 (see the dispositions below): that closes
+the BYTE dimension only.** This entry originally said the admitted session set
+was "unchanged by construction". It is not. The collector also stops on the soft
+preprocessing deadline, which measures wall-clock time across parsing,
+serialization and writes, and projection changes all three — the review executed
+the real collector with mocked timing and measured one session admitted under
+the baseline against four under projection at identical intake bytes. The
+guarantee is **byte-policy equivalence**, and on a deadline-bound install the
+admitted set can still move in either direction. Three consequences of the byte
+decision stand unchanged:
 
 - The maintainer's three options — a lower default X, a session-count bound, an
   explicit acceptance — are all avoided rather than chosen between, and the
@@ -204,6 +214,36 @@ Deliverables columns, the five Definition-of-done items, and the literal
 expected output shown in full — noting that for the projection spec that last
 rule is strictly inapplicable, since it ships a pure function and generates no
 file, and that both `extract` and `gateExtract` are shown literally anyway.
+
+## Design review round 1 — dispositions
+
+Two parallel adversarial reviews (Codex plugin 1.0.6, `gpt-6-astra`), one per
+new spec, tip `5d777b9c`, base `a4d19c0c`. Both `needs-attention`. Every finding
+was reproduced by executing the real parsers, collector and validator on
+synthetic inputs; no private transcripts were accessed. Raws and metas are
+committed at `ebee6fdc`. Confirmed clean by the reviewers and not re-litigated
+here: the worked example's 566-byte intake count, the existing goldens, sampled
+gate geometry, wrapper equality, caps, budget exhaustion, gate verdicts
+surviving text removal, Codex evidence staying non-authorizing, empty
+projections remaining processed, the report-skip bullets staying truthful, the
+prompt-hash rebinding story, and every inspected cite resolving.
+
+| Finding | Band | Weight | Disposition | Rationale |
+|---|---|---|---|---|
+| **P-1** user-role text bypasses the never-resetting flag | A | HEAVY | **keep the rule, fix the contradiction, price the residual** | The reviewer's laundering path is real but it is **today's behavior**: `SKILL.md:101-105` already sets the flag from role alone, so the same quoted sentence is `false` at the base commit. The projection neither creates nor widens it, and the person is the trust root. What was genuinely wrong was the spec: A5 and this logbook defined `false` as "no earlier tool output or gap", which is untrue for user messages. A5 is now split into A5 (the two rules), A5a (the gap enumeration) and A5b (what `false` claims); the worked example gained an asymmetry note; AC3a is the reviewer's fixture as a test of stated behavior; owner item 3 prices the alternative. |
+| **P-2** depth-limit drops are silent provenance gaps | B | HEAVY | **fix** | Reproduced: a valid tool record nested past `MAX_JSON_DEPTH` (64) is discarded by both parsers with `outcome: 'ok'`, `oversizedRecords: 0`, `truncated: false`. Row A5a now enumerates every context-losing return and requires observer notification **before** each. AC3b tests all four, and for the depth case also asserts the three fields that stay silent. |
+| **P-machinery** no explicit A6 / B1 assertions | C | LIGHT | **fix** | New AC4a: cap, redact-before-cap with a secret straddling character 4,000, message-count cap, and budget-debit equality as the single-read assertion. |
+| **C-1** the preprocessing deadline can move the admitted set | A | HEAVY | **fix the claim, keep the mechanism** | "Unchanged by construction" was false and I should have caught it: `scratch.js:50` takes `startedAt` before discovery and `:95-98` compares elapsed wall-clock time spanning parse, serialization and writes — all three of which projection changes. The reviewer measured 1 vs 4 admitted at identical intake bytes. C1 now claims **byte-policy equivalence** only; C1a says when the deadline binds and admits the direction is unpredictable; AC1 is scoped to the non-deadline regime and AC1a tests both directions with a mocked clock; AC7 must name the regime; owner item 3 prices the two redesign routes and neither is built. |
+| **C-machinery-1** AC4 said `promote` raises an understated flag | B | LIGHT | **fix** | It refuses. `validate.js:646-648` returns a reason and `promote.js:1386-1394` consumes it as a refusal leaving candidate bytes unchanged. AC4 is rewritten as refuse / accept / control, where the control is a clean invocation window that turns refused if `extractsBySession` is rebuilt from scratch. |
+| **C-clarity** D2's enforcement boundary | C | LIGHT | **fix, and state prominently** | New canonical row **D6** splits every provenance guarantee into code and prompt, and the ADR amendment gained the same paragraph. Propagating message flags onto an ordinary note is prompt-only; the invocation gate verifies invocation evidence, never a candidate's supporting messages. |
+
+**One thing the reviewers did not raise and this pass found anyway.** The dream
+skill has told the model for a long time that the orchestrator "RAISES your flag
+to `true`" (`SKILL.md:324-331`). It does not — an understated flag loses the
+whole ledger write. The correction rides along in row D3 because that row
+already rewrites the surrounding section, and it matters for behavior, not
+tidiness: a model told its mislabel will be corrected for it has no reason to
+get the label right.
 
 ## What round zero does not establish
 

@@ -110,12 +110,34 @@ re-derivation of the cites below is expected at dispatch; confirm that with
   from the **first** `session_meta` record only.
 - `src/core/transcripts/stream.js` owns the bounded read: `streamLines(filePath,
   sizeBytes, budget, onLine)` hands one line at a time, emits
-  `OVERSIZED_RECORD_MARKER` for a dropped over-long record, and debits the
-  caller-owned `budget`. Both parsers call it exactly once per file.
+  `OVERSIZED_RECORD_MARKER` for a dropped over-long record (`:113-118`), stops
+  with `runExhausted` when the caller-owned `budget` runs out with unread bytes
+  left (`:129-138`), and returns a non-`ok` outcome for `over-ceiling` (`:79-82`),
+  `read-error` (`:87-90`, `:143-146`) and `too-many-lines` (`:172-175`,
+  `:182-184`). Both parsers call it exactly once per file. `Limits.MAX_JSON_DEPTH`
+  is `64` (`:23`), and `maxJsonDepth` (`:202-223`) is a pre-parse scan.
+- **Two of the parsers' drops are completely silent today**, which row A5a
+  turns on: `claude.js:119` and `codex.js:168` `return` when
+  `maxJsonDepth(line) > Limits.MAX_JSON_DEPTH`, and `claude.js:121-125` /
+  `codex.js:170-174` `return` when `JSON.parse` throws. Neither sets
+  `truncated`, increments `oversizedRecords` or changes `outcome` — the design
+  review executed both parsers on a valid but deeply nested tool record and
+  measured `outcome: 'ok'`, `oversizedRecords: 0`, `truncated: false` with the
+  record gone and the following assistant message retained.
 - `src/core/dream/validate.js:510-527` (`invocationWindowTainted`) reads
   `extract.messages[i].role` and `extract.skill_invocations`; it needs **no
   message text at all**, and fails closed (returns tainted) on any malformed
   geometry. `:638-644` looks the extract up by `<harness>:<session_id>`.
+  `:191-216` (`tier3Decision`) requires `fm.derived_from_untrusted === false`
+  for **every** Tier-3 write — identity and skills — which is what prices owner
+  item 3.
+- **Today's provenance rule is role-based and lives only in the prompt.**
+  `skills/wienerdog-dream/SKILL.md:101-105`: set `derived_from_untrusted: true`
+  if **any** supporting message has role `tool_result`; set it `false` only when
+  every supporting message has role `user` or `assistant`. So at the base commit
+  a user message is trusted because of its role, whatever preceded it. Row
+  A5(a) preserves exactly that; row A5(b) is what this package adds on top, for
+  assistant messages, which today's rule does not distinguish at all.
 - `src/core/dream/scratch.js:118` measures admission as
   `Buffer.byteLength(JSON.stringify(extract))` of the extract
   `transcripts.parseWithOutcome` returned, and `:129` writes
@@ -167,8 +189,8 @@ changes any rule — but neither may be repeated as fact.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/transcripts/claude.js | additive record observer for Table A rows A2/A4/A5; default output byte-identical (AC5) |
-| modify | src/core/transcripts/codex.js | additive record observer for Table A rows A3/A4/A5; default output byte-identical (AC5) |
+| modify | src/core/transcripts/claude.js | additive record observer for Table A rows A2/A4/A5, notified at each row A5a context-losing return; default output byte-identical (AC5) |
+| modify | src/core/transcripts/codex.js | additive record observer for Table A rows A3/A4/A5, notified at each row A5a context-losing return; default output byte-identical (AC5) |
 | modify | src/core/transcripts/index.js | export `parsePrimaryWithOutcome` (Table B); reuse the existing redaction and caps (Table A row A6) |
 | create | src/core/transcripts/primary-dialogue.js | Table A's acceptance policy and Table B's assembly |
 | create | tests/unit/primary-dialogue.test.js | Tables A and B |
@@ -266,7 +288,13 @@ reply (`stop_reason: "tool_use"`) and supplies nothing (A2); the third record's
 `tool_result` block supplies no user text while its `text` block does (A2 — the
 defect this package fixes); the final assistant reply is retained but its
 `derived_from_untrusted` is **true**, because tool output was observed earlier
-in this session and A5 never resets (A5).
+in this session and A5's assistant taint state never resets (A5(b)).
+
+**Note the asymmetry deliberately shown here.** The second retained message is
+the user's correction, which arrives in the same record as the `tool_result` and
+is nevertheless `false` — a user message is `false` by role, regardless of any
+tool output before it (A5(a)). The assistant reply four seconds later is `true`.
+That is today's behavior preserved, not a new one; its residual is owner item 3.
 
 `JSON.stringify(result.gateExtract, null, 2)` is exactly:
 
@@ -321,7 +349,9 @@ grammar cannot be closed.
 | A2 | Claude acceptance | From a record whose top-level `type` is exactly `"user"`, which has no `isMeta: true` and no `isSidechain: true` (row A4), and whose `message.role` is exactly `"user"`: accept the whole of `message.content` when it is a string; when it is an array, accept the `text` value of each block whose `type` is exactly `"text"`, joined with `"\n\n"` in source order, as one user message. From a record whose top-level `type` is exactly `"assistant"` and whose `message.stop_reason` is exactly `"end_turn"`: accept the `text` value of each block whose `type` is exactly `"text"`, joined with `"\n\n"`, as one assistant message, dropping the message if that join is empty. Nothing else — no other `type`, no other `stop_reason` (including an absent one), no `tool_result`, `tool_use`, `thinking` or `image` block — supplies primary dialogue. |
 | A3 | Codex acceptance | Use the **first** `session_meta` record for `session_id`, `started` and `cwd`, exactly as `codex.js:176-182` does today. From a record whose top-level `type` is exactly `"response_item"` and whose `payload.type` is exactly `"message"`: when `payload.role` is exactly `"user"`, accept the `text` of each `payload.content[i]` whose `type` is exactly `"input_text"` **and** whose parallel metadata entry `payload.internal_chat_message_metadata_passthrough.content_item_kinds[i]` is exactly the string `"user.text"`, joined with `"\n"` in source order, as one user message; the metadata must be a plain object and `content_item_kinds` an array of exactly the same length as `payload.content`, or the record supplies nothing. **The kind, not the block type, is what decides**: the harness's injected `agents_md.instructions`, `environments.environment_context`, `plugins.recommendations` and `goal.internal_context` material rides `input_text` blocks too (145 measured occurrences), so a rule keyed on the block type alone would readmit exactly the boilerplate this package exists to remove. When `payload.role` is exactly `"assistant"` **and** `payload.phase` is exactly `"final_answer"`, accept the `text` of each `payload.content[i]` whose `type` is exactly `"output_text"`, joined with `"\n"`, as one assistant message. Nothing else supplies primary dialogue: not `role: "developer"` or any other role, not `phase: "commentary"` or an absent phase, not any other `payload.type` (`reasoning`, `custom_tool_call`, `custom_tool_call_output`, `function_call`, `function_call_output`, `agent_message`), not any other top-level `type` (`event_msg`, `token_usage_record`, `turn_context`, `world_state`, `compacted`, `inter_agent_communication_metadata`). Codex messages keep `ts: null`, as today. |
 | A4 | Copied context | A **Claude** record carrying `isSidechain: true` supplies no primary dialogue: a subagent's turns are a copy of instructions its parent already issued, and counting them would invent a second human. No `true` value exists anywhere in the local 236-file corpus, so this rule is written from the field's presence rather than an observed positive and must be exercised by a constructed fixture. A **Codex** rollout supplies primary dialogue only when its first `session_meta` record's `payload.thread_source` is exactly the string `"user"`, **or** when that key is absent from the payload — those two states, and no others. `"subagent"` (32 of 50 sampled files) is the agent's own rollout, whose user-role records are the parent's instructions to it; `"guardian_review"` (5 of 50) is a second fork mechanism; any other or malformed value is unrecognized and yields nothing. The absent case is accepted because the field is present in 50/50 sampled rollouts and co-occurs with `multi_agent_version`, so its absence indicates a harness build with no subagent concept — **that inference is not itself measured**, and this list is one of the lists `docs/runbooks/codex-pin-bump.md` requires re-verifying at every Codex pin bump. Beyond these two exclusions this package does not deduplicate, reads no ordinal or lineage field, and makes no claim that independent recurrence is solved: an ordinary resumed or forked session retains today's duplication limitation. |
-| A5 | Provenance | Each retained message carries a code-derived boolean `derived_from_untrusted`, computed over the **original record stream** — before projection, before the caps of row A6 — and never reset. A user message accepted under A2 or A3 is `false`. An assistant message is `false` only while both hold: no record the parser classifies as tool output (Claude `tool_result` block, any Codex `TOOL_OUTPUT_TYPES` payload) has been seen earlier in this session, and no gap in observed source context has occurred (a dropped oversized record, an exhausted read budget, or an unparseable line). Once either occurs, every later assistant message in that session is `true`. A new user request, a dropped exchange, a cap, or any later request boundary **never** lowers it. Nothing but this code writes the field. **"`derived_from_untrusted: false`" means exactly: code observed this text in a source record the harness attributes to the user, with no tool output or context gap before it. It does not mean a human typed it** (see Implementation notes), does not mean the content is true, and does not make it safe to obey. |
+| A5 | **Provenance — CANONICAL.** | Each retained message carries a code-derived boolean `derived_from_untrusted`, computed over the **original record stream**, before projection and before the caps of row A6. Nothing but this code writes the field. Two different rules apply, and conflating them is the error this row exists to prevent. **(a) A user message accepted under A2 or A3 is `false`, always — regardless of anything earlier in the session, including tool output and context gaps.** That is exactly today's rule (`skills/wienerdog-dream/SKILL.md:101-105`: `true` when any supporting message has role `tool_result`, `false` when every supporting message has role `user` or `assistant`), and this package does not change it. The person is the trust root: someone who repeats external text into the conversation has chosen to say it. The residual this leaves is real and is priced in owner item 3. **(b) An assistant message** is governed by a monotonic taint state over the same stream. The state starts `false` and is set `true` **permanently** by either a record the raw policy classifies as tool output (a Claude `tool_result` block; any Codex payload in `TOOL_OUTPUT_TYPES`) or a **context gap** as row A5a defines it. An assistant message is `false` only while the state is `false`, and `true` from the first such event through the end of the session. A new user request, a dropped exchange, a cap, or any later boundary **never** lowers the state. |
+| A5a | What counts as a context gap | A gap is a point at which code **could not determine a record's type** — never a record it classified and chose not to retain. The list is exactly four, and it was derived by reading `src/core/transcripts/stream.js`, `claude.js` and `codex.js` end to end: **(G1)** an over-long line the reader replaced with `OVERSIZED_RECORD_MARKER` (`stream.js:113-118`); **(G2)** a line rejected by the `maxJsonDepth(line) > Limits.MAX_JSON_DEPTH` guard before `JSON.parse` (`claude.js:119`, `codex.js:168`) — **today this is silent: outcome stays `ok`, `oversizedRecords` stays 0 and `truncated` stays `false`**; **(G3)** a line whose `JSON.parse` threw (`claude.js:121-125`, `codex.js:170-174`) — silent in the same way; **(G4)** a read cut short by the exhausted budget (`stream.js:129-138`, surfaced as `runExhausted`), which loses the file's tail. The observer is notified at each of these points **before** the parser returns from them, so a policy reading only the retained messages cannot miss the loss. A fifth case is total rather than partial and needs no flag: **(G5)** a `streamLines` outcome other than `ok` (`over-ceiling`, `read-error`, `too-many-lines`) makes the parser return an empty extract with no message to carry a value. A record the raw policy **classified and did not retain** is not a gap — `isMeta: true`, a Claude top-level `type` outside `user`/`assistant`, a Codex payload `mapCodexItem` maps to `null`, an assistant record whose joined text is empty — because its type was determined, it is not tool output, and the existing gate already consumes exactly that classification. |
+| A5b | What `false` does and does not claim | `derived_from_untrusted: false` claims exactly one thing: **the harness attributed this record to the user role** (or, for an assistant message, that no tool output and no gap preceded it). It is **not** a claim that a human authored the words. It cannot be: across 7 headless and 53 interactive local transcripts the first `user` record carries an identical top-level field set, so a `claude -p` routine prompt — Wienerdog's own code-authored text — is indistinguishable from a person's (see Implementation notes). Nor does `false` claim the content is true, that it was independently verified, or that it is safe to obey. Every surface that states this definition states it in these terms; no surface may say `false` means "no earlier tool output or gap" without restricting that clause to assistant messages. |
 | A6 | Existing caps | Apply the **existing** limits to the projected messages, in the existing order: redact through `capMessage` (`index.js:102-110`) and then cap at `MAX_MSG_CHARS` 4,000 characters, then retain the newest `MAX_MESSAGES` 2,000 messages. `truncated` is `true` when the raw extract's `truncated` is true or either projected cap fired. Metadata (`harness`, `session_id`, `started`, `cwd`, `source_path`) is copied unchanged from the raw extract, including `boundExtractPath`'s treatment of the two paths. This package adds no new cap, restores nothing lost to the existing ones, and never truncates to fit a model. |
 
 #### Table B — what `parsePrimaryWithOutcome` returns
@@ -340,34 +370,42 @@ review finding updates the table **and every mirror below in the same commit**;
 a newly found mirror is registered here on the spot.
 
 - [ ] **Deliverables-table cells that restate a path or rule** — walked: the
-      `claude.js` cell names A2/A4/A5; the `codex.js` cell names A3/A4/A5; the
-      `index.js` cell names Table B and A6; the `primary-dialogue.js` cell names
-      Tables A and B; the fixtures cell names AC5; the proofs cell names AC1–AC4.
+      `claude.js` cell names A2/A4/A5–A5a; the `codex.js` cell names A3/A4/A5–A5a;
+      the `index.js` cell names Table B and A6; the `primary-dialogue.js` cell
+      names Tables A and B; the fixtures cell names AC5; the proofs cell names
+      AC1–AC4.
 - [ ] **Acceptance criteria that assert its facts** — walked: AC1 asserts A2 and
-      A4 (Claude); AC2 asserts A3; AC3 asserts A5; AC4 asserts B1–B4; AC5
+      A4 (Claude); AC2 asserts A3; **AC3 asserts A5(b), AC3a asserts A5(a) and
+      A5b, AC3b asserts A5a**; AC4 asserts B1–B4; AC4a asserts A6 and B1; AC5
       asserts the unchanged-default half of B1 and the Deliverables boundary.
 - [ ] **Verification commands / greps** — walked: the `parsePrimaryWithOutcome`
       existence probe mirrors Table B's signature; the `tests/fixtures/transcripts/`
       untouched check mirrors AC5; the `rg` in Current-state verification
-      mirrors the Current-state cites A2/A3/B2 rest on.
+      mirrors the Current-state cites A2/A3/B2 rest on; the `rg` over
+      `maxJsonDepth` mirrors row A5a's G2.
 - [ ] **Current-state description** — walked: the `claude.js:138-155` ignore
       backs A2's array-`text` clause; `codex.js:61`/`:110-125` backs A3's
       developer and phase clauses; `codex.js:176-182` backs A3's first-header
       clause and A4's Codex clause; `validate.js:510-527` backs B2;
-      `scratch.js:118` backs B4. In the format-evidence table specifically: the
-      `stop_reason` and array-block rows back A2, the `content_item_kinds`
-      alignment and values rows back A3, the `isSidechain` and `thread_source`
-      rows back A4, and the `custom_tool_call_output` row backs the F2
-      disposition in Implementation notes.
+      `scratch.js:118` backs B4; **the four context-losing-return cites
+      (`stream.js:113-118`, `:129-138`; `claude.js:119`, `:121-125`;
+      `codex.js:168`, `:170-174`) back row A5a, `SKILL.md:101-105` backs
+      A5(a), and `validate.js:191-216` backs owner item 3's overrule cost.** In
+      the format-evidence table specifically: the `stop_reason` and array-block
+      rows back A2, the `content_item_kinds` alignment and values rows back A3,
+      the `isSidechain` and `thread_source` rows back A4, and the
+      `custom_tool_call_output` row backs the F2 disposition in Implementation
+      notes.
 - [ ] **Operative prose steps that apply it** — walked: Context's "three things
       from one bounded read" paragraph applies B1–B4; the Exact-contracts
       `parsePrimaryWithOutcome` block and both `GateExtract`/`Extract` sentences
-      apply B2/B3; the literal worked example and the paragraph reading it back
-      apply A2, A5 and B2/B4; Implementation notes' headless-collapse,
-      verified-text, `thread_source`, F2-defect, default-parse and
-      derived-proof bullets apply A2, A3, A4, A5, B1 and the RED-proof
+      apply B2/B3; the literal worked example, the paragraph reading it back and
+      **the asymmetry note after it** apply A2, A5(a), A5(b) and B2/B4;
+      Implementation notes' headless-collapse, verified-text,
+      **observer-placement**, `thread_source`, F2-defect, default-parse and
+      derived-proof bullets apply A2, A3, A4, A5, A5a, A5b, B1 and the RED-proof
       register; Out of scope's block-grouping bullet applies A1; owner item 1
-      applies B4 and owner item 2 applies A4.
+      applies B4, owner item 2 applies A4, and **owner item 3 applies A5(a)**.
 
 ## Implementation notes & constraints
 
@@ -392,10 +430,21 @@ a newly found mirror is registered here on the spot.
   sides. **There is therefore no field in the Claude transcript schema by which
   this projection can tell a `claude -p` routine prompt from a human one.** Do
   not add a heuristic (a project-directory name, a prompt prefix) to invent one:
-  the risk is low — it is Wienerdog's own text, and A5 still taints the
+  the risk is low — it is Wienerdog's own text, and A5(b) still taints the
   assistant's conclusion once tool output appears — and a wrong heuristic would
-  be worse than the known limitation. A5's definition of `false` is written to
-  say only what was actually observed.
+  be worse than the known limitation. Row **A5b** is where this consequence is
+  stated as a contract; this bullet is its measurement, and the two must not
+  drift apart.
+- **The observer must be wired BEFORE each context-losing return, not after the
+  existing guards.** Row A5a's four cases are where a policy that reads only the
+  retained records is blind, and the design review measured the worst of them:
+  with a tool record made of valid JSON nested deeper than
+  `Limits.MAX_JSON_DEPTH` (64), **both** parsers discard it, retain the
+  concluding assistant message, and report `outcome: 'ok'`,
+  `oversizedRecords: 0`, `truncated: false`. Nothing downstream of the guard can
+  discover that the record existed. The same is true of a `JSON.parse` failure.
+  An implementation that notifies the observer from inside the classification
+  branches only — after `JSON.parse` has succeeded — satisfies no part of A5a.
 - **Why `thread_source` and not `parent_thread_id` (row A4).** A
   `parent_thread_id` is present in 37 of 50 sampled rollouts, but 5 of those are
   `thread_source: "guardian_review"` — a different fork mechanism, with a
@@ -481,13 +530,30 @@ a newly found mirror is registered here on the spot.
       no messages, while `"user"` and an absent `thread_source` each yield the
       rollout's dialogue. Its RED proof reddens on accepting
       `role: "developer"`.
-- [ ] **AC3 — provenance never resets (Table A row A5).** In a fixture where a
-      tool record precedes two later exchanges, every assistant message from
-      that point on carries `derived_from_untrusted: true`, including the one
-      whose own exchange contains no tool record; user messages stay `false`; a
-      fixture with a dropped oversized record taints every later assistant
-      message. Its RED proof reddens on resetting the flag at a user-message
-      boundary.
+- [ ] **AC3 — assistant taint never resets (Table A row A5(b)).** In a fixture
+      where a tool record precedes two later exchanges, every assistant message
+      from that point on carries `derived_from_untrusted: true`, including the
+      one whose own exchange contains no tool record. Its RED proof reddens on
+      resetting the state at a user-message boundary.
+- [ ] **AC3a — user text is `false` by role (Table A row A5(a)).** The
+      reviewer's fixture is the test of stated behavior: a session in which a
+      tool record is followed by a user message quoting that tool output. Its
+      retained user message carries `derived_from_untrusted: false`, and the
+      assistant reply after it carries `true`. This asserts the rule the package
+      preserves from `SKILL.md:101-105`, not a rule it introduces; owner item 3
+      prices the residual. The fixture must also show that a user message
+      arriving in the *same* Claude record as a `tool_result` block is `false`.
+- [ ] **AC3b — every context-losing return taints (Table A row A5a).** One
+      fixture per case, each asserting that every retained assistant message
+      after the loss carries `true`: **(G1)** an over-long line replaced with
+      `OVERSIZED_RECORD_MARKER`; **(G2)** a Claude fixture *and* a Codex fixture
+      whose tool record is valid JSON nested deeper than `MAX_JSON_DEPTH` —
+      these must also assert the reviewer's measured baseline, that
+      `parse.outcome` is `"ok"`, `parse.oversizedRecords` is `0` and the raw
+      extract's `truncated` is `false`, so the fixture proves the observer sees
+      what those three fields do not; **(G3)** a line that is not valid JSON;
+      **(G4)** a budget exhausted mid-file. Its RED proof reddens on removing
+      the depth-limit notification.
 - [ ] **AC4 — return-value invariants (Table B).** For every fixture:
       `result.intakeBytes === Buffer.byteLength(JSON.stringify(parseWithOutcome(entry, freshBudget).extract))`;
       `result.gateExtract.messages` has the same length as that raw extract's
@@ -496,6 +562,16 @@ a newly found mirror is registered here on the spot.
       both are absent); `JSON.stringify(result.gateExtract)` contains no
       `"text"` key; `result.extract` has no `skill_invocations` key. Its RED
       proof reddens on measuring `intakeBytes` from the projected extract.
+- [ ] **AC4a — caps, redaction and the single read (Table A row A6, Table B
+      row B1).** A projected message longer than `MAX_MSG_CHARS` carries the
+      existing 4,000-character prefix plus the existing
+      `…[truncated N chars]` suffix and sets `truncated`; a secret-shaped string
+      in a projected message is redacted, and the redaction happens **before**
+      the character cap (assert with a secret that straddles character 4,000);
+      a projection of more than `MAX_MESSAGES` messages retains the newest 2,000
+      and sets `truncated`; and one call to `parsePrimaryWithOutcome` debits
+      `budget.remaining` by exactly the byte count one `parseWithOutcome` call
+      debits for the same file, which is what asserts the single bounded read.
 - [ ] **AC5 — the default parse is unchanged.** `parse` and `parseWithOutcome`
       return byte-identical results to the base commit for the whole existing
       fixture corpus, `tests/unit/transcripts.test.js` passes unmodified, and
@@ -516,6 +592,8 @@ git log --oneline 05f1f55d..HEAD -- src/core/transcripts/
 rg -n "function parseWithOutcome|MAX_MSG_CHARS = |MAX_MESSAGES = " src/core/transcripts/index.js
 rg -n "block.type === 'tool_result'|block.type === 'text'" src/core/transcripts/claude.js
 rg -n "TRUSTED_MESSAGE_ROLES|function invocationWindowTainted" src/core/transcripts/codex.js src/core/dream/validate.js
+rg -n "MAX_JSON_DEPTH|OVERSIZED_RECORD_MARKER|runExhausted" src/core/transcripts/stream.js src/core/transcripts/claude.js src/core/transcripts/codex.js
+rg -n "derived_from_untrusted === false" src/core/dream/validate.js
 npm test -- tests/unit/transcripts.test.js tests/unit/transcript-stream.test.js
 ```
 
@@ -594,6 +672,27 @@ Neither item blocks drafting. Both must be answered before this spec moves to
    position (admit subagent rollouts but mark them) is **not** available in this
    package: the extract has no field for it and adding one is a contract with no
    consumer until `WP-dream-primary-dialogue-filter` exists.
+3. **Should the monotonic taint state apply to user messages too?** The design
+   review built the path: tool output arrives, and the person then quotes that
+   output back. Row A5(a) marks that quoted text `false`. *Recommendation:* no
+   — keep `false`. **This is today's behavior, not a new exposure.**
+   `skills/wienerdog-dream/SKILL.md:101-105` already sets the flag from role
+   alone: `true` when a supporting message has role `tool_result`, `false` when
+   every supporting message has role `user` or `assistant`. The same quoted
+   sentence is `false` at the base commit; the projection neither creates the
+   path nor widens it. The person is the trust root, and someone who repeats
+   external text has chosen to say it — a different act from a tool depositing
+   it in the transcript. *Cost of overruling,* measured against the real gate:
+   `src/core/dream/validate.js:191-216` requires `derived_from_untrusted` to be
+   exactly `false` for **every** Tier-3 write, and Tier 3 is identity and
+   skills. Tainting user messages from the first tool record onward would mean
+   that in any session with an early tool call — which is nearly every agentic
+   session — **nothing the person says in it could ever reach identity or
+   skills again**, effectively ending Tier-3 learning from user statements. The
+   intermediate position, tainting user text only when it demonstrably quotes
+   prior tool output, needs a similarity test over message bodies that this
+   package has no mechanism for and that the owner's scope record does not ask
+   for. Nothing here records an owner decision.
 
 ## Definition of done
 
