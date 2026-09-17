@@ -903,3 +903,52 @@ test('dream-collect: parser quarantine and scratch write errors preserve their e
   t.mock.method(fs, 'writeSync', () => { throw new Error('scratch write failed'); });
   assert.throws(() => collectExtracts(paths, emptyLedger(), 400_000), /scratch write failed/);
 });
+
+// -------------------------------------------------------------------------
+// secret-sink wiring probes (WP-secret-sink-wiring-probes, ADR-0042)
+// -------------------------------------------------------------------------
+
+// A labelled-rule match: the `anthropic-key` rule is
+// /sk-ant-[A-Za-z0-9\-_]{20,}/g -> [REDACTED:anthropic-key], severity
+// QUARANTINE (src/core/secret-scan.js:88). 48 characters. Shaped so that
+// PROBE_HEAD and PROBE_TAIL each trip NO rule: PROBE_HEAD has only 17
+// characters after `sk-ant-` (the rule needs 20), and every
+// delimiter-separated segment of both halves is word-shaped, so the entropy
+// pass suppresses them. Measured against the shipped detector 2026-09-17:
+// scanAndRedact(PROBE_HEAD).text === PROBE_HEAD, findings [];
+// scanAndRedact(PROBE_TAIL).text === PROBE_TAIL, findings [].
+const PROBE = 'sk-ant-api03-PROBE-aaaa-bbbb-cccc-dddd-eeee-ffff';
+const PROBE_HEAD = PROBE.slice(0, 24); // 'sk-ant-api03-PROBE-aaaa-'
+const MARKER = '[REDACTED:anthropic-key]';
+
+// `artifact` is the file's text, read from disk after the sink ran.
+const safeOf = (artifact) => artifact.includes(MARKER) && !artifact.includes(PROBE_HEAD);
+
+// Table S row S4 — src/core/transcripts/index.js
+test('sink-probe: transcripts — a labelled secret in a transcript reaches dream-scratch redacted', () => {
+  const paths = tempPaths();
+  const sessionId = 'secret-probe';
+  // Mirror writeClaude's record shape but with content: 'boom ' + PROBE (do not
+  // modify writeClaude, which hardcodes its message body).
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${sessionId}.jsonl`);
+  const line = JSON.stringify({
+    type: 'user',
+    sessionId,
+    cwd: '/home/ada/proj',
+    timestamp: '2026-01-01T10:00:00.000Z',
+    message: { role: 'user', content: `boom ${PROBE}` },
+  });
+  fs.writeFileSync(file, `${line}\n`);
+  const when = new Date('2026-01-01T10:00:00Z');
+  fs.utimesSync(file, when, when);
+
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+  const scratchFile = result.wrote.find((p) => p.includes(sessionId));
+  assert.ok(scratchFile, 'the fixture was written to scratch');
+
+  const artifact = fs.readFileSync(scratchFile, 'utf8');
+  const safe = safeOf(artifact);
+  assert.equal(safe, true, artifact);
+});

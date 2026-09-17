@@ -1,7 +1,7 @@
 ---
 id: WP-secret-sink-wiring-probes
 title: Pin what each durable-output sink actually does with a labelled secret
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
