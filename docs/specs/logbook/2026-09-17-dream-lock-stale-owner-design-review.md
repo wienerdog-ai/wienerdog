@@ -216,9 +216,50 @@ rather than a claim about the configuration space. The premise was one `grep` of
 `--timeout` away the whole time. A single reviewer converges; it does not
 necessarily converge on the truth.
 
+## Round 6 — the message states only what the decline observed
+
+Same second reviewer as round 5: Codex plugin adversarial-review, `gpt-6-astra`,
+tip `8a29f4ca`. Verdict `needs-attention`, one product finding, no blocking
+machinery finding. Raw artifacts are committed beside this entry as
+`2026-09-17-dream-lock-stale-owner-design-r6-astra-raw.json`, `-focus.txt` and
+`-meta.txt`. Nothing below records an owner decision.
+
+What the round confirmed, again by execution: A-1's watchdog qualification and
+the removal of the deletion shortcut are fixed; A-2's proof routing is viable —
+it ran **the real declaration loader** and validated representative declarations
+against `runSuite` and the pipeline suite's CLI coverage; and the 54 h and 55 h
+worked cases hold, re-derived with the real `catchUp`/`todaysFire`. It also ran
+the real watchdog resolver, the real config reader and the real `acquireLock`
+against in-memory fixtures with a live-PID probe and simulated `EPERM`/`ESRCH`.
+No suites, lint or proofs — the implementation does not exist.
+
+| Finding | Band | Weight | Disposition | Rationale |
+|---|---|---|---|---|
+| R6-1 — S5 still equates an overdue busy lock with stopped vault activity | medium | **heavy** (user-visible text) | **Fix** | Two sentences asserted facts `busy` cannot establish. (i) *"nothing new has been written to your vault since then"* — false: `src/cli/dream.js` promotes into the vault at ≈ l.956, **inside** the lock, and releases only at ≈ l.1221, so a held lock is fully consistent with a healthy owner that has already written; and A-1 established that such an owner can legitimately be running this long. (ii) *"Wienerdog cannot clear it on its own"* — false: the owner may finish and release, or the probed PID may exit and Table L5's `ESRCH` takeover then applies. Compounding both, the **unconditional** "Restart this computer" could destroy a healthy long-running dream on a false diagnosis; O1 priced the false alert but not the misleading guidance. The message is rewritten to state only the decline's own observations — the lock is past its deadline, a local process answered the probe, this run did not start — to present both possibilities and say Wienerdog cannot tell which, and to offer restart as an **option** conditioned on the messages continuing, with its cost named in the same sentence. The diagnosis word changes from *stale* (which asserts death) to *overdue* (which does not), and the identifying literal `dream lock is overdue:` is now pinned in AC5, in AC7's rule for declaration `find` strings, and in the mirrored-surface walk. The internal constant keeps its `STALE_` name, which matches the work package slug and describes the condition to the implementer; S4 records that split deliberately. O1 gains a second named cost — the alert can cost one run's work, never vault content, since a dream run is one commit and an interrupted run simply does not make it. |
+
+### Two hedges that had to survive the rewrite
+
+Checked sentence by sentence against the tree, and both are conditional for a
+reason:
+
+- *"If it is still working it will release the lock when it finishes, and these
+  messages will stop on their own."* True only under its own `if` — the owner
+  releases via `releaseLock`, which is itself guarded by `ownsLock`.
+- *"Wienerdog **normally** clears the lock by itself the next time it runs."*
+  "Normally" is load-bearing: the `ESRCH` takeover is defeated if the PID is
+  reused again, which is the very failure this work package exists to make loud.
+
+**The lesson of round 6:** *a diagnostic message is a set of claims, and each one
+needs a source in what the code actually observed.* The message had drifted into
+narrating the incident — memory stopped, recovery impossible — rather than
+reporting the decline. The check that catches it is per-sentence and mechanical:
+for each assertion, name the value or branch that establishes it. Three of the
+sentences had no such source, and one of them contradicted a line number the spec
+itself already cited.
+
 ## Resulting shape
 
-Size drops from M to S after round 1 and stays S through round 5. Table S is seven
+Size drops from M to S after round 1 and stays S through round 6. Table S is seven
 rows (result shape, `staleForMs`, implausible-deadline refusal, the loud gate,
 the message and its real delivery surface, the exit-code doc-comment errata, the
 ADR amendment). Six owner items, renumbered once in round 1.
