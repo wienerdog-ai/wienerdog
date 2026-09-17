@@ -187,3 +187,56 @@ installs. *Recommendation adopted:* ship — four lines implementing §1 of an
 owner-signed amendment, removing a documented idempotency violation. *Overrule
 cost:* `writeDescriptor` stays non-idempotent on every dev install and the
 ENOENT-becomes-refusal path stays live for `git clone` installs.
+
+### WP-dream-report-run-skips (design gate closed 2026-09-17, round 4 approve, `2d5e2465`)
+
+Five items. **None was ruled on directly**; each is a recommendation adopted
+under the standing authorization above, reversible by dated amendment.
+
+**O1 — Which arms the report counts, and what each bullet may promise.**
+*Recommendation adopted:* all six counts, one bullet each, and **every bullet
+says only what the collector can deliver**. Two promises were removed after a
+reviewer executed the collector and reproduced them as false: **no bullet claims
+a session was skipped for the first time** (a re-quarantine re-enters that
+count, so the bullet states this run's decision — set aside now, skipped from
+now on until it changes), and **no deferral bullet promises a retry** (a session
+memoised as oversized behind a capacity or deadline stop is counted as deferred
+and then passed over from its memo unparsed, so the three deferral bullets say
+Wienerdog will *consider* it again and name the oversized outcome as possible).
+The oversized bullet names all three releases — session changes, Wienerdog
+updated, `dream_max_input_bytes` raised past the measured size — and that each
+earns a re-measurement that may still find it too big. *Overrule cost:* merging
+the deferral bullets hides two causes and their knobs; dropping oversized leaves
+the one permanently-passed-over class with no durable surface; restoring either
+removed promise puts a sentence in the user's vault that the collector
+contradicts.
+
+**O2 — Reword the `reports/warnings.md` pointer now it has non-quarantine
+neighbours?** *Recommendation adopted:* no — keep the shipped sentence and scope
+its promise lexically ("skipped" only in the two quarantine bullets and the
+pointer). *Overrule cost:* one promise gets two wordings across the report and
+the digest banner, and both full-string identities plus RED proof 1 are
+rewritten.
+
+**O3 — List oversized sessions in `reports/warnings.md`?** *Recommendation
+adopted:* no; out of scope, nothing filed — the memo is deliberately not a
+quarantine (ADR-0023 Amendment 3) and that file is a pure render of the ledger's
+quarantines (Amendment 2). *Overrule cost:* a new WP against
+`src/core/dream/warnings.js` plus an ADR-0023 amendment, and this package's
+pointer rule re-decided.
+
+**O4 — Durable per-run accounting for zero-admission runs?** *Recommendation
+adopted:* yes it should exist, **not in this package** — every carrier reopens
+ADR-0012 (a vault write on a run that makes no commit) or the ratified
+failure-message text. *Overrule cost:* the package gains a second subject and
+write path mid-review; accepting leaves the gap until its own WP, the
+191-session first-contact run being the visible instance.
+
+**O5 — Suppress the pointer when the warnings file's currency is unconfirmed?**
+*Recommendation adopted:* no flag — measured, the refresh result exists before
+`promote()` only when the run minted a new quarantine, so a flag would suppress
+the pointer on every run whose quarantines are all pre-existing. *Overrule
+cost:* either the pointer disappears from the main case, or this package absorbs
+an edit to `WP-quarantine-warnings-file`'s refresh points and an ADR-0012
+ordering question; accepting leaves a pointer that can name an absent or stale
+file while its counts stay exact, repaired by the next successful refresh.
