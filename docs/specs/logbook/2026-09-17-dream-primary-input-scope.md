@@ -33,10 +33,9 @@ from the dream's input. Do not prepare separate tool-evidence files, create an
 evidence index/archive, expose an on-demand extraction operation, or implement a
 budgeted evidence-access tool. Existing raw harness transcripts are not deleted.
 
-Let the dream report occasions when tool evidence would have helped it decide
-what to remember or verify a claim. Use those observations to inform whether a
-later implementation should provide access. The purpose is to test the value of
-that additional mechanism before building it.
+The model may mention missing tool evidence in the existing dream report when
+useful, as previously discussed. No new mandatory reporting section, collection
+mechanism, or persistent request queue is required for the first iteration.
 
 The earlier idea of primary content plus evidence sharing a dynamically consumed
 X is no longer needed for this first iteration. Preserve the existing X as an
@@ -49,11 +48,9 @@ overflow distinction, soft preprocessing deadline, and absence of persistent
 partial-session checkpoints. Changing which messages belong in an extract does
 not silently change those policies.
 
-## Proposed reporting behavior for the draft spec
+## Optional missing-evidence observations
 
-Use the existing dream report, rather than placing operational requests in
-durable knowledge notes or introducing a new persistent queue. A short section
-can name:
+An ordinary comment in the existing dream report can name:
 
 - the source session;
 - the specific observation or claim that needed additional evidence;
@@ -87,12 +84,13 @@ publication-failure contracts. The spec must reconcile their interaction
 explicitly rather than treating a model's self-reported completion as authority
 to bypass a code-owned gate.
 
-**Later scope steering on the same day:** the owner prefers keeping the current
-consolidation agent, potentially adding only a lighter model to filter irrelevant
-primary dialogue, plus an access report if available. See the next section.
-The completion outcomes above remain the desired semantics; an observational
-report alone does not implement them. Do not silently claim that the first
-iteration fixes the selected-but-unexamined ledger behavior.
+**Latest scope steering on the same day:** keep the current consolidation agent,
+potentially add only a lighter relevance filter, and omit automated access
+reporting. Assess practical quality using an LLM judge on examples. The owner
+explicitly prefers sufficiently good results over guaranteed 100% coverage.
+The completion outcomes above remain a desired direction, not a requirement to
+build per-session coverage enforcement in this first iteration. Do not claim
+that this iteration fixes the selected-but-unexamined ledger behavior.
 
 ## Latest direction: a lightweight relevance filter, existing consolidation
 
@@ -102,14 +100,31 @@ The owner does not want a broad dream redesign. The working proposal is:
 2. Use a lighter model (Sonnet was suggested; no exact model/version is selected)
    to remove material that is not useful for memory.
 3. Give the reduced material to the existing, more capable consolidation agent.
-4. If feasible, report what input content that consolidation agent actually
-   accessed, using its execution trace rather than its own coverage claims.
+4. Evaluate example runs using an LLM judge comparing source primary dialogue
+   with the actual memory changes. No automated access/coverage report is built.
 
 This replaces the earlier recommendation to add separate full per-session
 learning jobs and a redesigned consolidation protocol in the first iteration.
 No candidate store, evidence retrieval, or new durable partial-session state is
 proposed. Whether filtering is beneficial remains to be measured: it adds its
 own model work and can discard important information.
+
+### Accepted evaluation scope: sufficiently good memory
+
+The owner explicitly removed the proposed access report from the first
+iteration. Do not add Read/Grep trace instrumentation, exact coverage accounting,
+new reporting infrastructure, or a production judge to the nightly pipeline.
+LLM-as-judge is an offline evaluation method here, not another required runtime
+stage or a new evaluation framework to implement.
+
+Use representative examples to judge whether important decisions, corrections,
+and preferences survive; whether retained claims remain faithful to their
+sources; and whether the result contains less low-value material. Compare against
+the primary dialogue before model filtering so the judge can notice what the
+filter discarded. Judge the resulting memory changes in the context of existing
+notes, not just the dream's self-written report. A judge's verdict is a practical
+quality signal, not proof of completeness. No 100% input-coverage target or
+unsupported numerical quality threshold is introduced.
 
 ### Proposed implementation defaults, not yet owner-ratified
 
@@ -127,11 +142,14 @@ own model work and can discard important information.
   one model request. A parseable output must select only known original blocks.
   A failed or invalid filter result must not silently discard its input; define
   an explicit retain-original or retry behavior in the spec.
-- Compare primary bytes before/after filtering, retained important observations,
-  filter duration/usage, and consolidation duration/usage. Fewer retained bytes
-  alone do not establish lower total cost or better memory.
+- Use already available sizing/usage information if useful during offline
+  evaluation; do not build instrumentation for it in this iteration. Fewer
+  retained bytes alone do not establish lower total cost or better memory.
 
-### Access reporting: local evidence from September 17
+### Historical access evidence, not an implementation deliverable
+
+The measurements below predate the owner's decision to omit access reporting.
+They are retained as evidence only, not as requirements for the first WP.
 
 The real consolidation trace under the local Claude projects directory ran
 from `2026-09-17T01:30:23.525Z` to `2026-09-17T01:46:08.929Z` and contained:
@@ -152,25 +170,10 @@ Grep for dream; Bash and other execution/network tools are not in this profile.
 Source tool results excluded from input and the dream's own file tools are
 different things: excluding the former does not remove the latter.
 
-Count actual content returned by Read and content-mode Grep where the trace
-supports attribution. File lists and match counts do not establish access to a
-session's substantive content. A Read request may return a range, an error, a
-truncated result, or an indirect result reference; issuing it is not proof of a
-full read. Overlapping returned ranges should not inflate unique coverage.
-
-A first report can distinguish input files made available, files with observed
-content access, files touched only by metadata/search, and files with no observed
-content access, with explicit unknowns when the trace cannot decide. Exact
-character/token coverage is optional and must not be fabricated from call
-counts. Tool-visible text is evidence of exposure, not proof of understanding.
-Trace availability and collection differ by harness/version, so the spec must
-verify the current Claude path instead of treating an internal log format as a
-stable application interface. The report does not require a new access broker.
-
-Keeping the existing ledger behavior means an unexamined selected session can
-still be marked processed. An access report would make some such cases visible;
-it would not correct them. This is an explicit limitation to carry into the
-first-iteration scope discussion, not a resolved completion check.
+Read and content-mode Grep can both expose input text. File lists and match
+counts do not establish substantive access, and even a Read request is not proof
+of a full read. Tool-visible text is evidence of exposure, not understanding.
+No instrumentation of these distinctions will be added in the first iteration.
 
 ## Current execution model, verified for the owner's question
 
@@ -185,7 +188,9 @@ ranking, cross-session deduplication, and note writing are phases of that same
 agent session, not separately scheduled model jobs. The model chooses its read
 sequence. Code does not currently require a completion result for each input;
 the final ledger loop applies the run-level publication/secret outcome to all
-selected inputs. This is the gap the accepted completion semantics must close.
+selected inputs. This gap remains under the first iteration's unchanged
+consolidation/ledger flow; the offline quality evaluation does not enforce
+per-session completion.
 
 ## What the experiment can and cannot establish
 
@@ -214,10 +219,9 @@ outputs to dream input is not a prerequisite for this chosen iteration.
    block-selection rules, per-call and whole-run bounds, X before/after filtering,
    failure behavior, and the evaluation that checks usefulness rather than size
    reduction alone. No separate per-session learning architecture is requested.
-3. Define feasible access reporting from actual returned tool content, with
-   unknowns and honest limits. Carry the difference between the accepted target
-   completion semantics and unchanged ledger behavior explicitly; diagnostics
-   are not completion enforcement.
+3. Choose a small representative set of inputs and review criteria for offline
+   LLM-as-judge evaluation. Keep this an assessment of sufficiently good memory,
+   not an automated coverage-reporting or perfect-completion project.
 4. Check existing invocation-index, skill-learning, and provenance contracts when
    filtering messages. No gate may gain permission because its supporting
    evidence was removed; do not add tool details back to the model input to hide
@@ -225,9 +229,9 @@ outputs to dream input is not a prerequisite for this chosen iteration.
 5. Establish the effect on previously processed inputs and whether any targeted
    replay is needed. Do not reset the live ledger by default or replay everything
    solely to recover tool content that this iteration intentionally excludes.
-6. Split the selected scope into bounded WPs and reconcile it with the existing
-   report WP. The reporting section above is a proposed use of the existing
-   report, not permission to expand that sibling WP silently.
+6. Split the selected scope into bounded WPs if needed. The existing report WP
+   remains independent; no access-report work is added to it or made a dependency
+   of this first iteration.
 
 ## Verification
 
