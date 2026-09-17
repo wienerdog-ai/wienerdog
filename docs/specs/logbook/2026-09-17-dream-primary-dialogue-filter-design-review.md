@@ -139,3 +139,38 @@ verified the full synthetic JSON/JSONL example parses, checked the A/B/C/D mirro
 mapping and same-commit/new-mirror instructions, and reran markdownlint (0
 errors) and `git diff --check` (exit 0). Neither correction changes product
 behavior or authorizes implementation. Round zero is complete.
+
+## Maintainer handoff draft — not sent
+
+Please review `docs/specs/WP-dream-primary-dialogue-filter.md` before we authorize
+implementation. It proposes one M work package:
+
+- Build primary user/concluding-assistant dialogue, excluding source tool text
+  and recognized harness/progress material.
+- Ask a bounded Sonnet stage to select original exchange blocks, then run the
+  existing consolidation agent and publication pipeline.
+- Apply the existing X admission cap before Sonnet, without backfill. Keep
+  original content on ordinary filtering failure; preserve existing integrity
+  and process-supervision failures as aborts.
+- Evaluate representative examples offline with an LLM judge. No access report,
+  tool-evidence retrieval, full-coverage guarantee, or completion redesign.
+
+Feedback requested:
+
+1. Is the proposed scope feasible as one M WP using the existing supervised
+   process lifecycle? If it needs a broader lifecycle refactor, split before
+   implementation.
+2. Are the source/legacy/subagent rules and the separation of model input from
+   code-owned skill authorization acceptable? Does the durable policy need an
+   ADR amendment before Ready?
+3. Are Table C's provisional batch/time limits and keep-original fallback a
+   reasonable first experiment? They are not measured savings claims. A large X
+   can remain mostly unfiltered when that allowance expires.
+4. Is X-before-filter/no-backfill the right initial tradeoff? It bounds work but
+   intentionally does not fill newly freed space with older sessions.
+
+The existing limitation remains: successful run-level publication does not
+prove the consolidator examined every selected session. No historical replay is
+introduced. The WP remains Draft until feedback and owner sign-off; no
+implementation or deployment has started. Independent design-review results and
+proposed dispositions are recorded in this same logbook entry.
