@@ -1,0 +1,79 @@
+{
+  "verdict": "needs-attention",
+  "summary": "Do not ship this design yet. It deliberately permits genuine unresolved dream failures to disappear from the injected digest, and its RED proof does not actually enforce the critical config cross-check.",
+  "findings": [
+    {
+      "severity": "high",
+      "title": "The config cross-check does not establish that run-job launched this process",
+      "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+      "line_start": 367,
+      "line_end": 375,
+      "confidence": 0.99,
+      "body": "An attended or automated `wienerdog dream` that inherits `WIENERDOG_JOB=dream` passes `findJob` whenever the normal configured dream job exists. That invocation has no supervising run-job that will clear the alert, yet it removes the real unresolved failure from `digest.md`. The check establishes that a job name is plausible, not that this process is the child whose success will resolve it. Accidental inherited environment is sufficient; no hostile actor is required. The record remains in `alerts.jsonl`, but the primary session-injected warning can be absent until a later render.",
+      "recommendation": "Do not accept WIENERDOG_JOB alone. Require a supervisor-issued, per-run identity channel that dream can validate and correlate to the current run, and add an acceptance test proving that a direct dream invocation with a spoofed or inherited WIENERDOG_JOB still renders the alert."
+    },
+    {
+      "severity": "high",
+      "title": "The shared filter hides an unresolved prior failure before this run is known to succeed",
+      "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+      "line_start": 265,
+      "line_end": 265,
+      "confidence": 1,
+      "body": "The quarantine render at dream.js:724 runs before the no-complete-input throw at 736-743 and before containment, brain, success-marker, and alert-cleanup outcomes. Applying the filter at both render sites therefore deletes the existing dream warning from `digest.md`, after which the same run can fail and leave that earlier alert unresolved. B1 and B2 likewise occur after the final render and can leave or add same-job alerts. AC5 requires this unsafe early filtering, while AC7 checks only alerts.jsonl and explicitly makes no assertion that the digest still exposes the failure. This converts a currently visible real failure into a false negative for potentially a full nightly interval.",
+      "recommendation": "Redesign the omission so it occurs only after the alert lifecycle has durably established success and completed cleanup. At minimum, keep the quarantine-only render unfiltered and add digest assertions for the quarantine-then-no-complete throw, containment/brain failure, B1, and B2 paths. If the current ownership split cannot provide post-cleanup confirmation, prefer retaining the stale warning over hiding a genuine one."
+    },
+    {
+      "severity": "medium",
+      "title": "The unconditional-filter RED proof does not prove the required cross-check",
+      "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+      "line_start": 287,
+      "line_end": 297,
+      "confidence": 0.99,
+      "body": "The declaration says removal of the findJob plus `run: builtin:dream` guard must redden AC3, but AC3 runs with WIENERDOG_JOB absent. A plausible wrong implementation that filters by `process.env.WIENERDOG_JOB` whenever it is set, without consulting config, still passes AC3. It fails AC4 instead, yet the spec deliberately excludes AC4 from the mutation's expected failing set. Consequently the RED gate can prove a hard-coded always-on mutation while failing to prove the authority check it claims to protect.",
+      "recommendation": "Define the mutation as removing or bypassing only the findJob/run guard while retaining the environment conditional, and require AC4 to be in its exact expectRed set. Add separate mutations if both always-on filtering and cross-check removal need proof."
+    }
+  ],
+  "verification": {
+    "executed": [
+      {
+        "command": "git status --short --branch; git diff --stat and git diff 047a202c1ada70ab44bd24a21157854441d987a2...HEAD restricted to the two review files",
+        "exit_status": 0
+      },
+      {
+        "command": "git rev-parse HEAD; git merge-base 047a202c1ada70ab44bd24a21157854441d987a2 HEAD",
+        "exit_status": 0,
+        "result": "HEAD a2bc4afe55817bd24db6bfe197d3cf755eb27ab9; merge base 047a202c1ada70ab44bd24a21157854441d987a2"
+      },
+      {
+        "command": "wc, rg, nl and sed citation checks over the cited source and test files",
+        "exit_status": 0
+      },
+      {
+        "command": "git diff --check 047a202c1ada70ab44bd24a21157854441d987a2...HEAD",
+        "exit_status": 0
+      },
+      {
+        "command": "npm run lint -- --no-fix",
+        "exit_status": 0,
+        "result": "671 Markdown files checked; shellcheck, frontmatter and other lint gates passed"
+      }
+    ],
+    "read": [
+      "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+      "docs/specs/logbook/2026-09-17-dream-digest-omits-own-job-alerts-round-zero.md",
+      "src/cli/dream.js",
+      "src/cli/run-job.js",
+      "src/cli/sync.js",
+      "src/scheduler/jobs.js",
+      "src/core/alerts.js",
+      "src/core/alert-ack.js",
+      "src/core/digest.js",
+      "src/core/dream/lock.js",
+      "tests/unit/dream-pipeline.test.js",
+      "tests/unit/scheduler-runjob.test.js"
+    ],
+    "not_executed": [
+      "npm test and focused unit-test commands were not run; this verdict is based on document/source tracing plus lint and static repository checks."
+    ]
+  }
+}
