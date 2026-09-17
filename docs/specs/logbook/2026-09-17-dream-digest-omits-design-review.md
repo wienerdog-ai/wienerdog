@@ -149,3 +149,67 @@ items, with (e) now naming two residual bullets instead of one.
 **Nothing in this round was ruled on by the owner.** O1, O2 and now O3 are open.
 The only ruling on record remains the 2026-09-10 maintainer ruling about the
 managed-policy-warning follow-up's ordering.
+
+## Round 3 — independent design gate: APPROVE, and the loop closes
+
+| Field | Value |
+|-------|-------|
+| Tip reviewed | `ed1abe9bd62c190d089e41f02d32ff896e9db889` |
+| Base | `545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c` |
+| Raw output | `docs/specs/logbook/2026-09-17-dream-digest-omits-design-r3-raw.json`, committed in **`6c96471c`** before adjudication |
+| Focus / meta | `…-design-r3-focus.txt`, `…-design-r3-meta.txt`, same commit |
+| Verdict | **`approve`**, **`findings: []`** |
+| Read-only check | `git status --porcelain` identical before and after (meta); the reviewer's own run reports the worktree clean |
+
+**Verbatim verdict:** *"Ship the design to implementation. R2-1 is substantively
+closed: source tracing confirms ordinary dream failures are appended only after
+the child exits, doctor does not expose alerts, the lack of a finite
+digest-refresh bound is explicit, and AC6e pins the resulting
+record-present/callout-absent state. R2-2 is also closed: the recovery failure
+gets one fixed, non-interpolating stderr diagnostic, the original error remains
+authoritative, and AC7a/AC7b cover successful and failed recovery renders. No
+material product or verification-machinery findings remain, and the inspected
+file:line citations resolve on this tree."*
+
+### What the round EXECUTED, and what it did not
+
+| Command | Exit | Result |
+|---------|------|--------|
+| `git status --short --branch`; `git rev-parse HEAD`; `git merge-base 545df8bd… HEAD`; restricted `git diff 545df8bd…HEAD` | **0** | HEAD `ed1abe9b`, merge base `545df8bd`, worktree clean |
+| `nl`, `sed`, `rg`, `wc` and targeted source/control-flow citation checks | **0** | the cited dream, run-job, sync, scheduler, alerts, digest, lock and test locations resolve and support the revised claims |
+| `grep -ci alert src/cli/doctor.js` | **1** | printed `0`; exit 1 is grep's expected no-match status, **independently confirming the `doctor` measurement this spec relies on** |
+| `git diff --check 545df8bd…HEAD` | **0** | — |
+| `npm run lint` | **0** | markdownlint, shellcheck, PSScriptAnalyzer and frontmatter checks passed |
+
+**`npm test` and the focused unit tests were NOT run**, and the reviewer says so
+in its own `not_executed` field: the reviewed tip changes design documents only,
+so its runtime conclusions are source and control-flow tracing. Recorded here
+because a verdict whose tests did not run is a reading, and the runbook requires
+that to be stated rather than inferred. It costs this round nothing — there is no
+`src/` change on this tip for a suite to exercise — and the suite is the
+implementation PR's gate, not this one's.
+
+### Closure
+
+**The loop is DONE at round 3 by the runbook's own rule** — *"The loop is DONE
+when a round finds nothing about the product"* (`docs/runbooks/codex-review.md`,
+"Weighted closure"). Round 3 found nothing at all: no product finding and no
+machinery finding, so there is not even a residual to carry. The arc was
+**3 → 2 → 0 findings**, which is the shrinking series the frozen-surface rule
+predicts: verification machinery grew exactly twice across the loop, each time to
+guard a product behaviour a round had just identified (round 1 added three RED
+declarations and the per-site placement criteria; round 2 added AC6e and split
+AC7), and never to guard the machinery itself.
+
+Every finding across all three rounds carries a disposition; **none was dropped**
+and **none was accepted as a residual without being written into the spec**. Each
+round's raw output was committed before anyone read or judged it —
+**`d86e1616`** (round 1), **`2eeba955`** (round 2), **`6c96471c`** (round 3) —
+so the record is intact and after-the-fact adjudication is possible.
+
+`WP-dream-digest-omits-own-job-alerts` moves to **`Ready`** in the same commit as
+this entry. Owner items **O1, O2, O3** are recorded under the standing process in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`, each as a
+recommendation adopted under standing authorization — **not a direct ruling** —
+with its overrule cost, reversible by dated amendment. The owner has ruled on
+none of the three.

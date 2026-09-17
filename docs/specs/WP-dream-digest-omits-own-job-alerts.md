@@ -1,7 +1,7 @@
 ---
 id: WP-dream-digest-omits-own-job-alerts
 title: Stop the dream's own digest render from re-showing the alerts its success clears
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
@@ -12,6 +12,27 @@ adrs: [ADR-0004, ADR-0012, ADR-0031, ADR-0042]
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template gives
   the skeleton, the runbook the rules. Read both.
+
+> **The design gate ran 2026-09-17 against `545df8bd` and CLOSED at round 3** —
+> three rounds on one channel, **3 findings, then 2, then 0**. Round 1 (band A,
+> HEAVY ×2 + band B): the filter applied at both render sites and could hide a
+> genuine unresolved failure; the config cross-check did not establish that
+> `run-job` launched this process; one RED declaration proved a different
+> property than it claimed. Round 2 (band A HEAVY + band B→HEAVY): the
+> B1/B2-only residual was too narrow and its bound was not finite; a failed
+> recovery render left no diagnostic. **Every finding is dispositioned — none
+> dropped, none accepted as a residual without being written into this spec** —
+> and each round's raw reviewer output was committed BEFORE adjudication
+> (`d86e1616`, `2eeba955`, `6c96471c`). Round 3's verdict: *"Ship the design to
+> implementation … No material product or verification-machinery findings
+> remain, and the inspected file:line citations resolve on this tree."* The
+> per-round tables, the citation corrections, the both-directions gate runs and
+> the mirror walks are
+> `docs/specs/logbook/2026-09-17-dream-digest-omits-design-review.md`; the
+> re-derivation against post-#245 `main` is
+> `docs/specs/logbook/2026-09-17-dream-digest-omits-own-job-alerts-round-zero.md`.
+> **This spec is `Ready`.** Owner items **O1, O2 and O3** are recorded under the
+> standing process — see "Dispatch precondition — owner items".
 
 ## Context (read this, nothing else)
 
@@ -83,8 +104,17 @@ it — *when in doubt the stale callout is shown; a genuine one is never hidden*
 ## Current state
 
 Every line citation below was re-derived at `b4af715e` (`origin/main` after
-PR #245). Follow a citation by grepping its quoted text; the line number
-disambiguates, it does not locate.
+PR #245) and re-verified by the design gate at **`545df8bd`**, the base this spec
+was approved against; `src/` is byte-identical between the two. Follow a citation
+by grepping its quoted text; the line number disambiguates, it does not locate.
+
+**The dispatcher re-runs these claims before handing this WP to an implementer**
+and records the SHA it ran them against, per `docs/runbooks/codex-review.md`,
+"Dispatch-time re-verification". `Ready` is not the same as "still true": any
+merge landing between this approval and dispatch can falsify a line number here
+without anyone editing this file. A stale claim routes back to wd-architect, not
+to the implementer, whose Deliverables boundary usually excludes the file that
+would fix it.
 
 - `src/cli/dream.js` (1233 lines). Inside `run()`, the closure
   `regenerateDigest` (l.641 `const regenerateDigest = () => {` through l.660
@@ -443,10 +473,17 @@ added here on the spot:
 
 ## Dispatch precondition — owner items
 
-Three decisions in this package are the owner's and have **not** been made. The
-spec is drafted to two of them (O1, O3) because a spec cannot be written to an
-unresolved fork; drafting it is not deciding it. None of them is settled by
-anything below, and nothing in this file should be read as a ruling on any.
+Three decisions in this package are the owner's. **The owner has ruled on none
+of them directly.** Each is dispatched under this repo's standing process — *the
+maturing architect records a recommendation with the cost of overruling it, the
+session may dispatch under that recommendation, and the owner reverses any of
+them by dated amendment* — settled in
+`docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md` and
+carried into this session by
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`, whose
+"Items dispatched under the standing process" section lists all three with their
+overrule costs. Nothing in this file is a ruling, an approval or an acceptance,
+and nothing below should be read as one.
 
 **The one ruling that IS on record** and is cited as such in Out of scope:
 *Maintainer ruling (2026-09-10): this WP ships first; the follow-up WP is drafted
@@ -491,6 +528,11 @@ still prints it, and the callout returns at the next **unfiltered** render — a
 there (Table A, "Supervisor correlate", limit (a)). The Windows behaviour after
 this WP is today's behaviour.
 
+**Standing-process status.** O1's recommendation is **adopted under standing
+authorization, not by a direct ruling** — recorded 2026-09-17 in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md` and
+reversible by dated amendment at any time, at the cost below.
+
 **Overrule cost.** If the owner rules this channel still untrustworthy, the WP
 does not shrink — it changes shape. The remaining alternative is a supervisor→
 child channel that proves parentage, for example a per-run file under `state/`
@@ -520,6 +562,11 @@ fail-closed security check's semantics, on a file this WP does not touch, with
 its own threat-model argument to make (a retry doubles the window in which a
 genuinely broken runtime is re-probed rather than refused). It is listed under
 Out of scope and stays there whichever way it goes.
+
+**Standing-process status.** O2's recommendation is **adopted under standing
+authorization, not by a direct ruling** — recorded 2026-09-17 in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md` and
+reversible by dated amendment at any time, at the cost below.
 
 **Overrule cost.** If the owner rules the retry in scope of *this* WP: the
 Deliverables table gains `src/core/dream/containment-probe.js` and its test file,
@@ -552,6 +599,12 @@ after it appends the alert — which is rejected alternative A, prohibited by na
 in WP-041 and reaffirmed in Out of scope. So the honest choice is between an
 after-the-fact false warning and none, and the timely channels are unchanged
 either way.
+
+**Standing-process status.** O3's recommendation is **adopted under standing
+authorization, not by a direct ruling** — recorded 2026-09-17 in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`, where it is
+listed FIRST as the item most likely to want the owner's eye, and reversible by
+dated amendment at any time, at the cost below.
 
 **Overrule cost.** If the owner rules the loss unacceptable, this WP does not
 ship as drafted: the fix has to be a supervisor-side notification surface, which
@@ -864,13 +917,18 @@ node scripts/boundary-check.js docs/specs/WP-dream-digest-omits-own-job-alerts.m
 
 ## Definition of done
 
+0. Branch `wp/dream-digest-omits-own-job-alerts`, cut from the SHA the
+   dispatcher's re-verification names (Current state). Never commit to `main`.
 1. All verification steps pass locally; output pasted into the PR body,
    including the deliberately-broken red runs for V3-V6.
-2. Conventional commits; PR titled
+2. Conventional commits (`fix|test|docs(dream): … (WP-dream-digest-omits-own-job-alerts)`);
+   ONE PR, titled exactly
    `fix(dream): the digest render omits the alerts this run's success clears (WP-dream-digest-omits-own-job-alerts)`.
 3. PR template filled, including "Decisions made" — which must name the
    managed-policy-warning consequence (Table A, last row) — and `Generated-by:`.
-4. This spec's `status:` flipped to `In-Review` in the same PR.
+   Keep the body well under ~30 KB; put long round dispositions in a PR comment
+   (`docs/runbooks/codex-review.md`, Rules).
+4. This spec's `status:` flipped from `Ready` to `In-Review` in the same PR.
 5. Both PR review gates have run on the diff and are clean or fully
    dispositioned — they are defined in `docs/runbooks/codex-review.md` and not
    restated here. `In-Review` marks the START of review: this list is complete
