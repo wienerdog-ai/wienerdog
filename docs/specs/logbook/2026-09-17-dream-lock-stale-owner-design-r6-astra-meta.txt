@@ -1,0 +1,5 @@
+gate: design  name: lock-astra2  backend: codex plugin 1.0.6  model requested: gpt-6-astra
+tip: 8a29f4cacefb75abc38ad9d1eaef782e4fc5043a
+base: 2d5e24654c501b182d61eb28518ca572712712b6
+companion exit: 0
+porcelain: IDENTICAL before/after
