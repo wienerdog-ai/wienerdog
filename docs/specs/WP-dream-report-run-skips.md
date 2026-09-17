@@ -22,12 +22,25 @@ epic: quarantine-surface
 > the count table, two acceptance criteria and the long `node -e` gate were
 > describing code that had been deleted, so the package could not be dispatched
 > and is not `Ready` until the design-review loop says so. Everything below is
-> re-derived against `main` at `2d5e2465` (2026-09-17). The previous revision's
+> re-derived against `main` at `a47f2546` (2026-09-17). The previous revision's
 > PROVISIONAL mechanism is **discharged and removed**: the promotion rewrite it
 > was waiting for has landed, so the Deliverables table below names real files at
 > a real SHA and carries no markers. Five design questions that this
 > re-derivation could not settle alone are parked under **Dispatch precondition —
 > owner items**; three measured gaps are routed under **Discovered issues**.
+>
+> **2026-09-17 — RE-PINNED TO `a47f2546`. MECHANICAL RE-PIN, NO CONTRACT CHANGE.**
+> The two sibling packages queued into `src/cli/dream.js` ahead of this one have
+> landed (PR #253, PR #257), so the one re-pin Definition of done item 0(d) required
+> before dispatch has been done: **29 `src/cli/dream.js` citations were re-located
+> by finding each construct, never by applying an offset, and both ends of every
+> range were checked against the code.** Nothing else moved — no Deliverables row,
+> no contract table, no acceptance criterion, no byte-exact text, no verification
+> command, no RED declaration. Every construct this spec names still exists and
+> still behaves as the spec says; the files the other citations point into are
+> byte-identical. The method, the before/after table and the interaction check are
+> in `docs/specs/logbook/2026-09-17-report-run-skips-repin.md`. **`status` stays
+> `Ready` on exactly that basis.**
 >
 > **2026-09-17 — DESIGN GATE CLOSED AT ROUND 4; `Ready`.** Five review passes ran
 > on this spec: round zero (template conformance, 2 findings), rounds 1 and 2
@@ -123,25 +136,28 @@ actually holds (Table A's pointer row).
 
 ## Current state
 
-Re-derived against `main` at `2d5e2465` (2026-09-17). Every citation below was
-read whole at that SHA. (The re-derivation was performed at `b4af715e` and
-re-pinned here: `2d5e2465` is docs-only on top of it — `git diff --stat
-b4af715e 2d5e2465 -- src/ tests/ skills/` is empty — so every citation carries
-over unchanged.)
+**Re-derived against `main` at `a47f2546` (2026-09-17), and every `src/cli/dream.js`
+citation below was RE-LOCATED at that SHA, not offset.** The two sibling packages
+this spec was waiting on have landed in that file — `WP-dream-lock-stale-owner-loud`
+(PR #253) and `WP-dream-digest-omits-own-job-alerts` (PR #257) — so the precondition
+that they land first is **discharged**. Twenty-nine citations moved; the constructs
+themselves did not, and both ends of every range were checked against the code
+(`docs/specs/logbook/2026-09-17-report-run-skips-repin.md` carries the before/after
+table and the method). `src/core/dream/promote.js`, `scratch.js`, `ledger.js`,
+`warnings.js`, `src/core/transcripts/*` and `skills/wienerdog-dream/SKILL.md` are
+**byte-identical** across that range, so every citation into them is unchanged.
 
-**`src/cli/dream.js` line numbers are the ones that will move, and two sibling
-packages are queued to move them.** `WP-dream-digest-omits-own-job-alerts` edits
-the `regenerateDigest` function and its two call sites and adds a re-render on a
-late failure — it is `Ready` on `main` as of `2d5e2465`;
-`WP-dream-lock-stale-owner-loud` edits the lock-acquisition block and the
-exit-code doc comment. Both are expected to land in that file **before** this
-package. **Every `src/cli/dream.js:NNN` citation in this spec is pinned to
-`2d5e2465` and MUST be re-derived against the then-current tree at dispatch** —
-by a committed revision of this spec, never by a dispatch message, because
-`scripts/boundary-check.js` reads this file's Deliverables table and not the
-message. Nothing either sibling touches is a contract of this package: neither
-edits `collectExtracts`, the `promote()` call site, the accounting composer or
-the report, so what moves is line numbers, not facts (Definition of done item 0).
+**What the two siblings added to `src/cli/dream.js`, and why none of it reaches
+this package.** #253 added a `STALE_LOCK_ALERT_MS` constant, rewrote the exit-code
+doc comment and added a throw in the lock-acquisition block — all before the
+collector runs. #257 added `supervisingDreamJob`, `withoutOwnJobAlerts`, a
+`startedAt` first statement, a per-call flag on `regenerateDigest`, and **one new
+final statement, `regenerateDigest({ omitOwnJobAlerts: true })` at `:1320`**, which
+runs after the commit and after the workspace teardown, writes
+`<state>/digest.md` and nothing else, and closes over `ledger` — never `sel`, never
+`res`. It cannot affect the report this package writes. `sel` is still declared at
+`:708` and still in scope at the `promote()` call at `:1053`, so every count Table B
+names is available where the section is composed.
 
 ### The collector, after `WP-dream-filtered-input-budget`
 
@@ -169,7 +185,7 @@ canonical statement; the code facts are:
 - **Oversized.** `:102-105` (a matching ledger memo, `cached: true`) and
   `:119-123` (a fresh measurement, `cached: false`) push onto `oversized` and
   continue. The fresh arm also writes the memo into the returned
-  `oversizedExtracts` map, which `src/cli/dream.js:627-630` folds into the ledger
+  `oversizedExtracts` map, which `src/cli/dream.js:713-716` folds into the ledger
   and persists. **An oversized session is therefore the one exclusion that leaves
   a ledger-side trace and is still not retried** until the file's fingerprint, the
   running package version, or `dream_max_input_bytes` changes.
@@ -188,25 +204,25 @@ truncation is retired (ADR-0012, amendment of 2026-09-15; ADR-0023 Amendment 3).
 
 ### The orchestrator
 
-- `src/cli/dream.js:622-624` calls the collector; `sel` stays in scope through the
+- `src/cli/dream.js:708-710` calls the collector; `sel` stays in scope through the
   whole run, including the `promote()` call at `:956-967`.
-- `:683-700` builds `exclusions[]` — one console line each for `sel.deferred`,
+- `:780-797` builds `exclusions[]` — one console line each for `sel.deferred`,
   `sel.deadlineDeferred`, `sel.oversized` and `sel.readDeferred`, printed only
   when non-zero, counts only. **`exclusions` carries no quarantine count**, and
   that one fact decides which branch a quarantine-only run takes below.
-  `sel.newlyQuarantined` gets its own per-file console line at `:705-712`.
+  `sel.newlyQuarantined` gets its own per-file console line at `:802-809`.
   **Nothing prints a still-quarantined count anywhere.**
-- `:721-732` — a run with new quarantines records them, rewrites the digest and
-  calls **refresh point 1** for `reports/warnings.md` (`:729`). This is the **only**
+- `:818-829` — a run with new quarantines records them, rewrites the digest and
+  calls **refresh point 1** for `reports/warnings.md` (`:826`). This is the **only**
   refresh that happens before `promote()`, and it happens only when
-  `sel.newlyQuarantined.length > 0`; refresh point 3 (`:755`) is on the idle path
-  that returns, and refresh point 2 (`:1187`) runs after the commit. That ordering
+  `sel.newlyQuarantined.length > 0`; refresh point 3 (`:852`) is on the idle path
+  that returns, and refresh point 2 (`:1284`) runs after the commit. That ordering
   is what Table A's pointer row and its residual are measured against.
-- `:736-743` — **if `sel.entries.length === 0` and any exclusion fired, a real run
+- `:833-840` — **if `sel.entries.length === 0` and any exclusion fired, a real run
   THROWS** `WienerdogError('dream: no complete session was admitted. …')` carrying
   every exclusion line. No brain, no `promote()`, **no dream report at all** on
   that path.
-- `:746-757` — if `sel.entries.length === 0` with no exclusions, the run prints
+- `:843-854` — if `sel.entries.length === 0` with no exclusions, the run prints
   `wienerdog: nothing new to dream.`, refreshes `reports/warnings.md` and returns.
   **This is also where the adopt-with-history first run now returns, and where
   EVERY quarantine-only run returns** — however many sessions it quarantined or
@@ -227,7 +243,7 @@ truncation is retired (ADR-0012, amendment of 2026-09-15; ADR-0023 Amendment 3).
   exactly one write — the second write on the published-body arm (`:1585-1591`) or
   Table R's fallback (`:1637-1647`).
 - The same lines travel back to the caller as `report.record` on **every** arm, and
-  `src/cli/dream.js:1119-1131` prints them when the vault did not get them. **A
+  `src/cli/dream.js:1216-1228` prints them when the vault did not get them. **A
   section composed inside `composeRecord` inherits that delivery for free.**
 - `composeRecord` ends with a fail-closed neutralisation check over the whole
   composed text (`:769-775`). An integers-only section is a fixed point of it.
@@ -263,7 +279,7 @@ truncation is retired (ADR-0012, amendment of 2026-09-15; ADR-0023 Amendment 3).
 |--------|------|-------|
 | modify | src/core/dream/scratch.js | **One addition only:** `collectExtracts` also returns the count **Table B**'s `stillQuarantined` row names. No other returned field changes shape and no selection behaviour changes |
 | modify | src/core/dream/promote.js | the exported formatter of **Table A**, the one optional input of **Table B**, and `composeRecord` emitting the section last. Nothing else in the module changes |
-| modify | src/cli/dream.js | build the six integers **Table B** names from `sel` and pass them to `promote()`; nothing else in the run changes. **Its `:NNN` citations are pinned to `2d5e2465` and are re-derived at dispatch** — two sibling packages are queued to edit this file first (Current state) |
+| modify | src/cli/dream.js | build the six integers **Table B** names from `sel` and pass them to `promote()`; nothing else in the run changes. **Its `:NNN` citations are pinned to `a47f2546` and were re-located there on 2026-09-17**, after both queued siblings landed (Current state); re-derive them again only if something else lands in this file first |
 | modify | tests/unit/dream-collect.test.js | cover the new count only (**Table B**); no existing assertion on `collectExtracts`'s return shape is weakened. This is `scratch.js`'s test file (its test names are prefixed `dream-collect:`) |
 | modify | tests/unit/dream-promote.test.js | the four test identities of **Table C**, plus the appended-section coverage. Test names are prefixed `dream-promote:` |
 | modify | tests/integration/dream.test.js | one end-to-end run whose committed report carries the section (`dream-integration:` prefix) |
@@ -355,16 +371,16 @@ Operative prose cites the table and row rather than restating it.
 | Built from integers alone | every property of `counts` that is not a non-negative safe integer renders as `0`; `counts` itself may be `undefined` or any non-object and the result is then `''`. No basename, no path, no reason string, no session id reaches this section — the names live in `reports/warnings.md`, the enumeration's one home. **`promote()` performs NO validation of `runSkips`** and never throws for it: this input arrives after the brain has run and after the body has published, and a caller bug must cost the section, never the run's consolidation. That is the opposite of the `records` input's fail-loud rule (`promote.js:1027-1035`), deliberately; Implementation notes price the alternative. **The guard is ONE rule in two formatters, byte-identical:** the reduction is written exactly as `secretRevertSummaryLine` writes it (`src/core/dream/ledger.js:500`) — `` `const int = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);` `` — so the two cannot drift, and so Table C's third proof has a literal to mutate. `Number.isSafeInteger` is the predicate and no coercion precedes it: a float, a numeric string and a value above `Number.MAX_SAFE_INTEGER` each reduce to `0`, never to a floor or a parse |
 | No apostrophe | no `'` appears anywhere in the section's text, so the whole of it can be pinned in single-quoted JavaScript inside a double-quoted shell string. That is a property of the shipped wording, and the verification gate depends on it |
 | Placement in the report | composed inside `composeRecord` and appended **last** — after the enforcement block, which always renders, and after the redaction and preserved-copy blocks when they render — separated from whichever precedes it by exactly one blank line, exactly once per run. Last because the other blocks are about what the run refused to WRITE and this one is about what it could not READ |
-| **Coverage boundary — which runs carry the section, and what the others carry instead** | **A report exists only when `promote()` runs, and `promote()` runs only on a real run that admitted at least one session** (`sel.entries.length > 0`, past the dry-run return). This row states the other paths TRUTHFULLY rather than claiming they are covered elsewhere. **(a) The idle path** (`entries.length === 0`, no exclusion — `src/cli/dream.js:746-757`) prints one line, `wienerdog: nothing new to dream.`, refreshes `reports/warnings.md`, and returns. **Every quarantine-only run takes this path**, because `exclusions` never contains a quarantine count (`:683-700` builds it from B3–B6 alone): so on a run whose only event was quarantine, **B1 is observable only as the number of per-file console lines at `:705-712`, and B2 is not emitted anywhere at all**. **(b) The throw path** (`entries.length === 0`, some exclusion — `:736-743`) raises a `WienerdogError` whose message carries the **B3–B6 counts and no quarantine count**; the scheduled path records that failure in `alerts.jsonl` for the digest banner. **(c) Dry runs** (`:765-768`) and **(d) runs whose brain or gates fail before `promote()`** write no report either. **What the standing surfaces do and do not replace:** `reports/warnings.md`, `wienerdog doctor` and the digest banner carry the ledger's quarantine set **as it stands**, which is not this run's B1/B2 and cannot be read as them. **This package adds nothing to paths (a)–(d)** — closing them needs a report on a path that writes none, or a change to the failure message, each its own package. Named residual under Implementation notes; owner item 4 |
+| **Coverage boundary — which runs carry the section, and what the others carry instead** | **A report exists only when `promote()` runs, and `promote()` runs only on a real run that admitted at least one session** (`sel.entries.length > 0`, past the dry-run return). This row states the other paths TRUTHFULLY rather than claiming they are covered elsewhere. **(a) The idle path** (`entries.length === 0`, no exclusion — `src/cli/dream.js:843-854`) prints one line, `wienerdog: nothing new to dream.`, refreshes `reports/warnings.md`, and returns. **Every quarantine-only run takes this path**, because `exclusions` never contains a quarantine count (`:780-797` builds it from B3–B6 alone): so on a run whose only event was quarantine, **B1 is observable only as the number of per-file console lines at `:802-809`, and B2 is not emitted anywhere at all**. **(b) The throw path** (`entries.length === 0`, some exclusion — `:833-840`) raises a `WienerdogError` whose message carries the **B3–B6 counts and no quarantine count**; the scheduled path records that failure in `alerts.jsonl` for the digest banner. **(c) Dry runs** (`:862-865`) and **(d) runs whose brain or gates fail before `promote()`** write no report either. **What the standing surfaces do and do not replace:** `reports/warnings.md`, `wienerdog doctor` and the digest banner carry the ledger's quarantine set **as it stands**, which is not this run's B1/B2 and cannot be read as them. **This package adds nothing to paths (a)–(d)** — closing them needs a report on a path that writes none, or a change to the failure message, each its own package. Named residual under Implementation notes; owner item 4 |
 | **Ownership of the heading — none, and that is the existing rule, not a new one** | **`composeRecord` reserves nothing.** Its three shipped headings (`promote.js:584-591`) are only ever EMITTED: nothing scans the brain's candidate body for them, nothing strips a prior code-owned block, and nothing dedupes. So a candidate body that itself contains `## Refused by policy (promotion enforcement)` publishes unchanged and the code section is appended under it, and a **second run on the same date** appends a second copy of the whole accounting block beneath the first (the second write appends to `reportBody.bytes`; Table R's fallback appends to whatever is on disk — `promote.js:1571-1576`, `:1637-1647`). **This package applies the SAME rule to `## Sessions this run could not consolidate`: no reservation, no marker, no dedupe, no new mechanism.** Introducing ownership for this heading alone would leave the three shipped ones unowned and put two rules in one composer. The behaviour is pinned by fixtures rather than changed (acceptance criterion 11); the shared gap is a named residual under Implementation notes and is routed under Discovered issues |
-| Delivery when the vault refuses the write | none of the above changes. The section is part of `report.record`, so on `report.outcome === 'refused'` and on `promoted` with `accounting.published === false` it reaches the user through `src/cli/dream.js:1119-1131` exactly like the enforcement record |
+| Delivery when the vault refuses the write | none of the above changes. The section is part of `report.record`, so on `report.outcome === 'refused'` and on `promoted` with `accounting.published === false` it reaches the user through `src/cli/dream.js:1216-1228` exactly like the enforcement record |
 | The brain is not told about it | `skills/wienerdog-dream/SKILL.md` is **not** a deliverable. The model does not author this section, and telling it the section exists invites it to write one |
 
 #### Table B — canonical: the six counts, their sources and their order
 
 Row order is render order.
 
-| # | Count | Definition | Source in `src/cli/dream.js` at `2d5e2465` |
+| # | Count | Definition | Source in `src/cli/dream.js` at `a47f2546` |
 |---|---|---|---|
 | B1 | `newlyQuarantined` | **transcripts THIS RUN decided to quarantine** — those whose `selectState` answered `'select'` and which then went over the pre-read ceiling (`scratch.js:58`) or came back with a non-`ok` parse outcome (`:111`). **NOT "for the first time ever", and no surface may say so:** a prior quarantine whose fingerprint changed is re-selected (`ledger.js:242`, `// the file changed → reprocess`) and, if it fails again, lands here again — measured and reproduced by the confirming design round. The bullet therefore states this run's decision and its consequence, never the session's history | `sel.newlyQuarantined.length` |
 | B2 | `stillQuarantined` | **the transcripts this run ACTUALLY skipped for an existing quarantine** — the discovered files for which `selectState` returned `'skip-quarantined'`, counted at selection time. **Not** the run-start ledger's active-quarantine count; row B7 says why that is a different number | `sel.skippedQuarantined` — **a new integer `collectExtracts` returns**, computed from the same `discovered` array and the same `selectState` call that already partitions candidates (`src/core/dream/scratch.js:54`) |
@@ -379,7 +395,7 @@ Row order is render order.
 | **B7 — why `stillQuarantined` is NOT the run-start set's size** | because a prior quarantine whose file CHANGED is re-selected: `selectState` compares the record's fingerprint and answers `'select'` when it differs (`src/core/dream/ledger.js:242`), and the sticky `secret-revert-exhausted` arm (`:239-241`) is the only quarantine that ignores the fingerprint. Three miscounts follow from the run-start reading and all three are gone under the selection reading: **(a) double-counting** — a changed prior quarantine re-quarantined this run lands in B1 AND in the run-start set; **(b) a false skip** — a changed prior quarantine consolidated successfully this run is still reported as skipped again; **(c) a phantom** — a prior quarantine whose file was deleted is no longer discovered, was skipped by nothing, and is still counted. The report is durable, so each preserves a false coverage story for as long as the vault lives |
 | **B8 — disjointness, and the construction that gives it** | every discovered file takes exactly one `selectState` outcome (`ledger.js:228-257`, a total function over three values). `'skip-quarantined'` → B2. `'skip-processed'` → counted nowhere, by design: a consolidated transcript is not a skip. `'select'` → exactly one collector arm, because every arm either `continue`s or `break`s (Current state, "The collector"), and a `deferRemaining` stop is followed immediately by `break` so a file cannot be both visited and part of a remainder. Over-ceiling candidates never enter the admission loop at all. ADR-0023 Amendment 3 states the same partition normatively: "These categories and quarantine are disjoint; ledger-skipped files are outside them." **Consequence, asserted directly:** `entries.length` plus the six counts never exceeds the number of discovered files, and no file contributes to two |
 | **B9 — there is no truncation count, and there cannot be one** | budget-induced suffix truncation is retired. `sel.truncated` is the literal `[]` and every entry's `truncatedToFit` is the literal `false` (`src/core/dream/scratch.js:150`, `:135`). The parser's own `Extract.truncated` still means "a per-message or message-count cap applied", which is a property of every large session and not a coverage event — it is not counted here, and no bullet mentions it |
-| **B10 — `secret-revert-exhausted` quarantines minted after the commit** | **not** counted in B1. That path runs at `src/cli/dream.js:1150-1163`, after `promote()` has composed the report, and it already has its own dedicated console summary (`secretRevertSummaryLine`) and its own permanent digest banner. Do not reorder the run to reach it |
+| **B10 — `secret-revert-exhausted` quarantines minted after the commit** | **not** counted in B1. That path runs at `src/cli/dream.js:1247-1260`, after `promote()` has composed the report, and it already has its own dedicated console summary (`secretRevertSummaryLine`) and its own permanent digest banner. Do not reorder the run to reach it |
 | **B11 — the input's name and shape** | `promote({… , runSkips})`, optional, consumed only by Table A's formatter. Absent, `undefined`, or malformed ⇒ no section (Table A's integers-only row). It is **not** `records`, for the reason Current state gives |
 
 #### Table C — canonical: the machine-run RED proofs (ADR-0042)
@@ -515,7 +531,7 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
       the three shipped headings and that nothing scans for them (Table A's
       **ownership** row), why `records` is not the channel (row B11), and the
       return paths that compose no report and what `exclusions` does and does not
-      contain (Table A's **coverage** row) — plus the `2d5e2465` pin and the two
+      contain (Table A's **coverage** row) — plus the `a47f2546` pin and the two
       sibling packages queued into `src/cli/dream.js`, which mirrors the
       `dream.js` Deliverables cell and Definition of done item 0(d)
 - [ ] Operative prose steps that apply it — **walked, in document order**:
@@ -665,7 +681,7 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
 - **Why `promote()` does not validate `runSkips`.** Table A's integers-only row is
   the rule; the reason is the call site. `runSkips` arrives at `promote()` *after*
   the brain has run and, on the second-write arm, after the body has already been
-  published; a throw there is caught at `src/cli/dream.js:968-981`, retains the
+  published; a throw there is caught at `src/cli/dream.js:1065-1078`, retains the
   workspace and fails the whole run. *Alternative priced:* fail loud like `records`
   does, which would catch a caller bug immediately at the cost of turning a
   mis-shaped accounting object into the loss of a night's consolidation. The
@@ -696,10 +712,10 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
   `{written:false, reason}` and the run continues (`src/core/dream/warnings.js:230-311`).
   So the pointer can name a file that is absent or one or more runs stale, while
   the counts beside it are exact. **Measured ordering — the result is only HALF
-  available before `promote()`:** refresh point 1 (`src/cli/dream.js:729`) runs
+  available before `promote()`:** refresh point 1 (`src/cli/dream.js:826`) runs
   before the promotion, but **only when `sel.newlyQuarantined.length > 0`**; refresh
-  point 3 (`:755`) is on the idle path, which returns before `promote()`; refresh
-  point 2 (`:1187`) runs **after** it. A `stillQuarantined`-only run — the 191-session
+  point 3 (`:852`) is on the idle path, which returns before `promote()`; refresh
+  point 2 (`:1284`) runs **after** it. A `stillQuarantined`-only run — the 191-session
   case this package exists for — therefore has no refresh result at all at the
   moment the section is composed. A boolean on `runSkips` would be honest only for
   the newly-quarantined sub-path and would delete the pointer from the main one, so
@@ -716,18 +732,14 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
   applies none and pins the behaviour with criterion 11's two fixtures instead.
   Routed under Discovered issues.
 - **Every `src/cli/dream.js:NNN` citation in this spec is pinned to the base it was
-  verified against — `main` at `2d5e2465` — and MUST be re-derived at dispatch**,
-  because two sibling packages are queued into that file ahead of this one:
-  `WP-dream-digest-omits-own-job-alerts` (`Ready` on `main`; the `regenerateDigest`
-  function, its two call sites, and a re-render on a late failure) and
-  `WP-dream-lock-stale-owner-loud` (the lock-acquisition block and the exit-code
-  doc comment). The re-derivation is a committed revision of this spec, never a
-  dispatch message (Definition of done item 0(d)). None of them touches
-  `collectExtracts`, the `promote()` call site, the
-  accounting composer or the report, so if a `:NNN` citation here does not land on
-  what it names, the fact is still right and the number is stale — find the named
+  verified against — `main` at `a47f2546`.** The two siblings that were queued into
+  that file ahead of this package have landed (PR #253 and PR #257, Current state),
+  so the citations are current as of that SHA. They will drift again if anything
+  else lands in `dream.js` first: **if a `:NNN` citation does not land on what it
+  names, the fact is still right and the number is stale** — find the named
   construct, say so under "Discovered issues" in the PR body, and do not widen the
-  change to compensate.
+  change to compensate. A re-pin is a committed revision of this spec, never a
+  dispatch message (Definition of done item 0(d)).
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -828,7 +840,7 @@ Numbered, because Table C's `criterion` fields reference them.
 9. **Placement and delivery** — Table A's placement and delivery rows. The section
    is appended exactly once per run, last, one blank line after whichever
    accounting block precedes it; and on a run whose report write is refused it
-   reaches the user through `report.record` and `src/cli/dream.js:1119-1131`, one
+   reaches the user through `report.record` and `src/cli/dream.js:1216-1228`, one
    line per element.
 10. **The brain is untouched.** `skills/wienerdog-dream/SKILL.md` is not modified
     and is not told about the section.
@@ -922,8 +934,8 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'could not consolidate' ski
 - Reusing `promote()`'s `records` input for these counts — its members land in the
   enforcement section, and a fail-safe skip is not an enforcement event.
 - **Anything on a path that writes no report** — the no-admission throw
-  (`src/cli/dream.js:736-743`), the idle return (`:746-757`) and the dry-run return
-  (`:765-768`): no new message, no new record, no report written where none is
+  (`src/cli/dream.js:833-840`), the idle return (`:843-854`) and the dry-run return
+  (`:862-865`): no new message, no new record, no report written where none is
   written today. The throw's text is ADR-0012's 2026-09-15 amendment and
   `WP-dream-filtered-input-budget`'s row A9; the idle path makes no commit at all,
   so writing a report there is an ADR-0012 lifecycle question. Owner item 4.
@@ -975,11 +987,11 @@ work package and its own ADR amendment; nothing is filed here.
 **A run that admits nothing writes no report, so per-run skip accounting has no
 carrier on those paths.** Routed from design round 1, finding 1. A quarantine-only
 run — including the one that quarantines 191 historical sessions on first
-contact — reaches the idle return at `src/cli/dream.js:746-757`, because
-`exclusions` is built from the four collector counts alone (`:683-700`) and never
+contact — reaches the idle return at `src/cli/dream.js:843-854`, because
+`exclusions` is built from the four collector counts alone (`:780-797`) and never
 from a quarantine count. It prints `wienerdog: nothing new to dream.` and returns:
 `stillQuarantined` is emitted nowhere, and `newlyQuarantined` survives only as the
-number of per-file console lines. A zero-admission run that DOES throw (`:736-743`)
+number of per-file console lines. A zero-admission run that DOES throw (`:833-840`)
 puts B3–B6 in its failure message and still no quarantine count. Fixing this is not
 a report change: it is either **a report written on a path that writes none today**
 — which reopens ADR-0012's one-run-one-commit boundary, since the idle path makes
@@ -990,7 +1002,7 @@ is filed here. Owner item 4 states the recommendation.
 **Checked and clean: no shipped surface carries the first-ever claim.** The
 confirming round's finding 2 was about this spec's proposed wording, and the
 obvious worry is that it came from a sibling sentence already in the product. It
-did not. Measured at `2d5e2465`: `grep -n "first time" src/core/dream/warnings.js
+did not. Measured at `a47f2546`: `grep -n "first time" src/core/dream/warnings.js
 src/core/dream/ledger.js src/cli/dream.js src/cli/doctor.js` returns nothing. The
 warnings renderer groups by reason and never dates a record; the digest banner says
 "are being skipped and will not be dreamed over"; the per-file console line says
@@ -1023,7 +1035,7 @@ fix. It needs its own work package; nothing is filed here.
 
 **No code-owned report heading is reserved from brain-authored content, and this
 predates the new section.** Routed from design round 1, finding 5. Measured at
-`2d5e2465`: `ENFORCEMENT_HEADING`, `REDACTION_HEADING` and `PRESERVED_HEADING`
+`a47f2546`: `ENFORCEMENT_HEADING`, `REDACTION_HEADING` and `PRESERVED_HEADING`
 (`src/core/dream/promote.js:584-591`) appear only in emission (`:708`, `:737`,
 `:751`); nothing scans the candidate body, strips a prior code-owned block or
 dedupes. Two consequences already ship: a brain that writes `## Refused by policy
@@ -1155,18 +1167,17 @@ design review round 1 (2026-09-17) and are recorded with their dispositions in
    `Ready` (`docs/runbooks/codex-review.md`). (c) `WP-dream-filtered-input-budget`
    is `Done` at `docs/specs/done/WP-dream-filtered-input-budget.md` (merged in
    PR #245; flipped in PR #246), so this spec's `depends_on` entry is satisfied.
-   (d) **THE DISPATCHER RE-DERIVES EVERY `src/cli/dream.js:NNN` CITATION.** They
-   are pinned to the base this spec was verified against — `main` at `2d5e2465`,
-   re-confirmed unchanged in `src/`, `tests/` and `skills/` through `c33f1678` —
-   and **two sibling packages land in that file first**:
-   `WP-dream-digest-omits-own-job-alerts` (`Ready`; `regenerateDigest`, its two
-   call sites, a re-render on a late failure) and `WP-dream-lock-stale-owner-loud`
-   (the lock-acquisition block and the exit-code doc comment). Neither touches
-   `collectExtracts`, the `promote()` call site, the accounting composer or the
-   report, so **what moves is line numbers, not facts** — but the re-derivation is a
-   committed revision of this spec, never a dispatch message, because
-   `scripts/boundary-check.js` reads this file's Deliverables table and not the
-   message. The same applies after any further collector work.
+   (d) **THE `src/cli/dream.js:NNN` CITATIONS ARE PINNED TO `a47f2546` AND ARE
+   CURRENT AS OF IT.** The two siblings that were queued into that file ahead of
+   this package have landed — PR #253 (`WP-dream-lock-stale-owner-loud`) and PR #257
+   (`WP-dream-digest-omits-own-job-alerts`) — and the citations were re-located
+   against the result, construct by construct, on 2026-09-17
+   (`docs/specs/logbook/2026-09-17-report-run-skips-repin.md`). **This precondition
+   is therefore discharged**, and it re-arms only if something else lands in
+   `src/cli/dream.js` (or in the collector) before dispatch: then the citations are
+   re-derived by a committed revision of this spec, never by a dispatch message,
+   because `scripts/boundary-check.js` reads this file's Deliverables table and not
+   the message. Line numbers move; the tables do not.
 1. All verification steps pass locally; output pasted into the PR body, including
    the three-state evidence for each new gate and the `red-proofs` roll-up.
 2. Branch `wp/dream-report-run-skips`; conventional commits; PR titled
