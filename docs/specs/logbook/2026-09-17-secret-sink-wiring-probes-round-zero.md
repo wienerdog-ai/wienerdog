@@ -302,3 +302,160 @@ the product, both caveats are machinery-side and were fixed **within the existin
 surface** — no new gate, no new probe — so the gate is **CLOSED at round 1** and
 the spec moves to `Ready`. Base pinned for dispatch: `main` at `35e00e99`, on
 which all fifty citations were re-confirmed resolving after the rebase.
+
+## 10. Re-pin to `a47f2546` after PR #257 — a mechanical re-pin, no contract change
+
+Dispatch-time re-verification against `main` at `a47f2546` found **stale cites**,
+which blocks dispatch and routes the spec back to the architect
+(`docs/runbooks/codex-review.md`). PR #257 merged `WP-dream-digest-omits-own-job-alerts`:
+roughly +85 lines into `src/cli/dream.js`, and 99 lines appended at the END of
+`tests/unit/scheduler-runjob.test.js` (`@@ -3024,3 +3024,102 @@`).
+
+**Six citations moved, all in `src/cli/dream.js`, all re-derived by grepping for
+the construct rather than by adding an offset:**
+
+| Cite | Was | Now | Construct grepped for |
+|---|---|---|---|
+| `neutralise`'s `redactOnly` call | `:320` | **`:321`** | `sanitizeProjectName(redactOnly(String(value)));` (`:320` is now the `function neutralise(value) {` header) |
+| first console consumer | `:1145` | **`:1222`** | `neutralise(res.report.reason)` |
+| second console consumer | `:1148` | **`:1225`** | `neutralise(res.report.accounting.reason)` |
+| out-of-vault consumer | `:1214` | **`:1291`** | `console.log(... neutralise(r.path) ...)` |
+| lock-gated teardown block | `:1239-1241` | **`:1327-1329`** | `if (ownsLock(paths.state)) {` … `releaseLock(paths.state);` — **both ends checked** |
+| `cleanScratch` call | `:1240` | **`:1328`** | `cleanScratch(paths.state);` |
+
+**Nothing but line numbers moved.** Every cited construct still exists, byte-identical:
+the `neutralise` body, the three console consumers, and the teardown block
+(comment text and all three statements unchanged). The nine-site inventory was
+re-derived from scratch with `grep -rn redactOnly src bin scripts skills` and is
+**unchanged** — the same nine sink call sites and the same two excluded callers,
+no tenth. The eight redaction-site cites outside `dream.js` all still resolve and
+none of those files changed. **No construct disappeared and no behaviour changed,
+so this is a mechanical re-pin: no contract in the spec is affected and no new
+design round is owed.** The gate stays CLOSED at round 1; status stays `Ready`.
+
+`tests/unit/scheduler-runjob.test.js` now ends with that package's three
+`OWNJOB-AC6*` tests (file is 3125 lines; last test starts at `:3105`). The
+helpers this WP's probes reuse are near the top and were **confirmed unaffected**
+by an append at the end: `setup()` `:33`, `writeScript()` `:92`, `withRun()`
+`:102`, `fakeResolve` `:125`, the EP3 reference test `:796` — all unchanged. An
+Implementation note now records that this WP's five probes append after the
+`OWNJOB-AC6*` block.
+
+**Mechanical re-check of every citation in the spec**, after the fix. The
+extractor pulls each `path:N`, `path:N-M`, `path lines A-B` and bare `` `:N` ``
+continuation out of the spec, attributes each bare form to the most recently
+named file, and prints the line it resolves to on `a47f2546`:
+
+```text
+docs/specs/done/WP-secret-allowlist-exact-value-store.md:72-78   [path:N]
+  72: 1. **`WP-secret-fence-shape-and-context` is superseded and was never
+   ...
+  78: spec, do not implement it, do not depend on it.
+package.json:24   [path:N]
+  24: "red-proofs": "node tests/with-temp-root.js scripts/red-proofs.js",
+src/cli/dream.js:1222   [bare :N]
+  1222: ? `wienerdog: dream — the report could not be written to your vault (${neutralise(res.report.reason)
+src/cli/dream.js:1225   [bare :N]
+  1225: `(${neutralise(res.report.accounting.reason)}); the complete record of this run follows.`
+src/cli/dream.js:1291   [bare :N]
+  1291: for (const r of records) console.log(`wienerdog: dream — out-of-vault: ${neutralise(r.path)} — ${r.r
+src/cli/dream.js:1327-1329   [path:N]
+  1327: if (ownsLock(paths.state)) {
+   ...
+  1329: releaseLock(paths.state);
+src/cli/dream.js:1328   [path:N]
+  1328: cleanScratch(paths.state);
+src/cli/dream.js:321   [path:N]
+  321: return sanitizeProjectName(redactOnly(String(value)));
+src/cli/run-job.js:1048-1052   [path:N]
+  1048: // EP3 (audit A5 / ADR-0024 / WP-124): redact each chunk before it reaches
+   ...
+  1052: // never closes the stream (the old pipe's { end:false } semantics).
+src/cli/run-job.js:1055   [path:N]
+  1055: logStream.write(redactOnly(chunk.toString('utf8')));
+src/cli/run-job.js:1060   [path:N]
+  1060: logStream.write(redactOnly(chunk.toString('utf8')));
+src/cli/run-job.js:1120   [path:N]
+  1120: logStream.write(redactOnly(`\nwienerdog: job failed to run: ${failure && failure.message}\n`));
+src/core/alerts.js:48   [path:N]
+  48: const scrub = (v) => redactOnly(String(v == null ? '' : v).slice(0, MAX_FIELD_CHARS));
+src/core/digest.js:146   [path:N]
+  146: * slices and only THEN runs `redactOnly`, which expands. The price is accepted —
+src/core/digest.js:713   [path:N]
+  713: if (secretScan.scanAndRedact(section).findings.length > 0) {
+src/core/digest.js:738-739   [bare :N]
+  738: secretScan.scanAndRedact(rawSection).findings.length > 0 ||
+   ...
+  739: secretScan.scanAndRedact(projectsSection).findings.length > 0
+src/core/digest.js:780   [bare :N]
+  780: if (secretScan.scanAndRedact(normalized.join('\n')).findings.length > 0) {
+src/core/dream/brain.js:504-508   [path:N]
+  504: // Known limitation (OWNER-APPROVED 2026-07-17): a secret split across a
+   ...
+  508: // scan, WP-126 0600 log modes, no log content in email) cover the residual.
+src/core/dream/brain.js:517   [path:N]
+  517: const redacted = redactOnly(chunk.toString('utf8'));
+src/core/dream/brain.js:545   [path:N]
+  545: const redacted = redactOnly(chunk.toString('utf8'));
+src/core/dream/promote.js:621   [path:N]
+  621: return sanitizeProjectName(redactOnly(String(value)));
+src/core/dream/scratch.js:129   [path:N]
+  129: writeFilePrivate(scratchFile, JSON.stringify(extract, null, 2)); // 0600, no trailing newline
+src/core/dream/scratch.js:163-164   [path:N]
+  163: function cleanScratch(stateDir) {
+   ...
+  164: fs.rmSync(scratchDirOf(stateDir), { recursive: true, force: true });
+src/core/dream/scratch.js:46-49   [path:N]
+  46: function collectExtracts(paths, ledger, maxInputBytes, {
+   ...
+  49: } = {}) {
+src/core/dream/validate.js:1402   [path:N]
+  1402: if (findings.length === 0) return { ok: true };
+src/core/run-evidence.js:64   [path:N]
+  64: out.push(redactOnly(a.slice(0, 2000)));
+src/core/run-evidence.js:78   [path:N]
+  78: const scrub = (v) => redactOnly(String(v == null ? '' : v).slice(0, 2000));
+src/core/secret-scan.js:314-316   [path:N]
+  314: function redactOnly(text) {
+   ...
+  316: }
+src/core/secret-scan.js:88   [path:N]
+  88: simpleRule(/sk-ant-[A-Za-z0-9\-_]{20,}/g, 'anthropic-key', SEVERITY.QUARANTINE),
+src/core/transcripts/index.js:102-110   [path:N]
+  102: function capMessage(message) {
+   ...
+  110: }
+src/core/transcripts/index.js:103   [bare :N]
+  103: const redacted = redact(message.text);
+src/core/transcripts/index.js:67   [path:N]
+  67: return redactOnly(text);
+tests/unit/dream-brain.test.js:157   [path:N]
+  157: function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
+tests/unit/dream-brain.test.js:345   [bare :N]
+  345: test('dream-brain: a secret in brain output is redacted in the teed log AND stderrTail (WP-124 EP3)'
+tests/unit/dream-collect.test.js:19   [bare :N]
+  19: function tempPaths() {
+tests/unit/dream-collect.test.js:31   [bare :N]
+  31: function emptyLedger() {
+tests/unit/dream-collect.test.js:37   [bare :N]
+  37: function writeClaude(paths, sessionId, msgCount, msgLen, when) {
+tests/unit/scheduler-runjob.test.js:102   [bare :N]
+  102: async function withRun(env, envOverrides, argv, opts) {
+tests/unit/scheduler-runjob.test.js:125   [bare :N]
+  125: const fakeResolve = (script) => () => ({ command: script, args: [], shell: false });
+tests/unit/scheduler-runjob.test.js:3105   [bare :N]
+  3105: test('scheduler-runjob: OWNJOB-AC6e — an ordinary dream failure is recorded after the child exits, s
+tests/unit/scheduler-runjob.test.js:33   [bare :N]
+  33: function setup(vaultRel = 'wienerdog') {
+tests/unit/scheduler-runjob.test.js:796   [bare :N]
+  796: test('scheduler-runjob: the run-job log tee redacts a secret in child output (WP-124 EP3)', async ()
+tests/unit/scheduler-runjob.test.js:92   [bare :N]
+  92: function writeScript(dir, name, lines) {
+
+43 distinct citations; 0 unresolvable
+```
+
+Two short-form citations are written without a directory prefix and are outside
+that extractor's path pattern, so they were checked by hand on the same tree:
+`alerts.js:29` → `const MAX_FIELD_CHARS = 2000;` and `promote.js:770` →
+`if (redactOnly(text) !== text) {`. Both resolve.
