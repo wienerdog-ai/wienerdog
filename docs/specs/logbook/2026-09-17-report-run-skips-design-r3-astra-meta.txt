@@ -1,0 +1,5 @@
+gate: design  name: skips-astra  backend: codex plugin 1.0.6  model requested: gpt-6-astra
+tip: 360d7d822d887a419c05305996d36748a71ff87a
+base: 2d5e24654c501b182d61eb28518ca572712712b6
+companion exit: 0
+porcelain: IDENTICAL before/after

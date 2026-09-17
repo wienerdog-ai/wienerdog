@@ -1,0 +1,77 @@
+{
+  "verdict": "needs-attention",
+  "summary": "No-ship. F2, F4, F5, and F6 are substantively dispositioned and their runtime claims check out, but F1 remains contradicted by the opening scope statement, and B6 cannot reliably observe the incomplete-read condition it claims to count. All 43 explicit file:line citations resolve.",
+  "findings": [
+    {
+      "title": "F1 remains contradicted by the spec's opening product claim",
+      "severity": "medium",
+      "file": "docs/specs/WP-dream-report-run-skips.md",
+      "line_start": 43,
+      "line_end": 53,
+      "confidence": 1,
+      "body": "The spec still says each run writes a dream report and that a run skipping 191 sessions produces one. src/cli/dream.js:736-757 proves otherwise: zero-admission exclusion runs throw without promotion, while quarantine-only runs print \"nothing new to dream\" and return without a report. Table A later states this correctly, leaving two conflicting coverage contracts. This can preserve the exact misunderstanding F1 was supposed to remove without requiring any product-scope expansion.",
+      "recommendation": "Qualify both sentences to say that only a real, non-dry run admitting at least one session and reaching promote() composes the report; explicitly frame the 191-session example as a mixed run with at least one admission."
+    },
+    {
+      "title": "The read-deferred count cannot reliably observe the condition it promises",
+      "severity": "high",
+      "file": "docs/specs/WP-dream-report-run-skips.md",
+      "line_start": 345,
+      "line_end": 345,
+      "confidence": 0.99,
+      "body": "B6 claims to count transcripts whose read exceeded the per-session allowance. In production, scratch.js admits only discovery records at or below 50 MiB and gives each parser a fresh 200 MiB budget. An unchanged eligible file therefore cannot exhaust that budget. Worse, stream.js:129-136 decides whether unread bytes remain by comparing 200 MiB consumed against the stale discovery size. If a file grows from at most 50 MiB to more than 200 MiB after discovery, that comparison is false and runExhausted remains false despite a partial read. The run can consequently omit B6 and classify or admit a partial extract while the report claims exact coverage.",
+      "recommendation": "Depend on or include a reader fix that detects unread bytes from the current file-descriptor state rather than the stale discovery size, with an integration test for growth past the 200 MiB allowance. Until then, do not claim B6 is an exact production count."
+    }
+  ],
+  "machinery_findings": [
+    {
+      "title": "Acceptance criterion 5 can prove read-deferred disjointness only with an unreachable mocked state",
+      "severity": "medium",
+      "file": "docs/specs/WP-dream-report-run-skips.md",
+      "line_start": 708,
+      "line_end": 718,
+      "confidence": 0.98,
+      "body": "The two-run rewrite resolves the mutual exclusion between capacity and deadline stops, but both runs require readDeferred to be non-zero. Under the current 50 MiB discovery ceiling, fresh 200 MiB budget, and stale-size exhaustion check, a real dream collection cannot produce that state correctly. A test can satisfy the criterion only by forcing parse.runExhausted, so it would prove the array partition against a fabricated parser result while missing the production loss described above.",
+      "recommendation": "After fixing the reader, exercise B6 through a real bounded-read fixture or deterministic budget seam that reaches streamLines. Do not satisfy this criterion by directly mocking parse.runExhausted."
+    }
+  ],
+  "executed": [
+    {
+      "command": "git rev-parse HEAD; git merge-base 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c HEAD; git diff --stat and scoped git diff",
+      "exit_code": 0,
+      "result": "Confirmed target ea1167884d8fb9f2534c0de2b6221a33e3e24d43, requested merge base, and the scoped documentation diff."
+    },
+    {
+      "command": "git diff --check 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c...HEAD -- scoped review files",
+      "exit_code": 0,
+      "result": "No whitespace errors."
+    },
+    {
+      "command": "Read-only Node citation-range checker over the three scoped Markdown documents",
+      "exit_code": 0,
+      "result": "All 43 explicit filename:line citations resolved to existing files and in-range lines."
+    },
+    {
+      "command": "Node inspection of transcript intake constants",
+      "exit_code": 0,
+      "result": "Confirmed PRE_READ_CEILING_BYTES=52428800 and MAX_RUN_BYTES=209715200."
+    }
+  ],
+  "read_only": [
+    "All scoped specification, disposition, re-derivation, and raw round-one files",
+    "src/cli/dream.js",
+    "src/core/dream/scratch.js",
+    "src/core/dream/ledger.js",
+    "src/core/dream/promote.js",
+    "src/core/dream/warnings.js",
+    "src/core/transcripts/index.js",
+    "src/core/transcripts/stream.js",
+    "Relevant Claude/Codex parser call sites and test excerpts",
+    "skills/wienerdog-dream/SKILL.md"
+  ],
+  "not_executed": [
+    "No product test command ran; this branch contains design documents only and the specified formatter/count implementation does not exist.",
+    "No lint command ran.",
+    "No excluded docs/marketing, memory/research, or userreports content was reviewed."
+  ]
+}

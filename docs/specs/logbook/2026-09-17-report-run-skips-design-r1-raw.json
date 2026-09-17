@@ -1,0 +1,116 @@
+{
+  "verdict": "needs-attention",
+  "summary": "No-ship. The re-derived design still loses quarantine counts on no-report paths, contains an impossible acceptance scenario, and makes inaccurate oversized-session and warnings-pointer promises. Its provenance and executable-gate coverage also remain insufficient.",
+  "findings": [
+    {
+      "title": "Quarantine counts disappear whenever no session is admitted",
+      "severity": "high",
+      "file": "docs/specs/WP-dream-report-run-skips.md",
+      "line_start": 299,
+      "line_end": 300,
+      "confidence": 0.99,
+      "body": "The stated coverage boundary is false for B1 and B2. In src/cli/dream.js:683-700, exclusions contains only capacity, deadline, oversized, and incomplete-read counts. A newly-quarantined-only or still-quarantined-only run therefore reaches the idle return at 746-757, prints \"nothing new to dream,\" and never calls promote(). In a mixed zero-admission run that does throw, stillQuarantined is likewise absent from the failure message. reports/warnings.md and doctor expose ledger-wide standing state, not the exact per-run B1/B2 counts, so they cannot replace the lost run accounting.",
+      "recommendation": "Expand the design to carry all six counts through both zero-admission branches, with durable or failure-channel accounting for newly-only, still-only, and mixed cases. Add explicit acceptance tests for those paths instead of declaring them out of scope."
+    },
+    {
+      "title": "The oversized-session promise omits real retry conditions",
+      "severity": "high",
+      "file": "docs/specs/WP-dream-report-run-skips.md",
+      "line_start": 243,
+      "line_end": 246,
+      "confidence": 0.99,
+      "body": "The rendered sentence promises nightly pass-over until the file changes or the setting is raised. The actual memo is invalidated when package.json.version changes, and a changed parser can then admit an unchanged file at the unchanged setting. Conversely, merely raising dream_max_input_bytes is insufficient unless the new value reaches the cached extract size. Table B and the claim register themselves acknowledge package-version invalidation, so the byte-exact user wording contradicts the collector contract.",
+      "recommendation": "Rewrite the bullet to cover source or Wienerdog-version changes and a sufficiently raised limit, while making clear that invalidation causes remeasurement and may still leave the session oversized. Update both examples, the inline gate, and RED proof 2."
+    },
+    {
+      "title": "Acceptance criterion 5 requires an impossible collector state",
+      "severity": "high",
+      "file": "docs/specs/WP-dream-report-run-skips.md",
+      "line_start": 595,
+      "line_end": 598,
+      "confidence": 1,
+      "body": "A single run cannot exercise all five collector exclusion arms. Capacity deferral at scratch.js:91-94 or 124-127 breaks the only admission loop, and deadline deferral at 95-98 also breaks it; whichever stop happens first prevents the other. A correct implementation therefore cannot satisfy this criterion.",
+      "recommendation": "Split the disjointness proof into at least two runs, one ending in capacity deferral and one in deadline deferral, while exercising the continuing quarantine, oversized, and read-deferred arms before each stop. Assert the partition and discovered-file bound separately for both."
+    },
+    {
+      "title": "The warnings pointer can target a missing or stale file",
+      "severity": "medium",
+      "file": "docs/specs/WP-dream-report-run-skips.md",
+      "line_start": 292,
+      "line_end": 292,
+      "confidence": 0.94,
+      "body": "The pointer renders solely from nonzero quarantine counts, but refreshWarnings deliberately returns failures without aborting the dream. A refused, unreadable, or non-regular reports/warnings.md can therefore remain missing or stale while the new report promises that it identifies the sessions just counted. The refresh result is not part of runSkips, so the formatter cannot distinguish this case.",
+      "recommendation": "Make pointer rendering conditional on a confirmed-current warnings surface, or change the wording to acknowledge deferred reconciliation. Add an integration case where warnings refresh fails during a run with a new quarantine and an admitted session."
+    },
+    {
+      "title": "The code-owned heading is not reserved from brain-authored content",
+      "severity": "medium",
+      "file": "docs/specs/WP-dream-report-run-skips.md",
+      "line_start": 298,
+      "line_end": 301,
+      "confidence": 0.9,
+      "body": "Nothing rejects, removes, or distinguishes a brain-authored \"## Sessions this run could not consolidate\" heading. The unchanged skill only tells the brain not to write the older orchestrator section. A same-day report already containing this code-owned section, or a model independently choosing the generic heading, can therefore produce two visually indistinguishable sections after composeRecord appends another. The current acceptance criteria and T4 fixture do not exercise that collision.",
+      "recommendation": "Define a structural ownership rule: reject or neutralize the reserved heading in the candidate body, strip only a precisely delimited prior code-owned block, or introduce an unambiguous code-owned marker. Test a same-day second run and a candidate body containing the exact heading."
+    },
+    {
+      "title": "The inline integers-only gate accepts plausible coercion bugs",
+      "severity": "medium",
+      "file": "docs/specs/WP-dream-report-run-skips.md",
+      "line_start": 635,
+      "line_end": 639,
+      "confidence": 0.98,
+      "body": "The hostile-input check searches output for the original invalid tokens rather than asserting the expected output. A formatter that accepts finite nonnegative numbers and floors them would render oversized: 1.5 as a valid count of 1; the gate sees neither \"1.5\" nor another forbidden token and passes. It also does not test an integer above Number.MAX_SAFE_INTEGER. T3 is not protected by either RED declaration, so a similarly weak test implementation could leave this defect undetected.",
+      "recommendation": "Compare the hostile render to a full hand-written expected string containing only the valid newlyQuarantined bullet and pointer, add an unsafe-integer case, and add a RED mutation proving that float coercion makes the designated test fail."
+    }
+  ],
+  "executed": [
+    {
+      "command": "git diff 047a202c1ada70ab44bd24a21157854441d987a2...HEAD",
+      "exit_code": 0,
+      "result": "Confirmed exactly the two scoped documentation files changed."
+    },
+    {
+      "command": "git rev-parse HEAD; git merge-base HEAD 047a202c1ada70ab44bd24a21157854441d987a2",
+      "exit_code": 0,
+      "result": "Confirmed target 5dc06883d10dca4ab848cb1e57aa792ef74c36f1 and requested merge base."
+    },
+    {
+      "command": "git diff --quiet b4af715e 047a202c -- src/ tests/ skills/",
+      "exit_code": 0,
+      "result": "Confirmed the spec's source-tree carry-over assertion."
+    },
+    {
+      "command": "git diff --check 047a202c1ada70ab44bd24a21157854441d987a2...HEAD",
+      "exit_code": 0,
+      "result": "No whitespace errors."
+    },
+    {
+      "command": "npm run lint",
+      "exit_code": 0,
+      "result": "Markdown, shell, PowerShell, and frontmatter checks passed."
+    },
+    {
+      "command": "Exact long node -e gate extracted from the spec",
+      "exit_code": 1,
+      "result": "Failed with TypeError because runSkipSummarySection is intentionally absent before implementation."
+    }
+  ],
+  "read_only": [
+    "Both changed design documents in full or relevant numbered ranges",
+    "src/core/dream/scratch.js",
+    "src/core/dream/ledger.js",
+    "src/core/dream/promote.js",
+    "src/core/dream/warnings.js",
+    "src/core/transcripts/index.js",
+    "src/cli/dream.js",
+    "skills/wienerdog-dream/SKILL.md",
+    "docs/adr/0012-dream-run-lifecycle.md",
+    "docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md",
+    "docs/specs/done/WP-dream-filtered-input-budget.md",
+    "Relevant dream collector and integration tests"
+  ],
+  "not_executed": [
+    "No product test suite was run; this branch contains design documents only and no implementation of the new formatter or counts.",
+    "npm run red-proofs was not run because the new proof declaration is only specified, not present."
+  ]
+}

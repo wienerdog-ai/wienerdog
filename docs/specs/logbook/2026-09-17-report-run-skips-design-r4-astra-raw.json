@@ -1,0 +1,23 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b044-6601-7402-b2eb-848722c79179",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 2d5e24654c501b182d61eb28518ca572712712b6",
+    "baseRef": "2d5e24654c501b182d61eb28518ca572712712b6",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "approve",
+    "summary": "Approve the design revision: execution confirms A-1 and A-2 are fixed. No additional material product finding beyond the documented residuals and owner items. No material machinery findings.",
+    "findings": [],
+    "next_steps": [
+      "Executed actual collector and ledger logic with mocked discovery, parsing and writes: oversized memos behind both capacity-stop variants and deadline stops; subsequent memo skips; file/version changes; limits below, equal to and above memoized size; remeasurement remaining oversized; read-deferral transitions.",
+      "Executed first-quarantine, unchanged-quarantine and re-quarantine cases for all three intake reasons, plus recovery, deletion and sticky quarantine. B1/B2 remained disjoint; the revised B1 wording holds for both first quarantine and re-quarantine.",
+      "Executed the reader with memory-backed I/O and reproduced the already-routed B6 under-count. Collector partition probes used injected read-exhaustion outcomes; they do not establish production B6 coverage.",
+      "Machinery: scoped diff and diff --check inspected; all 52 named file:line references across the three Markdown documents resolve to existing files and in-range lines. Proof JSON, mutation literals, worked-example neutralisation and lexical checks passed.",
+      "Read only: scoped spec, logbooks, prior reviews and supporting source. No formatter, promotion integration, product suite, lint or RED-proof runner executed; implementation is absent. No files changed."
+    ]
+  }
+}

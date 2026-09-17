@@ -1,0 +1,41 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b038-5695-7253-aa68-10de120768bc",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 2d5e24654c501b182d61eb28518ca572712712b6",
+    "baseRef": "2d5e24654c501b182d61eb28518ca572712712b6",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No-ship: two prescribed report sentences contradict reproducible collector outcomes. No separate material machinery findings; the coverage boundary, stale-pointer residual and absent heading ownership match the code.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Deferred counts can promise retries for permanently memoized oversized sessions",
+        "body": "Capacity and deadline stops classify the entire unvisited remainder before checking oversized memos (scratch.js:91–105), while preserving those memos. I reproduced an admitted session followed by a memoized oversized session: either stop counted the latter as deferred, with oversized=0. On the following run it was skipped from its memo without parsing. The prescribed promise that these sessions “will be retried on the next run” therefore misrepresents a persistent exclusion as temporary. B4/B5's assertion that these sessions have no ledger record is also false for this case.",
+        "file": "docs/specs/WP-dream-report-run-skips.md",
+        "line_start": 301,
+        "line_end": 302,
+        "confidence": 0.99,
+        "recommendation": "Describe B4/B5 as sessions left unvisited when the input/time limit stopped collection, without guaranteeing a next-run retry. State that existing oversized memos may survive within either remainder. Update the wording mirrors and add fixtures covering preserved memos behind both stops."
+      },
+      {
+        "severity": "medium",
+        "title": "Re-quarantined sessions are falsely reported as skipped for the first time",
+        "body": "A previously quarantined file whose fingerprint changes is selected again (ledger.js:242). If it remains over the ceiling or parsing fails, it enters newlyQuarantined again (scratch.js:58,111). I reproduced this alongside an admitted session, so the proposed report would print “skipped for the first time” for a session already quarantined previously. Criterion 4(c) explicitly requires this classification but never reconciles it with the rendered historical claim.",
+        "file": "docs/specs/WP-dream-report-run-skips.md",
+        "line_start": 298,
+        "line_end": 298,
+        "confidence": 1,
+        "recommendation": "Remove the first-ever claim from B1 and its definition; describe this run's quarantine decision instead. Update every byte-exact mirror and assert the resulting report wording for criterion 4(c)'s re-quarantine case."
+      }
+    ],
+    "next_steps": [
+      "Executed: scoped git diff and diff --check; read-only Node probes using actual collector/ledger logic with mocked discovery, parsing and writes; citation checks (46 named-file references in range); proof-JSON parsing, mutation-literal checks and worked-example neutralisation checks.",
+      "Read only: scoped spec/logbooks and supporting collector, ledger, reader, CLI, promotion, warnings and skill code. No product suite, lint or RED-proof runner executed; the implementation is absent. No files changed."
+    ]
+  }
+}
