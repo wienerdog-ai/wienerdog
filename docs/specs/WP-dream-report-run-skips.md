@@ -22,12 +22,18 @@ epic: quarantine-surface
 > the count table, two acceptance criteria and the long `node -e` gate were
 > describing code that had been deleted, so the package could not be dispatched
 > and is not `Ready` until the design-review loop says so. Everything below is
-> re-derived against `main` at `047a202c` (2026-09-17). The previous revision's
+> re-derived against `main` at `545df8bd` (2026-09-17). The previous revision's
 > PROVISIONAL mechanism is **discharged and removed**: the promotion rewrite it
 > was waiting for has landed, so the Deliverables table below names real files at
-> a real SHA and carries no markers. Three design questions that this
+> a real SHA and carries no markers. Five design questions that this
 > re-derivation could not settle alone are parked under **Dispatch precondition —
-> owner items**; one measured gap is routed under **Discovered issues**.
+> owner items**; three measured gaps are routed under **Discovered issues**.
+>
+> **Design review round 1 (2026-09-17) returned needs-attention with six findings;
+> all six are dispositioned in this revision** and recorded, finding by finding, in
+> `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md` beside the raw
+> result. Four of them changed a contract row, so the surface is expected to be
+> re-reviewed in full. Nothing here records the owner accepting anything.
 
 ## Context (read this, nothing else)
 
@@ -56,11 +62,15 @@ incomplete read).
 
 **One of the six has no durable surface at all today.** An *individually
 oversized* transcript — one whose filtered extract alone exceeds
-`dream_max_input_bytes` — is skipped **every night** until the session file
-changes or that setting is raised (ADR-0023 Amendment 3, "Oversized measurements
-are independent optional ledger metadata"). Its only surface today is a console
-count on `stdout` of a scheduled job. That is the gap the integration review
-recorded, and Table A's oversized bullet is what closes it.
+`dream_max_input_bytes` — is passed over on **every** run for as long as the
+ledger's memo of its measurement stays valid, and that memo is invalidated only by
+a change to the source file or to the running package version; a raised
+`dream_max_input_bytes` releases it only if the new limit reaches the measured
+size, and any of those three merely earns it a fresh measurement, which may find
+it oversized again (**Table B row B3**, from ADR-0023 Amendment 3). Its only
+surface today is a console count on `stdout` of a scheduled job. That is the gap
+the integration review recorded, and Table A's oversized bullet is what closes it
+— in the report, and only for runs that write one (Table A's coverage row).
 
 ADR-0023 Amendment 2 (2026-08-29) makes this the fourth of the four surfaces the
 quarantine record has, and it obeys the same one-home principle they do: **the
@@ -91,10 +101,10 @@ actually holds (Table A's pointer row).
 
 ## Current state
 
-Re-derived against `main` at `047a202c` (2026-09-17). Every citation below was
+Re-derived against `main` at `545df8bd` (2026-09-17). Every citation below was
 read whole at that SHA. (The re-derivation was performed at `b4af715e` and
-re-pinned here: `047a202c` is docs-only on top of it — `git diff --stat
-b4af715e 047a202c -- src/ tests/ skills/` is empty — so every citation carries
+re-pinned here: `545df8bd` is docs-only on top of it — `git diff --stat
+b4af715e 545df8bd -- src/ tests/ skills/` is empty — so every citation carries
 over unchanged.)
 
 **`src/cli/dream.js` line numbers are the ones that will move, and two sibling
@@ -103,7 +113,7 @@ the `regenerateDigest` function and its two call sites and adds a re-render on a
 late failure; `WP-dream-lock-stale-owner-loud` edits the lock-acquisition block
 and the exit-code doc comment. Both are expected to land in that file **before**
 this package. **Every `src/cli/dream.js:NNN` citation in this spec is pinned to
-`047a202c` and MUST be re-derived against the then-current tree at dispatch** —
+`545df8bd` and MUST be re-derived against the then-current tree at dispatch** —
 by a committed revision of this spec, never by a dispatch message, because
 `scripts/boundary-check.js` reads this file's Deliverables table and not the
 message. Nothing either sibling touches is a contract of this package: neither
@@ -153,18 +163,30 @@ truncation is retired (ADR-0012, amendment of 2026-09-15; ADR-0023 Amendment 3).
   whole run, including the `promote()` call at `:956-967`.
 - `:683-700` builds `exclusions[]` — one console line each for `sel.deferred`,
   `sel.deadlineDeferred`, `sel.oversized` and `sel.readDeferred`, printed only
-  when non-zero, counts only. `sel.newlyQuarantined` gets its own per-file console
-  line at `:705-712`. **Nothing prints a still-quarantined count anywhere.**
+  when non-zero, counts only. **`exclusions` carries no quarantine count**, and
+  that one fact decides which branch a quarantine-only run takes below.
+  `sel.newlyQuarantined` gets its own per-file console line at `:705-712`.
+  **Nothing prints a still-quarantined count anywhere.**
+- `:721-732` — a run with new quarantines records them, rewrites the digest and
+  calls **refresh point 1** for `reports/warnings.md` (`:729`). This is the **only**
+  refresh that happens before `promote()`, and it happens only when
+  `sel.newlyQuarantined.length > 0`; refresh point 3 (`:755`) is on the idle path
+  that returns, and refresh point 2 (`:1187`) runs after the commit. That ordering
+  is what Table A's pointer row and its residual are measured against.
 - `:736-743` — **if `sel.entries.length === 0` and any exclusion fired, a real run
   THROWS** `WienerdogError('dream: no complete session was admitted. …')` carrying
   every exclusion line. No brain, no `promote()`, **no dream report at all** on
   that path.
 - `:746-757` — if `sel.entries.length === 0` with no exclusions, the run prints
   `wienerdog: nothing new to dream.`, refreshes `reports/warnings.md` and returns.
-  **This is also where the adopt-with-history first run now returns**; it writes no
-  report either.
+  **This is also where the adopt-with-history first run now returns, and where
+  EVERY quarantine-only run returns** — however many sessions it quarantined or
+  skipped — because the branch above it tests `exclusions`, which holds no
+  quarantine count. It writes no report either.
 - **Therefore the report section this package adds only ever renders on a run that
-  admitted at least one session.** Table A's coverage row owns that boundary.
+  admitted at least one session, and the quarantine counts are exactly what the
+  other paths lose.** Table A's coverage row owns that boundary and states, per
+  path, what is carried and what is not.
 
 ### The report's code-appended accounting
 
@@ -186,6 +208,14 @@ truncation is retired (ADR-0012, amendment of 2026-09-15; ADR-0023 Amendment 3).
   under the enforcement heading, whose subject is a policy violation. A skipped
   transcript is not a violation, and filing it there would misreport a correct
   fail-safe skip as an enforcement event.
+- **Nothing reserves those headings.** `ENFORCEMENT_HEADING`, `REDACTION_HEADING`
+  and `PRESERVED_HEADING` appear only where they are emitted (`:708`, `:737`,
+  `:751`); no code scans the candidate body for them, strips a previous code-owned
+  block or dedupes one. So a brain-authored copy of any of them survives into the
+  published body, and a second run on the same date appends a second accounting
+  block (`:1571-1576` appends to this run's published bytes; `:1637-1647` appends to
+  whatever is on disk). Table A's ownership row applies the same (absent) rule to
+  the new heading.
 - `promote()` exports `promote`, `makeAdmit` and `spawnGitForMerge` (`:1669-1677`)
   — the precedent for exporting an internal for the deliverable test file.
 - `WP-quarantine-warnings-file` created the durable list this section points at, at
@@ -204,7 +234,7 @@ truncation is retired (ADR-0012, amendment of 2026-09-15; ADR-0023 Amendment 3).
 |--------|------|-------|
 | modify | src/core/dream/scratch.js | **One addition only:** `collectExtracts` also returns the count **Table B**'s `stillQuarantined` row names. No other returned field changes shape and no selection behaviour changes |
 | modify | src/core/dream/promote.js | the exported formatter of **Table A**, the one optional input of **Table B**, and `composeRecord` emitting the section last. Nothing else in the module changes |
-| modify | src/cli/dream.js | build the six integers **Table B** names from `sel` and pass them to `promote()`; nothing else in the run changes. **Its `:NNN` citations are pinned to `047a202c` and are re-derived at dispatch** — two sibling packages are queued to edit this file first (Current state) |
+| modify | src/cli/dream.js | build the six integers **Table B** names from `sel` and pass them to `promote()`; nothing else in the run changes. **Its `:NNN` citations are pinned to `545df8bd` and are re-derived at dispatch** — two sibling packages are queued to edit this file first (Current state) |
 | modify | tests/unit/dream-collect.test.js | cover the new count only (**Table B**); no existing assertion on `collectExtracts`'s return shape is weakened. This is `scratch.js`'s test file (its test names are prefixed `dream-collect:`) |
 | modify | tests/unit/dream-promote.test.js | the four test identities of **Table C**, plus the appended-section coverage. Test names are prefixed `dream-promote:` |
 | modify | tests/integration/dream.test.js | one end-to-end run whose committed report carries the section (`dream-integration:` prefix) |
@@ -240,7 +270,7 @@ read-deferred 4 renders exactly:
 
 - 3 session transcript(s) were skipped for the first time this run.
 - 191 session transcript(s) were already being skipped and were skipped again.
-- 1 session transcript(s) are too big to dream over on their own. Wienerdog will pass over them every night until the session file changes or you raise dream_max_input_bytes in config.yaml.
+- 1 session transcript(s) are too big to dream over on their own. Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.
 - 2 session transcript(s) did not fit in what this run could take in, and will be retried on the next run.
 - 5 session transcript(s) were not reached before the time this run had to prepare them ran out, and will be retried on the next run.
 - 4 session transcript(s) were still being written while this run read them, and will be retried on the next run.
@@ -255,7 +285,7 @@ Second worked example — a run with **no quarantine counts** (`newlyQuarantined
 ```markdown
 ## Sessions this run could not consolidate
 
-- 1 session transcript(s) are too big to dream over on their own. Wienerdog will pass over them every night until the session file changes or you raise dream_max_input_bytes in config.yaml.
+- 1 session transcript(s) are too big to dream over on their own. Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.
 - 2 session transcript(s) did not fit in what this run could take in, and will be retried on the next run.
 - 5 session transcript(s) were not reached before the time this run had to prepare them ran out, and will be retried on the next run.
 - 4 session transcript(s) were still being written while this run read them, and will be retried on the next run.
@@ -289,14 +319,15 @@ Operative prose cites the table and row rather than restating it.
 |---|---|
 | Heading | `## Sessions this run could not consolidate` |
 | Body | one bullet per **non-zero** count, in Table B's row order, each byte-exact as the first worked example shows; then, **only when the pointer row below says it renders**, a blank line and that pointer line byte-exact |
-| **Pointer line — the text, and the ONLY condition under which it renders** | The text is byte-exact `Which sessions are being skipped, and why: reports/warnings.md in your vault.` It renders **if and only if `newlyQuarantined` or `stillQuarantined` is non-zero** — it rides the two QUARANTINE counts and nothing else. **Why no other count may carry it:** `reports/warnings.md` is a render of the ledger's *active quarantines* (`src/core/dream/warnings.js:138-189`), and none of the other four arms produces a quarantine record — ADR-0023 Amendment 3 states outright that the new exclusion causes introduce "no new quarantine reason", and Amendment 2 already rules that a count the file cannot name "travels without a pointer". Pointing a quarantine-free report there sends the user to a file containing none of the events the report just counted. **One pointer, not two** — `wienerdog doctor` is never named here: it reports the same counts this section just gave, and only `reports/warnings.md` answers "which ones" |
+| **Pointer line — the text, and the ONLY condition under which it renders** | The text is byte-exact `Which sessions are being skipped, and why: reports/warnings.md in your vault.` It renders **if and only if `newlyQuarantined` or `stillQuarantined` is non-zero** — it rides the two QUARANTINE counts and nothing else. **Why no other count may carry it:** `reports/warnings.md` is a render of the ledger's *active quarantines* (`src/core/dream/warnings.js:138-189`), and none of the other four arms produces a quarantine record — ADR-0023 Amendment 3 states outright that the new exclusion causes introduce "no new quarantine reason", and Amendment 2 already rules that a count the file cannot name "travels without a pointer". Pointing a quarantine-free report there sends the user to a file containing none of the events the report just counted. **One pointer, not two** — `wienerdog doctor` is never named here: it reports the same counts this section just gave, and only `reports/warnings.md` answers "which ones". **The condition is the two counts and nothing else, and what that costs is stated rather than hidden:** the run cannot confirm from here that the file it points at is current, so the pointer can name a file that is missing or one run stale. Named residual under Implementation notes; owner item 5. **No surface may add a further condition to this row without moving the row** |
 | **Lexical scoping of the pointer's promise** | The word **skipped** appears in the two quarantine bullets and in the pointer line, **and nowhere else in the section** — the other four bullets say *pass over*, *did not fit*, *were not reached* and *were still being written*. That is what makes the pointer readable as a promise about exactly the bullets it rides on, in a section where the four other conditions are also, in plain English, "skips". It is asserted directly: a section rendered with the two quarantine counts at 0 contains no occurrence of `skipped` |
 | Zero case | all six counts 0 → the function returns `''` and **nothing is appended** — no heading, no "none" line. This section is news; a run with nothing to report says nothing |
 | Partial case | a count of 0 omits its bullet and the remaining bullets render unchanged, in Table B's row order. The pointer line does **not** follow the heading — it follows the pointer row's condition |
-| Built from integers alone | every property of `counts` that is not a non-negative safe integer renders as `0`; `counts` itself may be `undefined` or any non-object and the result is then `''`. No basename, no path, no reason string, no session id reaches this section — the names live in `reports/warnings.md`, the enumeration's one home. **`promote()` performs NO validation of `runSkips`** and never throws for it: this input arrives after the brain has run and after the body has published, and a caller bug must cost the section, never the run's consolidation. That is the opposite of the `records` input's fail-loud rule (`promote.js:1027-1035`), deliberately; Implementation notes price the alternative |
+| Built from integers alone | every property of `counts` that is not a non-negative safe integer renders as `0`; `counts` itself may be `undefined` or any non-object and the result is then `''`. No basename, no path, no reason string, no session id reaches this section — the names live in `reports/warnings.md`, the enumeration's one home. **`promote()` performs NO validation of `runSkips`** and never throws for it: this input arrives after the brain has run and after the body has published, and a caller bug must cost the section, never the run's consolidation. That is the opposite of the `records` input's fail-loud rule (`promote.js:1027-1035`), deliberately; Implementation notes price the alternative. **The guard is ONE rule in two formatters, byte-identical:** the reduction is written exactly as `secretRevertSummaryLine` writes it (`src/core/dream/ledger.js:500`) — `` `const int = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);` `` — so the two cannot drift, and so Table C's third proof has a literal to mutate. `Number.isSafeInteger` is the predicate and no coercion precedes it: a float, a numeric string and a value above `Number.MAX_SAFE_INTEGER` each reduce to `0`, never to a floor or a parse |
 | No apostrophe | no `'` appears anywhere in the section's text, so the whole of it can be pinned in single-quoted JavaScript inside a double-quoted shell string. That is a property of the shipped wording, and the verification gate depends on it |
 | Placement in the report | composed inside `composeRecord` and appended **last** — after the enforcement block, which always renders, and after the redaction and preserved-copy blocks when they render — separated from whichever precedes it by exactly one blank line, exactly once per run. Last because the other blocks are about what the run refused to WRITE and this one is about what it could not READ |
-| Coverage boundary | the section renders **only on a run that admitted at least one session**, because no other run composes a report (Current state, "The orchestrator"). A run that admitted nothing but excluded something THROWS at `src/cli/dream.js:736-743`; on that path the run's failure message carries every exclusion count, and the scheduled path records that failure in `alerts.jsonl` for the digest banner. **This package adds nothing to that path and makes no claim about it** |
+| **Coverage boundary — which runs carry the section, and what the others carry instead** | **A report exists only when `promote()` runs, and `promote()` runs only on a real run that admitted at least one session** (`sel.entries.length > 0`, past the dry-run return). This row states the other paths TRUTHFULLY rather than claiming they are covered elsewhere. **(a) The idle path** (`entries.length === 0`, no exclusion — `src/cli/dream.js:746-757`) prints one line, `wienerdog: nothing new to dream.`, refreshes `reports/warnings.md`, and returns. **Every quarantine-only run takes this path**, because `exclusions` never contains a quarantine count (`:683-700` builds it from B3–B6 alone): so on a run whose only event was quarantine, **B1 is observable only as the number of per-file console lines at `:705-712`, and B2 is not emitted anywhere at all**. **(b) The throw path** (`entries.length === 0`, some exclusion — `:736-743`) raises a `WienerdogError` whose message carries the **B3–B6 counts and no quarantine count**; the scheduled path records that failure in `alerts.jsonl` for the digest banner. **(c) Dry runs** (`:765-768`) and **(d) runs whose brain or gates fail before `promote()`** write no report either. **What the standing surfaces do and do not replace:** `reports/warnings.md`, `wienerdog doctor` and the digest banner carry the ledger's quarantine set **as it stands**, which is not this run's B1/B2 and cannot be read as them. **This package adds nothing to paths (a)–(d)** — closing them needs a report on a path that writes none, or a change to the failure message, each its own package. Named residual under Implementation notes; owner item 4 |
+| **Ownership of the heading — none, and that is the existing rule, not a new one** | **`composeRecord` reserves nothing.** Its three shipped headings (`promote.js:584-591`) are only ever EMITTED: nothing scans the brain's candidate body for them, nothing strips a prior code-owned block, and nothing dedupes. So a candidate body that itself contains `## Refused by policy (promotion enforcement)` publishes unchanged and the code section is appended under it, and a **second run on the same date** appends a second copy of the whole accounting block beneath the first (the second write appends to `reportBody.bytes`; Table R's fallback appends to whatever is on disk — `promote.js:1571-1576`, `:1637-1647`). **This package applies the SAME rule to `## Sessions this run could not consolidate`: no reservation, no marker, no dedupe, no new mechanism.** Introducing ownership for this heading alone would leave the three shipped ones unowned and put two rules in one composer. The behaviour is pinned by fixtures rather than changed (acceptance criterion 11); the shared gap is a named residual under Implementation notes and is routed under Discovered issues |
 | Delivery when the vault refuses the write | none of the above changes. The section is part of `report.record`, so on `report.outcome === 'refused'` and on `promoted` with `accounting.published === false` it reaches the user through `src/cli/dream.js:1119-1131` exactly like the enforcement record |
 | The brain is not told about it | `skills/wienerdog-dream/SKILL.md` is **not** a deliverable. The model does not author this section, and telling it the section exists invites it to write one |
 
@@ -304,11 +335,11 @@ Operative prose cites the table and row rather than restating it.
 
 Row order is render order.
 
-| # | Count | Definition | Source in `src/cli/dream.js` at `047a202c` |
+| # | Count | Definition | Source in `src/cli/dream.js` at `545df8bd` |
 |---|---|---|---|
 | B1 | `newlyQuarantined` | transcripts this run recorded as `quarantined` for the first time — over the pre-read ceiling, or a non-`ok` parse outcome | `sel.newlyQuarantined.length` |
 | B2 | `stillQuarantined` | **the transcripts this run ACTUALLY skipped for an existing quarantine** — the discovered files for which `selectState` returned `'skip-quarantined'`, counted at selection time. **Not** the run-start ledger's active-quarantine count; row B7 says why that is a different number | `sel.skippedQuarantined` — **a new integer `collectExtracts` returns**, computed from the same `discovered` array and the same `selectState` call that already partitions candidates (`src/core/dream/scratch.js:54`) |
-| B3 | `oversized` | transcripts whose own filtered extract exceeds `dream_max_input_bytes`, measured this run or read from the ledger's `oversizedExtracts` memo. **Not retried** until the file's fingerprint, the package version or X changes (ADR-0023 Amendment 3) | `sel.oversized.length` |
+| B3 | `oversized` | transcripts whose own filtered extract exceeds `dream_max_input_bytes`, measured this run or read from the ledger's `oversizedExtracts` memo. **CANONICAL for what the bullet may promise (ADR-0023 Amendment 3):** the memo is consulted only after ledger eligibility and the discovery ceiling pass, and it permits skipping the parse **only while the measured size exceeds the CURRENT X** — so exactly three things release the session, and none of them is a retry next run: **(i)** the source file's fingerprint changes, **(ii)** the running `package.json.version` changes, **(iii)** X is raised **to or past the measured size** (a smaller rise changes nothing). Each of the three earns a **fresh parse and measurement**, whose outcome may be oversized again. A parser change therefore only helps by riding (ii) | `sel.oversized.length` |
 | B4 | `capacityDeferred` | the capacity stop's unvisited remainder — valid transcripts left over when the run's input budget was spent. No ledger record, so ordinary eligibility retries them next run | `sel.deferred.length` (`sel.dropped` is the same array; `sel.droppedForSize` its length) |
 | B5 | `deadlineDeferred` | the preprocessing deadline's unvisited remainder. No ledger record; retried next run | `sel.deadlineDeferred.length` |
 | B6 | `readDeferred` | transcripts whose read did not complete within the per-session work allowance; the partial extract is discarded. No ledger record; retried next run | `sel.readDeferred.length` |
@@ -331,33 +362,38 @@ reading set (CLAUDE.md: this spec plus the Deliverables files), so a semantic
 description of a mutation is not something an implementer can turn into a valid
 declaration. Copy the objects; do not re-derive them.
 
-**Both identities pin the section by FULL-STRING equality against a hand-written
-literal, never against the exported formatter's own output or a substring
-`includes`.** That is the load-bearing decision here: an `includes` assertion
-stays green under a reworded bullet, which is precisely the class of vacuity
-ADR-0042 exists to catch. Each identity carries its band marker in every assertion
-message it makes.
+**Every identity pins its render by FULL-STRING equality against a hand-written
+literal, never against the exported formatter's own output and never by a
+substring `includes` — T3 included.** That is the load-bearing decision here: an
+`includes` assertion stays green under a reworded bullet, and a
+forbidden-token scan stays green under a formatter that FLOORS `1.5` to a
+plausible `1` — the exact vacuity round 1 measured in the previous revision's
+inline gate. Enumerate the expected output, never the outputs you would object
+to. Each identity carries its band marker in every assertion message it makes.
 
 | # | Test identity — the exact top-level test name | Suite | Band marker | What it asserts |
 |---|---|---|---|---|
 | **T1** | `dream-promote: [RS-1] the six-count run-skip section renders byte-exact with its pointer` | `tests/unit/dream-promote.test.js` | `[RS-1]` | `runSkipSummarySection` over Table B's six counts set to 3, 191, 1, 2, 5, 4 equals the FULL hand-written string of the first worked example |
 | **T2** | `dream-promote: [RS-2] a run-skip section with no quarantine count renders no pointer and no skipped` | `tests/unit/dream-promote.test.js` | `[RS-2]` | the same function over 0, 0, 1, 2, 5, 4 equals the FULL hand-written string of the second worked example, and the result contains neither `reports/warnings.md` nor `skipped` |
-| **T3** | `dream-promote: [RS-3] the run-skip section reads every non-integer count as zero` | `tests/unit/dream-promote.test.js` | `[RS-3]` | Table A's integers-only row: a string, a float, `NaN`, `-1`, `undefined` and a crafted object each render as `0`; an all-zero call and a non-object argument each return `''`. **Every call in T3 leaves `oversized`, `newlyQuarantined` and `stillQuarantined` at 0 or non-integer** — `capacityDeferred` is the carrier that keeps a render non-empty — so T3 renders neither the oversized bullet nor the pointer, and is outside both proofs' `expectRed` |
-| **T4** | `dream-promote: [RS-4] promote appends the run-skip section beneath the enforcement record` | `tests/unit/dream-promote.test.js` | `[RS-4]` | a `promote()` call carrying `runSkips` publishes a report whose accounting ends with the section, after the enforcement block, separated by one blank line. **Its fixture sets `capacityDeferred` alone**, so T4 renders neither the oversized bullet nor the pointer and is outside both proofs' `expectRed` |
+| **T3** | `dream-promote: [RS-3] the run-skip section reads every non-integer count as zero` | `tests/unit/dream-promote.test.js` | `[RS-3]` | Table A's integers-only row, **by full-string equality on each render, never by scanning for forbidden tokens**: a string, a float, `NaN`, `-1`, `undefined`, a crafted object with a numeric `toString`, and an integer **above `Number.MAX_SAFE_INTEGER`** each render as `0`; an all-zero call and a non-object argument each return `''`. **Every call in T3 leaves `oversized`, `newlyQuarantined` and `stillQuarantined` at 0 or non-integer** — `capacityDeferred` is the carrier that keeps a render non-empty — so T3 renders neither the oversized bullet nor the pointer, and is outside the first two proofs' `expectRed`; **the third proof is T3's own** |
+| **T4** | `dream-promote: [RS-4] promote appends the run-skip section beneath the enforcement record` | `tests/unit/dream-promote.test.js` | `[RS-4]` | a `promote()` call carrying `runSkips` publishes a report whose accounting ends with the section, after the enforcement block, separated by one blank line. **Its fixture sets `capacityDeferred` alone**, so T4 renders neither the oversized bullet nor the pointer, and its counts are plain safe integers, so it is outside all three proofs' `expectRed` |
 
-**Two proofs, one declaration file** — one file per suite, which is what `suite`
+**Three proofs, one declaration file** — one file per suite, which is what `suite`
 being a top-level field means. Each proof's `criterion` is the acceptance
-criterion it proves, so `rollUp` emits two lines for this WP.
+criterion it proves, so `rollUp` emits three lines for this WP.
 
 *Provenance: on 2026-09-17 the author parsed this declaration and checked each
 `find` against both worked examples rendered from a stub formatter — proof 1's
 literal appears in the six-count render only, proof 2's in both — which is exactly
-the `expectRed` set each declares.*
+the `expectRed` set each declares. Proof 3's mutation was APPLIED to that stub and
+measured: `oversized: 1.5` rendered as a plausible `1` and
+`Number.MAX_SAFE_INTEGER + 1` rendered in full, so the render T3 pins changes and
+T3 reddens, while T1's and T2's plain integers are untouched by a floor.*
 
 **Each proof's `find` string must occur EXACTLY ONCE in `src/core/dream/promote.js`**
-(`occurrences: 1` is checked): the pointer sentence and the oversized bullet's
-second sentence appear in the formatter's literals and nowhere else — do not
-repeat either of them in a comment or a JSDoc example.
+(`occurrences: 1` is checked): the pointer sentence, the oversized bullet's second
+sentence and the integer-guard line appear in the formatter and nowhere else — do
+not repeat any of them in a comment or a JSDoc example.
 
 `tests/red-proofs/dream-report-run-skips.proofs.json`:
 
@@ -386,7 +422,7 @@ repeat either of them in a comment or a JSDoc example.
       "criterion": "3",
       "why": "the oversized bullet is the only place a permanently skipped session is named as permanent and the setting that unblocks it is named; both full-string identities render that bullet, so a mutation of it must redden both or one of them is not the pin it claims to be",
       "file": "src/core/dream/promote.js",
-      "find": "Wienerdog will pass over them every night until the session file changes or you raise dream_max_input_bytes in config.yaml.",
+      "find": "Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.",
       "replace": "They will be retried on the next run. RP_MUT_RS_OVERSIZED",
       "marker": "RP_MUT_RS_OVERSIZED",
       "occurrences": 1,
@@ -394,6 +430,21 @@ repeat either of them in a comment or a JSDoc example.
       "expectRed": [
         { "test": ["dream-promote: [RS-1] the six-count run-skip section renders byte-exact with its pointer"], "signal": "[RS-1]" },
         { "test": ["dream-promote: [RS-2] a run-skip section with no quarantine count renders no pointer and no skipped"], "signal": "[RS-2]" }
+      ]
+    },
+    {
+      "id": "run-skip-integer-guard-rejects-coercion",
+      "wp": "WP-dream-report-run-skips",
+      "criterion": "7",
+      "why": "round 1 measured the vacuity this closes: a guard that coerces and floors renders 1.5 as a plausible 1, which a forbidden-token scan cannot see. Under this mutation T3's hostile render gains an oversized bullet and a 9, and its unsafe-integer render prints 9007199254740992, so a T3 that pins full strings reddens and a T3 that scans for tokens does not. T1 and T2 pass plain safe integers, which a floor leaves unchanged",
+      "file": "src/core/dream/promote.js",
+      "find": "const int = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);",
+      "replace": "const int = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.floor(Number(v)) : 0); /* RP_MUT_RS_COERCE */",
+      "marker": "RP_MUT_RS_COERCE",
+      "occurrences": 1,
+      "testNamePattern": "\\[RS-",
+      "expectRed": [
+        { "test": ["dream-promote: [RS-3] the run-skip section reads every non-integer count as zero"], "signal": "[RS-3]" }
       ]
     }
   ]
@@ -420,18 +471,22 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
       `dream-promote.test.js` → Tables A and C; `tests/integration/dream.test.js` →
       Table A; the proofs file → Table C)
 - [ ] Acceptance criteria that assert its facts — criteria 1–3 and 6–9 assert
-      Table A, criteria 4–5 assert Table B (row B7's four cases, row B8's sum),
-      criterion 12 asserts Table C
+      Table A, criteria 4–5 assert Table B (row B7's four cases, row B8's
+      two-run partition), criterion 11 pins Table A's **ownership** row, criterion
+      12 pins Table A's **coverage** row, criterion 13 asserts Table C
 - [ ] Verification commands / greps — the `node -e` section gate asserts Table A
       (heading, both renders, the pointer condition, the lexical-scoping row, the
-      zero case, the integers-only row); the `SKILL.md` grep asserts Table A's
-      brain-is-not-told row; `npm run red-proofs` asserts Table C
+      zero case, and the integers-only row **by full-string equality on the hostile
+      and unsafe-integer renders**); the `SKILL.md` grep asserts Table A's
+      brain-is-not-told row; `npm run red-proofs` asserts Table C's three proofs
 - [ ] Current-state description — the five collector arms and the discarded
       `skip-quarantined` count (Table B rows B1–B6, B8), the single composed
       accounting block and its one write (Table A's placement and delivery rows),
-      why `records` is not the channel (row B11), and the two return paths that
-      compose no report (Table A's coverage row) — plus the `047a202c` pin and the
-      two sibling packages queued into `src/cli/dream.js`, which mirrors the
+      the three shipped headings and that nothing scans for them (Table A's
+      **ownership** row), why `records` is not the channel (row B11), and the
+      return paths that compose no report and what `exclusions` does and does not
+      contain (Table A's **coverage** row) — plus the `545df8bd` pin and the two
+      sibling packages queued into `src/cli/dream.js`, which mirrors the
       `dream.js` Deliverables cell and Definition of done item 0(d)
 - [ ] Operative prose steps that apply it — **walked, in document order**:
       - the Context paragraph naming the oversized gap → Table B row **B3** and
@@ -452,19 +507,25 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
         **integers-only** row; formatter home → Table A's **placement** row and the
         `promote.js` Deliverables cell; `runSkips` validation → Table A's
         **integers-only** row and row **B11**; residual 1 → row **B10**; residual 2
-        → Table A's **coverage** row; residual 3 → Table A's **lexical-scoping**
-        row; the moved-`dream.js` bullet → Table B's Source column and Definition
-        of done item 0(d);
+        (zero-admission) → Table A's **coverage** row; residual 3 → Table A's
+        **lexical-scoping** row; residual 4 (the pointer cannot confirm its file,
+        with the measured refresh ordering) → Table A's **pointer** row; residual 5
+        (no heading is reserved) → Table A's **ownership** row; the
+        moved-`dream.js` bullet → Table B's Source column and Definition of done
+        item 0(d);
       - Security checklist items 2 and 3 → Table A's **integers-only** and
-        **placement** rows and the three residuals they name;
+        **placement** rows and the five residuals they name;
       - the Verification-steps commentary (the three-state paragraph and the two
         provenance lines) → Table A's gate rows and Table C;
       - Out of scope, item by item: no naming → Table A's **integers-only** row;
         no `reports/warnings.md` change → Table A's **pointer** row; `records` not
         reused → row **B11**; nothing on the throw path → Table A's **coverage**
         row; the `scratch.js` bound → row **B2**;
-      - Discovered issues → Table B row **B3** (what an oversized session is, and
-        that this package only surfaces it);
+      - Discovered issues, entry by entry: the default-X gap → Table B row **B3**;
+        the zero-admission gap → Table A's **coverage** row; the unreserved
+        headings → Table A's **ownership** row;
+      - Dispatch-precondition owner items 4 and 5 → Table A's **coverage** row and
+        Table A's **pointer** row (with residual 4's measured ordering);
       - Dispatch-precondition owner items 1, 2 and 3 → row **B3** with Table A's
         oversized bullet, Table A's **pointer** and **lexical-scoping** rows, and
         Table A's **pointer** row respectively;
@@ -478,11 +539,15 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
       count", or to any of B3–B6** — none of those arms produces a quarantine
       record, so `reports/warnings.md` cannot name them
 - [ ] **CLAIM REGISTER — what an oversized session is promised.** Table B row B3 and Table A's
-      oversized bullet decide it — skipped again every night until the file, the
-      package version or `dream_max_input_bytes` changes — and its mirrors are the
-      Context paragraph naming the gap, both worked examples, the oversized
-      acceptance criterion, Table C's second proof, and owner item 1. **No surface
-      may promise that an oversized session is retried next run**
+      oversized bullet decide it — passed over on every run until the source file
+      changes, the package version changes, or `dream_max_input_bytes` is raised
+      **to or past the measured size**, each of which earns a fresh measurement
+      that may find it oversized again — and its mirrors are the Context paragraph
+      naming the gap, both worked examples, the inline gate's `B3` literal, the
+      oversized acceptance criterion, Table C's second proof, and owner item 1.
+      **No surface may promise that an oversized session is retried next run, that
+      a source change alone is the only release, or that any rise in the limit
+      helps**
 - [ ] **CLAIM REGISTER — where `stillQuarantined` comes from.** Table B row B2 decides it — the
       discovered files whose `selectState` answered `'skip-quarantined'` — and its
       mirrors are the `scratch.js` and `dream-collect.test.js` Deliverables rows,
@@ -490,6 +555,21 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
       four-case acceptance criterion, and the Out-of-scope bullet bounding the
       `scratch.js` change. **No surface may define it from the run-start ledger's
       active set**
+- [ ] **CLAIM REGISTER — which runs carry the section.** Table A's **coverage** row
+      decides it — only a real run that admitted at least one session — and its
+      mirrors are the Context paragraph's closing clause, the Current-state
+      "orchestrator" subsection, residual 2, acceptance criterion 12, the
+      zero-admission Discovered entry, owner item 4, and the Out-of-scope bullet on
+      the throw path. **No surface may say that `reports/warnings.md`, `doctor` or
+      the digest banner carries this run's B1/B2** — they carry the ledger's
+      standing set, which is a different fact (design round 1, finding 1)
+- [ ] **CLAIM REGISTER — who owns the heading.** Table A's **ownership** row decides
+      it — nobody, for this heading and for the three shipped ones alike — and its
+      mirrors are the Current-state "report's code-appended accounting" subsection,
+      residual 5, acceptance criterion 11's two fixtures, and the unreserved-heading
+      Discovered entry. **No surface may claim the new heading is reserved,
+      deduped or protected**, and no surface may describe a rule for it that the
+      shipped headings do not also have (design round 1, finding 5)
 - [ ] **CLAIM REGISTER — what validates `runSkips`.** Table A's integers-only row decides it —
       nothing in `promote()` does, and the formatter reduces every non-integer to 0
       — and its mirrors are the Exact-contracts JSDoc, Table B row B11, the
@@ -528,16 +608,45 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
   in it (Table B row B10). That class has two dedicated surfaces of its own, and
   moving the report's composition to reach it would reorder the commit (ADR-0012:
   one dream run, one commit).
-- **Named residual — a run that composes no report has nothing to append to.**
-  Three such runs exist: the throw at `src/cli/dream.js:736-743`, the idle return at
-  `:746-757` (which is also the adopt-with-history first run), and any run whose
-  brain or gates fail before `promote()`. Table A's coverage row bounds the claim;
-  their skips reach the user through `reports/warnings.md`, `wienerdog doctor`, the
-  digest banner and — on the throw path — the run's own failure message and
-  `alerts.jsonl` record.
+- **Named residual — a run that composes no report has nothing to append to, and
+  the quarantine counts are what that loses.** Table A's coverage row is canonical
+  and enumerates the four paths. The part worth stating twice, because it is the
+  one a reader would otherwise assume away: **a quarantine-only run takes the idle
+  path**, so `stillQuarantined` is emitted **nowhere** on it and `newlyQuarantined`
+  survives only as a number of console lines. The standing surfaces
+  (`reports/warnings.md`, `wienerdog doctor`, the digest banner) show the ledger's
+  quarantine set as it stands **now** — which is not "what this run skipped", and
+  must not be read as a substitute for it. Closing this needs a report on a path
+  that writes none, or a change to the failure message: separate packages, owner
+  item 4, also routed under Discovered issues.
 - **Named residual — the pointer's neighbours.** With the oversized bullet present,
   a reader could take the pointer to cover it. The lexical-scoping row is the
   mitigation chosen over rewording the pointer; owner item 2 prices the alternative.
+- **Named residual — the pointer cannot confirm the file it points at is current,
+  and the ordering is why.** `refreshWarnings` never throws: a refused publish, an
+  unreadable file or a non-regular object at `reports/warnings.md` comes back as
+  `{written:false, reason}` and the run continues (`src/core/dream/warnings.js:230-311`).
+  So the pointer can name a file that is absent or one or more runs stale, while
+  the counts beside it are exact. **Measured ordering — the result is only HALF
+  available before `promote()`:** refresh point 1 (`src/cli/dream.js:729`) runs
+  before the promotion, but **only when `sel.newlyQuarantined.length > 0`**; refresh
+  point 3 (`:755`) is on the idle path, which returns before `promote()`; refresh
+  point 2 (`:1187`) runs **after** it. A `stillQuarantined`-only run — the 191-session
+  case this package exists for — therefore has no refresh result at all at the
+  moment the section is composed. A boolean on `runSkips` would be honest only for
+  the newly-quarantined sub-path and would delete the pointer from the main one, so
+  **it is not added**; making it right needs a fourth refresh call site
+  (`WP-quarantine-warnings-file`'s surface) or moving refresh point 2 ahead of the
+  commit (ADR-0012), each its own package. Bounds of the residual: the ledger stays
+  ground truth, every refresh point re-reads and re-decides, and the counts in the
+  section are unaffected. Owner item 5.
+- **Named residual — nothing reserves a code-owned heading, and that is true of the
+  three shipped ones too.** Table A's ownership row is canonical. Applying a rule
+  to the new heading alone would leave `## Refused by policy (promotion
+  enforcement)`, `## Redacted in place (secret scan)` and `## Preserved copies
+  (secret quarantine)` unowned and put two rules in one composer, so this package
+  applies none and pins the behaviour with criterion 11's two fixtures instead.
+  Routed under Discovered issues.
 - **Expect `src/cli/dream.js` to have moved under you.** Two sibling packages are
   queued into that file ahead of this one (Current state names them and what each
   edits). None of them touches `collectExtracts`, the `promote()` call site, the
@@ -562,8 +671,10 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
       property. `composeRecord`'s fail-closed neutralisation check
       (`promote.js:769-775`) runs over the composed text including this section, so
       the containment has a second, independent enforcement.
-- [ ] Three residuals, all named under Implementation notes: the post-commit
-      exhausted class, the runs that compose no report, and the pointer's neighbours.
+- [ ] Five residuals, all named under Implementation notes: the post-commit
+      exhausted class, the runs that compose no report, the pointer's neighbours,
+      the pointer that cannot confirm its file is current, and the code-owned
+      headings that nothing reserves.
 
 ## Acceptance criteria
 
@@ -576,10 +687,12 @@ Numbered, because Table C's `criterion` fields reference them.
    worked example: it contains no `reports/warnings.md` and no occurrence of
    `skipped`. Every combination with at least one quarantine count non-zero carries
    the pointer. *(Proved by Table C's first proof.)*
-3. **The oversized promise.** The oversized bullet states that those sessions will
-   be passed over every night until the session file changes or
-   `dream_max_input_bytes` is raised, and names that setting. It never promises a
-   retry next run. *(Proved by Table C's second proof.)*
+3. **The oversized promise is TRUE against row B3.** The oversized bullet names all
+   three releases — the session changing, Wienerdog being updated, and
+   `dream_max_input_bytes` being raised **past the measured size** — says that each
+   earns a fresh measurement that may find the session too big again, and names the
+   setting. It never promises a retry next run, and never implies that any smaller
+   rise in the limit helps. *(Proved by Table C's second proof.)*
 4. **Each count is exact against Table B**, and a count of 0 omits its bullet while
    the others render unchanged in row order. **`stillQuarantined` is asserted on
    these four cases, which are what separate the selection reading from the
@@ -592,17 +705,29 @@ Numbered, because Table C's `criterion` fields reference them.
    none of the six. **Case (c) goes green under both readings for the wrong reason
    unless the double-count itself is asserted** — assert the sum, not only the
    individual counts.
-5. **Disjointness (row B8).** On a run exercising all five collector exclusion arms
-   at once **and** carrying at least one already-quarantined file,
-   `entries.length` plus the six counts does not exceed the number of discovered
-   files, and no discovered file contributes to two counts.
+5. **Disjointness (row B8), over TWO runs, because one run cannot show it.** The
+   capacity stop (`scratch.js:91-94`, `:124-127`) and the deadline stop (`:95-98`)
+   each `break` the single admission loop, so whichever fires first prevents the
+   other: **a run exercising all five collector arms at once does not exist.** The
+   partition is asserted on **two** runs instead, each carrying at least one
+   already-quarantined file and exercising the three CONTINUING arms — quarantine,
+   oversized, read-deferred — before its stop: **(a)** a run ending in a capacity
+   stop (`capacityDeferred` non-zero, `deadlineDeferred` 0); **(b)** a run ending in
+   a deadline stop (`deadlineDeferred` non-zero, `capacityDeferred` 0). For **each**
+   run: `entries.length` plus the six counts does not exceed the number of
+   discovered files, and no discovered file contributes to two counts.
 6. **The zero case.** A run with all six counts at 0 appends nothing: the report has
    no `## Sessions this run could not consolidate` heading and its other
    code-appended sections are byte-identical to before this change.
-7. **Integers only.** The formatter renders `0` for every property that is not a
-   non-negative safe integer (a string, a float, `NaN`, `-1`, `undefined`, a crafted
-   object), returns `''` when every property reduces to 0, and returns `''` for a
-   non-object argument. `promote()` does not throw for any of them.
+7. **Integers only, asserted by full-string equality on the render.** The formatter
+   renders `0` for every property that is not a non-negative safe integer — a
+   string, a float, `NaN`, `-1`, `undefined`, a crafted object with a numeric
+   `toString`, and an integer **above `Number.MAX_SAFE_INTEGER`** — returns `''`
+   when every property reduces to 0, and returns `''` for a non-object argument.
+   `promote()` does not throw for any of them. **The assertion compares the whole
+   render to a hand-written expected string; a check that merely looks for the
+   rejected values passes a formatter that floors `1.5` to a plausible `1`.**
+   *(Proved by Table C's third proof.)*
 8. **No identifier, ever.** No basename, path, session id or reason string appears
    anywhere in the appended section, for any input.
 9. **Placement and delivery** — Table A's placement and delivery rows. The section
@@ -612,15 +737,32 @@ Numbered, because Table C's `criterion` fields reference them.
    line per element.
 10. **The brain is untouched.** `skills/wienerdog-dream/SKILL.md` is not modified
     and is not told about the section.
-11. **Re-running the dream** over an unchanged corpus does not duplicate the section
-    in an existing day's report.
-12. **Machine-run RED (ADR-0042).** `npm run red-proofs` reports `RUN: PROVEN` and
-    its criteria roll-up carries two lines for this WP — `criterion 2` and
-    `criterion 3` — each `PROVEN` and each naming its Table C proof id.
-13. `npm test` and `npm run lint` pass. Every file under `tests/golden/` is
+11. **Heading ownership is PINNED, not changed** (Table A's ownership row). Two
+    fixtures record what happens, and the recorded behaviour is whatever the
+    shipped composer already does for its own three headings — this WP adds no
+    reservation: **(a) a same-day second run** that admits new sessions, and
+    **(b) a candidate body that itself contains the exact line
+    `## Sessions this run could not consolidate`.** Each asserts the resulting
+    report's full accounting region, so a later change to ownership — for this
+    heading or for `## Refused by policy (promotion enforcement)` — has to move
+    these fixtures and cannot land silently.
+12. **Zero-admission runs, asserted as they are** (Table A's coverage row): a run
+    whose only event is a quarantine writes **no report**, prints
+    `wienerdog: nothing new to dream.`, and this WP adds nothing to it; a run with
+    exclusions but no admission throws, and its message carries the B3–B6 counts
+    and no quarantine count. Both are asserted so the boundary is a pinned fact
+    rather than a sentence in this spec.
+13. **Machine-run RED (ADR-0042).** `npm run red-proofs` reports `RUN: PROVEN` and
+    its criteria roll-up carries three lines for this WP — `criterion 2`,
+    `criterion 3` and `criterion 7` — each `PROVEN` and each naming its Table C
+    proof id.
+14. `npm test` and `npm run lint` pass. Every file under `tests/golden/` is
     byte-identical and none is edited.
-14. Idempotence: **N/A — this WP ships no command and adds no write to a user
+15. Idempotence: **N/A — this WP ships no command and adds no write to a user
     machine.** It adds lines to a block the run already composes and writes once.
+    Re-running the dream over an unchanged corpus reaches the idle return and
+    writes no report at all; a same-day run that DOES admit sessions is criterion
+    11(a), not an idempotence claim.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -636,7 +778,7 @@ npm run red-proofs
 # no pointer and no "skipped" on a quarantine-free run, and is built from integers
 # alone. Single-quoted JS literals throughout, which Table A's no-apostrophe row
 # is what makes possible.
-node -e "const {runSkipSummarySection:f}=require('./src/core/dream/promote.js');const bad=[];const B3='- 1 session transcript(s) are too big to dream over on their own. Wienerdog will pass over them every night until the session file changes or you raise dream_max_input_bytes in config.yaml.';const B4='- 2 session transcript(s) did not fit in what this run could take in, and will be retried on the next run.';const B5='- 5 session transcript(s) were not reached before the time this run had to prepare them ran out, and will be retried on the next run.';const B6='- 4 session transcript(s) were still being written while this run read them, and will be retried on the next run.';const HEAD='## Sessions this run could not consolidate';const PTR='Which sessions are being skipped, and why: reports/warnings.md in your vault.';const ALL=[HEAD,'','- 3 session transcript(s) were skipped for the first time this run.','- 191 session transcript(s) were already being skipped and were skipped again.',B3,B4,B5,B6,'',PTR].join('\n');const NOQ=[HEAD,'',B3,B4,B5,B6].join('\n');const full=f({newlyQuarantined:3,stillQuarantined:191,oversized:1,capacityDeferred:2,deadlineDeferred:5,readDeferred:4});if(full!==ALL)bad.push('the six-count section is not byte-exact: '+JSON.stringify(full));const noq=f({newlyQuarantined:0,stillQuarantined:0,oversized:1,capacityDeferred:2,deadlineDeferred:5,readDeferred:4});if(noq!==NOQ)bad.push('the quarantine-free section is not byte-exact: '+JSON.stringify(noq));if(noq.indexOf('reports/warnings.md')!==-1)bad.push('a quarantine-free section emitted the warnings pointer; none of those arms leaves a ledger quarantine, so that file cannot name them');if(noq.indexOf('skipped')!==-1)bad.push('the word skipped leaked outside the two quarantine bullets, so the pointer promise is no longer lexically scoped');if(/wienerdog doctor/.test(full))bad.push('the section names a second pointer; the enumeration has one home');if(f({newlyQuarantined:0,stillQuarantined:0,oversized:0,capacityDeferred:0,deadlineDeferred:0,readDeferred:0})!=='')bad.push('the all-zero case is not empty');if(f(undefined)!=='')bad.push('a non-object argument did not render empty');const hostile=f({newlyQuarantined:3,stillQuarantined:'../../etc/passwd',oversized:1.5,capacityDeferred:-1,deadlineDeferred:NaN,readDeferred:{toString(){return '9';}}});if(/passwd|1\.5|-1|NaN|9 session/.test(hostile))bad.push('a non-integer argument reached the output: '+JSON.stringify(hostile));if(hostile.indexOf('already being skipped')!==-1)bad.push('a non-integer count rendered its bullet instead of being read as 0');const partial=f({newlyQuarantined:3,stillQuarantined:0,oversized:0,capacityDeferred:0,deadlineDeferred:0,readDeferred:0});if(partial.indexOf('already being skipped')!==-1)bad.push('a zero count still rendered its bullet');if(partial.indexOf(PTR)===-1)bad.push('the pointer line is missing from a quarantine-bearing partial render');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('SKIP SECTION OK');"
+node -e "const {runSkipSummarySection:f}=require('./src/core/dream/promote.js');const bad=[];const HEAD='## Sessions this run could not consolidate';const PTR='Which sessions are being skipped, and why: reports/warnings.md in your vault.';const B1='- 3 session transcript(s) were skipped for the first time this run.';const B2='- 191 session transcript(s) were already being skipped and were skipped again.';const B3='- 1 session transcript(s) are too big to dream over on their own. Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.';const B4='- 2 session transcript(s) did not fit in what this run could take in, and will be retried on the next run.';const B5='- 5 session transcript(s) were not reached before the time this run had to prepare them ran out, and will be retried on the next run.';const B6='- 4 session transcript(s) were still being written while this run read them, and will be retried on the next run.';const eq=(got,want,what)=>{if(got!==want)bad.push(what+' is not byte-exact: '+JSON.stringify(got));};const full=f({newlyQuarantined:3,stillQuarantined:191,oversized:1,capacityDeferred:2,deadlineDeferred:5,readDeferred:4});eq(full,[HEAD,'',B1,B2,B3,B4,B5,B6,'',PTR].join('\n'),'the six-count section');const noq=f({newlyQuarantined:0,stillQuarantined:0,oversized:1,capacityDeferred:2,deadlineDeferred:5,readDeferred:4});eq(noq,[HEAD,'',B3,B4,B5,B6].join('\n'),'the quarantine-free section');if(noq.indexOf('reports/warnings.md')!==-1)bad.push('a quarantine-free section emitted the warnings pointer; none of those arms leaves a ledger quarantine, so that file cannot name them');if(noq.indexOf('skipped')!==-1)bad.push('the word skipped leaked outside the two quarantine bullets, so the pointer promise is no longer lexically scoped');if(/wienerdog doctor/.test(full))bad.push('the section names a second pointer; the enumeration has one home');eq(f({newlyQuarantined:0,stillQuarantined:0,oversized:0,capacityDeferred:0,deadlineDeferred:0,readDeferred:0}),'','the all-zero case');eq(f(undefined),'','a non-object argument');eq(f({newlyQuarantined:3,stillQuarantined:'../../etc/passwd',oversized:1.5,capacityDeferred:-1,deadlineDeferred:NaN,readDeferred:{toString(){return '9';}}}),[HEAD,'',B1,'',PTR].join('\n'),'the hostile render (every non-integer must read as 0; a floor or any coercion FAILS here)');eq(f({newlyQuarantined:Number.MAX_SAFE_INTEGER+1,stillQuarantined:0,oversized:0,capacityDeferred:2,deadlineDeferred:0,readDeferred:0}),[HEAD,'',B4].join('\n'),'the unsafe-integer render (a count above Number.MAX_SAFE_INTEGER must read as 0)');const partial=f({newlyQuarantined:3,stillQuarantined:0,oversized:0,capacityDeferred:0,deadlineDeferred:0,readDeferred:0});if(partial.indexOf('already being skipped')!==-1)bad.push('a zero count still rendered its bullet');if(partial.indexOf(PTR)===-1)bad.push('the pointer line is missing from a quarantine-bearing partial render');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('SKIP SECTION OK');"
 
 # Table A gate — the dream skill is not told about the section. The `test -f`
 # guard is required: a negated grep on a missing file exits 2 and the negation
@@ -650,19 +792,23 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'could not consolidate' ski
   `src/core/dream/promote.js`; delete `skills/wienerdog-dream/SKILL.md`), the
   deliverable VIOLATING (reword one bullet; make the all-zero case render a
   heading; tie the pointer to the heading so a quarantine-free run emits it; let
-  `skipped` into a non-quarantine bullet; add the section to SKILL.md), and the
-  compliant state — so a check that cannot fail is caught before anyone believes
-  it.
+  `skipped` into a non-quarantine bullet; **replace the integer guard with one that
+  coerces and floors**; add the section to SKILL.md), and the compliant state — so
+  a check that cannot fail is caught before anyone believes it.
 - `npm run red-proofs` is the machine-run half (ADR-0042) and it is not a
-  substitute for the three-state observation above: it proves two identities are
+  substitute for the three-state observation above: it proves three identities are
   non-vacuous, not that the gates can fail.
 - **The `node -e` gate's own three states were observed by the author** against a
   stub exporting Table A's formatter, on 2026-09-17, before this spec was
-  committed: compliant → `SKIP SECTION OK` exit 0; module absent → exit 1; and
-  three separate mutations (the pointer tied to the heading, the all-zero case
-  rendering a heading, one count read raw instead of as an integer) → exit 1 with
-  the naming diagnostic. That establishes only that **the gate can fail**; the
-  implementer still owes the three states against the real deliverable.
+  committed: compliant → `SKIP SECTION OK` exit 0; module absent → exit 1; and four
+  separate mutations (the pointer tied to the heading, the all-zero case rendering
+  a heading, one count read raw instead of as an integer, and **the coerce-and-floor
+  guard of Table C's third proof**) → exit 1 with the naming diagnostic. The floor
+  mutation is the one worth stating: it is invisible to a forbidden-token scan and
+  is caught only because the gate now compares the hostile and unsafe-integer
+  renders to hand-written expected strings. That establishes only that **the gate
+  can fail**; the implementer still owes the three states against the real
+  deliverable.
 
 ## Out of scope (do NOT do these)
 
@@ -679,9 +825,21 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'could not consolidate' ski
   (`WP-doctor-quarantine-counts`).
 - Reusing `promote()`'s `records` input for these counts — its members land in the
   enforcement section, and a fail-safe skip is not an enforcement event.
-- **Anything on the no-admission throw path** (`src/cli/dream.js:736-743`): no new
-  message, no new record, no attempt to write a report there. That path is
-  ADR-0012's 2026-09-15 amendment and `WP-dream-filtered-input-budget`'s row A9.
+- **Anything on a path that writes no report** — the no-admission throw
+  (`src/cli/dream.js:736-743`), the idle return (`:746-757`) and the dry-run return
+  (`:765-768`): no new message, no new record, no report written where none is
+  written today. The throw's text is ADR-0012's 2026-09-15 amendment and
+  `WP-dream-filtered-input-budget`'s row A9; the idle path makes no commit at all,
+  so writing a report there is an ADR-0012 lifecycle question. Owner item 4.
+- **Reserving, deduping or marking any code-owned report heading**, including this
+  package's own. Nothing reserves the three shipped ones either (Table A's
+  ownership row); a rule for one heading is a rule the other three lack. Criterion
+  11 pins the behaviour instead.
+- **Adding a further condition to the pointer**, including a
+  warnings-file-is-current flag on `runSkips`. Measured under Implementation notes:
+  the refresh result exists before `promote()` only on the newly-quarantined
+  sub-path, so such a flag would suppress the pointer on the very case the package
+  exists for. Owner item 5.
 - Reordering the run, moving the run's single commit, or adding a second one
   (ADR-0012).
 - Any change to `skills/wienerdog-dream/SKILL.md` or to any prompt.
@@ -718,17 +876,49 @@ admits a single oversized extract alone rather than skipping it — and each
 re-opens ADR-0023 Amendment 3's A1–A4, which are owner-ratified. It needs its own
 work package and its own ADR amendment; nothing is filed here.
 
+**A run that admits nothing writes no report, so per-run skip accounting has no
+carrier on those paths.** Routed from design round 1, finding 1. A quarantine-only
+run — including the one that quarantines 191 historical sessions on first
+contact — reaches the idle return at `src/cli/dream.js:746-757`, because
+`exclusions` is built from the four collector counts alone (`:683-700`) and never
+from a quarantine count. It prints `wienerdog: nothing new to dream.` and returns:
+`stillQuarantined` is emitted nowhere, and `newlyQuarantined` survives only as the
+number of per-file console lines. A zero-admission run that DOES throw (`:736-743`)
+puts B3–B6 in its failure message and still no quarantine count. Fixing this is not
+a report change: it is either **a report written on a path that writes none today**
+— which reopens ADR-0012's one-run-one-commit boundary, since the idle path makes
+no commit — or **a change to the failure message**, which is `WP-dream-filtered-
+input-budget`'s owner-ratified row A9 text. Each is its own work package; nothing
+is filed here. Owner item 4 states the recommendation.
+
+**No code-owned report heading is reserved from brain-authored content, and this
+predates the new section.** Routed from design round 1, finding 5. Measured at
+`545df8bd`: `ENFORCEMENT_HEADING`, `REDACTION_HEADING` and `PRESERVED_HEADING`
+(`src/core/dream/promote.js:584-591`) appear only in emission (`:708`, `:737`,
+`:751`); nothing scans the candidate body, strips a prior code-owned block or
+dedupes. Two consequences already ship: a brain that writes `## Refused by policy
+(promotion enforcement)` into its report body gets a second, identical-looking
+section appended under it, and a **second run on the same date** appends a second
+copy of the whole accounting block. The fix — a delimited code-owned block, or a
+marker, or a rejection in the skill-body gate — belongs to whichever package owns
+`composeRecord`'s document model, and must cover all four headings at once. This
+package adds the same (absent) rule for its own heading and pins the behaviour with
+criterion 11 so a future fix has to move a fixture. Nothing is filed here.
+
 ## Dispatch precondition — owner items
 
-Three items. Each carries a recommendation and the cost of overruling it. **None
+Five items. Each carries a recommendation and the cost of overruling it. **None
 of them is decided**: nothing in this repo records the owner accepting any of
-them, and this spec asserts no such acceptance.
+them, and this spec asserts no such acceptance. Items 4 and 5 were raised by
+design review round 1 (2026-09-17) and are recorded with their dispositions in
+`docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`.
 
 1. **Which arms does the report count, and how honest is the oversized bullet?**
    *Recommendation: all six of Table B, one bullet each, and the oversized bullet
-   says plainly that those sessions will keep being passed over every night and
-   names `dream_max_input_bytes`* (its exact wording is Table A's; the word
-   *skipped* is reserved to the two quarantine bullets, per Table A's
+   states all three releases row B3 allows — the session changing, Wienerdog being
+   updated, a sufficiently raised limit — and that each earns a fresh measurement
+   that may find the session too big again* (its exact wording is Table A's; the
+   word *skipped* is reserved to the two quarantine bullets, per Table A's
    lexical-scoping row). The alternative shapes are (a) four bullets, merging
    B4–B6 into one "will be retried next run" line — the promise is identical for
    all three, but the user loses the cause, and with it which setting, if any, is
@@ -773,22 +963,56 @@ them, and this spec asserts no such acceptance.
    and an ADR-0023 amendment, and this package's pointer row must then be
    re-decided, because the pointer would newly be able to promise the oversized
    bullet's sessions too.
+4. **Should a run that admits nothing get durable per-run accounting?** Today it
+   does not: a quarantine-only run writes no report and emits no
+   `stillQuarantined` anywhere, and a zero-admission run that throws carries the
+   four collector counts and no quarantine count (Table A's coverage row, and
+   Discovered issues).
+   *Recommendation: yes it should, and NOT in this package.* Every available
+   carrier is outside this boundary: a report on the idle path would be the first
+   vault write by a run that makes no commit (ADR-0012, one run one commit); a
+   quarantine count in the failure message edits text ADR-0012's 2026-09-15
+   amendment and `WP-dream-filtered-input-budget` row A9 fixed; a fifth durable
+   surface reopens ADR-0023 Amendment 2's one-home principle. Each is a package
+   with its own ADR question, and folding any of them in here would turn a report
+   section into a lifecycle change mid-review.
+   *Cost of overruling:* this package grows a second subject and a second write
+   path, its Deliverables gain the idle and throw branches, and the surface the
+   design loop is converging on moves again. The cost of ACCEPTING is that the
+   gap stays open until its own package lands, with the quarantine-only first-run
+   case — the 191-session one — the most visible instance of it.
+5. **Should the `reports/warnings.md` pointer be suppressed when this run cannot
+   confirm the file is current?** *Recommendation: no, not by a boolean in this
+   package.* Measured (Implementation notes): the refresh result exists before
+   `promote()` **only** when the run minted a new quarantine, so a
+   confirmed-current flag would be false on every `stillQuarantined`-only run and
+   would delete the pointer from exactly the case the package exists for. Honest
+   alternatives both restructure someone else's surface — a fourth refresh call
+   site, or moving refresh point 2 ahead of the commit.
+   *Cost of overruling:* either the pointer disappears from the main case, or this
+   package takes an edit to `WP-quarantine-warnings-file`'s refresh points and an
+   ADR-0012 ordering question with it. The cost of ACCEPTING is a pointer that can
+   name an absent or stale file while its counts are exact — bounded, because the
+   next successful refresh point repairs the file and the ledger was never wrong.
 
 ## Definition of done
 
-0. **DISPATCH PRECONDITION.** (a) The three owner items above are answered, and the
+0. **DISPATCH PRECONDITION.** (a) The five owner items above are answered, and the
    answers are applied to this spec by a committed revision — never by a dispatch
    message, because `scripts/boundary-check.js` reads the Deliverables table in this
    file and nothing a message says changes what CI sees. (b) This spec is `Ready`,
    which only the design-review loop or the owner may make it
    (`docs/runbooks/codex-review.md`). (c) `WP-dream-filtered-input-budget` is `Done`
    at `docs/specs/done/WP-dream-filtered-input-budget.md` (merged in PR #245;
-   flipped in PR #246, `047a202c`), so this spec's new `depends_on` entry is
+   flipped in PR #246, `545df8bd`), so this spec's new `depends_on` entry is
    satisfied. (d) **Every `src/cli/dream.js:NNN` citation is re-derived by a
    committed revision of this spec** if either sibling named in Current state —
    `WP-dream-digest-omits-own-job-alerts`, `WP-dream-lock-stale-owner-loud` — has
-   landed in that file since `047a202c`, and likewise after any further collector
-   work. The re-derivation changes line numbers, not the tables.
+   landed in that file since `545df8bd`, and likewise after any further collector
+   work. The re-derivation changes line numbers, not the tables. (e) **Design
+   review round 1's six findings are all dispositioned** in this revision
+   (`docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`), and the
+   fresh external round that follows those four heavy changes has run.
 1. All verification steps pass locally; output pasted into the PR body, including
    the three-state evidence for each new gate and the `red-proofs` roll-up.
 2. Conventional commits; PR titled
