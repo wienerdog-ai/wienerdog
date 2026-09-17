@@ -1,7 +1,7 @@
 ---
 id: WP-dream-lock-stale-owner-loud
 title: Make a stale busy dream lock loud, and refuse an implausible deadline
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-dream-live-owner-lock]
@@ -13,46 +13,36 @@ adrs: [ADR-0004, ADR-0012, ADR-0031, ADR-0042]
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template gives
   the skeleton, the runbook the rules. Read both.
 
-> **The design gate ran 2026-09-17 against `545df8bd` / `2d5e2465` and CLOSED at
-> round 4** — four rounds on one channel, **4 findings, then 3, then 2, then 1**.
-> Round 1 (band A HEAVY + three band B HEAVY): the boot-time death proof was not
-> proof at all, because nothing binds the lock's `startedAt` to the PID the probe
-> found — it was removed rather than repaired; the promised hourly alert latency
-> was contradicted by `run-job`'s own success watermark; the byte-exact message
-> never reaches the durable alert or the email; a far-future deadline defeated
-> both takeover and loudness indefinitely. Round 2 (band A HEAVY + two band B):
-> restart-then-delete could delete a lock the automatic takeover had just
-> acquired; the deadline cap still multiplied an unvalidated config value; the
-> result-shape change reached a test outside the permission boundary. Round 3
-> (band A HEAVY + band B): a repeated message does not identify the record it
-> diagnosed; the silence bound ignored that the gate is only sampled when a run
-> happens. Round 4 (band B, LIGHT): 54 hours is not a wall-clock maximum, because
-> a local schedule day can be 25 hours. **Every finding is dispositioned — none
+> **The design gate ran 2026-09-17 and CLOSED at round 7** — seven rounds on two
+> channels and two models: rounds 1–4 `gpt-5.6-sol` via `codex exec`, rounds 5–7
+> `gpt-6-astra` via the Codex plugin. Findings **4, 3, 2, 1 — then 2, 1, 1**.
+> Round 1 removed the boot-time death proof outright (nothing binds the lock's
+> `startedAt` to the probed PID), corrected the alert latency against `run-job`'s
+> own success watermark, narrowed the message's delivery claim, and bounded a
+> far-future deadline. Round 2 killed restart-then-delete, made the deadline cap
+> absolute rather than a multiple of an unvalidated config value, and pulled a
+> test back inside the permission boundary. Round 3 withdrew the claim that a
+> repeated message identifies the record, and replaced the silence bound with the
+> sampling rule. Round 4 showed 54 hours is not a wall-clock maximum, because a
+> local schedule day can be 25 hours. **Round 5 re-opened a loop round 4 had
+> closed**: a second model evaluated the actual watchdog resolver and showed that
+> a *scheduled* dream can legitimately overrun the loud bound, which killed the
+> last start-time heuristic and with it the deletion instruction. Round 6 rewrote
+> the message to assert only what a `busy` decline observes. Round 7 withdrew an
+> atomicity assurance in O1's pricing. **Every finding is dispositioned — none
 > dropped, none accepted as a residual without being written into this spec** —
 > and each round's raw reviewer output was committed BEFORE adjudication
-> (`ba19772e`, `46061d59`, `e7856efb`, `83e658d8`). Round 4's verdict on the
-> round-3 repair: *"R3-A1 is substantively fixed: the operative contract
-> withdraws record-identity claims and truthfully prices deletion as resting on a
-> fallible human check."* The per-round tables, the `>`/`>=` sweep, the
+> (`0b926fe2`, `1a6c8f6d`, `2f4b509d`, `b815864e`, `eef9b885`, `54aa0a6d`,
+> `92c6d57f`). Round 7's verdict on the round-6 repair: *"reviewed every S5
+> sentence against acquisition, promotion and teardown. The vault-inactivity and
+> impossible-recovery claims are withdrawn, restart names ongoing-work loss, and
+> deletion remains conditional."* The per-round tables, the `>`/`>=` sweep, the
 > daylight-saving arithmetic and the mirror walks are
 > `docs/specs/logbook/2026-09-17-dream-lock-stale-owner-design-review.md`; the
 > round-zero conformance pass is
 > `docs/specs/logbook/2026-09-17-dream-lock-silent-stall.md`.
-> **The loop was RE-OPENED on 2026-09-17 by a confirming round from a second
-> reviewer** (Codex plugin adversarial-review, `gpt-6-astra`, tip `9f7eb37d`,
-> raw `f9351bdb`). That round confirmed the 54 h and 55 h worked cases by
-> executing the real `catchUp`/`todaysFire` functions, confirmed that no raw lock
-> bytes enter the message, and confirmed the cited locations and the
-> `acquireLock` consumer inventory. It also found **one product finding the first
-> reviewer had accepted across four rounds**: O1's claim that only an *attended*
-> run can legitimately overrun six hours is false, because `wienerdog schedule
-> --timeout` and `resolveTimeoutMs` bound the scheduled watchdog at nothing. The
-> half-hour start-time heuristic that round 3 put into the recovery text died
-> with it, and with it the deletion instruction itself (O4). A second, machinery
-> finding: the RED lane runs only the declared suite, so S4's proof could never
-> have reached the CLI comparison. **This spec is back to `status: Draft`.**
-> Owner items **O1–O6** stay recorded under the standing process — see "Dispatch
-> precondition — owner items" — but O1 and O4 changed materially in this pass.
+> **This spec is `Ready`.** Owner items **O1–O6** are recorded under the standing
+> process — see "Dispatch precondition — owner items".
 
 ## Context (read this, nothing else)
 
@@ -410,13 +400,30 @@ the lock is not rewritten and scratch is not mutated (S4 branch (2) throws befor
 any of that). This spec claims only that the default configuration cannot produce
 a legitimate six-hour overrun; it does **not** claim that no legitimate run can
 trip the gate.
-**Second named cost — the alert can cost work, not only attention.** A user who
-acts on a false alarm by restarting ends a dream that was healthy and mid-run.
-S5 is written against this: it presents restart as an option rather than an
-instruction, conditions it on the messages continuing, and says in the same
+**Second named cost — the alert can cost work, and interrupting a dream is not
+a clean rollback.** A user who acts on a false alarm by restarting ends a dream
+that was healthy and mid-run, and "ends" is not "undoes". There is no
+transactional rollback anywhere in the run:
+
+- **Promotion publishes paths one at a time, before the commit.** `promote()`
+  runs at `src/cli/dream.js` ≈ l.956 and `commitNamedSet` only at ≈ l.1055, and
+  `src/core/dream/promote.js` says so in its own words at ≈ l.808-812: *"Cross-path
+  WRITE-atomicity is not claimed — a first `rename` that succeeds followed by one
+  that fails leaves a half-applied pair"*. A restart inside that window can leave
+  some vault changes published and others absent, uncommitted, with the
+  transcript ledger unadvanced (`writeLedger`, ≈ l.1164) — so the next run
+  reprocesses those sessions.
+- **A restart after the commit but before the ledger is persisted** leaves
+  committed work eligible for reprocessing by the next run.
+
+**These are properties of *any* interruption of a dream** — power loss, the outer
+watchdog, a forced reboot — and this work package neither introduces them nor
+repairs them; rolling back a partial publish is named in `promote.js` as a
+successor's subject. What this work package adds is one more reason a user might
+choose to interrupt. That is why S5 offers the restart as an option rather than
+an instruction, conditions it on the messages continuing, and says in the same
 sentence that it ends a dream that is still working. The residual is that a user
-may restart anyway; what is lost is one run's work, not vault content, since a
-dream run is one commit and an interrupted run simply does not make it.
+may restart anyway and land in one of the two states above.
 *Overrule cost:* one-constant change to `STALE_LOCK_ALERT_MS` plus the tests
 that pin it. Lower (e.g. 2 h) makes a legitimate long run alert sooner and makes
 that second cost more likely; higher
@@ -424,6 +431,15 @@ that second cost more likely; higher
 bound from the configured timeouts instead was not taken: both are unbounded, so
 a derived bound inherits that (the same defect O2 records), and it would make the
 loud gate silent exactly on the installs configured to run longest.
+**A separate overrule, offered here rather than taken:** if the owner judges that
+a non-developer needs a stronger warning than "ends … a dream that is still
+working", S5's fifth sentence would become — *"If they keep coming, restarting
+this computer ends whatever is holding the lock. That includes a dream that is
+still working, and stopping one part-way can leave some of its notes written and
+others not, so prefer waiting if you can."* — which is true against the two
+states above. It is **not** taken now because changing S5 is a user-visible text
+change and would re-open the design loop; it is a one-string revision whenever
+the owner wants it.
 
 **O2 — The implausible-deadline cap. (Table S3)**
 *Question:* how far in the future may a stored deadline be before the record is
@@ -842,8 +858,10 @@ unrelated lifecycle and capacity amendments remain in force.
 
 1. This spec is `Ready`; owner items O1–O6 are recorded under the standing
    process and need no further permission to dispatch, but a material change to
-   any of them does. **Re-verify C1–C5 at the dispatch revision** — the
-   `src/cli/dream.js` line numbers will have moved (Implementation notes).
+   any of them does. **The verified base is pinned in Current state, and the
+   dispatcher MUST re-derive every `src/cli/dream.js` citation at dispatch** —
+   `WP-dream-digest-omits-own-job-alerts` lands in that file first, so C1–C5's
+   line numbers will have moved. Locate each region by its code, not its number.
 2. All verification steps pass locally; output pasted into the PR body,
    including both directions of every new assertion.
 3. Branch `wp/dream-lock-stale-owner-loud`; conventional commits; PR titled

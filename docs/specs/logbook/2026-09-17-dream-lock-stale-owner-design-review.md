@@ -116,7 +116,7 @@ a bound; round 3 asked what constrains when the bound is evaluated; round 4 asks
 in whose clock. Three rounds, one root — a bound stated as a number when the
 honest statement was a rule.
 
-## Closure
+## Closure (round 4 — superseded)
 
 **Superseded 2026-09-17 by the confirming round below: this closure did not
 hold, and the spec returned to `status: Draft`.** The round-4 reasoning stands as
@@ -235,7 +235,7 @@ No suites, lint or proofs — the implementation does not exist.
 
 | Finding | Band | Weight | Disposition | Rationale |
 |---|---|---|---|---|
-| R6-1 — S5 still equates an overdue busy lock with stopped vault activity | medium | **heavy** (user-visible text) | **Fix** | Two sentences asserted facts `busy` cannot establish. (i) *"nothing new has been written to your vault since then"* — false: `src/cli/dream.js` promotes into the vault at ≈ l.956, **inside** the lock, and releases only at ≈ l.1221, so a held lock is fully consistent with a healthy owner that has already written; and A-1 established that such an owner can legitimately be running this long. (ii) *"Wienerdog cannot clear it on its own"* — false: the owner may finish and release, or the probed PID may exit and Table L5's `ESRCH` takeover then applies. Compounding both, the **unconditional** "Restart this computer" could destroy a healthy long-running dream on a false diagnosis; O1 priced the false alert but not the misleading guidance. The message is rewritten to state only the decline's own observations — the lock is past its deadline, a local process answered the probe, this run did not start — to present both possibilities and say Wienerdog cannot tell which, and to offer restart as an **option** conditioned on the messages continuing, with its cost named in the same sentence. The diagnosis word changes from *stale* (which asserts death) to *overdue* (which does not), and the identifying literal `dream lock is overdue:` is now pinned in AC5, in AC7's rule for declaration `find` strings, and in the mirrored-surface walk. The internal constant keeps its `STALE_` name, which matches the work package slug and describes the condition to the implementer; S4 records that split deliberately. O1 gains a second named cost — the alert can cost one run's work, never vault content, since a dream run is one commit and an interrupted run simply does not make it. |
+| R6-1 — S5 still equates an overdue busy lock with stopped vault activity | medium | **heavy** (user-visible text) | **Fix** | Two sentences asserted facts `busy` cannot establish. (i) *"nothing new has been written to your vault since then"* — false: `src/cli/dream.js` promotes into the vault at ≈ l.956, **inside** the lock, and releases only at ≈ l.1221, so a held lock is fully consistent with a healthy owner that has already written; and A-1 established that such an owner can legitimately be running this long. (ii) *"Wienerdog cannot clear it on its own"* — false: the owner may finish and release, or the probed PID may exit and Table L5's `ESRCH` takeover then applies. Compounding both, the **unconditional** "Restart this computer" could destroy a healthy long-running dream on a false diagnosis; O1 priced the false alert but not the misleading guidance. The message is rewritten to state only the decline's own observations — the lock is past its deadline, a local process answered the probe, this run did not start — to present both possibilities and say Wienerdog cannot tell which, and to offer restart as an **option** conditioned on the messages continuing, with its cost named in the same sentence. The diagnosis word changes from *stale* (which asserts death) to *overdue* (which does not), and the identifying literal `dream lock is overdue:` is now pinned in AC5, in AC7's rule for declaration `find` strings, and in the mirrored-surface walk. The internal constant keeps its `STALE_` name, which matches the work package slug and describes the condition to the implementer; S4 records that split deliberately. O1 gains a second named cost — the alert can cost one run's work, never vault content, since a dream run is one commit and an interrupted run simply does not make it. **Superseded in round 7 (R7-1): that last assurance is withdrawn.** A commit does not make interrupted promotion atomic — `promote()` publishes paths one at a time before `commitNamedSet`, and `promote.js` itself declines to claim cross-path write-atomicity — so a restart mid-promotion can leave the vault half-published and the ledger unadvanced. O1 now prices those states instead. |
 
 ### Two hedges that had to survive the rewrite
 
@@ -257,9 +257,76 @@ for each assertion, name the value or branch that establishes it. Three of the
 sentences had no such source, and one of them contradicted a line number the spec
 itself already cited.
 
+## Round 7 — disposition and closure
+
+Codex plugin adversarial-review, `gpt-6-astra`, tip `c0acf8c1`. Verdict
+`needs-attention`, one finding, no blocking machinery finding. Raw artifacts are
+committed beside this entry as
+`2026-09-17-dream-lock-stale-owner-design-r7-astra-raw.json`, `-focus.txt` and
+`-meta.txt`. Nothing below records an owner decision.
+
+What the round confirmed: *"reviewed every S5 sentence against acquisition,
+promotion and teardown. The vault-inactivity and impossible-recovery claims are
+withdrawn, restart names ongoing-work loss, and deletion remains conditional."*
+S5, AC5 and AC7 carry `dream lock is overdue:` and no `dream lock is stale:`
+literal remains anywhere. The cited locations resolve.
+
+| Finding | Band | Weight | Disposition | Rationale |
+|---|---|---|---|---|
+| R7-1 — O1 assumes a commit makes interrupted promotion atomic | medium | **light** | **Fix the claim** | O1's round-6 pricing ended with an assurance that an interrupted run costs "one run's work, never vault content, since a dream run is one commit and an interrupted run simply does not make it". False. `promote()` runs at `src/cli/dream.js` ≈ l.956 and `commitNamedSet` only at ≈ l.1055, and `src/core/dream/promote.js` ≈ l.808-812 says in its own words that *"Cross-path WRITE-atomicity is not claimed — a first `rename` that succeeds followed by one that fails leaves a half-applied pair"*. So a restart inside that window can leave some vault changes published and others absent, uncommitted, with the transcript ledger unadvanced (`writeLedger` ≈ l.1164) and those sessions reprocessed next run; and a restart after the commit but before the ledger is persisted leaves committed work eligible for reprocessing. O1 now prices both states and says plainly that they are properties of **any** interruption of a dream — power loss, the outer watchdog — which this work package neither introduces nor repairs, without implying transactional rollback. The finding lives in an owner item's pricing and in a logbook rationale, not in the byte-exact message and not in anything the implementer builds, so it is LIGHT under the weighted-closure rule. The message's own sentence — *"ends whatever is holding the lock — including a dream that is still working"* — is true and unchanged; a stronger non-developer warning is **offered as a one-string overrule inside O1** rather than applied, because changing S5 would be a user-visible text change and would re-open the loop. |
+
+**The lesson of round 7** is the round-6 lesson applied one surface outward:
+*the per-sentence source check belongs to the reasoning too, not only to the
+user-facing string.* Round 6 audited every sentence of the message against the
+code and fixed it. The very same paragraph that recorded that fix then asserted
+an atomicity guarantee nobody had checked — in an owner item, where a wrong
+assurance is exactly as load-bearing, because it is what the owner would be
+deciding against.
+
+## Closure
+
+**The loop is closed at round 7**, per `docs/runbooks/codex-review.md`'s
+weighted-closure rule: round 7's single finding is LIGHT — it changes no rule, no
+constant, no test and no byte of the user-facing message — it is fixed, and its
+three citations were verified against the tree before adjudication.
+
+**Seven rounds, on two channels and two models.** Rounds 1–4 were `gpt-5.6-sol`
+via `codex exec`; rounds 5–7 were `gpt-6-astra` via the Codex plugin. Findings:
+**4, 3, 2, 1 — then 2, 1, 1.** The second channel's first round re-opened a loop
+the first had closed, by evaluating the actual watchdog resolver rather than
+reading the claim about it; that is the single most useful thing either channel
+did, and it is why the round count is not a measure of convergence on its own.
+
+Every finding is dispositioned in the tables above. None was dropped, and none
+was accepted as a residual without being written into the spec. Each round's raw
+reviewer output was committed **before** adjudication — post-rebase `0b926fe2`
+(round 1), `1a6c8f6d` (round 2), `2f4b509d` (round 3), `b815864e` (round 4),
+`eef9b885` (round 5), `54aa0a6d` (round 6), `92c6d57f` (round 7).
+
+What the reviewers executed: **static reads throughout, plus real execution of
+non-test code in the later rounds.** Rounds 1–4: repository history and status
+queries, a whitespace check, and `nl`/`sed`/`rg` over the design documents and
+the source, test, ADR, milestone and runbook regions they cite; round 1 added
+read-only web research into `os.uptime()` platform semantics, and rounds 3–4
+added Node schedule arithmetic. Rounds 5–7 went further and ran the product's own
+functions: the real `catchUp`/`todaysFire` with simulated watermarks (confirming
+54 h and 55 h), the real watchdog resolver and config reader, the real
+`acquireLock` against in-memory fixtures with a live-PID probe and simulated
+`EPERM`/`ESRCH`, and the real RED-proof declaration loader against representative
+declarations. **`npm test`, the targeted suites, `npm run lint` and `npm run
+red-proofs` were NOT run in any round**, and every round said so: this is a
+design-only branch, the implementation and the declared proofs do not exist yet,
+and both-directions evidence is the implementer's obligation at PR time
+(Verification steps, AC7).
+
+The spec moves to `status: Ready`. Owner items O1–O6 are recorded as
+recommendations adopted under the standing authorization in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`, each with
+its overrule cost, none of them a direct ruling.
+
 ## Resulting shape
 
-Size drops from M to S after round 1 and stays S through round 6. Table S is seven
+Size drops from M to S after round 1 and stays S through round 7. Table S is seven
 rows (result shape, `staleForMs`, implausible-deadline refusal, the loud gate,
 the message and its real delivery surface, the exit-code doc-comment errata, the
 ADR amendment). Six owner items, renumbered once in round 1.
