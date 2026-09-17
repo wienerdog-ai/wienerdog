@@ -590,6 +590,93 @@ const REDACTION_HEADING = '## Redacted in place (secret scan)';
 /** The heading the preserved-copy lines of REFUSED paths are written under. */
 const PRESERVED_HEADING = '## Preserved copies (secret quarantine)';
 
+/** The heading the run's own skip accounting is written under. */
+const RUN_SKIPS_HEADING = '## Sessions this run could not consolidate';
+
+/**
+ * Where the skipped sessions are NAMED. It rides the two QUARANTINE counts and
+ * nothing else: `reports/warnings.md` renders the ledger's active quarantines,
+ * and none of the other four arms leaves a quarantine record, so the file is
+ * structurally incapable of naming them (ADR-0023 Amendment 2).
+ */
+const RUN_SKIPS_POINTER = 'Which sessions are being skipped, and why: reports/warnings.md in your vault.';
+
+/** The one promise a deferral may make. A stop classifies the whole unvisited
+ *  remainder before any oversized memo is read, and the memos survive, so a
+ *  session deferred here can be passed over from its memo on the next run —
+ *  "considered again" is true, "retried" would not be. */
+const CONSIDERED_AGAIN =
+  'Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.';
+
+/**
+ * The code-owned per-run skip accounting for the dream report. Built from
+ * integers alone: every property that is not a non-negative safe integer
+ * renders as 0, exactly like `secretRevertSummaryLine` — which is what makes it
+ * STRUCTURALLY impossible for a basename, a path or a session id to enter this
+ * section. The names live in `reports/warnings.md`, the enumeration's one home.
+ *
+ * The wording is measured against what the collector can actually deliver: no
+ * bullet claims a session was skipped for the first time (a prior quarantine
+ * whose fingerprint changed is re-selected and can land in the first count
+ * again), and no deferral bullet promises a retry.
+ * @param {{newlyQuarantined:number, stillQuarantined:number, oversized:number,
+ *          capacityDeferred:number, deadlineDeferred:number,
+ *          readDeferred:number}} counts
+ * @returns {string} the section, no trailing newline; '' when every count is 0
+ */
+function runSkipSummarySection(counts) {
+  const c = counts || {};
+  const int = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);
+  const newlyQuarantined = int(c.newlyQuarantined);
+  const stillQuarantined = int(c.stillQuarantined);
+  const oversized = int(c.oversized);
+  const capacityDeferred = int(c.capacityDeferred);
+  const deadlineDeferred = int(c.deadlineDeferred);
+  const readDeferred = int(c.readDeferred);
+
+  // One bullet per NON-ZERO count, in the canonical order. The word "skipped"
+  // appears only in the two quarantine bullets and in the pointer, which is
+  // what scopes the pointer's promise to the bullets it rides on.
+  /** @type {string[]} */
+  const bullets = [];
+  if (newlyQuarantined > 0) {
+    bullets.push(
+      `- ${newlyQuarantined} session transcript(s) were set aside by this run and will be skipped from now on, until they change.`
+    );
+  }
+  if (stillQuarantined > 0) {
+    bullets.push(`- ${stillQuarantined} session transcript(s) were already being skipped and were skipped again.`);
+  }
+  if (oversized > 0) {
+    bullets.push(
+      `- ${oversized} session transcript(s) are too big to dream over on their own. ` +
+        'Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.'
+    );
+  }
+  if (capacityDeferred > 0) {
+    bullets.push(
+      `- ${capacityDeferred} session transcript(s) were not reached, because this run had already taken in as much as it could. ${CONSIDERED_AGAIN}`
+    );
+  }
+  if (deadlineDeferred > 0) {
+    bullets.push(
+      `- ${deadlineDeferred} session transcript(s) were not reached, because this run ran out of time to prepare them. ${CONSIDERED_AGAIN}`
+    );
+  }
+  if (readDeferred > 0) {
+    bullets.push(
+      `- ${readDeferred} session transcript(s) were still being written while this run read them. ${CONSIDERED_AGAIN}`
+    );
+  }
+  // This section is news. A run with nothing to report says nothing at all —
+  // no heading, no "none" line.
+  if (bullets.length === 0) return '';
+
+  const lines = [RUN_SKIPS_HEADING, '', ...bullets];
+  if (newlyQuarantined > 0 || stillQuarantined > 0) lines.push('', RUN_SKIPS_POINTER);
+  return lines.join('\n');
+}
+
 /**
  * What the report tells the user to do with one preserved copy, keyed by the
  * `remediation` the record carries. **READ, never decided here:** Table Q row
@@ -698,7 +785,8 @@ function preservedLine(rel, entry) {
  *          redacted:ReturnType<typeof promote>['redacted'],
  *          reportRel:string, reportRefusal:string|null,
  *          reportRedaction:RedactionAccounting|null,
- *          reportPreserved:PreservedCopy[]}} o
+ *          reportPreserved:PreservedCopy[],
+ *          runSkips?:Parameters<typeof runSkipSummarySection>[0]}} o
  * @returns {string[]} the record, heading lines included
  * @throws {WienerdogError} when the composed record does not survive its own
  *   neutralisation — Table N row N2's fail-closed default
@@ -749,6 +837,13 @@ function composeRecord(o) {
     for (const entry of o.reportPreserved) preservedLines.push(preservedLine(o.reportRel, entry));
   }
   if (preservedLines.length > 0) lines.push('', PRESERVED_HEADING, ...preservedLines);
+
+  // LAST, and one blank line after whichever block precedes it: the blocks
+  // above are about what the run refused to WRITE, this one about what it could
+  // not READ. Split so every element of `record` stays exactly one line, which
+  // is what the refused-report console dump prints.
+  const runSkips = runSkipSummarySection(o.runSkips);
+  if (runSkips !== '') lines.push('', ...runSkips.split('\n'));
 
   // TABLE N, ROW N2 — THE FAIL-CLOSED DEFAULT, AND IT IS THE CONTRACT'S ACTUAL
   // ENFORCEMENT. The rows above classify the channels this composer knows
@@ -818,6 +913,7 @@ function composeRecord(o) {
  *          gates:{secret:Function, skillBody:Function, tier3:Function, ledger:Function},
  *          registry?:object, extractsBySession?:Map<string,object>,
  *          records?:Array<{path:string, reason:string}>,
+ *          runSkips?:Parameters<typeof runSkipSummarySection>[0],
  *          writeFile?:typeof writeIntoVault,
  *          spawnGit?:typeof spawnGitForMerge}} o
  *   vaultDir   the vault root — the only thing this module knows about the
@@ -858,6 +954,14 @@ function composeRecord(o) {
  *              enforcement (`WP-dream-promote-in-workspace`, row G12). Each is
  *              neutralised at composition exactly like this module's own
  *              records (Table N)
+ *   runSkips   the counts of what this run could NOT consume, which only the
+ *              caller's collector observed. NOT validated and never a reason to
+ *              throw — it arrives after the brain has run and, on the
+ *              second-write arm, after the body has published, so a caller bug
+ *              must cost the section and never the night's consolidation. The
+ *              formatter reduces every non-integer to 0 instead. It is not
+ *              `records`: those land under the enforcement heading, whose
+ *              subject is a policy violation, and a fail-safe skip is not one
  *   writeFile  test seam — the vault-write primitive. Defaults to the real
  *              `writeIntoVault`; a JS-only injection point, never an env one
  *   spawnGit   test seam — the merge's git invocation. Defaults to
@@ -1559,6 +1663,7 @@ function promote(o) {
     reportRefusal: bodyPublished || reportBody === null ? null : reportBody.reason,
     reportRedaction,
     reportPreserved,
+    runSkips: opts.runSkips,
   });
   const section = Buffer.from(`${record.join('\n')}\n`, 'utf8');
   /**
@@ -1674,4 +1779,5 @@ module.exports = {
   // be substitutable for the CLAIM 2b assertion to observe every `cwd`.
   makeAdmit,
   spawnGitForMerge,
+  runSkipSummarySection,
 };

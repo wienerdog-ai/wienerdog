@@ -1053,6 +1053,17 @@ async function run(argv, opts = {}) {
         res = promote({
           vaultDir, workspaceDir, date, baseline, delta, layout,
           gates, registry, extractsBySession, records,
+          // What this run could not consume, counts only — the collector is the
+          // only place these are observed and the report is composed inside
+          // promote(), so they have to travel as an input.
+          runSkips: {
+            newlyQuarantined: sel.newlyQuarantined.length,
+            stillQuarantined: sel.skippedQuarantined,
+            oversized: sel.oversized.length,
+            capacityDeferred: sel.deferred.length,
+            deadlineDeferred: sel.deadlineDeferred.length,
+            readDeferred: sel.readDeferred.length,
+          },
           // JS-only test seam, forwarded rather than invented: `promote()` already
           // documents `writeFile` as the vault-write primitive's injection point.
           // The pipeline needs it because the report's SECOND write — the one whose

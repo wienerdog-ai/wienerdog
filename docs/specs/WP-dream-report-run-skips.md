@@ -1,7 +1,7 @@
 ---
 id: WP-dream-report-run-skips
 title: Make the dream report account for the sessions a run could not consume
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-quarantine-warnings-file, WP-quarantine-banner-decay, WP-dream-promote-in-workspace, WP-dream-filtered-input-budget]

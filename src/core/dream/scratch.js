@@ -51,7 +51,17 @@ function collectExtracts(paths, ledger, maxInputBytes, {
   // Discover all files: the ledger alone decides eligibility, including baselines
   // and the sticky secret-revert exception. A memo never overrides this decision.
   const discovered = transcripts.discover(paths, { since: null });
-  const candidates = discovered.filter((d) => ledgerLib.selectState(ledger, d) === 'select');
+  // The same single selectState call also counts the files this run ACTUALLY
+  // skipped for an existing quarantine — a count the filter used to discard and
+  // nothing outside it could recover. 'skip-processed' is not a skip and is not
+  // counted; a consolidated transcript is not missing from the run.
+  const candidates = [];
+  let skippedQuarantined = 0;
+  for (const d of discovered) {
+    const state = ledgerLib.selectState(ledger, d);
+    if (state === 'select') candidates.push(d);
+    else if (state === 'skip-quarantined') skippedQuarantined++;
+  }
   const newlyQuarantined = [];
   const underCeiling = [];
   for (const d of candidates) {
@@ -144,6 +154,7 @@ function collectExtracts(paths, ledger, maxInputBytes, {
     scratchDir,
     processed,
     newlyQuarantined,
+    skippedQuarantined,
     deferred,
     droppedForSize: deferred.length,
     dropped: deferred,
