@@ -87,3 +87,65 @@ Implementation-notes residual were all updated in the same pass.
 **Nothing in this round was ruled on by the owner.** O1 and O2 remain open; the
 only ruling on record is still the 2026-09-10 maintainer ruling about the
 managed-policy-warning follow-up's ordering.
+
+## Round 2 — independent design gate
+
+| Field | Value |
+|-------|-------|
+| Tip reviewed | `d7d50c0f3d8b4188bd81a337a0912753d6902564` |
+| Base | `047a202c1ada70ab44bd24a21157854441d987a2` |
+| Raw output | `docs/specs/logbook/2026-09-17-dream-digest-omits-design-r2-raw.json`, committed in **`ce5180c7`** (now `2eeba955` after the rebase onto `545df8bd`) before adjudication |
+| Focus / meta | `…-design-r2-focus.txt`, `…-design-r2-meta.txt`, same commit |
+| Verdict | `needs-attention`, 2 new findings (1 high, 1 medium) |
+| Round-1 findings | **all three confirmed substantively fixed** by the reviewer: AC5 covers inherited `WIENERDOG_JOB` without a valid token, catch-up uses the token-minting `runJob` path, Windows is explicitly left unchanged, only step 19 filters, AC6a-d assert digest content, and the config-removal mutation targets AC4 |
+| Tests executed by the reviewer | **none** — its own `not_executed` field says the tip is document-only and the conclusions are source/control-flow tracing. Recorded because a verdict whose tests did not run is a reading |
+
+### Findings, bands, weight, dispositions
+
+| # | Band | Weight | Finding | Disposition | Rationale and what changed |
+|---|------|--------|---------|-------------|----------------------------|
+| R2-1 | **A** | **HEAVY** | The B1/B2-only narrowing omits ordinary job failures and has no finite bound. `run-job` records a normal dream-body failure only after the child exits (l.1251 watermark → l.1257 `failLoud` → l.1269 throw), so a failing run makes no render that could show the fresh record; and the advertised recovery bound is not finite, because l.724 is conditional on `newlyQuarantined`, `sync` is attended-only, and every later successful step-19 render filters the job again | **FIX THE CLAIM; no new mechanism** | The trace is correct and was re-verified here against `run-job.js` l.1226-1269 and `failLoud`'s append at l.715. What it describes is a **pre-existing property of the product**, not something this WP introduces — and the display it removes is the after-the-fact one the 2026-09-10 bug report was filed about. Round 1's two claims (B1/B2 are the sole narrowing; the exposure is bounded by "the next unfiltered render") are **WITHDRAWN in the text**, and replaced by a new Table A row, *What reaches the digest for the dream's OWN failures*, plus a rewritten *Out-of-process failures are ONE class* row. THE PRINCIPLE row was re-scoped to what a `dream.js` render can govern. New Current-state facts: the ordinary failure path's three line cites, and the measured fact that **`doctor` reads no alerts**. New **AC6e** pins the end-to-end behaviour from a clean digest. New owner item **O3** puts the acceptability question to the owner with recommendation and overrule cost. No mechanism was added — the reviewer's alternative (a supervisor-side render) is rejected alternative A, prohibited by WP-041 |
+| R2-2 | **B** | LIGHT→**HEAVY** | A failed recovery render is swallowed and leaves no diagnostic: the atomic writer preserves the previous FILTERED digest, run-job then appends the genuine failure, and the user gets neither the callout nor any sign that restoration failed | **FIX** | Graded HEAVY because the fix changes observable product output (a new stderr line), even though it originates as a diagnostic gap. Table A's *Late in-process failure* row now requires: original exception still propagates; the recovery exception reported separately as **exactly ONE fixed-text stderr line** with **no interpolation** of exception, record, config or path bytes (this WP opens no new channel for untrusted bytes to a user-facing surface); plain language per CLAUDE.md. The inability to restore is named as its own residual. **AC7 split into AC7a/AC7b**, where AC7b injects a recovery-render failure and asserts all three: original error wins, diagnostic printed, digest unchanged in its filtered state |
+
+**Weighted closure.** Both fixes touch what the implementer builds, so a further
+fresh external round is owed on the revised tip. No finding was dropped; neither
+was accepted as a residual without being written into the spec.
+
+### Citation corrections the reviewer measured
+
+Both were in Table A's *Supervisor correlate* row only; the Current-state bullet
+was already correct.
+
+| Was | Is | Checked |
+|-----|----|---------|
+| `buildCleanEnv` returned at l.916 | **l.917** | `const env = buildCleanEnv(paths, name, platform);` — note a second `buildCleanEnv` call exists at l.577, which is why the number matters |
+| token minted at l.936 | **l.934-938**, with `crypto.randomBytes(8).toString('hex')` at **l.935** and the export at **l.936** | both ends of the range re-checked: l.934 is the `if`, l.938 its closing `}` |
+
+### Mechanical re-verification after the fixes
+
+| Gate | absent | violating | compliant |
+|------|--------|-----------|-----------|
+| V3 (comment-only diff shape) | guarded by `test -f` | **rc 1** (synthetic diff with an executable line) | **rc 0** (empty diff, and synthetic comment-only diff) |
+| V4a (narrowed claim present once) | — | **rc 1** on the untouched file | **rc 0** on the `sed` copy |
+| V4b (old universal gone) | **rc 1** | **rc 1** | **rc 0** |
+| V5 (`digest.js` unmoved) | — | — | **rc 0** (empty numstat vs `545df8bd`) |
+| V6 (declaration ids) | **rc 1** | **rc 1** (one id renamed) | **rc 0** |
+
+V6's `want` array is unchanged this round: Table C's id column did not move, only
+one row's `criterion` (`7` → `7a`) and its must-redden text. `npm run lint`
+passes; `git diff --check` clean.
+
+### Mirror walk (ADR-0031, same commit)
+
+THE PRINCIPLE row, the two rewritten/added Table A rows, Table C's
+`dream-digest-no-recovery-render` row and its `expectRed` note, the acceptance
+criteria (AC6 count four→five, AC6e added, AC7 split), the Mirrored Surface
+Checklist's acceptance-criteria / Current-state / operative-prose (e) /
+owner-items bullets, both Implementation-notes residuals, the owner-items
+preamble (two→three) and the new O3 were all updated in this one commit. No new
+mirror class was discovered; the operative-prose enumeration stays at eleven
+items, with (e) now naming two residual bullets instead of one.
+
+**Nothing in this round was ruled on by the owner.** O1, O2 and now O3 are open.
+The only ruling on record remains the 2026-09-10 maintainer ruling about the
+managed-policy-warning follow-up's ordering.
