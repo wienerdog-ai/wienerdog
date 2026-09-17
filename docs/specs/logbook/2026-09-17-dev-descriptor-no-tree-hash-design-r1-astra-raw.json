@@ -1,0 +1,19 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b037-2a19-7271-ba23-d443fd064fb9",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c",
+    "baseRef": "545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "approve",
+    "summary": "Approve the design; no material product or machinery findings. The only treeDigest consumer is prod-only; dev tree writers gain no new execution capability. ADR-0028:752 and 791–797 explicitly authorize this contract. Legacy dev descriptors remain accepted; their first rewrite truthfully reports changed:true, subsequent unchanged writes false. Prod serialization and digest remain identical for identical inputs. AC9/V11 explicitly require enabled scenarios, PASS, and pasted output; SKIPPED cannot satisfy them. The proposed assertions and mutations discriminate their targeted regressions. Citation checks found no material grounding errors. Executed: source searches, citation-endpoint checks, diff checks, the disabled scenario guard, and passing in-memory probes covering migration, launcher acceptance/refusal, ENOENT elimination, and prod equivalence. Read: ADR-0028, consumer paths, tests, scenario code, and RED-runner contracts. Full suites and enabled scenarios were not rerun in this read-only environment; the logbook’s execution claims were not independently reproduced.",
+    "findings": [],
+    "next_steps": [
+      "Implement within the stated boundary and supply fresh unit, mutation, lint, and enabled V11 evidence before implementation approval."
+    ]
+  }
+}

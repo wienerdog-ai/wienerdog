@@ -1,0 +1,5 @@
+gate: design  name: desc-r1  backend: codex plugin 1.0.6  model requested: gpt-6-astra
+tip: 0dfdb58ce877fc31ab6df75446c2869a12e19392
+base: 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c
+companion exit: 0
+porcelain: IDENTICAL before/after
