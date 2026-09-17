@@ -1,7 +1,7 @@
 ---
 id: WP-dream-filtered-input-budget
 title: Allocate dream input capacity from filtered extracts
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-119, WP-087, WP-dream-live-owner-lock]
@@ -9,6 +9,35 @@ adrs: [ADR-0004, ADR-0012, ADR-0023, ADR-0031]
 ---
 
 # WP-dream-filtered-input-budget: Allocate dream input capacity from filtered extracts
+
+> **Record, 2026-09-17 (post-merge, upstream integration) — no defect in what
+> shipped.**
+>
+> Implemented on the fork (felho/wienerdog) and integrated upstream by PR #245
+> (merge `b4af715e`, 2026-09-17). Fork gates: spec gate (wd-reviewer) APPROVE
+> and independent gate (native Codex) "patch is correct", one round, no
+> findings. Upstream re-review on the merged tree: boundary clean,
+> implementation matches the canonical table, verdict INTEGRATE WITH
+> FOLLOW-UPS. Merged tree: tests 2754 / pass 2742 / fail 0 / skipped 12; lint
+> passed.
+>
+> **Recorded, not errata:** (i) default X 8,000,000 is below the parser's
+> worst-case extract (`MAX_MESSAGES` 2000 × `MAX_MSG_CHARS` 4000,
+> `src/core/transcripts/index.js`), so such a session is skipped as oversized
+> indefinitely and, if alone, makes the run throw; remote in practice (largest
+> measured extract 176,050 bytes); the spec does not reconcile the two
+> constants. (ii) Oversized sessions are reported by console count only — no
+> entry in `reports/warnings.md`, the digest, or `doctor`. (iii) No-backfill
+> plus a nightly-growing large session can starve an older backlog item;
+> accepted on the fork as "defaults cannot guarantee it"; the comment at
+> `src/core/dream/ledger.js:203-205` now describes a hazard the code no
+> longer mitigates. (iv) `WP-dream-report-run-skips` (Ready) is stale against
+> the new collector and is routed to wd-architect for re-derivation. (v)
+> capacity-vs-deadline tie-break at `remaining === 0`
+> (`src/core/dream/scratch.js:91-97`) is implementer-chosen; Table A does not
+> specify it.
+
+<!-- errata above; the spec as it shipped follows -->
 
 > **In-Review: implemented under the owner-ratified 2026-09-15 design.** The owner
 > accepted P1–P4, including A10, and authorized continuation with implementation.

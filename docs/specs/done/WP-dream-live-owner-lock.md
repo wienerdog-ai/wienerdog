@@ -1,7 +1,7 @@
 ---
 id: WP-dream-live-owner-lock
 title: Preserve a live dream owner's lock after its deadline
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-069]
@@ -9,6 +9,30 @@ adrs: [ADR-0004, ADR-0012, ADR-0031]
 ---
 
 # WP-dream-live-owner-lock: Preserve a live dream owner's lock after its deadline
+
+> **Record, 2026-09-17 (post-merge, upstream integration) — no defect in what
+> shipped.**
+>
+> Implemented on the fork (felho/wienerdog) and integrated upstream by PR #245
+> (merge `b4af715e`, 2026-09-17). Fork gates: spec gate (wd-reviewer) APPROVE
+> and independent gate (native Codex) "patch is correct", one round, no
+> findings. Upstream re-review on the merged tree: boundary clean,
+> implementation matches the canonical table, verdict INTEGRATE WITH
+> FOLLOW-UPS. Merged tree: tests 2754 / pass 2742 / fail 0 / skipped 12; lint
+> passed.
+>
+> **Recorded, not errata:** (i) PID-reuse silent wedge — an expired lock whose
+> recorded PID is held by an unrelated long-lived process returns `busy`;
+> `busy` prints one line and exits 0, so run-job records success and no alert
+> fires; the spec accepts PID reuse as a residual (L4) but does not examine
+> the silence; routed to a follow-up WP. (ii) The exit-code doc comment at
+> `src/cli/dream.js:536-537` enumerates Exit 1 causes and was not updated for
+> the new `owner-unknown` throw; routed to the same follow-up. (iii) test
+> gaps, note-level: the falsy-throw arm of `lock.js:63` (`!err`) is untested;
+> `tests/unit/dream-lock.test.js:53-60` asserts `process.pid` rather than the
+> spec's literal example PID.
+
+<!-- errata above; the spec as it shipped follows -->
 
 > **Ready: owner-approved scope and independent design approval.** On
 > 2026-09-15 the owner selected a separate prerequisite WP for the narrow
