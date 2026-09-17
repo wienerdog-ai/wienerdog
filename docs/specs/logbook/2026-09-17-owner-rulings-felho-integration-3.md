@@ -63,6 +63,35 @@ this project (double gate approvals, etc.)
 - **Merges are authorized for this session only**; the next session needs it
   restated.
 
+## 3. The review backend and model
+
+Given mid-session, after the orchestrator reported that every design round so
+far had run on `gpt-5.6-sol` through a `codex exec` recipe and asked whether to
+continue that way:
+
+```text
+Do not use llmp. Use either the Codex plugin or Herdr. Also, use the Astra
+model, not Sol.
+```
+
+**What it carries.** A direct ruling. From that point every independent gate in
+this session runs through the Codex plugin (`adversarial-review` for design,
+`review` for a PR) with `--model gpt-6-astra` passed explicitly, in a detached
+worktree, with `CODEX_HOME` unset so the default home applies. The earlier
+recipe pointed at a separate review home that pins `gpt-5.6-sol`; it is not used
+again. llmp was not in use at any point in the session.
+
+**What it changed, measured.** Ten design rounds had already run on Sol. Each
+spec Sol had closed or approved was given a confirming round on the plugin with
+Astra before anything further was merged. Astra returned findings on all three,
+each reproduced by executing production function bodies with mocked I/O rather
+than by reading: `WP-dream-digest-omits-own-job-alerts` (already Ready on
+`main`; re-opened and returned to Draft, its implementer paused),
+`WP-dream-lock-stale-owner-loud` and `WP-dream-report-run-skips` (both held off
+`main`). `WP-dev-descriptor-no-tree-hash` was reviewed on Astra only and approved
+at round 1. The raws are preserved beside each spec's logbook entries with the
+backend and requested model named in the file.
+
 ## Items dispatched under the standing process
 
 Appended as each design loop parks them, each with the recommendation adopted
@@ -129,3 +158,32 @@ a fail-closed security check's semantics on a file this WP does not touch.
 `src/core/dream/containment-probe.js` and its test file and the WP crosses into a
 second concern, so per the sizing rule it splits rather than grows. Nothing in
 Tables A, B or C changes either way.
+
+### WP-dev-descriptor-no-tree-hash (design gate closed 2026-09-17, round 1, `545df8bd`)
+
+Three items. **None was ruled on directly**; each is a recommendation adopted
+under the standing authorization above, reversible by dated amendment.
+
+**O1 — should a follow-on amendment record that
+`WP-stance-authority-containment` landed, and should this WP carry it?**
+ADR-0028's owner-signed 2026-07-25 amendment still calls that WP "in drafting"
+and says "A7 is not closed", but it merged as `86d069e0` on 2026-07-26; it also
+cites `launcher.js:309` for a reader now at `:334`. *Recommendation adopted:*
+yes to the amendment, no to this WP carrying it — a separate docs WP. *Overrule
+cost:* listing the ADR here puts a Sonnet implementer inside an owner-signed
+document and turns an S into an M; not amending at all leaves the signed record
+describing a closed violation as open.
+
+**O2 — is ADR-0042's `tests/red-proofs/*.proofs.json` lane right for a WP this
+size?** The two newest Done specs use a narrative regression criterion instead.
+*Recommendation adopted:* yes — all three mutations are single-line exact
+substrings against one suite. *Overrule cost:* drop the declaration file and
+its criteria and revert to a hand-pasted red/green pair; one commit, no
+redesign.
+
+**O3 — does the weakened urgency change priority?** The maintainer's install is
+prod stance today, so the defect is latent there and live only on dev-stance
+installs. *Recommendation adopted:* ship — four lines implementing §1 of an
+owner-signed amendment, removing a documented idempotency violation. *Overrule
+cost:* `writeDescriptor` stays non-idempotent on every dev install and the
+ENOENT-becomes-refusal path stays live for `git clone` installs.
