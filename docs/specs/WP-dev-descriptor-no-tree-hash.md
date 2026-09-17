@@ -1,7 +1,7 @@
 ---
 id: WP-dev-descriptor-no-tree-hash
 title: Stop content-addressing the live checkout in the dev job descriptor
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
@@ -10,6 +10,32 @@ epic: audit-a7
 ---
 
 # WP-dev-descriptor-no-tree-hash: the dev descriptor stops hashing a live tree
+
+- Authoring rules live in `docs/runbooks/spec-authoring.md` — the
+  template gives the skeleton, the runbook the rules. Read both.
+
+> **READ THIS BEFORE ANYTHING ELSE — the base this spec was verified against.**
+> Every `file:line` citation, every quoted code shape and every recorded command
+> output below was **executed** against `origin/main` at **`545df8bd`**
+> (2026-09-17) and **re-confirmed unchanged** at **`2d5e2465`**, the base this
+> revision rebased onto — the delta between them is documentation only (`git diff
+> --name-only 545df8bd 2d5e2465` returns nothing outside `docs/`), and the eleven
+> load-bearing cites in `src/scheduler/descriptor.js`, `src/scheduler/launcher.js`,
+> `docs/GLOSSARY.md`, `docs/adr/0028-…` and the three test files were re-read at
+> `2d5e2465` and all resolve.
+>
+> **`Ready` is not the same as "still true".** `src/scheduler/descriptor.js` moved
+> under the previous revision of this spec and invalidated nearly every cite in
+> it (see `docs/specs/logbook/2026-09-17-dev-descriptor-no-tree-hash-round-zero.md`
+> §2 for the full before/after table). **The orchestrator session re-runs this
+> spec's executable Current-state claims against current `main` immediately before
+> writing the dispatch message, and names each claim and its result in that
+> message** (`docs/runbooks/codex-review.md`, "Dispatch-time re-verification"). A
+> stale claim blocks the dispatch and routes this spec back to wd-architect; the
+> implementer is never dispatched to work around one. The cheapest single probe is
+> **V5**: `grep -n 'appTreeDigest(paths)' src/scheduler/descriptor.js` must print
+> **three** lines — `72`, `222`, `223` — before any work starts. If it prints two,
+> the change already landed; if the line numbers moved, the file moved.
 
 ## Context (read this, nothing else)
 
@@ -908,8 +934,15 @@ WIENERDOG_RUN_SCENARIOS=1 npm run scenarios:a7-integrity
 
 ## Dispatch precondition — owner items
 
-Three decisions are reserved for the owner. None blocks drafting; each is stated
-as question / recommendation / cost of overruling the recommendation.
+**Status: all three are recommendations adopted under standing authorization, not
+direct rulings.** The standing process is recorded in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md` (itself
+carrying forward `2026-09-05-owner-rulings-git-env-pinning-queue.md`): the
+architect records a recommendation with the cost of overruling it, the session may
+dispatch under that recommendation, and the owner reverses any of them by dated
+amendment. **Nothing below was approved, accepted or ratified by the owner**, and
+none of it blocks dispatch. Each is stated as question / recommendation adopted /
+cost of overruling.
 
 1. **ADR-0028's owner-signed 2026-07-25 amendment is stale on its own
    disposition.** §3 (`:920-928`) and §4 (`:945`) describe
@@ -918,7 +951,7 @@ as question / recommendation / cost of overruling the recommendation.
    2026-07-26 and is `status: Done`; no later amendment records the landing. §3
    also cites `launcher.js:309` as the dev `treeDigest`'s sole reader, now `:334`.
    — **Question:** should a follow-on amendment record the landing, and should
-   *this* WP carry it? — **Recommendation:** yes to the amendment, no to this WP
+   *this* WP carry it? — **Recommendation adopted:** yes to the amendment, no to this WP
    carrying it: a separate docs WP, authored against the ADR as a whole. —
    **Cost of overruling:** adding `docs/adr/0028-*.md` to this Deliverables table
    puts a Sonnet implementer inside an owner-signed document and turns an S into
@@ -932,7 +965,7 @@ as question / recommendation / cost of overruling the recommendation.
    against the old behaviour and pass against implementation" criterion and list
    no declaration file. This spec adopts the machine-run lane (D4, AC8, V9, V10).
    — **Question:** is the declaration lane what the owner wants for a WP of this
-   size? — **Recommendation:** yes here — all three mutations are single-line exact
+   size? — **Recommendation adopted:** yes here — all three mutations are single-line exact
    substrings against one suite, which is the shape the lane handles best, and the
    lane is the stronger evidence. — **Cost of overruling:** drop D4, AC8, V9 and
    V10 and revert Table E rows 1/2/4 to a hand-pasted red/green pair; one commit,
@@ -941,7 +974,7 @@ as question / recommendation / cost of overruling the recommendation.
    revision argued the defect fires on the maintainer's own nightly dream; that
    install is **prod** today (Current state §7), so the defect is latent for them
    and live only on dev-stance installs. — **Question:** does that change the
-   priority of an owner-signed amendment's §1? — **Recommendation:** ship anyway:
+   priority of an owner-signed amendment's §1? — **Recommendation adopted:** ship anyway:
    it is four lines of production change implementing a contract the owner already
    signed, and it removes a documented idempotency violation. — **Cost of
    overruling:** shelving leaves `writeDescriptor` non-idempotent on every dev
@@ -950,26 +983,62 @@ as question / recommendation / cost of overruling the recommendation.
 
 ## Definition of done
 
-1. All verification steps (V1, V2, V3, V5, V6, V9, V10, V11) pass locally; output
+0. **Before any work starts (the orchestrator's step, not the implementer's).**
+   This spec was verified against `origin/main` at `545df8bd`, re-confirmed at
+   `2d5e2465` (see the base-pin note under the title). The dispatching session
+   re-runs the executable Current-state claims against current `main` and names
+   each claim and its result in the dispatch message
+   (`docs/runbooks/codex-review.md`, "Dispatch-time re-verification"); a stale
+   claim routes this spec back to wd-architect rather than being worked around.
+   The implementer starts by confirming V5 prints **three** lines (`72`, `222`,
+   `223`) and stops if it does not.
+1. Branch `wp/dev-descriptor-no-tree-hash`, off current `main`. Never commit to
+   `main`.
+2. All verification steps (V1, V2, V3, V5, V6, V9, V10, V11) pass locally; output
    pasted into the PR body, including the Table E mutation evidence (all **four**
    rows, each shown red — rows 1/2/4 via V9's per-proof `PROVEN` lines, row 3 via
    V6's exit-1 run against a copy) and the V2 `ℹ tests / ℹ pass / ℹ fail` counts.
-2. The PR body states, in one line each: **V5 printed three lines on `main` and
+   **V11 is REQUIRED, not optional, and it is the one step the rest of CI cannot
+   substitute for.** Run
+   `WIENERDOG_RUN_SCENARIOS=1 npm run scenarios:a7-integrity` and paste its output
+   showing the final `PASS` line together with the three dev-fire case lines
+   `ok [3c-stale-dev]`, `ok [10a-dev-source-edit]` and `ok [10b-dev-at-edit]`.
+   Without the env variable the suite prints
+   `A7 integrity containment proof: SKIPPED` and **exits 0**, so a PR can
+   otherwise go green having never executed the dev path this WP changes — a
+   pasted `SKIPPED` does not satisfy AC9 and is a failed Definition of done.
+3. The PR body states, in one line each: **V5 printed three lines on `main` and
    two after the fix**; **V2's `ℹ pass` is strictly greater than 173** (173 would
    be a failure); **V9 exited 0 with `RUN: PROVEN` and this WP's three ids
    PROVEN**; **V11 printed a final `PASS`, not `SKIPPED`**; and **V1's `ℹ fail 0`,
    V3, V6 and V11 printed the same result before and after** — that last one is
    the preservation claim and it is a pass, not a defect. V6's line must include
    its exit status.
-3. Conventional commits; PR titled
+4. Conventional commits; PR titled
    `fix(scheduler): dev descriptor stops hashing the live checkout (WP-dev-descriptor-no-tree-hash)`.
-4. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
-5. This spec's `status:` flipped to `In-Review` in the same PR.
-6. The PR body confirms that `tests/unit/launcher.test.js`,
+5. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
+6. This spec's `status:` flipped to `In-Review` in the same PR.
+7. The PR body confirms that `tests/unit/launcher.test.js`,
    `tests/unit/scheduler-schedule.test.js`, `src/scheduler/launcher.js` and every
    file outside the four-row Deliverables table are **untouched** —
    `git diff --stat` and `node scripts/boundary-check.js` pasted as the proof.
-7. Both PR review gates have run on the diff and are clean or fully
+8. Both PR review gates have run on the diff and are clean or fully
    dispositioned — they are defined in `docs/runbooks/codex-review.md` and not
    restated here. `In-Review` marks the START of review: this list is complete
    only when review is.
+
+---
+
+**Design gate closed 2026-09-17 at round 1 — `status: Ready`.** The design-review
+loop ran once and returned `approve` with **no findings** (Codex plugin 1.0.6
+adversarial review, model `gpt-6-astra`, tip `0dfdb58c`, base `545df8bd`; raw
+verdict, focus and meta preserved under `docs/specs/logbook/` as
+`2026-09-17-dev-descriptor-no-tree-hash-design-r1-astra-{raw.json,focus.txt,meta.txt}`).
+`docs/runbooks/codex-review.md`'s weighted closure applies: *"The loop is DONE when
+a round finds nothing about the product"* — round 1 found nothing about the
+product and nothing about the machinery, so the loop closes without a further
+round. Recorded in
+`docs/specs/logbook/2026-09-17-dev-descriptor-no-tree-hash-round-zero.md` §8,
+including what the reviewer executed versus what it only read. The three owner
+items above are recommendations adopted under standing authorization; they are not
+rulings and they do not gate this flip.

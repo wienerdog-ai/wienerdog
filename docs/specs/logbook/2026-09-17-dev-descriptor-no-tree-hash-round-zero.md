@@ -212,8 +212,104 @@ question / recommendation / cost of overruling:
 None of these was decided here, and nothing in the repo records the owner
 approving, accepting or ratifying any of them.
 
-## 7. Tree state
+## 7. Tree state at the end of round zero
 
 `src/` is byte-identical to `origin/main` at the end of this pass; the only
 changed files are the spec and this entry. `npm run lint` → `lint passed`;
-`git diff --check` → clean. The spec stays `status: Draft`.
+`git diff --check` → clean. The spec was left `status: Draft` for the design gate.
+
+## 8. Template conformance and design review round 1 — gate CLOSED
+
+### Template conformance (clean-context executor)
+
+**PASS.** All five literal Mirrored-Surface bullets present. One finding: the
+template's non-heading line immediately after the title — *"Authoring rules live
+in `docs/runbooks/spec-authoring.md` — the template gives the skeleton, the
+runbook the rules. Read both."* — was absent. Band C / LIGHT, authoring only.
+**Fixed**: the line is now present, in the template's exact wording, and is
+followed by the base-pin note this revision also adds.
+
+### Design review round 1
+
+| | |
+|---|---|
+| Gate | design (mandatory, `docs/runbooks/codex-review.md` "When it runs" item 1) |
+| Backend / model | Codex plugin 1.0.6 adversarial review, `gpt-6-astra` |
+| Tip reviewed | `0dfdb58c` |
+| Base | `545df8bd` |
+| Verdict | **approve**, `findings: []` |
+| Raw artifacts | `2026-09-17-dev-descriptor-no-tree-hash-design-r1-astra-raw.json` / `-focus.txt` / `-meta.txt`, committed as `3533ef78` **before** this disposition was written |
+| Companion exit | 0; porcelain IDENTICAL before/after |
+
+The focus brief put six challenges to the reviewer: (1) whether removing the
+dev-stance tree hash weakens anything any consumer actually checks, and whether an
+app-tree writer gains anything; (2) whether the claim about ADR-0028's amendment
+is true, read at the cited lines; (3) migration of descriptors already written
+with a dev `treeDigest`; (4) whether a PR can pass every required check without
+ever exercising the dev path, given the `SKIPPED`-exits-0 scenario guard; (5)
+whether every AC and each RED declaration discriminates; (6) whether all `file:line`
+citations resolve, checked at **both** ends of every range.
+
+Verdict summary, quoted:
+
+> The only treeDigest consumer is prod-only; dev tree writers gain no new
+> execution capability. ADR-0028:752 and 791–797 explicitly authorize this
+> contract. Legacy dev descriptors remain accepted; their first rewrite truthfully
+> reports changed:true, subsequent unchanged writes false. Prod serialization and
+> digest remain identical for identical inputs. AC9/V11 explicitly require enabled
+> scenarios, PASS, and pasted output; SKIPPED cannot satisfy them. The proposed
+> assertions and mutations discriminate their targeted regressions. Citation checks
+> found no material grounding errors.
+
+**Executed vs. read — recorded because it bounds what this verdict covers.**
+*Executed:* source searches, citation-endpoint checks, diff checks, the disabled
+scenario guard, and in-memory probes covering migration, launcher
+acceptance/refusal, `ENOENT` elimination and prod equivalence. *Read only:*
+ADR-0028, the consumer paths, the tests, the scenario code and the RED-runner
+contracts. **Not done:** full suites and enabled scenarios were not rerun in that
+read-only environment, so the round-zero execution claims in §4 above were **not
+independently reproduced** — they rest on this session's own runs. The reviewer's
+own next step says the same thing from the other side: *"Implement within the
+stated boundary and supply fresh unit, mutation, lint, and enabled V11 evidence
+before implementation approval."* That is the PR gate's job, not this one's.
+
+### Closure
+
+`docs/runbooks/codex-review.md`, "Weighted closure": *"The loop is DONE when a
+round finds nothing about the product. Machinery findings at that point are fixed
+or accepted as named residuals; they do not extend the loop."* Round 1 returned
+zero product findings and zero machinery findings, so the loop closes at round 1
+with no residuals to name. The one conformance finding was band C / LIGHT and was
+fixed and verified mechanically (the line is present; `npm run lint` passes),
+which by the same section does not justify another external round.
+
+**`status:` flipped `Draft` → `Ready`** with the dated close note at the foot of
+the spec. The three owner items are recorded as recommendations adopted under the
+standing authorization in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`; **none is a
+direct ruling and nothing in this repo records the owner approving, accepting or
+ratifying any of them.**
+
+## 9. Rebase and re-verification at the new base
+
+After the design gate the branch was rebased onto `origin/main` at `2d5e2465`
+(PR #248, `WP-dream-digest-omits-own-job-alerts` to Ready). The delta
+`545df8bd..2d5e2465` is **documentation only** —
+`git diff --name-only 545df8bd 2d5e2465 | grep -v '^docs/'` returns nothing — so no
+cite in this package could have moved. Re-read at `2d5e2465` anyway, all resolving:
+`descriptor.js:72/222/223` (V5's three lines), `:191` `installStance(paths)`,
+`:254`/`:259` (`reduceForDigest`'s braces), `launcher.js:334`,
+`descriptor.test.js:234`, `scheduler-schedule.test.js:1410`,
+`launcher.test.js:274`/`:287`, `GLOSSARY.md:26`, and `ADR-0028:752`
+(`Status: **Accepted. OWNER-SIGNED 2026-07-26.**`).
+
+The spec now pins both SHAs under its title and hands the re-verification
+obligation forward: **`Ready` is not "still true"**, and the dispatching session
+re-runs the executable claims and names each result in the dispatch message
+(Definition of done item 0).
+
+## 10. Tree state at close
+
+Spec `status: Ready`. `src/` byte-identical to `origin/main`; the only changed
+files across this branch are the spec, this entry and the three preserved raw
+review artifacts. `npm run lint` → `lint passed`; `git diff --check` → clean.
