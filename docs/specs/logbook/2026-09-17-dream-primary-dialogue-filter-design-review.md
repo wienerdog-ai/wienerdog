@@ -54,15 +54,19 @@ redesign, or runtime judge. Offline qualitative evaluation is sufficient; no
    label unimplemented behavior tested or an unresolved owner choice approved.
 
 Native transport calibration precedent is retained in the September 15
-filtered-input-budget native-calibration red/green raw artifacts in this folder.
-This exercise does not change that backend or the frozen reviewer prompt.
+[red](2026-09-15-dream-filtered-input-budget-native-calibration-red-raw.txt) and
+[green](2026-09-15-dream-filtered-input-budget-native-calibration-green-raw.txt) raw
+artifacts. This exercise does not change that backend or the frozen reviewer
+prompt.
 
 ## Current progress
 
 - Product source baseline: `1c3790de9f88f40aa28202e6f47748500babd555`.
 - wd-architect draft committed at `ff78e2f024db99724754f52415fd14f23c55b9d5` in
   a separate worktree; production main remains unchanged.
-- Round-zero coherence completed below; template and independent gates pending.
+- Template conformance and coherence are complete. Independent round 2 approved
+  the revised design with no findings or routed scope objections.
+- The WP remains Draft. The handoff text below is prepared but not sent.
 - Main-developer feedback and owner sign-off remain pending.
 
 ## Local format observations used during drafting
@@ -234,3 +238,51 @@ removed, and reran repo-configured markdownlint (2 files, 0 errors), frontmatter
 (275 specs, 4 agents), and `git diff --check` (exit 0). Current product code and
 its already-run baseline tests did not change, so those tests were not repeated.
 A fresh independent round reviews the revised contract below.
+
+## Independent design review: round 2 and closure
+
+Reviewed revision: `108f57441d4b383018bafac6d15a3dd8bedad2cb`.
+Raw output: [round 2 JSON](2026-09-17-dream-primary-filter-adversarial-r2-raw.json).
+Raw-introduction commit: `677eb84863d6b858eaf7c473c93f3b7179a67156`.
+The raw artifact was committed before inspection. This was a fresh native
+reviewer, with empty byte-identical checkout status before/after. It explicitly
+reports static inspection and does not claim implementation tests ran.
+
+Verdict: `approve`; zero product findings and zero routed scope objections.
+R1-A1 was verified fixed by the changed original-stream, persistent assistant
+taint rule. The former B3 scope exception was verified removed, with the original
+code-owned gate retained. The reviewer also attacked the revised contracts and
+checked the existing profile/probe/supervision paths. Its late Codex-only
+feasibility check found the current production dream already depends on the
+pinned Claude containment probe; the low-level Codex spawn arm does not by itself
+establish a Claude-free production path. No unsupported compatibility exception
+was added to this WP.
+
+The pinned stop criterion is met: the design-review loop is closed. No new
+residual finding is accepted on the owner's behalf. The draft's proposed
+conservative behavior, limits, and one-M feasibility remain in the explicit
+maintainer-feedback/owner-sign-off hold. Design approval is not runtime evidence
+or an implementation assignment.
+
+### Final handoff state
+
+- One new WP, still `status: Draft`, on `wp/dream-primary-dialogue-filter`.
+- The architect authored the spec and its revisions; no product implementation
+  was performed by the orchestrator or any delegated agent.
+- Raw conformance and both independent reviews remain verbatim, with their
+  introduction SHAs recorded before dispositions.
+- Repo-configured markdownlint, frontmatter, and whitespace checks pass. The
+  existing baseline tests passed 100/100; future filter tests and offline model
+  evaluation have not run because implementation is not authorized.
+- The main developer's handoff text is prepared above, not sent. Feedback and
+  owner sign-off are the next decision point; implementation does not start
+  automatically after either this document or a clean design review.
+- Production main remains at `1c3790de9f88f40aa28202e6f47748500babd555` and clean.
+  The branch contains documentation/evidence only; no installed runtime,
+  scheduler, live vault/ledger, or upstream remote was changed.
+
+### Lesson for the handoff
+
+- WP-dream-primary-dialogue-filter: derive source provenance before discarding
+  context, and preserve it through later assistant restatements. Hiding tool
+  text must not turn the same externally sourced claim into trusted dialogue.
