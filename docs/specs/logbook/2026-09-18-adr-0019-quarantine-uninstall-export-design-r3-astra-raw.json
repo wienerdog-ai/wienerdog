@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b5bd-541d-7921-83b2-22a5e360aedd",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r3",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the specified cleanup order can follow a quarantine symlink and remove an external directory.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Validate shelf ancestors before the bottom-up cleanup\",\n      \"body\": \"X1 checks and removes quarantine/redacted before checking quarantine itself. lstat does not reject symlinks in intermediate path components. With quarantine pointing to an external directory containing an empty redacted directory, this sequence removes external/redacted before detecting and preserving the quarantine link. The initial gate blocks a pre-existing link, but the exported deleter and a link introduced after the gate remain exposed. Read-only verification confirmed the filesystem semantics; an in-memory execution of X1 reproduced the external removal. Criterion 14 checks surviving file bytes and the link, so it can miss deletion of an empty external directory.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 345,\n      \"line_end\": 345,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require top-down lstat validation of state and quarantine before accessing redacted, then remove validated directories bottom-up. Add a direct-sweep regression asserting that an external empty redacted directory survives a symlinked quarantine root.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct X1's ancestor-validation order and extend criterion 14 before implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: the specified cleanup order can follow a quarantine symlink and remove an external directory.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Validate shelf ancestors before the bottom-up cleanup",
+        "body": "X1 checks and removes quarantine/redacted before checking quarantine itself. lstat does not reject symlinks in intermediate path components. With quarantine pointing to an external directory containing an empty redacted directory, this sequence removes external/redacted before detecting and preserving the quarantine link. The initial gate blocks a pre-existing link, but the exported deleter and a link introduced after the gate remain exposed. Read-only verification confirmed the filesystem semantics; an in-memory execution of X1 reproduced the external removal. Criterion 14 checks surviving file bytes and the link, so it can miss deletion of an empty external directory.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 345,
+        "line_end": 345,
+        "confidence": 0.99,
+        "recommendation": "Require top-down lstat validation of state and quarantine before accessing redacted, then remove validated directories bottom-up. Add a direct-sweep regression asserting that an external empty redacted directory survives a symlinked quarantine root."
+      }
+    ],
+    "next_steps": [
+      "Correct X1's ancestor-validation order and extend criterion 14 before implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the specified cleanup order can follow a quarantine symlink and remove an external directory.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Validate shelf ancestors before the bottom-up cleanup\",\n      \"body\": \"X1 checks and removes quarantine/redacted before checking quarantine itself. lstat does not reject symlinks in intermediate path components. With quarantine pointing to an external directory containing an empty redacted directory, this sequence removes external/redacted before detecting and preserving the quarantine link. The initial gate blocks a pre-existing link, but the exported deleter and a link introduced after the gate remain exposed. Read-only verification confirmed the filesystem semantics; an in-memory execution of X1 reproduced the external removal. Criterion 14 checks surviving file bytes and the link, so it can miss deletion of an empty external directory.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 345,\n      \"line_end\": 345,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require top-down lstat validation of state and quarantine before accessing redacted, then remove validated directories bottom-up. Add a direct-sweep regression asserting that an external empty redacted directory survives a symlinked quarantine root.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct X1's ancestor-validation order and extend criterion 14 before implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
