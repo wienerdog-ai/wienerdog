@@ -43,6 +43,17 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-18 #17 (same session, morning — the dream lane of the 2026-09-17 order is complete; one backlog package found stale and parked).**
+> Measured on `main` at `37d199fd`, not transcribed. The delta since #16 is **docs-only** (`git diff --stat 900dd6d4..37d199fd -- src tests skills scripts bin templates` is empty), so #16's merged-tree figures stand.
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | 1 | `WP-ep2-retention-prune-timing-test` | Draft, **STALE — do not dispatch** | parked by **#273** | Assessed at `622ca04b`: the `scanTokens` loop it anchors to is gone (`WP-dream-promote-in-workspace`), the `git diff --cached` seam it observes is gone (`WP-dream-gate-inputs-baseline-delta`), and the only test file its Deliverables permit can assert only the fixture's own `pruneRedacted` call — production's is `src/cli/dream.js:1102`. **The gap is real**: nothing in `tests/` asserts the prune runs once per run. Assessment: `docs/specs/logbook/2026-09-18-ep2-retention-prune-timing-test-stale.md`. |
+> | 2 | `WP-ep2-n2-rehome` | **Draft** (new, S, docs-only) | **#273** | Re-homes Table N row N2 / B10 / B12 and M-48 of the ep2 Done spec to the real locus. **No design round; not dispatchable.** |
+> | 3 | `WP-ep2-prune-once-per-run-test` | **Draft** (new, S, depends on 2) | **#273** | One pipeline-suite test + one ADR-0042 declaration. Open design question recorded: `src/cli/dream.js:33-38` destructures `makeGates` at require time, so a module mock cannot reach the binding. **No design round; not dispatchable.** |
+>
+> **Everything that remains needs the owner:** the two signature lines (ADR-0012 part 6, ADR-0020); whether to mature the two ep2 successors and the four Draft stubs; the offline evaluation design that decides `WP-dream-primary-dialogue-filter`; a spec for the `WD-SINK-*` fix (owner item O2 of `WP-secret-sink-wiring-probes`); the `doctor` arm for `parse-threw` and the parser-hardening successor; `WP-broker-e2e-terminal-auth` (interactive terminal auth); **and an npm release** — the installed app is still 0.13.0 and carries none of the seven implementations merged since #245. Nothing in this repository records the owner approving, accepting, ratifying or signing any of the items taken under standing authorization.
+>
 > **Status pass, 2026-09-18 #16 (same session, overnight — the crafted-transcript DoS is closed on `main`; both gates clean in one round on the Codex plugin with `gpt-6-astra`).**
 > Measured on `main` at `900dd6d4`, not transcribed:
 >
