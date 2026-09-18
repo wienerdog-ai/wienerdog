@@ -97,5 +97,22 @@ in X1 step 1 is ours, and a guarantee inside `rmSync` says nothing about a
 **Declaration count after round 3:** eight declarations over seven criteria; six
 carry a pre-measurable anchor, two mutate code this package authors.
 
+## Round 4 — Astra, 2026-09-18
+
+- **Reviewed tip:** `6fcd68b2`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r4-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r4-astra-focus.txt`
+- **Committed before adjudication at:** `084142ed`
+- **Verdict:** `needs-attention` — *"The proposed sweep still permits deletion of
+  quarantined originals on case-insensitive filesystems."*
+- **Held from round 3:** **X11** was **not** re-opened.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R4-1** | **Protect case variants of the quarantine directory before recursive deletion.** Table X row **X1** step 2 (`:348`) recursively deleted every child **not named exactly `quarantine`**. On a case-insensitive filesystem an existing **`Quarantine`** directory **is** the destination of `quarantinePreserve`'s lowercase path, while enumeration returns the capitalized name — so if it is empty at the gate and a dream completes a preserve before the sweep, **step 2 destroys the new original before step 3's protected `rmdir` sequence ever runs**. Case-insensitive path identity verified on this workspace (APFS default); an in-memory execution of the specified sequence reproduced the deletion. **X10 and X11 do not cover it** — they classify *types* and *ancestors*, not *names* | A | HEAVY (high, conf. 0.98) | **ACCEPTED IN FULL.** New canonical **Table X row X12**: *shelf identity is decided by case-folded name, on every platform, never by byte-equal name.* X1 step 2 now excludes every child whose name **ASCII-case-folds** to `quarantine`; **a child that folds equal but is not byte-equal is preserved and reported**, never deleted and never assumed to be ours, which only ever deletes *less* (ADR-0038's direction) and makes `<state>` non-empty so X1 step 3's existing `ENOTEMPTY` rule stops the climb with no new clause. **The same fold locates the roots for the inventory** (Table K row **K1** rewritten), so the plan and the act agree about which directory is the shelf. The **byte-exact lowercase path stays the removal target**, because that is what `quarantinePreserve` writes and what a case-insensitive volume resolves to the same inode. **Closed-set argument recorded:** our names are pure ASCII with no combining marks, so their ASCII case variants are *exactly* the set a case-insensitive volume could collide with — an enumeration of our own good, with nothing enumerated as forbidden — and an explicit ASCII fold is required rather than `toLowerCase`, whose Unicode mappings are broader than the property being tested. **Acceptance criterion 15** (three arms: inventory counts a capitalized shelf and the refusal names it by its on-disk name; the direct sweep does not delete it; the ambiguity rule preserves a fold-equal non-byte-equal sibling), **criterion 9 gains the case-fold interleaving arm** — empty `Quarantine` at inventory, preserve completed before the sweep, bytes survive — and the RED-proof criterion moved **15 → 16** with both references. **New RED proof `quse-shelf-name-case-sensitive`** (mutation: restore byte equality; new code, disclosed). **Table Y row Y4 was rewritten rather than left standing**: its claim that the package *"constructs exactly two paths, both literal joins"* stopped being true the moment a `readdirSync` name is joined, and it now rests on that name having first matched the closed fold set |
+
+**Declaration count after round 4:** nine declarations over eight criteria; six
+carry a pre-measurable anchor, three mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean or LIGHT-only return
 (`docs/runbooks/codex-review.md`, "Weighted closure").
