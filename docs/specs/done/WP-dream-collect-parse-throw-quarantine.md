@@ -1,7 +1,7 @@
 ---
 id: WP-dream-collect-parse-throw-quarantine
 title: Set aside a transcript whose preparation throws, instead of aborting the whole dream run
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: [WP-dream-primary-dialogue-collection]
@@ -9,6 +9,191 @@ adrs: [ADR-0004, ADR-0005, ADR-0023, ADR-0031, ADR-0042]
 ---
 
 # WP-dream-collect-parse-throw-quarantine: Set aside a transcript whose preparation throws, instead of aborting the whole dream run
+
+> **Errata, 2026-09-18 (post-merge) — seven stale, contradictory or
+> unexecutable spec-prose facts. None is a defect in what shipped.**
+>
+> Implemented in PR #271 (merge `900dd6d4`, 2026-09-18 04:25 UTC), tip
+> `cac39c0f`. **Both PR gates are clean on that tip, in one round:** wd-reviewer
+> returned APPROVE with every declared mutation replayed by hand, and the
+> independent gate (Codex plugin `review` on `gpt-6-astra`) returned *"No
+> actionable regressions found"*; CI seven checks pass. Final numbers on
+> `cac39c0f`: `npm test` 2904 tests / 2892 pass / **0 fail** / 12 skipped;
+> `npm run lint` clean; the **UNFILTERED** `npm run red-proofs` →
+> `RUN: PROVEN`, **165 PROVEN**, zero `FAILED`, `VACUOUS`, `UNCONTROLLED`,
+> `FILTERED` or `ERROR`, including this package's four declarations
+> (`pt-boundary-drops-instead-of-quarantining`, `pt-reason-literal-pinned`,
+> `pt-only-parse-is-caught`, `pt-sanitize-unbounded`) and the three
+> `WP-dream-primary-dialogue-collection` declarations this package's file edits
+> could have disarmed.
+>
+> **That second unfiltered run is the one that counts, because the first one
+> failed.** On the boundary commit `500d74e5` the unfiltered run reported
+> `RUN: ERROR` — not on any proof of this package, but on the sibling
+> `admission-measured-on-intake-not-projection`, with
+> `"find" occurs 0 time(s) in src/core/dream/scratch.js, "occurrences" declares 1`.
+> The cause was **this spec's own implementation note**, which told the
+> implementer to re-spell the exact substring that sibling proof pins. Erratum 5
+> is that finding; commit `cac39c0f` is its fix.
+>
+> **Every erratum below was measured by the fidelity gate on `cac39c0f`**, not
+> inferred, and each cites the spec line as it stood at merge.
+>
+> **Erratum 1 — Definition of done item 2 (`:818`) shipped an unfilled template
+> placeholder.** *What is wrong:* "PR titled
+> `fix(dream): title (WP-dream-collect-parse-throw-quarantine)`" — `title` is the
+> template's placeholder, never replaced during authoring. *What is true:* the PR
+> was titled `fix(dream): set aside a transcript whose preparation throws instead
+> of aborting the run (WP-dream-collect-parse-throw-quarantine)`, which is this
+> spec's own title sentence; `pr-title` CI passed on it. *Found:* the
+> implementer, Decision 8 / Discovered issue 1. *Routing:* corrected in place
+> below. **Class: a template placeholder that survived authoring and the design
+> gate.**
+>
+> **Erratum 2 — Table C's Criterion column (`:346-351`) predicts two `expectRed`
+> sets narrower than the measured ones.** *What is wrong:*
+> `pt-boundary-drops-instead-of-quarantining` carries Criterion `1, 2`, and its
+> "What it proves" cell asserts that **two** criteria's assertions redden;
+> `pt-reason-literal-pinned` carries Criterion `1`. *What is true, measured by
+> hand-applying each mutation and confirmed by the unfiltered run on
+> `cac39c0f`:* the first reddens criteria **1, 2, 3, 4 and 6** — five, not two —
+> and the second reddens **1, 2 and 3**. The cause is mechanical:
+> `testNamePattern` is `\\[PT-`, which selects the **whole** `[PT-` suite, so
+> every test that observes the set-aside *record* reddens when the record stops
+> being written, and every test that pins the *literal* reddens when the literal
+> changes. Nothing is weakened — the shipped
+> `tests/red-proofs/dream-collect-parse-throw.proofs.json` declarations already
+> carry the measured sets, which is why the run is `PROVEN`; the table's column
+> is what is stale. The other two rows, `pt-only-parse-is-caught` and
+> `pt-sanitize-unbounded`, matched their predictions **exactly**. *Found:* the
+> implementer, Discovered issue 2. *Routing:* corrected in place below, and the
+> "`expectRed` sets are derived" paragraph is replaced by the measurement.
+> **Class: prose a measured `expectRed` set falsified — the same class as
+> `WP-dream-primary-dialogue-collection`'s errata 3 and 4, and the second
+> occurrence of it in this epic.**
+>
+> **Erratum 3 — the `tests/unit/ledger.test.js` Deliverables cell (`:217`) is
+> narrower than the acceptance criterion it maps to.** *What is wrong:* "Table A
+> row A3's pinned set at `:485` — one array literal". *What is true:* acceptance
+> criterion 9 (`:575-581`) requires the day-0 / day-8 banner render observed
+> **through `quarantineBannerLine`**, because `hasFreshInformationalQuarantine`
+> is module-private; the pinned array alone cannot carry that observation. *What
+> shipped:* one test added in the same file — inside the file's permission
+> boundary — asserting that `parse-threw` matches `read-error` byte for byte at
+> both ends of the window and that an unrecognized reason still never decays.
+> *Found:* the implementer, Decision 4 / Discovered issue 3. *Routing:* the cell
+> is widened below. **Class: a Deliverables Notes cell that predicts an extent
+> and contradicts its own acceptance criterion; the criterion is the binding
+> one.**
+>
+> **Erratum 4 — the `tests/unit/dream-collect.test.js` Deliverables cell
+> (`:216`) names a tail the 2026-09-18 re-pin did not update.** *What is wrong:*
+> "Append after the two blocks appended today (`WP-secret-sink-wiring-probes`
+> and `WP-dream-report-run-skips`, the file's current tail)". *What is true:* at
+> the re-pinned base `297ef1df` the file's tail is
+> `WP-dream-primary-dialogue-collection`'s block — **three** packages, not two —
+> which this spec's own Implementation notes (`:484-489`) state correctly. This
+> is **mirror drift inside the Deliverables table**: the re-pin updated the note
+> and left the cell. Nothing shipped wrong; the implementer read the tail and
+> appended after all three. *Found:* the architect, filing. *Routing:* corrected
+> in place below. **Class: a registered mirror that a re-pin updated in one place
+> only.**
+>
+> **Erratum 5 — the "order the change this way" implementation note (`:449-461`)
+> is UNEXECUTABLE: it instructs a re-spelling that disarms a sibling package's
+> RED proof.** *What is wrong:* the note says to "declare `extract`,
+> `gateExtract`, `intakeBytes`, `parse`, **`extractBytes`**, `scratchFile` and
+> the payload string with `let` above the `try`". Hoisting `extractBytes` that
+> way re-spells `const extractBytes = intakeBytes;` — which is the **exact
+> substring** that `WP-dream-primary-dialogue-collection`'s declared mutation
+> `admission-measured-on-intake-not-projection` targets in
+> `tests/red-proofs/dream-primary-collection.proofs.json`, with
+> `occurrences: 1`. Following the note therefore makes that declaration
+> unapplicable: verdict `ERROR`, `"find" occurs 0 time(s)`, i.e. a **silent loss
+> of a sibling package's guarantee** that admission is measured against the
+> transcript intake and not the projection. Only the **UNFILTERED** run surfaces
+> it, and only for the package that did not write it — a `--wp`-scoped reading of
+> this package was all green. *Measured:* the implementer's first unfiltered run
+> on `500d74e5` reported exactly that, `RUN: ERROR`. *What shipped:* the
+> `const extractBytes = intakeBytes;` declaration **keeps its spelling inside the
+> `try`** (`src/core/dream/scratch.js:201`), and a separately hoisted
+> `let admittedBytes` (`:172`) carries the value `remaining` is decremented by
+> (`:211`, `:243`). Behavior is identical; commit `cac39c0f` is that fix, kept
+> separate so the cause is legible, and the shipped code carries a comment saying
+> why the two names exist. *Found:* the implementer, Decision 1. *Routing:* the
+> note is rewritten below to prescribe the shipped shape and to say why.
+> **Class: an implementation note that contradicts a sibling package's RED
+> declaration — new. The architect's countermeasure: before writing a note that
+> re-spells a line in a hot file, grep every `tests/red-proofs/*.proofs.json`
+> whose `file` is that path and check each `find` still occurs its declared
+> number of times.**
+>
+> **Erratum 6 — acceptance criterion 4's eviction clause (`:556-557`) is not
+> constructible from file content.** *What is wrong:* "`sel.gateExtracts` holds
+> no entry for it, **and the entry an earlier colliding session put there is not
+> evicted by it**". *What is true:* a set-aside candidate never derives a scratch
+> filename at all — the throw is at or before `sanitize` — so a genuine filename
+> collision *with a set-aside candidate* cannot be built out of transcript bytes,
+> and the clause's literal words are unobservable in an end-to-end corpus. *What
+> shipped,* which is Table B row B3's checkable form: the run's gate map holds
+> **exactly** the admitted sessions, an **earlier admitted** session's entry
+> survives the crafted candidate, and the set-aside candidate is absent from the
+> map. *Found:* the implementer, Decision 3. *Routing:* criterion 4 is rewritten
+> below to the shipped assertion. **Recorded for any later package that wants
+> the literal words:** the reviewer's construction is a **seam mock** — mock
+> `parsePrimaryWithOutcome` to return an extract whose `session_id` sanitizes
+> onto a filename already written **and** whose `toJSON` throws, so the
+> derivation succeeds (creating the collision) and the serialization throws
+> (making it a set-aside). **Class: an acceptance criterion whose clause cannot
+> be constructed from the input the criterion names.**
+>
+> **Erratum 7 — owner item 3's recommendation was NOT adopted; the tables bind,
+> and the consequence is live on `main`.** *What is contradictory:* the dispatch
+> preamble (`:726-729`) says every item below it is "a recommendation **adopted**
+> under standing authorization", and owner item 3's recommendation (`:779`) reads
+> "**yes, extend it**" — extend the Deliverables by `src/cli/doctor.js`. But the
+> Deliverables table never lists `doctor.js`, Table A row A7 (`:319`) says
+> "**Not changed by this WP**", and Out of scope (`:693`) names it. Three
+> surfaces refuse it and one preamble sentence adopts it, and
+> `scripts/boundary-check.js` reads the **Deliverables table** — so the
+> implementer's CI-passing reading (leave `doctor.js` alone) was the only one
+> available. *Recorded plainly:* **owner item 3 was NOT adopted.** Nothing in
+> this repository records the owner approving, accepting, ratifying or signing
+> it, and this spec asserts no such acceptance. *Consequence on `main` at
+> `900dd6d4`, measured:* `src/cli/doctor.js` carries `case` arms for
+> `over-ceiling`, `too-many-lines` and `read-error` only (`:515-521`), so a
+> `parse-threw` count renders through `:565` as `N session transcript(s) are
+> being skipped for a reason this version does not recognize` — truthful about
+> the count, wrong about the recognition, exactly as row A7 predicted it would
+> be. The fix is a successor package of one `switch` arm plus one assertion in
+> `tests/unit/doctor.test.js`; **it is not specced**, and it is carried forward
+> in `docs/HANDOVER.md` status pass #16. *Routing:* the preamble sentence is
+> qualified below, so no later reader takes a blanket adoption as covering an
+> item the permission boundary refuses. **Class: a blanket adoption sentence
+> contradicted by the permission boundary it cannot change.**
+>
+> **Reviewer notes, non-errata:** (i) the three hoisted parse-call names carry
+> `/** @type {any} */` at `src/core/dream/scratch.js:162-164` although
+> `import('../transcripts').GateExtract` exists and would type `gateExtract`
+> precisely; a later package may narrow them. (ii) The "Row C2" comment inherited
+> from `WP-dream-primary-dialogue-collection` now sits at `:213-215`, where it
+> annotates the **serialization** rather than the write it was written for — the
+> boundary moved the `JSON.stringify` above `writeFilePrivate` and the comment
+> travelled with it. Both are readings, neither is a defect, and neither is
+> corrected here.
+>
+> **Also recorded:** `tests/unit/dream-warnings.test.js` gained **two** touch
+> points rather than the one its Deliverables cell predicts — `parse-threw`
+> joins the existing fixed-order render (which is what proves the `GROUPS` row
+> sits after `read-error` and before the secret-exhausted row, and that the
+> catch-all still collects unrecognized reasons), plus one new byte-exact
+> whole-document render. The cell says "Table A row A4's render" and names no
+> extent, so it is **not** stale and is left as written. It is noted because it
+> is the third extent question in this package (errata 2, 3 and this), which is
+> what `docs/HANDOVER.md` pass #16 routes as a runbook question rather than a
+> spec defect.
+
+<!-- errata above; the spec as it shipped follows -->
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -213,8 +398,8 @@ constructs themselves are unchanged.
 | modify | src/core/dream/scratch.js | Table B in full (the fault boundary, rows B1–B6) and Table A rows A1 and A5 (the reason literal's one site, and discarding the caught value) |
 | modify | src/core/dream/ledger.js | Table A row A3 only — the `reason?:` typedef union and `INFORMATIONAL_QUARANTINE_REASONS`. No function body changes |
 | modify | src/core/dream/warnings.js | Table A row A4 only — one `GROUPS` row |
-| modify | tests/unit/dream-collect.test.js | Table B and Table A rows A1, A5, A6. **Append after the two blocks appended today** (`WP-secret-sink-wiring-probes` and `WP-dream-report-run-skips`, the file's current tail) |
-| modify | tests/unit/ledger.test.js | Table A row A3's pinned set at `:485` — one array literal |
+| modify | tests/unit/dream-collect.test.js | Table B and Table A rows A1, A5, A6. **Append after the THREE blocks already in the file** (`WP-secret-sink-wiring-probes`, `WP-dream-report-run-skips` and — the tail at base `297ef1df` — `WP-dream-primary-dialogue-collection`), exactly as Implementation notes says. *(Corrected 2026-09-18 post-merge, Erratum 4: this cell shipped naming two blocks and the wrong tail, because the 2026-09-18 re-pin updated the Implementation note and not this cell.)* |
+| modify | tests/unit/ledger.test.js | Table A row A3 — the pinned set at `:485`, **plus whatever else acceptance criterion 9 needs in this file**: criterion 9 observes the day-0/day-8 banner through `quarantineBannerLine`, which the array literal alone cannot carry, and one test was added for it. *(Corrected 2026-09-18 post-merge, Erratum 3: this cell shipped reading "one array literal", an extent narrower than its own criterion. Where a Notes cell and an acceptance criterion disagree, the criterion binds.)* |
 | modify | tests/unit/dream-warnings.test.js | Table A row A4's render |
 | create | tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl | The **in-parse** failure rollout, byte-exact as given under "Exact contracts" |
 | create | tests/fixtures/dream/transcripts/codex-poisoned-session-id.jsonl | The **post-parse** failure rollout (Table B row B9), byte-exact as given under "Exact contracts" |
@@ -345,8 +530,8 @@ and this package adds tests to only one suite that carries proofs.
 
 | Proof id | Criterion | Mutation (exact-substring, in `src/core/dream/scratch.js`) | What it proves |
 |----------|-----------|------------------------------------------------------------|----------------|
-| `pt-boundary-drops-instead-of-quarantining` | 1, 2 | the `catch` arm's `newlyQuarantined.push({ ...d, reason: 'parse-threw' });` → `/* marker */` (leaving the bare `continue;`) | the assertion observes the **record**, not merely that the run survived: under the mutation the run still completes and the crafted file is silently dropped |
-| `pt-reason-literal-pinned` | 1 | `reason: 'parse-threw'` → `reason: 'read-error'` | the assertion pins the literal, not just "some quarantine happened" |
+| `pt-boundary-drops-instead-of-quarantining` | **1, 2, 3, 4, 6** (measured) | the `catch` arm's `newlyQuarantined.push({ ...d, reason: 'parse-threw' });` → `/* marker */` (leaving the bare `continue;`) | the assertion observes the **record**, not merely that the run survived: under the mutation the run still completes and the crafted file is silently dropped. **Five criteria's assertions redden, not two** — every test that observes the set-aside record observes this mutation (Erratum 2) |
+| `pt-reason-literal-pinned` | **1, 2, 3** (measured) | `reason: 'parse-threw'` → `reason: 'read-error'` | the assertion pins the literal, not just "some quarantine happened". **Three criteria redden, not one** — every test that pins the literal observes this mutation (Erratum 2) |
 | `pt-only-parse-is-caught` | 3 | the `catch` arm gains a leading re-throw guarded on the parse having already returned — `if (extract !== undefined) throw new Error('<marker>');` before the existing push. `extract` is one of the four names the parse call destructures (`scratch.js:149-150`) and is assigned the moment that call returns, so the guard is true for **exactly** a post-parse failure | **the boundary's extent (Table B row B9).** The mutation *is* the plausible wrong implementation — catch the parse, nothing after it — so criteria 1 and 2 stay green under it and only criterion 3 reddens. A criterion-3 test that passed here would be observing nothing |
 | `pt-sanitize-unbounded` | 8 | `.slice(0, SCRATCH_ID_MAX_CHARS)` → `/* marker */` | the width bound is what admits a long-session-id rollout; without it the run aborts in `writeFilePrivate` |
 
@@ -363,16 +548,31 @@ applies to criteria 1, 3 and 8 at minimum — `pt-only-parse-is-caught` and
 
 `testNamePattern` for all four is `\\[PT-`, so every new test in this package
 carries a `[PT-<n>]` tag in its name and a filtered run selects exactly them.
-**The `expectRed` test-name sets are `derived — the implementer measures and
-corrects`:** the tests do not exist yet, so the exact names cannot be measured
-from this tree. The sentences that depend on those sets, and that must be
-re-read once measured, are: this table's "Criterion" column; the
-`pt-boundary-drops-instead-of-quarantining` row's "What it proves" cell, which
-asserts that **two** criteria's assertions redden; the `pt-only-parse-is-caught`
-row's "What it proves" cell, which asserts that criteria 1 and 2 stay **green**
-under it and that **only** criterion 3 reddens; the paragraph above naming
-criteria 1, 3 and 8 as the `assert.doesNotThrow` sites; acceptance criterion 10
-and its count of **four**; and the `npm run red-proofs` line under
+
+**The `expectRed` test-name sets were MEASURED, and two of the four came back
+wider than this table predicted** *(corrected 2026-09-18 post-merge, Erratum 2;
+the spec shipped saying the sets were `derived — the implementer measures and
+corrects`, which was true at authoring and is the reason the measurement
+happened).* Each set was measured by hand-applying its mutation and running
+`node --test --test-name-pattern '\[PT-' tests/unit/dream-collect.test.js`, then
+confirmed by the unfiltered run on `cac39c0f`. The measured sets are in the
+Criterion column above and in the shipped
+`tests/red-proofs/dream-collect-parse-throw.proofs.json`.
+
+**The mechanism, because it will recur:** `testNamePattern` selects the **whole**
+`[PT-` suite, not the one criterion a mutation was written for. So a mutation
+that stops the set-aside record being written reddens **every** test that
+observes that record (five), and a mutation that changes the reason literal
+reddens **every** test that pins it (three). Derive an `expectRed` set from the
+filtered suite, never from this table's Criterion column.
+
+The two rows that matched their predictions exactly are
+`pt-only-parse-is-caught` — criteria 1 and 2 stay **green** under it and **only**
+criterion 3 reddens, which is the load-bearing claim of Table B row B9 and held
+as stated — and `pt-sanitize-unbounded`. The other sentences that depend on the
+sets, all re-read after the measurement and all still true, are: the paragraph
+above naming criteria 1, 3 and 8 as the `assert.doesNotThrow` sites; acceptance
+criterion 10 and its count of **four**; and the `npm run red-proofs` line under
 "Verification steps".
 
 ### Mirrored Surface Checklist
@@ -451,9 +651,25 @@ new mirror found in review is added here on the spot (register-new-mirrors).
   (`:164`), the filename derivation (`:174`) and the payload stringify (today
   `:178`'s second argument) into one `try` block. The parse call now destructures
   **four** names, so declare `extract`, `gateExtract`, `intakeBytes`, `parse`,
-  `extractBytes`, `scratchFile` and the payload string with `let` above the
+  `scratchFile` and the payload string with `let` above the
   `try` and assign the parse result with a parenthesized destructuring
-  assignment. Leave `writeFilePrivate` and **everything after it** outside — the
+  assignment.
+  **`extractBytes` is the one name you must NOT hoist** *(corrected 2026-09-18
+  post-merge, Erratum 5; this bullet shipped listing it among the hoisted names,
+  which is unexecutable).* `const extractBytes = intakeBytes;` is the **exact
+  substring** that `WP-dream-primary-dialogue-collection`'s declared mutation
+  `admission-measured-on-intake-not-projection` pins in
+  `tests/red-proofs/dream-primary-collection.proofs.json` with `occurrences: 1`,
+  so re-spelling it leaves that sibling declaration unapplicable — verdict
+  `ERROR`, `"find" occurs 0 time(s)`, visible **only** in the unfiltered run.
+  Keep that `const` byte-for-byte where it is, inside the `try`, and hoist a
+  **separate** `let admittedBytes` above the `try` to carry the value `remaining`
+  is decremented by after the write. That is what shipped
+  (`src/core/dream/scratch.js:172`, `:201`, `:211`, `:243`) and it is behavior-
+  identical. **The general rule this taught:** before re-spelling any line in a
+  hot file, grep every `tests/red-proofs/*.proofs.json` whose `file` is that path
+  and check each `find` still occurs its declared number of times.
+  Leave `writeFilePrivate` and **everything after it** outside — the
   two gate-map writes and the eviction (`:179-183`) as well as the four pushes
   and the two accumulators (`:184-194`) (Table B rows B1, B3, B5).
   `continue` and `break` from inside a `try` are ordinary control flow and keep
@@ -552,12 +768,21 @@ new mirror found in review is added here on the spot (register-new-mirrors).
       from the throw.** Its `newlyQuarantined` element has exactly the discovery
       record's keys plus `reason`; `remaining` is unchanged by it (a later
       candidate that fits still fits); `intakeBytesTotal` is unchanged by it;
-      no scratch file is written for it; **`sel.gateExtracts` holds no entry for
-      it, and the entry an earlier colliding session put there is not evicted by
-      it**; and no
+      no scratch file is written for it; **`sel.gateExtracts` holds exactly the
+      admitted sessions — an earlier admitted session's entry survives the
+      crafted candidate, and the crafted candidate is absent from the map**; and
+      no
       substring of the thrown value's message, name or stack appears in the
       element, the written ledger, the rendered `reports/warnings.md` or the
       scratch directory (Table A row A5, Table B row B3).
+      *(Corrected 2026-09-18 post-merge, Erratum 6: the clause shipped reading
+      "and the entry an earlier colliding session put there is not evicted by
+      it", which is not constructible from file content — a set-aside candidate
+      never derives a filename, so it can never collide with one. The wording
+      above is the same row-B3 fact in its observable form. A later package that
+      wants the literal words needs a seam mock: `parsePrimaryWithOutcome`
+      returning an extract whose `session_id` sanitizes onto an already-written
+      filename AND whose `toJSON` throws.)*
 - [ ] 5. **`reports/warnings.md` renders it under its own heading**, byte-exact
       as given under "Exact contracts", and an unrecognized reason still falls to
       the catch-all row (Table A row A4).
@@ -736,6 +961,15 @@ and this spec asserts no such acceptance.** Each was raised by the architect
 during round zero and carried through design-review round 1, dispositioned in
 `docs/specs/logbook/2026-09-17-dream-collect-parse-throw-quarantine.md`.
 
+**Qualification added 2026-09-18 post-merge (Erratum 7): "adopted" above cannot
+reach past the Deliverables table.** `scripts/boundary-check.js` reads the
+Deliverables table in this file, and CI rejects a PR that touches anything else.
+So where an item's recommendation would add a file that the Deliverables, a
+contract-table row and Out of scope all decline, **the tables bind and the item
+is not adopted**. That is what happened to **item 3** below: it was **NOT
+adopted**, `src/cli/doctor.js` was not changed, and its consequence is live on
+`main` — see item 3's own dated note.
+
 **1. Should the parser hardening land in this package, or as a successor?**
 
 - *Recommendation:* **a successor package.** Keeping them apart keeps this one
@@ -786,6 +1020,18 @@ taxonomy extension need an ADR-0023 amendment?**
 - *Overrule cost:* accept that line for one release. The count stays exact and
   `reports/warnings.md` — the enumeration's one home — is already correct, so
   nothing is *wrong*, only confusing. A follow-up S package corrects it.
+- **OUTCOME, recorded 2026-09-18 post-merge (Erratum 7): this item was NOT
+  adopted.** The recommendation says "extend it"; the Deliverables table, Table
+  A row A7 and Out of scope all say `doctor.js` is not changed, and the
+  Deliverables table is what `scripts/boundary-check.js` enforces — so the
+  overrule cost above is what shipped, not the recommendation. Nothing in this
+  repository records the owner approving, accepting, ratifying or signing either
+  reading. **Live on `main` at `900dd6d4`:** `src/cli/doctor.js` has `case` arms
+  for `over-ceiling`, `too-many-lines` and `read-error` only (`:515-521`), so a
+  `parse-threw` count renders through `:565` as *"N session transcript(s) are
+  being skipped for a reason this version does not recognize"*. The successor is
+  one `switch` arm plus one assertion in `tests/unit/doctor.test.js`; it is
+  **not specced**, and `docs/HANDOVER.md` pass #16 carries it.
 
 ## Definition of done
 
@@ -815,7 +1061,11 @@ taxonomy extension need an ADR-0023 amendment?**
    construct — that file pair is the one sibling packages keep moving.
    (e) Branch `wp/dream-collect-parse-throw-quarantine`.
 1. All verification steps pass locally; output pasted into the PR body.
-2. Conventional commits; PR titled `fix(dream): title (WP-dream-collect-parse-throw-quarantine)`.
+2. Conventional commits; PR titled
+   `fix(dream): set aside a transcript whose preparation throws instead of aborting the run (WP-dream-collect-parse-throw-quarantine)`.
+   *(Corrected 2026-09-18 post-merge, Erratum 1: this line shipped reading
+   `fix(dream): title (WP-…)`, an unfilled template placeholder. The title above
+   is the one the PR carried.)*
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 5. Both PR review gates have run on the diff and are clean or fully

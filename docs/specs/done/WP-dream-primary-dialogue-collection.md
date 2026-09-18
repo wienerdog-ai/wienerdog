@@ -14,6 +14,11 @@ epic: dream-primary-dialogue
 > **Errata, 2026-09-18 (post-merge) — nine stale, contradictory or unregistered
 > spec-prose facts. None is a defect in what shipped.**
 >
+> *(A tenth erratum was appended later the same day, by the filing pass for
+> `WP-dream-collect-parse-throw-quarantine` (PR #271). The "nine" above is the
+> count this package's own filing pass found and is left as the record of it;
+> Erratum 10 sits below the "Recorded, not errata" list.)*
+>
 > Implemented in PR #269 (merge `297ef1df`, 2026-09-18), tip `119137d2`. **Both
 > PR gates are clean on that tip:** wd-reviewer returned APPROVE with executed
 > evidence, and the independent gate (Codex plugin `review` on `gpt-6-astra`)
@@ -188,6 +193,43 @@ epic: dream-primary-dialogue
 > entry does not record the corpus composition needed to reconstruct the list, so
 > the correction says so rather than inventing ids. The counts, the arms and the
 > byte figures are unaffected.
+>
+> ---
+>
+> **Erratum 10 — added 2026-09-18 by the filing pass for
+> `WP-dream-collect-parse-throw-quarantine` (PR #271, merge `900dd6d4`): every
+> cite placing `sanitize` at `src/core/dream/scratch.js:18-20` is now stale, and
+> the function itself has changed.** *What this spec says:* the Deliverables cell
+> for `src/core/dream/scratch.js` states that "`sanitize` at `:18-20` is **not**
+> changed", and five more places cite `:18-20` as its definition — Current
+> state's filename paragraph, Table C row C4a, the Mirrored Surface Checklist,
+> AC1b's `SID_RE`-alphabet argument, and the Discovered-issues entry on the
+> filename collision (plus one inside Erratum 1 above).
+> *What is true on `main` at `900dd6d4`:* `sanitize` is at **`:28-30`**,
+> it carries a **width bound** — `.slice(0, SCRATCH_ID_MAX_CHARS)` applied after
+> the character replace — and `SCRATCH_ID_MAX_CHARS = 128` is declared at
+> **`:23`**. PR #271's Table B row B6 made that change, and the same PR's spec
+> says so explicitly: it names this spec's "`sanitize` … is not changed" sentence
+> as one it falsifies.
+>
+> **The cites are NOT rewritten in place, deliberately.** A `Done` spec is the
+> record of what was true at **its** pin — base `b46a3843`, re-derived construct
+> by construct — not a live index into `main`. Rewriting its line numbers would
+> destroy the one thing the cites are for: letting a reader reconstruct the tree
+> this package was designed against. Anyone reading a cite here must therefore
+> re-derive it by construct against whatever `main` currently is — which is what
+> the repo's re-pin discipline already requires of a *live* spec, and what this
+> erratum makes explicit for a filed one. **This is the first time a done-flip
+> has recorded moved cites this way**; it is the pattern to reuse.
+>
+> **What changed in substance, not only in line number:** the character allowlist
+> is untouched (`[^A-Za-z0-9_-]` → `_`, globally), so every argument in this spec
+> that rests on the **alphabet** — including AC1b's over-determination reasoning
+> and Table C row C4a's `s_1` / `s.1` collision — still holds exactly. What is
+> added is a **length** bound, which widens the pre-existing collision set by ids
+> sharing a 128-character allowlisted prefix. PR #271 records that widening under
+> its own Out of scope and routes it here, to this spec's Discovered issues,
+> where the underlying defect already sits: **unfixed, and still unspecced.**
 
 <!-- errata above; the spec as it shipped follows -->
 
