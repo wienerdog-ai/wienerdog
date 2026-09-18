@@ -11,6 +11,21 @@ epic: secret-lifecycle
 
 # WP-ep2-n2-rehome: re-home N2 onto the call site that exists
 
+> **ERRATUM 1 — 2026-09-18, after PR-gate round 1 on the implementation
+> (PR #285).** Both gates landed on one family: **Table M registered only N2's
+> trigger-LOCUS mirrors, while N2R-9 re-keys a SECOND contract — M-48's mutation
+> IDENTITY — whose mirror family Table M never enumerated.** Three surfaces
+> identify M-48 with the per-call form and were therefore bounded to `CHECK` or
+> to the locus clause alone. **Row N2R-13 now enumerates them with a literal
+> replacement clause each**, and rows **M-2**, **M-6**, **M-8** and **M-13** are
+> widened to that axis. The erratum also repairs a contradiction the gate found
+> between the Mirrored Surface Checklist and the Deliverables boundary, fixes an
+> ordinal, reconciles AC-8's JSDoc range, and pins the block's landed shape
+> (**N2R-14**) so `WP-ep2-prune-once-per-run-test`'s `validate.js` cites can be
+> re-pinned in the same pass. **`status:` does not change.** This is an
+> architect's erratum on a `Ready` spec, which is why it lands as its own docs PR
+> rather than from the implementation branch — see the Checklist's routing rule.
+
 ## Context (read this, nothing else)
 
 Wienerdog is an open-source "AI upgrade stack" that writes configuration files
@@ -159,7 +174,7 @@ one union is half the work of this package**.
 |--------|------|-------|
 | modify | docs/specs/done/WP-secret-fence-ep2-redact-arm.md | **Only the cells Table M marks `EDIT`.** Every value written comes from **Table N2R**; restate nothing. **Touch nothing else in this file** |
 | modify | src/core/dream/validate.js | **COMMENT TEXT ONLY — the JSDoc block at `:1159-1173` above `pruneRedactedOriginals`, and no other line of the file.** Table M row **M-15**. No executable line may change; asserted by **V-6**. *Precedent: the ep2 spec's own **V-28** (`:6181`) edits and then checks a `validate.js` header comment as a contract mirror, so a code comment carrying a canonical fact is already treated here as a mirror rather than as code* |
-| modify | docs/adr/0036-mechanism-cell-schema-for-contract-tables.md | **ONLY if owner item O-1 is granted, and then only the routed-WP slug inside row A3 (`:106`).** Table M row **M-16**. Every other byte of that ADR — including its `OWNER-SIGNED` line, A3's divisibility claim and A3's dated 2026-07-28 measurement — is unchanged. If O-1 is declined, this row is not exercised and the disagreement is recorded in the PR body |
+| modify | docs/adr/0036-mechanism-cell-schema-for-contract-tables.md | **Exercised — owner item O-1 was taken under the standing process on 2026-09-18 (see that section) — and then only the routed-WP slug inside row A3 (`:106`).** Table M row **M-16**. Every other byte of that ADR — including its `OWNER-SIGNED` line, A3's divisibility claim and A3's dated 2026-07-28 measurement — is unchanged. *The earlier conditional form — "only if O-1 is granted … if declined, this row is not exercised" — is superseded by the ruling; erratum 1* |
 | modify | docs/specs/WP-ep2-n2-rehome.md | **This spec file — the `status:` transition ONLY** (`Ready` → `In-Review`, per Definition of done item 4). No other line of this file may change. *Listed explicitly rather than relied on as a convention: `_TEMPLATE.md` carries the self-file exception in a comment above its Deliverables table, and a reader who never opens the template would otherwise have a Definition-of-done item the permission boundary forbids* |
 
 **`tests/` is NOT in this table, and neither is any executable line of `src/`.**
@@ -228,15 +243,25 @@ prose in this spec defers to it and restates nothing.** Measured at `08de2bc3`.
 | **N2R-8** | **what did NOT change** | Table N rows **N1, N3, N4, N5, N6, N7**; the body of `pruneRedactedOriginals` (`:1174`); every acceptance behaviour of the retention prune; M-48's census limb. **A pass that edits any of these has exceeded this WP** |
 | **N2R-9** | **the re-keyed M-48 mutation** | *duplicate the single `gates.pruneRedacted();` invocation at `src/cli/dream.js:1102`, passing the accumulated `redactedCreated` set unchanged, so the prune runs twice in one run* — replacing *"move the `pruneRedactedOriginals` call from its post-loop site into the B4 loop"*. **It stays an N2-only mutation that preserves N3**, and it is **byte-identical to the `find`/`replace` of proof (a) in the declaration `WP-ep2-prune-once-per-run-test` ships**, so the row and the machine-run proof state one mutation. **M-48 states exactly one mutation (ADR-0036 row A3), so the per-redaction schedules that successor also proves get NO row here** — adding one would be a second mutation row in a `Done` spec and is out of scope |
 | **N2R-10** | **M-48's dated measurements** | **stay exactly as written and are not re-run.** *"EXECUTED 2026-07-28, AND REDDENED NOTHING AT THAT DATE"*, the `tests 1807, pass 1802, fail 0` counts, and the sentences describing the 2026-07-28 mutation as a move into the B4 loop are claims about a day, and are still true of that day. **Do not restate them in the present tense and do not delete them** — their dated form is what lets this WP edit the row without re-establishing the measurement |
-| **N2R-11** | **the routed-WP slug** | **`WP-ep2-prune-once-per-run-test`**, replacing `WP-ep2-retention-prune-timing-test` at **all eight** of its occurrences in the ep2 spec — lines `2317`, `2322`, `4240`, `4246`, `4247`, `4504` (twice) and `4708` — and, if owner item O-1 is granted, at its single occurrence in `docs/adr/0036-…:106`. The path string at `:2322` becomes `docs/specs/WP-ep2-prune-once-per-run-test.md`, which exists |
-| **N2R-12** | **the union every mirror list must end up registering** | **Table M rows M-1 … M-16**, which is the union of the five lists named in Table M's `registered by` column, plus M-15 and the routed-slug surfaces. **Every list in Table M marked `EDIT` ends the pass registering exactly that union restricted to its own subject** (the N2-trigger lists register the trigger's mirrors; the routed-slug registration registers the slug's) |
+| **N2R-11** | **the routed-WP slug** | **`WP-ep2-prune-once-per-run-test`**, replacing `WP-ep2-retention-prune-timing-test` at **all eight** of its occurrences in the ep2 spec — lines `2317`, `2322`, `4240`, `4246`, `4247`, `4504` (twice) and `4708` — and at its single occurrence in `docs/adr/0036-…:106`, which **owner item O-1's ruling makes an exercised surface** rather than a conditional one. The path string at `:2322` becomes `docs/specs/WP-ep2-prune-once-per-run-test.md`, which exists |
+| **N2R-12** | **the union every mirror list must end up registering** | **Table M rows M-1 … M-16**, which is the union of the five lists named in Table M's `registered by` column, plus M-15 and the routed-slug surfaces. **Every list in Table M marked `EDIT` ends the pass registering exactly that union restricted to its own subject** (the N2-trigger lists register the trigger's mirrors; the routed-slug registration registers the slug's). **Each list names the surfaces it adds BY NAME, never by list position** — ADR-0036 row **A2** forbids an ordinal where a structural anchor is available, and here the ordinal is also false: **`Table B row B10` is FIRST in M-48's six-surface enumeration**, so a phrase like *"the last two"* names the wrong pair. The accepted form is M-12's — *"the two surfaces that pass added"*, followed by their names |
+
+| **N2R-13** | **the surfaces that IDENTIFY M-48 with the per-call form** — *erratum 1* | **Three cells assert what M-48's mutation IS, not where the prune runs, and N2R-9 falsifies all three.** Each is given with its anchor and its literal replacement; **nothing else in any of the three cells is touched.** <br>**(a) Table B row B10** (`:1572`) — anchor `reading it into this chain is a per-call prune, i.e. exactly what mutation M-48 does` → the literal **“reading it into this chain is a per-redaction prune — the schedule `WP-ep2-prune-once-per-run-test`'s proof (b) covers; M-48 is the duplicate-invocation form”** (the quotation marks are this table's delimiters and are not written) <br>**(b-i) the M-13 errata sentence** (`:2355`) — anchor `correctly and cites M-48 more accurately after the split than before it` → **`correctly; its M-48 citation was RE-KEYED on 2026-09-18, when M-48 became the duplicate-invocation form and B10's clause named the per-redaction schedule instead`** <br>**(b-ii) the same sentence's closing clause** (`:2357-2358`) — anchor `Both are registered as M-48 mirrors by this sentence, checked, and left byte-unchanged.` → **`Both are registered as M-48 mirrors by this sentence. Consequence 7 was checked and left byte-unchanged; B10 was left byte-unchanged on 2026-07-28 and RE-KEYED on 2026-09-18, so "two that did not" counts that pass and not today's.`** <br>**(c) the Security checklist's per-call-half clause** (`:3675`) — anchor `and only the per-call half now has a row` → the literal **“and on 2026-07-28 only the per-call half had a row. Since 2026-09-18 M-48 states the duplicate-invocation form, so neither half has a mutation row here; the per-call (per-redaction) schedule is covered by `WP-ep2-prune-once-per-run-test`'s proof (b)”** (delimiters not written) <br>**(d) that bullet's provenance date** (`:3670`) — anchor `**Re-keyed 2026-07-28, round 7 of the post-Done errata**` → the same with **`, and again on 2026-09-18`** appended inside the bold, **exactly as M-9's row already does**. Without it the bullet dates a 2026-09-18 statement to 2026-07-28 <br>**(e) the AC-15 census cell's dated mutation description** (`:4504`) — anchor `The isolated N2-only mutation — move the prune call into the B4 loop` → the same with **`as it was spelled at that date`** inserted after `mutation`, again matching M-9. The cell stays dated-past and its limb stays `gap` |
+| **N2R-14** | **the re-homed JSDoc's landed shape, and the shift it forces** — *erratum 1* | The re-homed opening paragraph of `pruneRedactedOriginals`'s JSDoc is **five lines where it was three**, so the block runs `:1159-1175` where it ran `:1159-1173` and **every construct below it in `src/core/dream/validate.js` shifts by `+2`**. The file's executable content is unchanged — the edit is comment text only (**AC-8**, **V-6**) — so **`src/` stays pinned at `08de2bc3`**; only line numbers move. **`WP-ep2-prune-once-per-run-test` is re-pinned by `+2` in the same PR as this erratum**, across every `validate.js` cite below the block: `:1174 → :1176`, `:1178 → :1180`, `:1180 → :1182`, `:1192 → :1194`, `:1320 → :1322`, `:1322 → :1324`, `:1415 → :1417`, `:1418 → :1420`, `:1556-1558 → :1558-1560`. `:663` and every `dream.js`, `private-fs.js` and test-file cite are unaffected. **The sweep is the whole set, not the three the gate named** — a count that moved is wrong wherever any sentence states it |
 
 ### Mirrored Surface Checklist
 
 **Every surface below mirrors Table N2R. All of them move in the SAME COMMIT as
 the table's values — no commit may exist in which a registered mirror and
-Table N2R disagree.** Any further mirror found during review is added to
-**Table M** on the spot, in the same pass that fixes it.
+Table N2R disagree.** **Any further mirror found during review is registered in
+`docs/specs/logbook/2026-09-18-ep2-successors-design-review.md`, in the same pass
+that fixes it — NOT in Table M.** *Corrected by erratum 1: the earlier wording
+said "added to Table M on the spot", which the Deliverables row for this file
+forbids, since an implementer may change only its `status:`. `docs/specs/logbook/`
+needs no Deliverables row (CLAUDE.md; `scripts/boundary-check.js` decides the
+set), so the logbook is the one surface an implementation branch can always
+write. The architect folds the registration back into Table M by erratum, which
+is what this one does.*
 
 **A. Mirrors inside this spec:**
 
@@ -273,26 +298,34 @@ list already claimed the surface: **[N-inline]** = Table N's in-place enumeratio
 | id | surface | locus (ep2 spec unless stated) | registered by | verdict |
 |----|---------|-------------------------------|---------------|---------|
 | **M-1** | **Table N row N2**, the canonical row | `:1760` | the table itself | **EDIT** — re-word the locus to N2R-3 and N2R-4; leave the rule (N2R-1) unchanged in meaning |
-| **M-2** | **Table B row B10** | `:1572` | [M48], and the sentence at `:2353-2358` | **EDIT** — its clause *"it runs once per gate run after the loop over changed paths"* carries the stale locus (N2R-7) |
+| **M-2** | **Table B row B10** | `:1572` | [M48], and the sentence at `:2353-2358` | **EDIT, TWO CLAUSES — it mirrors BOTH contracts.** *(i) the LOCUS clause*, *"it runs once per gate run after the loop over changed paths"*, which carries the stale locus (N2R-7); *(ii) the IDENTITY clause*, *"exactly what mutation M-48 does"*, re-keyed per **N2R-13(a)**. *Widened by erratum 1: bounding this row to (i) is what left a registered mirror contradicting its canonical row after N2R-9* |
 | **M-3** | **Table B row B12** | `:1574` | [N-inline], [N-checklist], [H-d] | **CHECK, NO EDIT** — measured locus-free: *"N2 the trigger (once per run, only after a completed B4)"*. B12 is a pointer cell by design. Record the verdict in the PR body |
 | **M-4** | **Table R consequence 7** | `:2181-2215`; anchor the literal `The retention contract is TABLE N's` | [N-inline], [N-checklist], [H-d], [M48], and `:2303`, `:3073` | **CHECK, NO EDIT** — measured: it opens *"and this consequence restates none of it"* and names no locus. Its two dated corrections stay (N2R-10) |
 | **M-5** | **the B12/B13 growth story** | `:2488-2501`; anchor the literal `B12/B13 — the growth story` | [N-inline], [N-checklist] | **CHECK, NO EDIT** — measured: cites Table N rows N1/N3/N5 and D2 only; states no trigger locus |
-| **M-6** | **the Security checklist's retention-prune bullet** | `:3663-3680` | [N-inline], [N-checklist], [H-d], [M48] | **EDIT, ONE CLAUSE** — *"post-split M-48 moves the prune's CALL SITE and passes the accumulated set unchanged"* is falsified by N2R-9, which duplicates rather than moves. Re-key that clause and nothing else in the bullet |
+| **M-6** | **the Security checklist's retention-prune bullet** | `:3663-3680` | [N-inline], [N-checklist], [H-d], [M48] | **EDIT, THREE CLAUSES.** *(i)* *"post-split M-48 moves the prune's CALL SITE and passes the accumulated set unchanged"* is falsified by N2R-9, which duplicates rather than moves — re-key it. *(ii)* *"only the per-call half now has a row"* is falsified by the same row — **N2R-13(c)**. *(iii)* the bullet's provenance date — **N2R-13(d)**, the four words `, and again on 2026-09-18`, without which the bullet dates a 2026-09-18 statement to 2026-07-28. **Nothing else in the bullet.** *Widened by erratum 1 from "one clause"* |
 | **M-7** | **AC-14's third case** | `:4193-4259`; the routed slug at `:4240`, `:4246`, `:4247` | [N-inline], [N-checklist], [H-d], [M48], [slug5] | **EDIT, ROUTING ONLY** — N2R-11. The dated sentence at `:4229` describing the 2026-07-28 mutation as a move into the B4 loop **stays** (N2R-10) |
-| **M-8** | **the AC-15 census row for M-48** | `:4504` | [M48], [slug5], and `:2303`, `:3073` | **EDIT, ROUTING ONLY** — N2R-11, twice on that line. **The limb cell stays `gap`** (N2R-8); the dated measurement stays (N2R-10) |
+| **M-8** | **the AC-15 census row for M-48** | `:4504` | [M48], [slug5], and `:2303`, `:3073` | **EDIT, ROUTING PLUS ONE QUALIFIER.** N2R-11, twice on that line; **and N2R-13(e)** — the four words `as it was spelled at that date` on the dated mutation description, so the cell cannot be read as naming M-48's *current* mutation. **The limb cell stays `gap`** (N2R-8); the dated measurement stays (N2R-10). *The qualifier is added by erratum 1, matching what M-9's row already carries* |
 | **M-9** | **mutation row M-48** | `:4708` | the row itself; [N-inline], [N-checklist], [H-d], [slug5] | **EDIT** — re-home the present-tense implementation description to N2R-3/N2R-4, re-key the mutation cell to N2R-9, apply N2R-11, and update this row's own six-surface enumeration to N2R-12. Every dated measurement stays (N2R-10) |
 | **M-10** | **Table N's in-place mirror enumeration** | `:1811-1813` | itself | **EDIT** — register N2R-12 |
 | **M-11** | **Table N's Mirrored Surface Checklist bullet** | `:2884-2891` | itself | **EDIT** — register N2R-12. This is the bullet **V-30** mechanically enforces; see Implementation notes |
 | **M-12** | **the *"(d) the per-run retention prune"* mirror list** | `:2990-2992` | itself — **NOT named by any draft of this WP** | **EDIT** — register N2R-12 |
-| **M-13** | **the sentence registering B10 and consequence 7 as M-48 mirrors** | `:2353-2358` | itself — **NOT named by any draft of this WP** | **CHECK, NO EDIT** — it registers a subset of N2R-12 and states no locus; M-48's meta-rule makes it a mirror, so it is registered here rather than left unnamed |
+| **M-13** | **the sentence registering B10 and consequence 7 as M-48 mirrors** | `:2353-2358` | itself — **NOT named by any draft of this WP** | **EDIT, TWO CLAUSES — N2R-13(b-i) and N2R-13(b-ii).** *Widened by erratum 1 from `CHECK, NO EDIT`. The earlier verdict cleared it because "it states no locus", which is true and beside the point: it asserts B10 "cites M-48 more accurately after the split" and that both surfaces were "left byte-unchanged", and N2R-9 plus N2R-13(a) falsify both. A verdict scoped to one contract cannot clear a cell that mirrors the other* |
 | **M-14** | **the routed-slug five-surface registration** | `:2313-2327`; the slug at `:2317` and the spec path at `:2322` | itself — **NOT named by any draft of this WP** | **EDIT** — N2R-11 at both occurrences. Its enumeration of five surfaces is unchanged in membership; only the slug and the path move |
 | **M-15** | **`pruneRedactedOriginals`'s JSDoc** | `src/core/dream/validate.js:1159-1173`; the stale sentence at `:1160-1161`, hard-wrapped mid-phrase | — **no list named it; this WP registers it** | **EDIT, COMMENT TEXT ONLY** — *"Runs ONCE per gate run, after the loop over changed paths"* carries the stale locus. Re-word to N2R-3/N2R-4. **No executable line changes** (V-6) |
-| **M-16** | **ADR-0036 row A3** | `docs/adr/0036-mechanism-cell-schema-for-contract-tables.md:106` | [M48], bidirectionally (`:169-171` cites back) | **SPLIT VERDICT.** Its *divisibility* claim and its dated 2026-07-28 measurement survive the re-home unedited — the call site moved but is still a call site, the set is still merely passed in, and 2026-07-28 is still 2026-07-28. **Assert that, record the verdict.** Its **routed-WP slug** is stale and is **owner item O-1** |
+| **M-16** | **ADR-0036 row A3** | `docs/adr/0036-mechanism-cell-schema-for-contract-tables.md:106` | [M48], bidirectionally (`:169-171` cites back) | **SPLIT VERDICT.** Its *divisibility* claim and its dated 2026-07-28 measurement survive the re-home unedited — the call site moved but is still a call site, the set is still merely passed in, and 2026-07-28 is still 2026-07-28. **Assert that, record the verdict.** Its **routed-WP slug** is stale; **owner item O-1, taken under the standing process on 2026-09-18, permits that one slug and nothing else** (N2R-11) |
 
 ## Dispatch precondition — owner items
 
-**O-1 must be answered before this work package is dispatched.** It is recorded
-rather than decided because it edits an owner-signed ADR.
+**O-1 was TAKEN under the standing process on 2026-09-18** and recorded on `main`
+in `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`, under
+*"Items dispatched under the standing process, 2026-09-18 (continued)"* (PR #283):
+**the recommendation below was adopted** — grant, bounded to that one slug.
+**Nothing in that record is the owner approving, accepting, ratifying or signing
+the change**; it is a dispatch under the standing process, reversible by dated
+amendment. **It is no longer a dispatch blocker**, and the item is kept below in
+full because an adopted recommendation is only auditable beside the cost of
+overruling it. *Recorded 2026-09-18 by erratum 1; this section previously said the
+item had to be answered before dispatch.*
 
 - **O-1 — may this WP change the routed-WP slug inside ADR-0036 row A3?**
   ADR-0036 is `Accepted (amends ADR-0031)`, **OWNER-SIGNED 2026-07-28**. Row A3
@@ -386,14 +419,20 @@ repository, whose inputs are literals from Table N2R and Table M.
       M-10, M-11, M-12, M-13, M-14 — end the pass registering the union N2R-12
       names, each restricted to its own subject. Asserted **per surface**, never by
       a whole-file grep.
-- [ ] **AC-8 (M-15)** The change to `src/core/dream/validate.js` is **comment text
-      only**: every added and removed line of that file's diff lies inside the
-      JSDoc block at `:1159-1171` and begins with a JSDoc continuation marker.
-      (V-6)
-- [ ] **AC-9 (M-16, O-1)** If O-1 was granted, `docs/adr/0036-…md`'s diff changes
-      the routed slug and nothing else. If O-1 was declined, that file is not in
-      the diff at all. Either way A3's divisibility claim and its dated
-      measurement are byte-identical, and the verdict is recorded in the PR body.
+- [ ] **AC-8 (M-15, N2R-14)** The change to `src/core/dream/validate.js` is
+      **comment text only**: every added and removed line of that file's diff lies
+      inside **the JSDoc block immediately above `function
+      pruneRedactedOriginals(`** and begins with a JSDoc continuation marker.
+      (V-6) *Erratum 1 replaced a line range with the construct: this criterion
+      said `:1159-1171` where Deliverables and M-15 said `:1159-1173`, and the
+      block's own length changes under this WP (N2R-14), so a numeric range here
+      is wrong before the work starts and wrong again after it. V-6 already
+      locates the block by that construct.*
+- [ ] **AC-9 (M-16, O-1)** `docs/adr/0036-…md`'s diff changes the **routed slug
+      and nothing else** — O-1 was taken under the standing process, so this row
+      is exercised rather than conditional. A3's divisibility claim, its dated
+      measurement and the `OWNER-SIGNED` line are byte-identical, and the verdict
+      is recorded in the PR body.
 - [ ] **AC-10** The ep2 spec's **V-30** and **V-31** pass, its four pinned digests
       **V-11, V-18, V-20, V-33** are unmoved, and `npm test` and `npm run lint`
       pass. (V-7, V-8, V-9)
@@ -500,7 +539,7 @@ npm run lint
 - **Do not edit `tests/`, and do not change an executable line of `src/`.** The
   behaviour is correct as shipped. Giving N2 a detector is
   `WP-ep2-prune-once-per-run-test`.
-- **Do not edit ADR-0036 beyond what owner item O-1 grants**, and if the
+- **Do not edit ADR-0036 beyond the one slug owner item O-1's ruling permits**, and if the
   assertion in Table M row **M-16** fails — if A3's divisibility claim or its
   dated measurement turns out NOT to survive the re-home — **STOP and report**.
   An ADR amendment is its own change with its own signature path, not a cell in
@@ -530,9 +569,9 @@ counts and the zero-redaction guard. Raws: `6b9e515d` (round 1) and `5ced42cd`
 (round 2), under `docs/specs/logbook/`; dispositions in
 `docs/specs/logbook/2026-09-18-ep2-successors-design-review.md`. **This is a
 REVIEW GATE, not owner approval**, and it grants nothing the owner has not been
-asked for — **owner item O-1 remains OPEN**, in the standing form under "Dispatch
-precondition — owner items", and must be answered before this work package is
-dispatched.
+asked for. **Owner item O-1 is separate and was taken under the standing process
+on 2026-09-18** — see "Dispatch precondition — owner items"; the gate neither
+granted nor could grant it.
 
 1. All verification steps pass locally; output pasted into the PR body, including
    the V-7 and V-8 runs.

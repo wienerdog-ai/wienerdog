@@ -50,11 +50,42 @@ so a confirming round was run; round 2 approved with no findings. Both specs mov
 to `status: Ready`.
 
 **This is a review gate and nothing more.** It is not owner approval and grants
-nothing the owner has not been asked for. **Owner item O-1** — whether
-`WP-ep2-n2-rehome` may change the routed-WP slug inside ADR-0036 row A3, which is
-`Accepted, OWNER-SIGNED 2026-07-28` — **remains OPEN**, in the standing form under
-that spec's "Dispatch precondition — owner items", with its recommendation and its
-overrule cost. It must be answered before that package is dispatched.
+nothing the owner has not been asked for.
+
+**Owner item O-1 is no longer open — corrected 2026-09-18.** This section first
+said it "remains OPEN". By the time the gate closed it had been **taken under the
+standing process** and recorded on `main` in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`, under
+*"Items dispatched under the standing process, 2026-09-18 (continued)"* (PR #283):
+the recommendation was adopted — grant, bounded to the one slug
+(`WP-ep2-retention-prune-timing-test` → `WP-ep2-prune-once-per-run-test`), with
+`OWNER-SIGNED`, A3's divisibility claim and its dated 2026-07-28 measurement
+unchanged. **That record states, and this one repeats, that nothing there is the
+owner approving, accepting, ratifying or signing the change**; it is a dispatch
+under the standing process, reversible by dated amendment. The ADR row is
+therefore in `WP-ep2-n2-rehome`'s Deliverables as an exercised row, and the
+"Dispatch precondition — owner items" section is read together with that ruling.
+
+## PR gate round 1 — the implementation (PR #285, tip `8a24ebff`)
+
+Both gates landed on one family. **The root cause is in the SPEC, not the diff:**
+Table M enumerated only N2's trigger-LOCUS mirrors, while N2R-9 re-keys a second
+contract — M-48's mutation IDENTITY — whose mirror family Table M never listed.
+
+| # | finding | source | weight | disposition |
+|---|---------|--------|--------|-------------|
+| **P1-1** | **Table B row B10 still says pruning inside the chain is *"exactly what mutation M-48 does"*** while the PR re-keys M-48 to the duplicate-invocation form — a registered mirror contradicting its canonical row | Astra, independent | HEAVY (contract) | **FIXED in the spec by erratum 1**: new canonical row **N2R-13(a)** with the literal replacement clause; **M-2** widened from one clause to two |
+| **P1-2** | **Root cause — Table M's axis.** M-2 (`:276`) bounded B10 to the locus clause; M-6 (`:280`) to "that clause and nothing else"; M-13 (`:287`) cleared as "it states no locus" while its errata sentence asserts B10 *"cites M-48 more accurately after the split"* — now false | wd-reviewer, REQUEST-CHANGES | HEAVY | **FIXED**: **N2R-13** enumerates the identity axis with a literal replacement per surface; **M-2**, **M-6**, **M-8** and **M-13** widened to it |
+| **P1-3** | The PR's M-6 edit **dates a 2026-09-18 statement to 2026-07-28** and leaves *"only the per-call half now has a row"* false | wd-reviewer | HEAVY | **FIXED**: **N2R-13(c)** re-keys the clause; **N2R-13(d)** appends the four words `, and again on 2026-09-18` to the provenance, exactly as M-9's row already carries |
+| **P1-4** | **The repair instruction is unexecutable**: the Checklist says a further mirror is "added to Table M on the spot", but the Deliverables row forbids any change to this spec except `status:` | wd-reviewer | LIGHT | **FIXED**: further mirrors are now routed to **this logbook entry**, which an implementation branch may always write (`scripts/boundary-check.js`); the architect folds them back into Table M by erratum |
+| **P1-5** | **M-10 / M-11 register their additions by the ordinal "the last two"** — false, since B10 is **first** in M-48's six-surface enumeration, and forbidden by ADR-0036 row **A2** | coordinator, round zero | LIGHT | **FIXED**: **N2R-12** now requires the additions to be named, in M-12's form *"the two surfaces that pass added"* |
+| **P1-6** | **AC-8 cites the JSDoc as `:1159-1171`** where Deliverables and M-15 say `:1159-1173` | coordinator, round zero | LIGHT | **FIXED**: AC-8 now locates the block **by construct** and states no range — the block's own length changes under this WP, so any number there is wrong before the work starts and again after it. V-6 already anchors on the construct |
+| **P1-7** | **M-8's census cell** should carry M-9's `as it was spelled at that date` qualifier | coordinator, round zero | LIGHT | **FIXED**: **N2R-13(e)**; M-8's verdict is now `EDIT, ROUTING PLUS ONE QUALIFIER`. Limb stays `gap` |
+| **P1-8** | **The JSDoc grows three lines to five**, so `validate.js` constructs below it shift `+2` and `WP-ep2-prune-once-per-run-test`'s cites go stale the moment the rehome lands | coordinator, round zero | LIGHT | **FIXED**: **N2R-14** pins the landed shape and the shift, and the successor spec is **re-pinned in the same PR** — `:1176`, `:1180`, `:1182`, `:1194`, `:1322`, `:1324`, `:1417`, `:1420`, `:1558-1560`. **Widened beyond the three cites the gate named**, because a line count that moved is wrong wherever any sentence states it. `src/` stays pinned at `08de2bc3`: the change is comment text only, so no executable byte moves |
+
+**Neither spec's `status:` changes.** Erratum 1 is an architect's amendment to a
+`Ready` spec and lands as its own docs PR; the implementer rebases PR #285 onto it
+and applies N2R-13 and N2R-14.
 
 ### The three regression schedules, re-measured by hand at `08de2bc3`
 
