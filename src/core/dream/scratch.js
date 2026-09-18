@@ -163,7 +163,13 @@ function collectExtracts(paths, ledger, maxInputBytes, {
     /** @type {any} */ let gateExtract;
     /** @type {any} */ let parse;
     let intakeBytes = 0;
-    let extractBytes = 0;
+    // The measured size of the candidate this iteration ADMITS. It is a separate
+    // name from the `const extractBytes` the measurement below binds because
+    // that declaration is what `WP-dream-primary-dialogue-collection`'s declared
+    // RED mutation targets by exact substring: re-spelling it would leave that
+    // package's row C1 proof unapplicable, which is a silent loss of the
+    // guarantee that X is measured against the intake and not the projection.
+    let admittedBytes = 0;
     let scratchFile = '';
     let payload = '';
     // THE PER-CANDIDATE FAULT BOUNDARY (WP-dream-collect-parse-throw-quarantine,
@@ -192,7 +198,7 @@ function collectExtracts(paths, ledger, maxInputBytes, {
       // extract — the exact number this line computed before this package — so
       // the capacity stop, the individually-oversized skip and the memo it writes
       // all keep the verdicts they had.
-      extractBytes = intakeBytes;
+      const extractBytes = intakeBytes;
       if (extractBytes > maxInputBytes) {
         oversizedExtracts[key] = { fingerprint: ledgerLib.fingerprint(d), appVersion, extractBytes };
         oversized.push({ ...d, extractBytes, cached: false });
@@ -202,6 +208,7 @@ function collectExtracts(paths, ledger, maxInputBytes, {
         deferRemaining(underCeiling, i, deferred);
         break;
       }
+      admittedBytes = extractBytes;
       scratchFile = path.join(scratchDir, `${d.harness}-${sanitize(extract.session_id)}.json`);
       // Row C2: the PROJECTION is what reaches disk — an extract whose projection
       // retained no messages is still written, with its identity and an empty
@@ -233,7 +240,7 @@ function collectExtracts(paths, ledger, maxInputBytes, {
     wrote.push(scratchFile);
     processed.push(d);
     intakeBytesTotal += intakeBytes;
-    remaining -= extractBytes;
+    remaining -= admittedBytes;
   }
 
   return {
