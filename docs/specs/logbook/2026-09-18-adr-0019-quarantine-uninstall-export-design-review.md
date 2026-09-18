@@ -331,5 +331,36 @@ list has found a spec bug and should say so rather than guess.
 **Declaration count after round 12:** sixteen declarations over eleven criteria;
 nine have a pre-measurable anchor, seven mutate code this package authors.
 
+## Round 13 — Astra, 2026-09-18
+
+- **Reviewed tip:** `ce1ab255`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r13-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r13-astra-focus.txt`
+- **Committed before adjudication at:** `52f8be19`
+- **Verdict:** `needs-attention` — *"manifest replay can still erase a shelf alias
+  and expose the retained originals to recursive cleanup."*
+- **Held from round 12:** **X19** was **not** re-opened.
+- **Notable:** this is the first finding the previous round's convergence note
+  **predicted its own handling for** — *"a further alias finding is closed by
+  adding the site to that enumeration, never by writing a new rule"* — and that is
+  exactly how it was closed.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R13-1** | **Preserve ancestor aliases during symlink replay too.** Table **V** exempted the `symlink` replay kind from the ancestor guard, on the reasoning that unlinking a link deletes no bytes. With `<state>` → `<claude>/skills/wienerdog-test` → `<core>/logs` and an original at `logs/quarantine/…`, a `symlink` manifest entry naming the **intermediate** alias resolves **above** the protected shelf, so **X16** permitted it. Astra probed the shipped `reverse()`: it unlinks that entry. The disposer then meets a **dangling** `<state>`, **X17** rebuilds its anchors under the lexical path, **X18** no longer sees `<core>/logs` overlapping anything, and the recursive delete takes the original. Reachable with the alias introduced after the gate too, inside **X3**'s existing interleaving model | A | HEAVY (high, conf. 0.98) | **ACCEPTED IN FULL, and closed by the rule rather than by a new one** — the case round 12's convergence note reserved. **The site is added to the enumeration as item (7):** `reverse()`'s `symlink` reverser's `unlinkSync` (`manifest.js:314`). New **Table X row X20** states the unified sentence: ***no operation of this uninstall removes a link on the resolution chain of a protected shelf*** — the disposer's step 0b by **X19**, `reverse()`'s `symlink` kind by X20, **one rule seen from two sides**. A `symlink` entry is **preserved and reported** when **its own target, or any intermediate alias on the chain from a lexical anchor (X17 (1)) to its resolved anchor (X17 (2)), overlaps a protected target**; unanswerable preserves, absent does not. **The conceptual correction this round forces, recorded because it is the reusable part:** Table V's YES column meant *"deletes bytes recursively"*, and the `symlink` kind is governed for a **different** reason — **it deletes REACHABILITY, not bytes**, and the bytes go one step later when the now-lexical anchors stop gating the recursive delete. The column is re-read as *"the pre-dispatch guard applies"*, each row naming its clause. **The `dir` exemption is KEPT and is now a provable one**: its reverser removes only a virtually-empty directory and **can remove neither a file nor a link**, so it can neither destroy an original nor break a chain — and guarding it would add a `skipped` line to an ordinary uninstall, breaking **W6**. **Acceptance criterion 18** gains the resolution-chain arm — **the only arm in this package spanning `reverse()` *and* both disposer calls *and* a retry** — asserting the **alias's** survival before the original's, because the alias is what makes the original protectable on the next pass, and asserted for the outermost alias as well. New RED proof **`quse-symlink-entry-breaks-chain`**, anchored on the `reverseSymlink` dispatch line (**1** at `5b77865f`): **every other declaration here mutates a deleter, this one mutates an exemption**, and the loss it restores happens **two steps downstream** of the mutated line, so a suite checking the shelf immediately after `reverse()` stays green |
+
+**Enumeration after round 13 — still closed, now with seven items.** (1) step 0b's
+`unlinkSync`; (2) step 2's per-child recursive `rmSync`; (3) step 3's `rmdirSync`
+climb; (4) the `mechanics` loop at `:1148`; (5) the two Table **V** recursive replay
+kinds; (6) the pre-existing core removal at `:1151-1170`; **(7) `reverse()`'s
+`symlink` reverser's `unlinkSync` at `:314`**. Every one of (1)–(5) and (7) is gated
+by **X16** over **X17**'s anchors. **Items (1) and (7) are one sentence** — *no
+operation of this uninstall removes a link on the resolution chain of a protected
+shelf* — **because deleting reachability is as destructive as deleting bytes, one
+step later.** The `dir` kind is the single exemption and it is provable.
+
+**Declaration count after round 13:** seventeen declarations over eleven criteria;
+ten have a pre-measurable anchor, seven mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean or LIGHT-only return
 (`docs/runbooks/codex-review.md`, "Weighted closure").
