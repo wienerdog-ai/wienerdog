@@ -43,6 +43,25 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-18 #16 (same session, overnight — the crafted-transcript DoS is closed on `main`; both gates clean in one round on the Codex plugin with `gpt-6-astra`).**
+> Measured on `main` at `900dd6d4`, not transcribed:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | 1 | `WP-dream-collect-parse-throw-quarantine` | **Done** | implementation **#271** (`900dd6d4`, tip `cac39c0f`), filed by **this PR** with seven errata | A transcript whose preparation throws is now **set aside** with reason `parse-threw` and the run continues; it is named in `reports/warnings.md` under *"Something in the session file stopped Wienerdog from reading it"*. `sanitize` is bounded to 128 characters, which is what makes `writeFilePrivate` failures environmental again. **The parsers are still unhardened** — that is the successor. |
+> | 2 | `WP-dream-primary-dialogue-collection` | **Done** | implementation **#269** (`297ef1df`), filed **#270** with nine errata; **erratum 10 added by this PR** | Erratum 10: every cite placing `sanitize` at `scratch.js:18-20` is stale (now `:28-30`, with a width bound). Cites are **not** rewritten — a Done spec records what was true at its pin. |
+> | 3 | `WP-dream-primary-dialogue-filter` | Draft, **parked** | — | Unchanged entry condition: an offline evaluation of #2 + the projection must call for it. |
+>
+> **Owner: still owed the two signature lines** — the ADR-0012 part-6 amendment and the ADR-0020 amendment, both on `main` reading "owner signature pending". Nothing in this repository records the owner approving, accepting, ratifying or signing either. **And, plainly: owner item 3 of `WP-dream-collect-parse-throw-quarantine` was NOT adopted.** Its preamble says every item is adopted under standing authorization, but the Deliverables table, Table A row A7 and Out of scope all decline `src/cli/doctor.js`, and `scripts/boundary-check.js` reads the **table**. The tables bind.
+>
+> **New since #15, routed and not fixed:** (a) **`wienerdog doctor` renders a `parse-threw` count as an unrecognized reason** — `src/cli/doctor.js:515-521` has arms for `over-ceiling`/`too-many-lines`/`read-error` only, so `:565` says *"skipped for a reason this version does not recognize"* about a reason this version emits. Truthful count, wrong about recognition. Successor is one `switch` arm plus one assertion; **unspecced**. (b) The `--wp`-scoped `npm run red-proofs` that can never exit 0 **still sits in the parked filter spec** as a gating check. (c) **Deliverables Notes cells that predict an extent keep going stale** — an append point, "one array literal", Table C's Criterion column, three times in one package. The reviewer recommends marking extent-predicting cells as **non-binding hints that defer to the acceptance criteria**, as `expectRed` already does. Runbook change, **unspecced**. Carried from #15: the seven `WD-SINK-*` defects; the scratch-filename collision.
+>
+> **Merged tree** (`main` at `900dd6d4`): `npm run lint` **re-run this pass — passed**. `npm test` was started on `900dd6d4` and **had not finished when this pass was written** — this machine was saturated (`tests/integration/adopt-e2e.test.js` alone took ~40 min), so the counts here are **not** a fresh local measurement. Their basis: `900dd6d4`'s tree is **byte-identical** to tip `cac39c0f` (`git diff cac39c0f 900dd6d4` is empty), where CI's `test (ubuntu-latest)` and `test (macos-latest)` both pass and the implementer measured tests 2904 / pass 2892 / fail 0 / skipped 12. Red-proofs was **not** re-run either — the verdict is the implementer's unfiltered log on `cac39c0f`: `RUN: PROVEN`, **165 PROVEN**, zero `FAILED`/`VACUOUS`/`UNCONTROLLED`/`FILTERED`/`ERROR`. Worth knowing: the implementer's **first** unfiltered run was `RUN: ERROR`, on a *sibling* package's proof, because this spec's own hoist note re-spelled the substring that proof pins (erratum 5).
+>
+> **No npm release has been cut.** The installed app is still **0.13.0**, so tonight's dream carries **none** of this session's fixes — the crafted-transcript DoS is closed on `main` only — until a release is cut and installed.
+>
+> **Next in the queue:** (1) the offline evaluation that decides `WP-dream-primary-dialogue-filter`; (2) spec a fix for the `WD-SINK-*` defects; (3) the parser-hardening successor **plus** the `doctor` arm; (4) `WP-ep2-retention-prune-timing-test`; `WP-broker-e2e-terminal-auth` needs an interactive terminal-auth spike and is left for the owner; then the stubs; `WP-a10-windows-reap` stays blocked on a Windows runner. `WP-contract-reference-tables` is still `In-Review` with its implementing commit on `main` and no traceable PR.
+>
 > **Status pass, 2026-09-18 #15 (same session, overnight — the primary-dialogue epic's second package landed; every review on the Codex plugin with `gpt-6-astra`).**
 > Measured on `main` at `297ef1df`, not transcribed:
 >
