@@ -1,0 +1,64 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b53d-c820-7b41-bb2d-a0551b63fb58",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-shelf-r1",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch this spec yet: its central premise is false, its RED declaration cannot resolve the declared tests, and its prescribed fixture cannot demonstrate the claimed loss.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"The universal only-copy premise excludes existing failure paths\",\n      \"body\": \"O1 claims every surviving shelf file is an only-copy, but validate.js:1489–1504 explicitly retains duplicates when identity reads fail or the best-effort deletion throws. Repeated preservation of identical content also creates separate filenames without deduplication. One successful-redaction fixture cannot establish this universal property. O5–O8 use that false premise to eliminate alternatives and mandate inaccurate recovery documentation; refused fall-through notes also have no sanitized version promoted to the vault.\",\n      \"file\": \"docs/specs/WP-quarantine-only-copy-shelf.md\",\n      \"line_start\": 375,\n      \"line_end\": 375,\n      \"confidence\": 1,\n      \"recommendation\": \"State that shelf files may be the sole surviving copy, distinguish successful redactions from refused fall-throughs and retained duplicates, and reassess the dependent decisions and documentation against those cases.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"The RED declaration names a nonexistent nested test\",\n      \"body\": \"expectRed[].test is an outermost-first identity path, not a list of independent tests (scripts/red-proofs.js:694,1599–1602). This declaration therefore identifies R8 nested inside OC-1, although both are top-level tests. The baseline phase will reject it before mutation. Splitting the entries alone is insufficient: R8's existing assertion does not emit the specified O1 signal, and the spec prohibits changing existing tests.\",\n      \"file\": \"docs/specs/WP-quarantine-only-copy-shelf.md\",\n      \"line_start\": 300,\n      \"line_end\": 306,\n      \"confidence\": 1,\n      \"recommendation\": \"Declare two expectRed objects, each with a single-element test path and a diagnostic signal that its assertion actually emits. Update the byte-exact contract and verify the declaration against the runner.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"The two-run fixture either preserves a duplicate or never triggers pruning\",\n      \"body\": \"RUN defaults to publish:false, so the first prescribed run leaves the original note unchanged. The second run then preserves identical bytes in its own protected shelf copy: deleting R cannot make the O2 absence assertion pass. If the implementer publishes the first run to satisfy O1's scrubbed-vault assertion, the unchanged second run has no secret to redact and cannot trigger pruning. The fixture never introduces distinct secret-bearing content for that second run.\",\n      \"file\": \"docs/specs/WP-quarantine-only-copy-shelf.md\",\n      \"line_start\": 261,\n      \"line_end\": 268,\n      \"confidence\": 1,\n      \"recommendation\": \"Explicitly publish the first run, then introduce a different secret-bearing note before the second run. Assert one completed redaction per run and that the second preserved original differs from R before checking eviction and byte absence.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct the canonical premise and its dependent documentation.\",\n    \"Repair the fixture and RED declaration before marking the spec Ready.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch this spec yet: its central premise is false, its RED declaration cannot resolve the declared tests, and its prescribed fixture cannot demonstrate the claimed loss.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "The universal only-copy premise excludes existing failure paths",
+        "body": "O1 claims every surviving shelf file is an only-copy, but validate.js:1489–1504 explicitly retains duplicates when identity reads fail or the best-effort deletion throws. Repeated preservation of identical content also creates separate filenames without deduplication. One successful-redaction fixture cannot establish this universal property. O5–O8 use that false premise to eliminate alternatives and mandate inaccurate recovery documentation; refused fall-through notes also have no sanitized version promoted to the vault.",
+        "file": "docs/specs/WP-quarantine-only-copy-shelf.md",
+        "line_start": 375,
+        "line_end": 375,
+        "confidence": 1,
+        "recommendation": "State that shelf files may be the sole surviving copy, distinguish successful redactions from refused fall-throughs and retained duplicates, and reassess the dependent decisions and documentation against those cases."
+      },
+      {
+        "severity": "medium",
+        "title": "The RED declaration names a nonexistent nested test",
+        "body": "expectRed[].test is an outermost-first identity path, not a list of independent tests (scripts/red-proofs.js:694,1599–1602). This declaration therefore identifies R8 nested inside OC-1, although both are top-level tests. The baseline phase will reject it before mutation. Splitting the entries alone is insufficient: R8's existing assertion does not emit the specified O1 signal, and the spec prohibits changing existing tests.",
+        "file": "docs/specs/WP-quarantine-only-copy-shelf.md",
+        "line_start": 300,
+        "line_end": 306,
+        "confidence": 1,
+        "recommendation": "Declare two expectRed objects, each with a single-element test path and a diagnostic signal that its assertion actually emits. Update the byte-exact contract and verify the declaration against the runner."
+      },
+      {
+        "severity": "medium",
+        "title": "The two-run fixture either preserves a duplicate or never triggers pruning",
+        "body": "RUN defaults to publish:false, so the first prescribed run leaves the original note unchanged. The second run then preserves identical bytes in its own protected shelf copy: deleting R cannot make the O2 absence assertion pass. If the implementer publishes the first run to satisfy O1's scrubbed-vault assertion, the unchanged second run has no secret to redact and cannot trigger pruning. The fixture never introduces distinct secret-bearing content for that second run.",
+        "file": "docs/specs/WP-quarantine-only-copy-shelf.md",
+        "line_start": 261,
+        "line_end": 268,
+        "confidence": 1,
+        "recommendation": "Explicitly publish the first run, then introduce a different secret-bearing note before the second run. Assert one completed redaction per run and that the second preserved original differs from R before checking eviction and byte absence."
+      }
+    ],
+    "next_steps": [
+      "Correct the canonical premise and its dependent documentation.",
+      "Repair the fixture and RED declaration before marking the spec Ready."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch this spec yet: its central premise is false, its RED declaration cannot resolve the declared tests, and its prescribed fixture cannot demonstrate the claimed loss.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"The universal only-copy premise excludes existing failure paths\",\n      \"body\": \"O1 claims every surviving shelf file is an only-copy, but validate.js:1489–1504 explicitly retains duplicates when identity reads fail or the best-effort deletion throws. Repeated preservation of identical content also creates separate filenames without deduplication. One successful-redaction fixture cannot establish this universal property. O5–O8 use that false premise to eliminate alternatives and mandate inaccurate recovery documentation; refused fall-through notes also have no sanitized version promoted to the vault.\",\n      \"file\": \"docs/specs/WP-quarantine-only-copy-shelf.md\",\n      \"line_start\": 375,\n      \"line_end\": 375,\n      \"confidence\": 1,\n      \"recommendation\": \"State that shelf files may be the sole surviving copy, distinguish successful redactions from refused fall-throughs and retained duplicates, and reassess the dependent decisions and documentation against those cases.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"The RED declaration names a nonexistent nested test\",\n      \"body\": \"expectRed[].test is an outermost-first identity path, not a list of independent tests (scripts/red-proofs.js:694,1599–1602). This declaration therefore identifies R8 nested inside OC-1, although both are top-level tests. The baseline phase will reject it before mutation. Splitting the entries alone is insufficient: R8's existing assertion does not emit the specified O1 signal, and the spec prohibits changing existing tests.\",\n      \"file\": \"docs/specs/WP-quarantine-only-copy-shelf.md\",\n      \"line_start\": 300,\n      \"line_end\": 306,\n      \"confidence\": 1,\n      \"recommendation\": \"Declare two expectRed objects, each with a single-element test path and a diagnostic signal that its assertion actually emits. Update the byte-exact contract and verify the declaration against the runner.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"The two-run fixture either preserves a duplicate or never triggers pruning\",\n      \"body\": \"RUN defaults to publish:false, so the first prescribed run leaves the original note unchanged. The second run then preserves identical bytes in its own protected shelf copy: deleting R cannot make the O2 absence assertion pass. If the implementer publishes the first run to satisfy O1's scrubbed-vault assertion, the unchanged second run has no secret to redact and cannot trigger pruning. The fixture never introduces distinct secret-bearing content for that second run.\",\n      \"file\": \"docs/specs/WP-quarantine-only-copy-shelf.md\",\n      \"line_start\": 261,\n      \"line_end\": 268,\n      \"confidence\": 1,\n      \"recommendation\": \"Explicitly publish the first run, then introduce a different secret-bearing note before the second run. Assert one completed redaction per run and that the second preserved original differs from R before checking eviction and byte absence.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct the canonical premise and its dependent documentation.\",\n    \"Repair the fixture and RED declaration before marking the spec Ready.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
