@@ -9,6 +9,57 @@ adrs: [ADR-0004, ADR-0005]
 epic: secret-lifecycle
 ---
 
+> # ⛔ SUPERSEDED-PENDING — DO NOT DISPATCH THIS WORK PACKAGE
+>
+> **Assessed 2026-09-18 against `main` at `622ca04b` and found architecturally
+> stale.** The `status:` field still reads `Draft` because moving or deleting a
+> spec is the owner's call; it is **not** dispatchable and no amount of cite
+> refreshing makes it so.
+>
+> **The gap is still real** — nothing in `tests/` constrains the retention
+> prune's timing or cardinality — and **no rule of the retention contract
+> changed**: Table N rows N1–N7 are stable. What moved is the *locus*, and three
+> of this spec's load-bearing mechanisms moved with it:
+>
+> 1. **The permitted Deliverables boundary can no longer host a non-vacuous
+>    test.** The only test file this spec permits,
+>    `tests/unit/dream-validate.test.js`, calls `gates.pruneRedacted()` itself
+>    from its own `gateFixture()` helper (`:242`, reached via `RUN` at `:1552`).
+>    A cardinality assertion added there measures the fixture, not `src/`. The
+>    production call site is now `src/cli/dream.js:1102`.
+> 2. **The observational seam is dead.** This spec's witness is an ordered event
+>    log over per-path `git diff --cached --numstat` / `-U0` spawns. The gate no
+>    longer spawns git per path — `WP-dream-gate-inputs-baseline-delta` replaced
+>    those calls with `addedLineNumbers` over a workspace delta.
+> 3. **The structural half (b3) has no anchor.** `scanTokens` occurs zero times
+>    in `src/` and `tests/`; `WP-dream-promote-in-workspace` (`4115668a`) removed
+>    the loop. AC-3c, whose sole detector is (b3), has no referent.
+>
+> This spec's own verification step 0 — its declared dispatch blocker — **fails**
+> at `622ca04b`: assertions 0d-1 and 0d-3 both block, and 0f prints
+> `PROBE-ANCHOR-MISS` (neither mutation anchor exists; the counter is now
+> `completedRedactions`, not `secretRedactions`).
+>
+> **The full assessment, with the step-0 table, the construct-by-construct
+> old→new cite table and the conformance gaps:**
+> `docs/specs/logbook/2026-09-18-ep2-retention-prune-timing-test-stale.md`
+>
+> **Successors — both `Draft`, both pinned to `622ca04b`, and NEITHER has had a
+> design round, so neither is dispatchable either:**
+>
+> - `docs/specs/WP-ep2-n2-rehome.md` — S, docs-only: re-home N2 and Table B rows
+>   B10/B12 onto the real locus, re-key M-48, move every registered mirror in the
+>   same pass.
+> - `docs/specs/WP-ep2-prune-once-per-run-test.md` — S,
+>   `depends_on: [WP-ep2-n2-rehome]`: one pipeline-suite test plus one ADR-0042
+>   RED declaration over the `src/cli/dream.js:1102` call.
+>
+> **Everything below this banner is the July 2026 text, preserved unedited.** It
+> describes an architecture that no longer exists; read it as history, and take
+> no instruction from it.
+
+---
+
 > **`depends_on: []` is correct and is NOT the whole story — read this before
 > dispatching.** This WP's real precondition has no WP id to list: the two cells it
 > edits (**M-48**'s mutation row and its row in the **AC-15 coverage census**) exist
