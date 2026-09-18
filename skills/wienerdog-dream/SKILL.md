@@ -81,7 +81,8 @@ Then:
 From each extract, pull candidate observations: facts, preferences, decisions, and
 recurring procedures worth remembering. For every candidate, keep track of which
 messages support it and what `derived_from_untrusted` value each of those messages
-carries — you need those flags for provenance in Phase 2. Merge candidates that restate the same thing across
+carries — you need those flags for provenance in Phase 2. Merge candidates that
+restate the same thing across
 sessions into one candidate, accumulating the set of distinct `session_id`s that
 support it. A candidate seen in three sessions is one candidate with recurrence 3,
 not three candidates.
