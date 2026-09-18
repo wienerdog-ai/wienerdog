@@ -390,3 +390,40 @@ lands with its Status line reading "ACCEPTED under standing authorization
 himself. This package is dispatched only after both
 `WP-dream-primary-dialogue-projection` and `WP-dream-report-run-skips` have
 landed.
+
+### WP-dream-collect-parse-throw-quarantine (design gate closed 2026-09-18, round 1, `a60c14e6`)
+
+Three items. **None was ruled on directly**; each is a recommendation adopted
+under the standing authorization above, reversible by dated amendment. The
+package fixes a pre-existing defect surfaced by the review of PR #266: a
+transcript file whose content-block text value is not a string makes the shipped
+parser throw inside the nightly collector's admission loop, which has no error
+boundary — one such file aborts the whole run, and because it is never
+quarantined, aborts it again every night until removed.
+
+**Item 1 — `wienerdog doctor`.** Without a change, a `parse-threw` quarantine
+renders under doctor's fixed "a reason this version does not recognize" row.
+*Recommendation adopted:* extend the Deliverables by `src/cli/doctor.js` (one
+switch arm, one message, one test). *Overrule cost:* one release of a confusing
+but truthful doctor line; `reports/warnings.md`, the enumeration's one home, is
+correct either way.
+
+**Item 2 — parser hardening deferred to a successor package.** Measured:
+hardening the four text-value joins breaks zero tests and zero goldens, so
+nothing is lost by splitting, and this package stays S with the collector's
+error boundary as the guarantee. *Overrule cost:* both parser files, their
+tests, two fixtures and a second declarations file fold in; the package becomes
+M.
+
+**Item 3 — `parse-threw` is an informational quarantine reason** with the same
+seven-day banner decay as its three siblings, and no ADR-0023 amendment: it adds
+no record field, counter or state, and no code path reads the reason to decide
+anything. *Overrule cost:* one line and an inverted criterion; ratifying it in
+the ADR would be a separate docs-only amendment package.
+
+**Process record.** The provider's safety filter refused the first two external
+design-review attempts, whose focus text described a "crafted" file and a
+denial-of-service shape, at the moment the reviewer began constructing malformed
+probe files; the third attempt, phrased as a malformed-input robustness review
+with an instruction to reason over the code, completed and found the product
+design clean. All three focus texts are preserved beside the review.
