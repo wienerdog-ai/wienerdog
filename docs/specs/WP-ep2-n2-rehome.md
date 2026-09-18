@@ -25,6 +25,19 @@ epic: secret-lifecycle
 > re-pinned in the same pass. **`status:` does not change.** This is an
 > architect's erratum on a `Ready` spec, which is why it lands as its own docs PR
 > rather than from the implementation branch — see the Checklist's routing rule.
+>
+> **ERRATUM 2 — 2026-09-18, after PR-gate round 2 on the implementation
+> (PR #285, tip `b78d3cb2`).** **Erratum 1's own literals broke erratum 1's own
+> gate.** N2R-13(a) and N2R-13(c) each spell `WP-ep2-prune-once-per-run-test`
+> inside a mandated replacement clause, so applying them byte-exactly takes the
+> new slug from eight occurrences to **ten** — while N2R-11's count sentence,
+> **AC-6** and **V-5** still said eight. The implementer applied the canonical
+> rows and left V-5 failing rather than reword a mandated literal, which is the
+> correct precedence and is recorded as such. **N2R-11 now states the two facts
+> separately** — the eight OLD occurrences are re-routed and the old slug ends at
+> zero; the new slug ends at exactly ten — and **AC-6 and V-5 assert both
+> counts**. **M-9**'s verdict also picks up the ordinal obligation N2R-12 already
+> carried for the other lists. **`status:` does not change.**
 
 ## Context (read this, nothing else)
 
@@ -243,7 +256,7 @@ prose in this spec defers to it and restates nothing.** Measured at `08de2bc3`.
 | **N2R-8** | **what did NOT change** | Table N rows **N1, N3, N4, N5, N6, N7**; the body of `pruneRedactedOriginals` (`:1174`); every acceptance behaviour of the retention prune; M-48's census limb. **A pass that edits any of these has exceeded this WP** |
 | **N2R-9** | **the re-keyed M-48 mutation** | *duplicate the single `gates.pruneRedacted();` invocation at `src/cli/dream.js:1102`, passing the accumulated `redactedCreated` set unchanged, so the prune runs twice in one run* — replacing *"move the `pruneRedactedOriginals` call from its post-loop site into the B4 loop"*. **It stays an N2-only mutation that preserves N3**, and it is **byte-identical to the `find`/`replace` of proof (a) in the declaration `WP-ep2-prune-once-per-run-test` ships**, so the row and the machine-run proof state one mutation. **M-48 states exactly one mutation (ADR-0036 row A3), so the per-redaction schedules that successor also proves get NO row here** — adding one would be a second mutation row in a `Done` spec and is out of scope |
 | **N2R-10** | **M-48's dated measurements** | **stay exactly as written and are not re-run.** *"EXECUTED 2026-07-28, AND REDDENED NOTHING AT THAT DATE"*, the `tests 1807, pass 1802, fail 0` counts, and the sentences describing the 2026-07-28 mutation as a move into the B4 loop are claims about a day, and are still true of that day. **Do not restate them in the present tense and do not delete them** — their dated form is what lets this WP edit the row without re-establishing the measurement |
-| **N2R-11** | **the routed-WP slug** | **`WP-ep2-prune-once-per-run-test`**, replacing `WP-ep2-retention-prune-timing-test` at **all eight** of its occurrences in the ep2 spec — lines `2317`, `2322`, `4240`, `4246`, `4247`, `4504` (twice) and `4708` — and at its single occurrence in `docs/adr/0036-…:106`, which **owner item O-1's ruling makes an exercised surface** rather than a conditional one. The path string at `:2322` becomes `docs/specs/WP-ep2-prune-once-per-run-test.md`, which exists |
+| **N2R-11** | **the routed-WP slug** | **Two facts, counted separately — *restated by erratum 2, which found them conflated into one number that N2R-13 then falsified*.** <br>**(i) THE RE-ROUTING.** `WP-ep2-prune-once-per-run-test` replaces `WP-ep2-retention-prune-timing-test` at **all eight** of the old slug's occurrences in the ep2 spec — lines `2317`, `2322`, `4240`, `4246`, `4247`, `4504` (twice) and `4708` — so **the old slug ends at ZERO**. Also at its single occurrence in `docs/adr/0036-…:106`, which **owner item O-1's ruling makes an exercised surface** rather than a conditional one. The path string at `:2322` becomes `docs/specs/WP-ep2-prune-once-per-run-test.md`, which exists. <br>**(ii) THE RESULTING COUNT.** The new slug ends at **exactly TEN** occurrences in the ep2 spec: **(i)'s eight re-routings, plus one each from the mandated replacement literals in N2R-13(a) and N2R-13(c)**, which name the successor package as the owner of the per-redaction schedule. **Ten is the contracted number, and a pass that lands any other count has either missed a re-routing or added a mention this table does not decide.** *Measured on the implementation at `b78d3cb2`: old 0, new 10, across nine lines (`4504`'s successor line carries two).* |
 | **N2R-12** | **the union every mirror list must end up registering** | **Table M rows M-1 … M-16**, which is the union of the five lists named in Table M's `registered by` column, plus M-15 and the routed-slug surfaces. **Every list in Table M marked `EDIT` ends the pass registering exactly that union restricted to its own subject** (the N2-trigger lists register the trigger's mirrors; the routed-slug registration registers the slug's). **Each list names the surfaces it adds BY NAME, never by list position** — ADR-0036 row **A2** forbids an ordinal where a structural anchor is available, and here the ordinal is also false: **`Table B row B10` is FIRST in M-48's six-surface enumeration**, so a phrase like *"the last two"* names the wrong pair. The accepted form is M-12's — *"the two surfaces that pass added"*, followed by their names |
 
 | **N2R-13** | **the surfaces that IDENTIFY M-48 with the per-call form** — *erratum 1* | **Three cells assert what M-48's mutation IS, not where the prune runs, and N2R-9 falsifies all three.** Each is given with its anchor and its literal replacement; **nothing else in any of the three cells is touched.** <br>**(a) Table B row B10** (`:1572`) — anchor `reading it into this chain is a per-call prune, i.e. exactly what mutation M-48 does` → the literal **“reading it into this chain is a per-redaction prune — the schedule `WP-ep2-prune-once-per-run-test`'s proof (b) covers; M-48 is the duplicate-invocation form”** (the quotation marks are this table's delimiters and are not written) <br>**(b-i) the M-13 errata sentence** (`:2355`) — anchor `correctly and cites M-48 more accurately after the split than before it` → **`correctly; its M-48 citation was RE-KEYED on 2026-09-18, when M-48 became the duplicate-invocation form and B10's clause named the per-redaction schedule instead`** <br>**(b-ii) the same sentence's closing clause** (`:2357-2358`) — anchor `Both are registered as M-48 mirrors by this sentence, checked, and left byte-unchanged.` → **`Both are registered as M-48 mirrors by this sentence. Consequence 7 was checked and left byte-unchanged; B10 was left byte-unchanged on 2026-07-28 and RE-KEYED on 2026-09-18, so "two that did not" counts that pass and not today's.`** <br>**(c) the Security checklist's per-call-half clause** (`:3675`) — anchor `and only the per-call half now has a row` → the literal **“and on 2026-07-28 only the per-call half had a row. Since 2026-09-18 M-48 states the duplicate-invocation form, so neither half has a mutation row here; the per-call (per-redaction) schedule is covered by `WP-ep2-prune-once-per-run-test`'s proof (b)”** (delimiters not written) <br>**(d) that bullet's provenance date** (`:3670`) — anchor `**Re-keyed 2026-07-28, round 7 of the post-Done errata**` → the same with **`, and again on 2026-09-18`** appended inside the bold, **exactly as M-9's row already does**. Without it the bullet dates a 2026-09-18 statement to 2026-07-28 <br>**(e) the AC-15 census cell's dated mutation description** (`:4504`) — anchor `The isolated N2-only mutation — move the prune call into the B4 loop` → the same with **`as it was spelled at that date`** inserted after `mutation`, again matching M-9. The cell stays dated-past and its limb stays `gap` |
@@ -305,7 +318,7 @@ list already claimed the surface: **[N-inline]** = Table N's in-place enumeratio
 | **M-6** | **the Security checklist's retention-prune bullet** | `:3663-3680` | [N-inline], [N-checklist], [H-d], [M48] | **EDIT, THREE CLAUSES.** *(i)* *"post-split M-48 moves the prune's CALL SITE and passes the accumulated set unchanged"* is falsified by N2R-9, which duplicates rather than moves — re-key it. *(ii)* *"only the per-call half now has a row"* is falsified by the same row — **N2R-13(c)**. *(iii)* the bullet's provenance date — **N2R-13(d)**, the four words `, and again on 2026-09-18`, without which the bullet dates a 2026-09-18 statement to 2026-07-28. **Nothing else in the bullet.** *Widened by erratum 1 from "one clause"* |
 | **M-7** | **AC-14's third case** | `:4193-4259`; the routed slug at `:4240`, `:4246`, `:4247` | [N-inline], [N-checklist], [H-d], [M48], [slug5] | **EDIT, ROUTING ONLY** — N2R-11. The dated sentence at `:4229` describing the 2026-07-28 mutation as a move into the B4 loop **stays** (N2R-10) |
 | **M-8** | **the AC-15 census row for M-48** | `:4504` | [M48], [slug5], and `:2303`, `:3073` | **EDIT, ROUTING PLUS ONE QUALIFIER.** N2R-11, twice on that line; **and N2R-13(e)** — the four words `as it was spelled at that date` on the dated mutation description, so the cell cannot be read as naming M-48's *current* mutation. **The limb cell stays `gap`** (N2R-8); the dated measurement stays (N2R-10). *The qualifier is added by erratum 1, matching what M-9's row already carries* |
-| **M-9** | **mutation row M-48** | `:4708` | the row itself; [N-inline], [N-checklist], [H-d], [slug5] | **EDIT** — re-home the present-tense implementation description to N2R-3/N2R-4, re-key the mutation cell to N2R-9, apply N2R-11, and update this row's own six-surface enumeration to N2R-12. Every dated measurement stays (N2R-10) |
+| **M-9** | **mutation row M-48** | `:4708` | the row itself; [N-inline], [N-checklist], [H-d], [slug5] | **EDIT** — re-home the present-tense implementation description to N2R-3/N2R-4, re-key the mutation cell to N2R-9, apply N2R-11, and update this row's own six-surface enumeration to N2R-12 — **including N2R-12's naming rule, which binds THIS enumeration as well as M-10/M-11/M-12**: the surfaces the pass adds are named, never given as an ordinal. *Registered by erratum 2 because the implementer applied it here on their own initiative, replacing "The seventh was added" with the named form; a rule a spec relies on but does not state is not a contract.* Every dated measurement stays (N2R-10) |
 | **M-10** | **Table N's in-place mirror enumeration** | `:1811-1813` | itself | **EDIT** — register N2R-12 |
 | **M-11** | **Table N's Mirrored Surface Checklist bullet** | `:2884-2891` | itself | **EDIT** — register N2R-12. This is the bullet **V-30** mechanically enforces; see Implementation notes |
 | **M-12** | **the *"(d) the per-run retention prune"* mirror list** | `:2990-2992` | itself — **NOT named by any draft of this WP** | **EDIT** — register N2R-12 |
@@ -331,7 +344,8 @@ item had to be answered before dispatch.*
   ADR-0036 is `Accepted (amends ADR-0031)`, **OWNER-SIGNED 2026-07-28**. Row A3
   (`:106`) ends with the parenthetical *"`WP-ep2-retention-prune-timing-test` is
   routed to close that gap"*. This WP re-routes that gap to
-  `WP-ep2-prune-once-per-run-test` on all eight ep2-spec surfaces (N2R-11), which
+  `WP-ep2-prune-once-per-run-test` at all eight of the old slug's ep2-spec
+  occurrences (**N2R-11(i)**; the resulting total is N2R-11(ii)'s ten), which
   leaves A3 naming a different WP from the row it cites bidirectionally.
   **Recommendation: grant it, bounded to that one slug.** Nothing the owner signed
   changes: the `OWNER-SIGNED` line is untouched, A3's clause, its forbidden set,
@@ -411,9 +425,14 @@ repository, whose inputs are literals from Table N2R and Table M.
 - [ ] **AC-5 (N2R-8)** The **AC-15 census limb cell for M-48 still equals `gap`.**
       This WP adds no detector, so a limb that moved is a false claim of coverage.
       Asserted as a cell equality, not a substring. (V-4)
-- [ ] **AC-6 (N2R-11)** `WP-ep2-retention-prune-timing-test` occurs **zero** times
-      in the ep2 spec, and `WP-ep2-prune-once-per-run-test` occurs **exactly
-      eight** times, across the seven lines N2R-11 names. (V-5)
+- [ ] **AC-6 (N2R-11, N2R-13)** **Both counts hold, and they are two assertions,
+      not one:** `WP-ep2-retention-prune-timing-test` occurs **zero** times in the
+      ep2 spec (N2R-11(i) — every one of the eight old occurrences was re-routed),
+      **and** `WP-ep2-prune-once-per-run-test` occurs **exactly ten** times
+      (N2R-11(ii) — those eight plus N2R-13(a) and N2R-13(c)). (V-5) *Erratum 2
+      replaced "exactly eight, across the seven lines N2R-11 names": the line list
+      belongs to the OLD slug's occurrences and stopped describing the new one the
+      moment N2R-13 added two mentions of its own.*
 - [ ] **AC-7 (N2R-12, Table M)** **Every row of Table M is either edited or
       explicitly dispositioned in the PR body**, and **all five** mirror lists —
       M-10, M-11, M-12, M-13, M-14 — end the pass registering the union N2R-12
@@ -486,17 +505,25 @@ limb=$(sed -n "${crow}p" "$SPEC" | awk -F'|' '{gsub(/[* ]/,"",$3); print tolower
 test "$limb" = "gap" || { echo "FAIL V-4: census limb is '$limb', want 'gap'"; exit 1; }
 echo "ok V-4: census limb still gap"
 
-# V-5  AC-6 — the routed slug moved on every surface, and on no more than those.
+# V-5  AC-6 — BOTH slug counts: the re-routing is complete and the total is the
+#      contracted one. No other step in this block counts either slug — V-2 reads
+#      Table N row N2, V-3 reads M-48's mutation cell, and neither greps a slug
+#      (checked under erratum 2).
 #      OCCURRENCES, not lines: line 4504 carries two, so `grep -c` reads 7 where
 #      the contract says 8. EACH GREP IS GUARDED: a no-match grep exits 1, and
 #      under `set -e` with `pipefail` that kills the step SILENTLY — the zero
 #      count, which is the whole point of the first assertion, never reaches it.
 old=$({ grep -o 'WP-ep2-retention-prune-timing-test' "$SPEC" || true; } | wc -l | tr -d ' ')
 new=$({ grep -o 'WP-ep2-prune-once-per-run-test' "$SPEC" || true; } | wc -l | tr -d ' ')
-test "$old" = "0" || { echo "FAIL V-5: the old slug still occurs $old time(s)"; exit 1; }
-test "$new" = "8" || { echo "FAIL V-5: the new slug occurs $new time(s), want 8"; exit 1; }
+#      TWO COUNTS, not one. N2R-11(i) is the re-routing (old -> 0); N2R-11(ii) is
+#      the resulting total (new -> 10: the eight re-routings plus the slug inside
+#      N2R-13(a)'s and N2R-13(c)'s mandated replacement literals). Erratum 2: a
+#      single "new = 8" conflated the two and was falsified by erratum 1's own
+#      literals, which a byte-exact application cannot avoid.
+test "$old" = "0" || { echo "FAIL V-5: N2R-11(i) — the old slug still occurs $old time(s), want 0"; exit 1; }
+test "$new" = "10" || { echo "FAIL V-5: N2R-11(ii) — the new slug occurs $new time(s), want 10 (8 re-routings + N2R-13(a) + N2R-13(c))"; exit 1; }
 test -f docs/specs/WP-ep2-prune-once-per-run-test.md || { echo "FAIL V-5: the routed spec does not exist"; exit 1; }
-echo "ok V-5: routed slug on all eight surfaces, and the spec it names exists"
+echo "ok V-5: old slug at 0, new slug at 10, and the spec it names exists"
 
 # V-6  AC-8 — the JSDoc was re-homed, and NOTHING BUT COMMENT TEXT changed.
 #      Two halves, because the bound alone reads greenest when the work was never

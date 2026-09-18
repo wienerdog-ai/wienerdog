@@ -87,6 +87,29 @@ contract — M-48's mutation IDENTITY — whose mirror family Table M never list
 `Ready` spec and lands as its own docs PR; the implementer rebases PR #285 onto it
 and applies N2R-13 and N2R-14.
 
+## PR gate round 2 — the implementation (PR #285, tip `b78d3cb2`)
+
+**Erratum 1's own mandated literals broke erratum 1's own gate**, and the
+implementer surfaced it correctly rather than working around it.
+
+| # | finding | source | weight | disposition |
+|---|---------|--------|--------|-------------|
+| **P2-1** | **The slug count is off by exactly the erratum's own literals.** N2R-13(a) and N2R-13(c) each spell `WP-ep2-prune-once-per-run-test` inside a **mandated replacement clause**, so a byte-exact application takes the new slug from eight occurrences to **ten** — while N2R-11's count sentence, **AC-6** and **V-5** all still said eight. **V-5 failed on a correct implementation** | PR gate round 2 | HEAVY (contract) | **FIXED by erratum 2.** N2R-11 now states two facts separately — **(i)** the eight OLD occurrences are re-routed and the old slug ends at **zero**; **(ii)** the new slug ends at **exactly ten**, those eight plus N2R-13(a) and N2R-13(c). **AC-6 and V-5 assert both counts.** V-5's diagnostics now name the sub-row that failed |
+| **P2-2** | **The implementer's precedence call**: they applied the canonical rows byte-exactly and left V-5 red rather than reword a mandated literal to make a verification step pass | PR gate round 2 | — | **ENDORSED, and recorded as the rule.** A mandated literal outranks a verification count: the literal is the contract, the count is a check over it, and a check that disagrees with its own canonical row is the check that is wrong. Rewording the literal would have made the gate green while leaving Table M's registered mirrors saying two different things |
+| **P2-3** | **A third ordinal, fixed on the implementer's own initiative.** M-48's enumeration read *"The seventh was added"*; the implementer replaced it with the named form N2R-12 mandates for M-10/M-11/M-12 | PR gate round 2 | LIGHT | **REGISTERED by erratum 2.** Table M row **M-9**'s verdict now states that N2R-12's naming rule binds M-48's own enumeration too. *A rule a spec relies on but does not state is not a contract, and the fix should not have depended on the implementer noticing* |
+
+**Everything else on that tip is green** and is recorded so the next round does not
+re-derive it: the old slug at zero, all eight contracted re-routings present,
+V-1…V-4 and V-6…V-8, `npm test` 2904 with zero failures, `npm run lint`, and the
+boundary check.
+
+**Measured on `b78d3cb2`** — old slug **0**, new slug **10**, across nine lines
+(`:4525` carries two). **V-5 as erratum 2 rewrites it was run both ways:** green
+against that tree, and red against `main`'s unimplemented one (`FAIL V-5:
+N2R-11(i) — the old slug still occurs 8 time(s), want 0`).
+
+**Neither spec's `status:` changes.**
+
 ### The three regression schedules, re-measured by hand at `08de2bc3`
 
 Each mutation applied to a worktree carrying the candidate test, the **whole** suite
