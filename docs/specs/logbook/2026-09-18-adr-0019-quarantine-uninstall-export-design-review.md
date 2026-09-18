@@ -536,6 +536,35 @@ every cell this package touches in a round, not only on the clause being changed
 criteria; twelve have a pre-measurable anchor, eleven mutate code this package
 authors.
 
+## Round 19 — Astra, 2026-09-18
+
+- **Reviewed tip:** `dc4a277e`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r19-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r19-astra-focus.txt`
+- **Committed before adjudication at:** `e6503c6e`
+- **Verdict:** `needs-attention` — *"X19 still permits alias removal that makes a
+  retry destroy a completed quarantine copy."*
+- **Residuals:** nothing inside them, fifth consecutive round.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R19-1** | **Alias retention missed deletion targets BENEATH the alias target.** Round 18's clause (b) asked whether the alias target lay **inside** a swept directory and missed the **opposite relationship**. With `<state>` → `~/.claude`, initially absent shelves, and a sparse manifest holding a **hash-less** `{kind:'file'}` entry for `~/.claude/quarantine/2026-09-18-note.md`, the target is **outside `<core>`** and an **ANCESTOR** of the replay target, so the alias was unlinked. A dream completes that copy **after the absence decision and before the unlink**; a subsequent `secrets` `EPERM` retains the manifest under **X13**; and **on the retry** `<state>` is absent, the rebuilt anchors miss the original, and the `file` entry deletes it. Confirmed against an in-memory model and the shipped `reverse()`. **No concurrent alias creation or redirection is required**, so no named residual covers it | A | HEAVY (high, conf. 0.96) | **ACCEPTED IN FULL, and closed as a CLOSURE move rather than a third enumeration** — which is the part worth keeping. Clause (b) now retains a `<state>` alias whenever its resolved target **OVERLAPS — equals, contains, or is contained by — ANY of `withinAllowedRoot`'s roots**: `[paths.core, paths.claudeDir, paths.codexDir, <home>/.local/bin]` (`manifest.js:742`). **Why that object is closed where a list is not:** `withinAllowedRoot` gates **every mutating replay kind** (gate `:872-883`) and the disposer's own sweeps all lie under `<core>`, so **every path this command can delete sits under one of those four roots by construction** — including an individual **file beneath** the alias target, which is exactly what round 19 measured. **The round-18 swept-directory enumeration is kept ONLY as the derivation** of why the roots are the right object, and is **no longer the test**; this spec stops maintaining a list of targets it does not own. The blanket "never unlink an absent-shelf alias" stays refused (it re-opens round 16 and criterion 14). **The by-construction argument is restated against the new object:** an alias disjoint from all four roots, with no existing chain, is unlinked as at `5b77865f`, and **no deletion this command performs reaches outside those roots**. **Acceptance criterion 9** gains the ancestor arm — alias target **outside `<core>`** and an **ancestor** of a replay target, copy before the unlink, **an injected `secrets` failure** so X13 retains the manifest, then a **full retry** — with all three properties called load-bearing, since without the failure there is no retry and without the retry the first run passes. **Criterion 14**'s fixture must be **disjoint from all four roots**. New RED proof **`quse-alias-ancestor-of-target-unlinked`**, anchored on the shipped `allowedRoots` line (**1**): **no earlier fixture reaches it**, because every one of them puts the alias target *inside* `<core>` where the one-way test already retained |
+
+**The whole-cell re-read paid for itself in the same round it was adopted.** Round
+18's process note required re-reading every cell a round touches. Doing that on
+**X19** immediately after this rewrite caught **two stale tail sentences** left from
+round 18 — *"a `<state>` symlink whose target overlaps no shelf is unlinked"* and the
+hypothetical clause's *"such an alias is unlinked exactly as at `5b77865f`"* — both
+of which contradicted the new clause (b) **inside the cell that defines it**. Neither
+was reported by the reviewer; both were fixed before the commit. That is the third
+intra-cell drift of this gate and **the first one caught by process rather than by a
+round.** Two registered mirrors (X10's step-0b clause, the security bullet) and
+criterion 14's fixture requirement were updated in the same pass.
+
+**Declaration count after round 19:** twenty-four declarations over thirteen
+criteria; thirteen have a pre-measurable anchor, eleven mutate code this package
+authors.
+
 **One confirming round remains.** The gate closes on a clean return, a LIGHT-only
 return, **or a finding that falls inside `R-alias-outside-closure`,
 `R-post-ledger-preserve` or `R-post-uninstall-preserve`**
