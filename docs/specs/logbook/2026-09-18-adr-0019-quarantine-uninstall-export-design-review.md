@@ -668,7 +668,107 @@ the gate returns clean; done now it is a redesign.
 **Declaration count after round 21:** twenty-six declarations over thirteen criteria;
 fifteen have a pre-measurable anchor, eleven mutate code this package authors.
 
-**One confirming round remains.** The gate closes on a clean return, a LIGHT-only
-return, **or a finding that falls inside `R-alias-outside-closure`,
-`R-post-ledger-preserve` or `R-post-uninstall-preserve`**
-(`docs/runbooks/codex-review.md`, "Weighted closure").
+## Round 22 — Astra, 2026-09-18 — **APPROVE, no findings. THE GATE IS CLOSED.**
+
+- **Reviewed tip:** `131040ca`, against base `5b77865f`.
+- **Raw + focus committed before adjudication at:** `4c5fd818`
+- **Verdict:** `approve`, **no findings**.
+
+**Closing tally.** Twenty-two rounds. Rounds 1–21 produced **17 band-A/HEAVY findings
+and 4 LIGHT/band-C ones**, **every one accepted in full — none dispositioned away**.
+Every round's raw and focus were committed **before** adjudication:
+
+`5084f7c1` (r1) · `85041d69` (r2) · `a0693065` (r3) · `084142ed` (r4) · `59064c78` (r5) ·
+`7cfecf2a` (r6) · `86123c72` (r7) · `648f225a` (r8) · `4bd3ea58` (r9) · `878c50bf` (r10) ·
+`fe6ab693` (r11) · `7cbd4a27` (r12) · `52f8be19` (r13) · `e33c9666` (r14) · `69f49bb4` (r15) ·
+`905d8ac3` (r16) · `dd500826` (r17) · `b80dbb46` (r18) · `e6503c6e` (r19) · `8be6ce17` (r20) ·
+`c32aaea2` (r21) · `4c5fd818` (r22).
+
+**A review gate is not owner approval.** Nothing in this repository records the owner
+approving, accepting, ratifying or signing this work, and the ADR-0019 amendment it
+drafts carries *"owner signature pending"*. **Owner items 1–4 remain OPEN**, in the
+standing form.
+
+**What the twenty-two rounds were about, in one line each.** Rounds 1–10 built the
+contracts (the race, the counting rule, symlinks, validation order, case folding, the
+propagation boundary, the dry-run planner, the replay guard, the recursive-ancestor
+guard, the resolution rule). Rounds 11–19 were **one family**: nine consecutive ways a
+deletion could still reach the shelf through an alias, each closed by extending a rule
+rather than adding one, and bounded at round 14 by the named residual
+`R-alias-outside-closure`. Rounds 20–21 were a **second** family — the retry ledger —
+and round 21 also caught the direction in which this work could fail by *refusing
+forever*. **Three failure directions were named by the end: destroying the user's text,
+stranding a credential, and never letting the uninstall finish.**
+
+## The split — row-id map (2026-09-18, after closure)
+
+The gated document, `docs/specs/WP-adr-0019-quarantine-uninstall-export.md`, is now
+`Superseded` and carries the split rationale. **Every contract row keeps its original
+id**, so every disposition above still resolves. Acceptance criteria are renumbered
+within each spec; the old→new map is below.
+
+| Row / item | New home |
+|---|---|
+| **K1**–**K7**, and **K8** (the fold, carried in as the inventory half of **X12**) | `WP-adr-0019-quarantine-uninstall-gate` |
+| **W1**, **W2**, **W3**, **W4**, **W5**, **W6**, **W7**, **W9** | `WP-adr-0019-quarantine-uninstall-gate` |
+| **Y1**, **Y2**, **Y3**, **Y4**, **Y5**, **Y7**, **Y8** | `WP-adr-0019-quarantine-uninstall-gate` |
+| Owner items **1**, **2**, **3** | `WP-adr-0019-quarantine-uninstall-gate` |
+| **X1**–**X13**, **X15**–**X22** (**X14** never existed; the gap is preserved) | `WP-uninstall-shelf-deletion-guards` |
+| **Table V** | `WP-uninstall-shelf-deletion-guards` |
+| **W8**, **W10**, **W11** | `WP-uninstall-shelf-deletion-guards` |
+| **Y6**, **Y9**, **Y10** | `WP-uninstall-shelf-deletion-guards` |
+| Owner item **4**; residuals `R-alias-outside-closure`, `R-post-ledger-preserve`, `R-post-uninstall-preserve` | `WP-uninstall-shelf-deletion-guards` |
+
+**Two allocations deviate from the split sketch, and both are recorded here rather than
+made silently.** **W7** (the composition constraint against
+`WP-scheduler-replay-manifest-independent`) went to the **gate**, because the gate is the
+first package to touch `src/cli/uninstall.js` after that one and must carry the
+constraint at the moment it applies; the deletion package cites it. **W8** (the
+preserved-quarantine summary arm) went to the **deletion guards**, because it renders
+`preservedQuarantine` — a return field the gate does not introduce — and in the gate it
+would have been unreachable code referencing a field that does not exist.
+
+**W5 and W6 are split by half, not by row.** Both are canonical in the gate; the
+deletion package adds the read-only planner (**X15**) and the `removed` granularity
+(**X4**) as second halves that **defer** to those cells rather than re-deciding them.
+
+### Acceptance criteria — old number → new
+
+| Unsplit | Gate package | Deletion-guards package |
+|---|---|---|
+| 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 20 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 | — |
+| 1, 2, 7, 9, 14, 15, 16, 17, 18, 19, 20 | — | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 |
+
+**Criteria 7, 15 and 20 appear on both sides deliberately.** Criterion 7's
+byte-identity binds both packages — the gate must not change ordinary output and neither
+may the deletion side; criterion 15's inventory arm is the gate's and its sweep arms are
+the deletion package's; criterion 20 is each package's own RED-proof run over its own
+declarations file. **The RED declarations' `criterion` fields still carry the unsplit
+numbers** and are re-derived against each spec's numbering by its implementer, who says
+so in the PR body.
+
+### RED declarations — where each went
+
+The gate takes six: `quse-refusal-not-raised`, `quse-yes-skips-the-refusal`,
+`quse-unreadable-shelf-read-as-empty`, `quse-block-printed-on-an-empty-shelf`,
+`quse-dry-run-block-suppressed`, `quse-shelf-name-case-sensitive`. The deletion package
+takes the other **twenty**, in `tests/red-proofs/uninstall-shelf-deletion-guards.proofs.json`.
+**Of those twenty, eleven mutate code the package itself authors** — which is a fact
+about the package, not an accident: most of its rules did not exist until a round
+measured the hole they close.
+
+## Process lessons worth carrying forward
+
+1. **The whole-cell re-read after a rewrite.** Five intra-cell drifts occurred in this
+   gate — a cell rewritten around its own ending, the ending left contradicting the new
+   text. Two were caught by review rounds (K7's title at round 7, X17's concluding clause
+   at round 18); **four were caught by the re-read discipline adopted at round 18**,
+   including two in the round it was adopted. No Mirrored Surface Checklist can see
+   inside one cell; only the re-read can.
+2. **A protection package has more than one failure direction.** Rounds 15 and 21 both
+   landed on over-protection — stranding a credential, and refusing forever — and the
+   Security checklists now name all three directions explicitly.
+3. **Bounding a family is a design act with its own evidence.** Round 14's
+   `R-alias-outside-closure` did not stop findings arriving, but every one of rounds 15–21
+   landed on the **rule** rather than inside the residual, which is what a good bound
+   looks like from the inside.
