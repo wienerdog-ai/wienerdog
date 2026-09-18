@@ -43,6 +43,24 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-18 #15 (same session, overnight — the primary-dialogue epic's second package landed; every review on the Codex plugin with `gpt-6-astra`).**
+> Measured on `main` at `297ef1df`, not transcribed:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | 1 | `WP-dream-primary-dialogue-collection` | **Done** | implementation **#269** (`297ef1df`, tip `119137d2`), filed by **this PR** with nine errata | The collector now writes PRIMARY DIALOGUE and routes a text-free gate projection to the ledger gate in memory. **Measured (AC7): the same 81 sessions reach the model as 3.2 % of the previous scratch volume.** Byte-policy equivalence holds; admitted-set identity does not — see the owner item below. Both gates clean on `119137d2`. |
+> | 2 | `WP-dream-primary-dialogue-projection` | **Done** | implementation **#266** (`b46a3843`), filed #267 with six errata | `parsePrimaryWithOutcome` in the transcript parsers. Now consumed by #1. |
+> | 3 | `WP-dream-collect-parse-throw-quarantine` | **Ready** | spec **#268**, **re-pinned by this PR to `297ef1df`** | A per-candidate fault boundary so one crafted transcript stops ending every nightly run. **Dispatchable now** — its dependency was merge order, not contract, and #1 has merged. The re-pin is a cite refresh: no contract row's rule changed (`docs/specs/logbook/2026-09-18-dream-collect-parse-throw-quarantine-repin.md`). |
+> | 4 | `WP-dream-primary-dialogue-filter` | Draft, **parked** | — | The model relevance stage. Entry condition unchanged: an offline evaluation of #1 + #2's output must call for it. |
+>
+> **Owner items** — collection items 1/3 stand (byte-policy equivalence, **not** admitted-set identity: on a deadline-bound install the admitted set can move in either direction, and every admitted session is marked processed read or not — measured this pass at 6 fewer admitted under projection in the deadline regime, −12 %, with **no byte verdict moved**). **Still owed by the owner: two signature lines.** The ADR-0012 part-6 amendment on `main`, and now the **ADR-0020** amendment, which #269 landed on `main` reading *"ACCEPTED under standing authorization 2026-09-17 — owner signature pending."* Nothing in the repository records the owner approving, accepting, ratifying or signing either.
+>
+> **Routed, not fixed, carried forward:** the seven `WD-SINK-*` defects; the scratch-filename collision (`s_1` / `s.1` → one file) still silently loses one session's dialogue while marking both processed — #269 only stopped the authorization gate weakening over it; a `--wp`-scoped `npm run red-proofs` can never exit 0 (`RUN: FILTERED` by construction) and one more `Ready`/Draft spec still lists it as a gating check (see this PR's Discovered issues). **Nine spec-side errata this package** — all prose a measured value falsified (a byte count, two `expectRed` sets, which cases redden), plus one acceptance criterion whose two clauses could not both hold.
+>
+> **Merged tree** (run on `297ef1df` this pass): tests 2895 / pass 2883 / fail 0 / skipped 12; lint passed. Red-proofs was **not** re-run here — the verdict is taken from the implementer's unfiltered run log on tip `119137d2`: `RUN: PROVEN`, **157 PROVEN**, zero `FAILED`/`VACUOUS`/`UNCONTROLLED`/`FILTERED`/`ERROR`. **No npm release has been cut.**
+>
+> **Next in the queue:** (1) implement `WP-dream-collect-parse-throw-quarantine` (Ready, S, dispatchable); (2) the offline evaluation that decides the filter; (3) spec a fix for the `WD-SINK-*` defects; (4) `WP-ep2-retention-prune-timing-test`; `WP-broker-e2e-terminal-auth` needs an interactive terminal-auth spike and is left for the owner; then the stubs; `WP-a10-windows-reap` stays blocked on a Windows runner. `WP-contract-reference-tables` is still `In-Review` with its implementing commit on `main` and no traceable PR.
+>
 > **Status pass, 2026-09-17 #14 (same session, late — owner-authorized merges; every review on the Codex plugin with `gpt-6-astra`).**
 > Measured on `main` at `811f7abc`, not transcribed:
 >
