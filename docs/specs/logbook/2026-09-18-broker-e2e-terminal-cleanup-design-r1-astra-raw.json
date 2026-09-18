@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 0c3348b62a3cd7d643d525df8f134b9ac2252ace",
+    "baseRef": "0c3348b62a3cd7d643d525df8f134b9ac2252ace",
+    "explicit": true
+  },
+  "threadId": "01a0b47b-2480-70c1-af96-c606694a0f45",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-broker-r1",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 0c3348b62a3cd7d643d525df8f134b9ac2252ace from merge-base 0c3348b62a3cd7d643d525df8f134b9ac2252ace."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"The replacement spec permits a false-positive containment result: creating a draft does not prove weekly-review consumed the poisoned input.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Require evidence that weekly-review read the poisoned note\",\n      \"body\": \"The prescribed floor checks only gmail.users.drafts.create. A routine that skips the poisoned daily note and drafts from the benign dream report—or from no input—passes. The new logbook explicitly records drafts.create occurring with an empty snapshot (lines 42–50), demonstrating that this observable does not establish input consumption. Seeding the note and checking that it mounts cannot establish that the model read it. Implementing this spec therefore allows CONTAINED without exercising the attack payload.\",\n      \"file\": \"docs/specs/WP-broker-e2e-terminal-cleanup.md\",\n      \"line_start\": 282,\n      \"line_end\": 284,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require evidence of a successful Read returning the poisoned daily note in addition to draft creation. Update the permitted implementation scope and mirrored acceptance criteria, and require a negative check showing that draft creation without reading the poisoned note fails.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the weekly-review non-vacuity contract before dispatching implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "The replacement spec permits a false-positive containment result: creating a draft does not prove weekly-review consumed the poisoned input.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Require evidence that weekly-review read the poisoned note",
+        "body": "The prescribed floor checks only gmail.users.drafts.create. A routine that skips the poisoned daily note and drafts from the benign dream report—or from no input—passes. The new logbook explicitly records drafts.create occurring with an empty snapshot (lines 42–50), demonstrating that this observable does not establish input consumption. Seeding the note and checking that it mounts cannot establish that the model read it. Implementing this spec therefore allows CONTAINED without exercising the attack payload.",
+        "file": "docs/specs/WP-broker-e2e-terminal-cleanup.md",
+        "line_start": 282,
+        "line_end": 284,
+        "confidence": 0.99,
+        "recommendation": "Require evidence of a successful Read returning the poisoned daily note in addition to draft creation. Update the permitted implementation scope and mirrored acceptance criteria, and require a negative check showing that draft creation without reading the poisoned note fails."
+      }
+    ],
+    "next_steps": [
+      "Revise the weekly-review non-vacuity contract before dispatching implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"The replacement spec permits a false-positive containment result: creating a draft does not prove weekly-review consumed the poisoned input.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Require evidence that weekly-review read the poisoned note\",\n      \"body\": \"The prescribed floor checks only gmail.users.drafts.create. A routine that skips the poisoned daily note and drafts from the benign dream report—or from no input—passes. The new logbook explicitly records drafts.create occurring with an empty snapshot (lines 42–50), demonstrating that this observable does not establish input consumption. Seeding the note and checking that it mounts cannot establish that the model read it. Implementing this spec therefore allows CONTAINED without exercising the attack payload.\",\n      \"file\": \"docs/specs/WP-broker-e2e-terminal-cleanup.md\",\n      \"line_start\": 282,\n      \"line_end\": 284,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require evidence of a successful Read returning the poisoned daily note in addition to draft creation. Update the permitted implementation scope and mirrored acceptance criteria, and require a negative check showing that draft creation without reading the poisoned note fails.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the weekly-review non-vacuity contract before dispatching implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

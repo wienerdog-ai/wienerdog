@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 0c3348b62a3cd7d643d525df8f134b9ac2252ace",
+    "baseRef": "0c3348b62a3cd7d643d525df8f134b9ac2252ace",
+    "explicit": true
+  },
+  "threadId": "01a0b487-f4fe-7cb2-96ae-21ff3369f234",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-broker-r2",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 0c3348b62a3cd7d643d525df8f134b9ac2252ace from merge-base 0c3348b62a3cd7d643d525df8f134b9ac2252ace."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"The spec permits an authentication failure after partial execution to report CONTAINED.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Preserve failure detection when removing the auth short-circuit\",\n      \"body\": \"E2 deletes the authentication failure check without replacing it. proveRoutine catches runJob exceptions into `threw`, but never adds them to `failures`. If authentication fails after a qualifying broker call, the remaining assertions can pass. An in-memory reproduction using the prescribed E2/E3/E6 blocks, a marker-bearing draft, and a subsequent authentication exception returned zero failures; the original code returned AUTH-BLOCKED. This contradicts the promised behavior that a 401 remains a real failure and can certify an incomplete run.\",\n      \"file\": \"docs/specs/WP-broker-e2e-terminal-cleanup.md\",\n      \"line_start\": 338,\n      \"line_end\": 338,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require primary-run execution/authentication failures to enter the failure list while still running containment assertions. Keep the grant-flip run's expected-failure handling separate. Add a regression check where a qualifying call precedes an authentication failure and require a failing verdict.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise E2 and its mirrored acceptance criteria before dispatching implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "The spec permits an authentication failure after partial execution to report CONTAINED.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Preserve failure detection when removing the auth short-circuit",
+        "body": "E2 deletes the authentication failure check without replacing it. proveRoutine catches runJob exceptions into `threw`, but never adds them to `failures`. If authentication fails after a qualifying broker call, the remaining assertions can pass. An in-memory reproduction using the prescribed E2/E3/E6 blocks, a marker-bearing draft, and a subsequent authentication exception returned zero failures; the original code returned AUTH-BLOCKED. This contradicts the promised behavior that a 401 remains a real failure and can certify an incomplete run.",
+        "file": "docs/specs/WP-broker-e2e-terminal-cleanup.md",
+        "line_start": 338,
+        "line_end": 338,
+        "confidence": 0.99,
+        "recommendation": "Require primary-run execution/authentication failures to enter the failure list while still running containment assertions. Keep the grant-flip run's expected-failure handling separate. Add a regression check where a qualifying call precedes an authentication failure and require a failing verdict."
+      }
+    ],
+    "next_steps": [
+      "Revise E2 and its mirrored acceptance criteria before dispatching implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"The spec permits an authentication failure after partial execution to report CONTAINED.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Preserve failure detection when removing the auth short-circuit\",\n      \"body\": \"E2 deletes the authentication failure check without replacing it. proveRoutine catches runJob exceptions into `threw`, but never adds them to `failures`. If authentication fails after a qualifying broker call, the remaining assertions can pass. An in-memory reproduction using the prescribed E2/E3/E6 blocks, a marker-bearing draft, and a subsequent authentication exception returned zero failures; the original code returned AUTH-BLOCKED. This contradicts the promised behavior that a 401 remains a real failure and can certify an incomplete run.\",\n      \"file\": \"docs/specs/WP-broker-e2e-terminal-cleanup.md\",\n      \"line_start\": 338,\n      \"line_end\": 338,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require primary-run execution/authentication failures to enter the failure list while still running containment assertions. Keep the grant-flip run's expected-failure handling separate. Add a regression check where a qualifying call precedes an authentication failure and require a failing verdict.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise E2 and its mirrored acceptance criteria before dispatching implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
