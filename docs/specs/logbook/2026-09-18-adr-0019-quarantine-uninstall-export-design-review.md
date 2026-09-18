@@ -290,5 +290,46 @@ it, not by writing a new rule.**
 **Declaration count after round 11:** fifteen declarations over eleven criteria;
 nine have a pre-measurable anchor, six mutate code this package authors.
 
+## Round 12 — Astra, 2026-09-18
+
+- **Reviewed tip:** `934b69f2`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r12-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r12-astra-focus.txt`
+- **Committed before adjudication at:** `7cbd4a27`
+- **Verdict:** `needs-attention` — *"unlinking a symlinked state directory can
+  erase the evidence needed to protect quarantined originals."*
+- **Held from round 11:** **X18** was **not** re-opened. The finding lands on
+  **step 0 — the last mutating operation still outside X16.**
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R12-1** | **Preserve shelf aliases across both disposal sweeps.** Table X row **X1** step 0 unlinked a symlinked `<state>` **before** step 1 computed the protected targets. With `<core>/state` → `<core>/logs` and an original at `logs/quarantine/…`, the alias is removed **and the original is not**; **X17** then derives its anchors under the now-**absent** `<state>` path, so **X18** sees no overlap and permits the recursive delete of `logs`, taking the original. Reachable through the exported direct sweep or a link-and-preserve introduced after the CLI gate. **And computing the anchors earlier only protects the FIRST sweep:** `uninstall.js` calls the disposer **again at `:467`**, when the alias is already gone. An in-memory model of **both** orderings confirmed the loss | A | HEAVY (high, conf. 0.97) | **ACCEPTED IN FULL.** New **Table X row X19**, and it is a **retention** rule, not merely an ordering one — the distinction the finding's second half forces. **Order corrected to begin with the targets:** **0a** compute protected shelf targets (before any mutation at all) → **0b** classify `<state>` → **2** per-child recursive removal → **3** the `rmdirSync` climb. **Retention:** a `<state>` symlink whose resolved target **overlaps** a protected shelf target — contains, equals or is contained by, per **X16** — is **preserved and reported in `preservedQuarantine`**, never unlinked, so the evidence survives for the second disposer call and for any retry, which starts from whatever the last process left. **A `<state>` symlink covering no shelf is unlinked exactly as at `5b77865f`** — the ordinary alias case, which acceptance criterion **14** already pinned; X19 is what makes those two arms consistent rather than contradictory, and criterion 14 now says so. Unanswerable preserves (**X17** outcome 4); absent does not (outcome 3). **Consequence stated rather than discovered later:** a retained link leaves `<core>` non-empty, so the core is kept and Table W row **W8**'s arm prints — correct, because the text is still reachable through that name. **W6 unaffected:** on an ordinary install `<state>` is a real directory and step 0b's symlink arms are never reached. **The "step 0 is outside X16" language is gone from X10, X18 and the security checklist**, so the convergence note's *no site is exempt* is now literally true. Acceptance criteria **1** and **14** gain the arm, asserted across **both** live disposer calls; new RED proof **`quse-state-alias-unlinked`**, whose point is that **a suite exercising only the first call stays green** — the loss happens on the second — so the declaration is what forces the two-call fixture to exist |
+
+## Convergence — the deletion surface is CLOSED (recorded at round 12)
+
+Twelve rounds in, this package's mutating operations are **enumerated**, and the
+enumeration is the contract rather than a summary:
+
+1. step **0b**'s `unlinkSync` of a `<state>` symlink;
+2. step **2**'s per-child recursive `fs.rmSync` over `<state>`'s non-shelf children;
+3. step **3**'s non-recursive `rmdirSync` climb over the validated prefix;
+4. the `mechanics` loop's recursive `fs.rmSync` at `manifest.js:1148` over
+   `logs`/`schedules`/`secrets`;
+5. the two Table **V** replay kinds, `vendored-tree` and `copied-skill`;
+6. the core removal at `:1151-1170` — pre-existing, non-recursive, unchanged.
+
+**Every one of (1)–(5) is gated by Table X row X16's symmetric containment check
+over Table X row X17's anchors. No site is exempt, and no table lists one.**
+Resolution semantics are uniform across **X11**, **X12**, **X16** and **X19**
+under **X17**, which is the shape `WP-scheduler-replay-manifest-independent`
+reached with **D15** after the same recurring family.
+
+**A further alias finding is closed by adding the site to that enumeration, never
+by writing a new rule.** An implementer who finds a mutating operation not on the
+list has found a spec bug and should say so rather than guess.
+
+**Declaration count after round 12:** sixteen declarations over eleven criteria;
+nine have a pre-measurable anchor, seven mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean or LIGHT-only return
 (`docs/runbooks/codex-review.md`, "Weighted closure").
