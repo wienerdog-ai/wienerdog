@@ -119,7 +119,8 @@ ep2-spec cite is unchanged across that range.)*
 
 **`src/cli/dream.js`:**
 
-- `makeGates` is imported by **destructuring at require time**, `:33-38`.
+- `makeGates` is imported by **destructuring at require time**, `:34-39` — `const {`
+  on `:34`, `} = require('../core/dream/validate');` on `:39`.
 - `const gates = makeGates({ stateDir: paths.state });` — **`:1060`**.
 - **The one invocation, `:1100-1102`:**
 
@@ -130,10 +131,12 @@ ep2-spec cite is unchanged across that range.)*
   ```
 
   It is unconditional, it sits after the `try`/`catch` around `promote()`, and it
-  is the only call to `pruneRedacted` in `src/`. Confirmed by
-  `grep -rn 'pruneRedacted' src/`, which returns three hits in `validate.js` (the
-  `@returns` JSDoc line `:1314`, the closure `:1556`, the guarded call `:1557`)
-  and this one in `dream.js`.
+  is the only **call** to `pruneRedacted` in `src/`. Confirmed by
+  `grep -rn 'pruneRedacted' src/`, which returns **five** hits: four in
+  `validate.js` — `:1174`, which matches only because `pruneRedactedOriginals`
+  contains the string; the `@returns` JSDoc line `:1314`; the closure `:1556`; the
+  guarded call `:1557` — and this one in `dream.js`. **Exactly one of the five is
+  an invocation of the closure**, which is the claim N2R-5 makes.
 
 ### The document, as it is today
 
@@ -223,7 +226,7 @@ prose in this spec defers to it and restates nothing.** Measured at `08de2bc3`.
 | **N2R-6** | **the counter's name** | **`completedRedactions`.** `secretRedactions` does not exist in `src/`; it survives only as a fixture-facing result field in `tests/unit/dream-validate.test.js` |
 | **N2R-7** | **the construct N2's old wording named** | the per-path loop `for (let i = 0; i < scanTokens.length; i++)` — **removed** by `WP-dream-promote-in-workspace` (`4115668a`). `scanTokens` occurs zero times in `src/` and `tests/`. The gate also no longer spawns per-path git (`WP-dream-gate-inputs-baseline-delta`) |
 | **N2R-8** | **what did NOT change** | Table N rows **N1, N3, N4, N5, N6, N7**; the body of `pruneRedactedOriginals` (`:1174`); every acceptance behaviour of the retention prune; M-48's census limb. **A pass that edits any of these has exceeded this WP** |
-| **N2R-9** | **the re-keyed M-48 mutation** | *duplicate the single `gates.pruneRedacted();` invocation at `src/cli/dream.js:1102`, passing the accumulated `redactedCreated` set unchanged, so the prune runs twice in one run* — replacing *"move the `pruneRedactedOriginals` call from its post-loop site into the B4 loop"*. **It stays an N2-only mutation that preserves N3**, and it is **byte-identical in intent to the `find`/`replace` `WP-ep2-prune-once-per-run-test` declares**, so the row and the machine-run proof state one mutation |
+| **N2R-9** | **the re-keyed M-48 mutation** | *duplicate the single `gates.pruneRedacted();` invocation at `src/cli/dream.js:1102`, passing the accumulated `redactedCreated` set unchanged, so the prune runs twice in one run* — replacing *"move the `pruneRedactedOriginals` call from its post-loop site into the B4 loop"*. **It stays an N2-only mutation that preserves N3**, and it is **byte-identical to the `find`/`replace` of proof (a) in the declaration `WP-ep2-prune-once-per-run-test` ships**, so the row and the machine-run proof state one mutation. **M-48 states exactly one mutation (ADR-0036 row A3), so the per-redaction schedules that successor also proves get NO row here** — adding one would be a second mutation row in a `Done` spec and is out of scope |
 | **N2R-10** | **M-48's dated measurements** | **stay exactly as written and are not re-run.** *"EXECUTED 2026-07-28, AND REDDENED NOTHING AT THAT DATE"*, the `tests 1807, pass 1802, fail 0` counts, and the sentences describing the 2026-07-28 mutation as a move into the B4 loop are claims about a day, and are still true of that day. **Do not restate them in the present tense and do not delete them** — their dated form is what lets this WP edit the row without re-establishing the measurement |
 | **N2R-11** | **the routed-WP slug** | **`WP-ep2-prune-once-per-run-test`**, replacing `WP-ep2-retention-prune-timing-test` at **all eight** of its occurrences in the ep2 spec — lines `2317`, `2322`, `4240`, `4246`, `4247`, `4504` (twice) and `4708` — and, if owner item O-1 is granted, at its single occurrence in `docs/adr/0036-…:106`. The path string at `:2322` becomes `docs/specs/WP-ep2-prune-once-per-run-test.md`, which exists |
 | **N2R-12** | **the union every mirror list must end up registering** | **Table M rows M-1 … M-16**, which is the union of the five lists named in Table M's `registered by` column, plus M-15 and the routed-slug surfaces. **Every list in Table M marked `EDIT` ends the pass registering exactly that union restricted to its own subject** (the N2-trigger lists register the trigger's mirrors; the routed-slug registration registers the slug's) |

@@ -90,7 +90,8 @@ drift and you report it; if the content is absent, stop and say so.**
 
 **`src/cli/dream.js`** owns the timing:
 
-- `makeGates` is imported **by destructuring at require time**, `:33-38`.
+- `makeGates` is imported **by destructuring at require time**, `:34-39` (`const {`
+  on `:34`, `} = require('../core/dream/validate');` on `:39`).
 - `const gates = makeGates({ stateDir: paths.state });` — **`:1060`**.
 - **The one invocation, `:1100-1102`:**
 
@@ -189,7 +190,7 @@ must literally contain the signal string.**
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | tests/unit/dream-pipeline.test.js | **Add exactly one test**, appended to the end of the file, plus whatever helper that one test needs **inside its own body**. Its title, its assertion signal, its seam and its fixture are decided by **Table P**. Change no existing test and no existing shared helper |
-| create | tests/red-proofs/ep2-prune-once-per-run.proofs.json | **Exactly one declaration**, per **Table P** row P-9. `suite` is `tests/unit/dream-pipeline.test.js` |
+| create | tests/red-proofs/ep2-prune-once-per-run.proofs.json | **Exactly one declaration file carrying exactly TWO proofs**, per **Table P** row P-9 — one per regression schedule in P-8. `suite` is `tests/unit/dream-pipeline.test.js` |
 | modify | docs/specs/WP-ep2-prune-once-per-run-test.md | **This spec file — the `status:` transition ONLY** (`Ready` → `In-Review`, per Definition of done item 4). No other line of this file may change |
 
 **`src/` is NOT in this table.** The N2 behaviour is correct as shipped; only its
@@ -237,13 +238,13 @@ registered mirror in the same commit.** Measured at `08de2bc3`.
 | **P-1** | **the host suite** | `tests/unit/dream-pipeline.test.js` — the only suite that drives the real `src/cli/dream.js`. One test appended at the end of the file |
 | **P-2** | **the exact test title** | `dream-pipeline: the retention prune runs EXACTLY ONCE per run, and only after a completed redaction (Table N row N2)` |
 | **P-3** | **the assertion signal** | `N2-prune-must-run-exactly-once-per-run` — a literal substring of **every** assertion message in the test body, per `scripts/red-proofs.js:716-717`. Every assertion carries it, not just one, so whichever leg fails the runner's `signal` search finds it |
-| **P-4** | **what the test asserts, half one — CARDINALITY** | over a run that completes **two** redactions, the prune's delete path fires **exactly once**. This is the half a per-call or duplicated prune violates |
-| **P-5** | **what the test asserts, half two — THE PRECONDITION** | over a second run, in the same test body, that completes **zero** redactions with the directory already over the cap, the prune's delete path fires **zero** times. This is the half `if (completedRedactions > 0)` holds, and it is what keeps P-4 from passing on a prune that always fires |
-| **P-6** | **THE SEAM — what is observed** | the prune's **delete path** over `<stateDir>/quarantine/redacted/`: `fs.rmSync` calls, mocked with `t.mock.method`, whose target's directory is that directory **and** whose basename is one of the fixture's own seeded names (P-7). Those calls are **recorded and NEUTRALIZED — counted, not performed**; every other `fs.rmSync` delegates to the real one. Neutralizing is what makes a second invocation observable: the helper returns at `validate.js:1180` whenever the directory is at or below the cap, and a performed first prune leaves it exactly at the cap, so **an un-neutralized second invocation deletes nothing and is invisible**. The scoping to seeded basenames is mandatory and **measured**: neutralizing *every* `rmSync` under `redacted/` also swallows `quarantinePreserve`'s own temp cleanup and the run throws `quarantinePreserve: "…/.tmp-…" still exists after its removal was attempted` |
-| **P-7** | **the fixture** | built from the suite's own existing helpers — `setup()` (`:288`), `brainWrites()` (`:1162`), `runDream()` (`:347`). **Leg one:** two notes, each carrying a distinct context-free high-entropy blob (REDACT severity, established by the suite's `:1349` test), plus **49** seeded files in `<state>/quarantine/redacted/` that this run did not create, named `<YYYY-MM-DD>-<name>` so N3's date-prefix filter admits them, mode `0600` inside `0700`. 49 seeded + 2 created = **51**, one over the cap of 50, so every prune invocation deletes exactly one seeded file. **Leg two:** one clean note and **51** seeded files. **Reuse the suite's helpers; add no shared helper** |
-| **P-8** | **the mutation the test must catch** | **duplicate the invocation**: a second `gates.pruneRedacted();` beside `src/cli/dream.js:1102`. It is an N2-only mutation — the accumulated set is untouched, so N3 stays satisfied and no existing `EP2 retention:` test moves. It is the same mutation `WP-ep2-n2-rehome` re-keys M-48 to (that spec's Table N2R row N2R-9), so the row and the proof state one mutation |
-| **P-9** | **the RED declaration** | one proof in `tests/red-proofs/ep2-prune-once-per-run.proofs.json`: `suite` = P-1; `id` = `ep2-prune-runs-once-per-run`; `wp` = `WP-ep2-prune-once-per-run-test`; `criterion` = `2`; `file` = `src/cli/dream.js`; `find` = the exact `gates.pruneRedacted();` line as it appears at `src/cli/dream.js:1102`, **including its six leading spaces**; `replace` = that line plus a newline and a duplicate carrying the marker; `marker` = `RP_MUT_EP2_PRUNE_TWICE`; `occurrences` = `1`; `testNamePattern` = `retention prune runs EXACTLY ONCE`; `expectRed[0].test` = `[P-2]`; `expectRed[0].signal` = P-3 |
-| **P-10** | **the MEASURED red set** | hand-applied at `08de2bc3` in a worktree carrying the candidate test, the whole suite run: **`tests 2905, pass 2892, fail 1, skipped 12`**, the single failure being **P-2**, with the diagnostic `N2-prune-must-run-exactly-once-per-run: the prune's delete path ran 2 time(s) over a run that completed two redactions; Table N row N2 permits exactly one.` **Nothing else in the repository reddens.** Control, same tree without the mutation: `tests 2905, pass 2893, fail 0, skipped 12`. *This is a measurement of the candidate implementation, not a promise about the implementer's; the implementer re-establishes it through P-11* |
+| **P-4** | **what the test asserts, half one — CARDINALITY** | over a run that completes **two** redactions against P-7's fixture, the prune's delete path attempts **exactly two** deletions — the count a single correct prune makes when the directory ends **two** over the cap. **The assertion is on the delete-path count, not on an invocation count**, because the invocation is not directly observable (Table S). Every schedule that violates N2 attempts a different number: P-8 measures them |
+| **P-5** | **what the test asserts, half two — THE PRECONDITION** | over a second run, in the same test body, that completes **zero** redactions with the directory already **one** over the cap, the prune's delete path attempts **zero** deletions. This is the half `if (completedRedactions > 0)` holds, and it is what keeps P-4 from passing on a prune that always fires |
+| **P-6** | **THE SEAM — what is observed** | the prune's **delete path** over `<stateDir>/quarantine/redacted/`: `fs.rmSync` calls, mocked with `t.mock.method`, whose target's directory is that directory **and** whose basename is one of the fixture's own seeded names (P-7). Those calls are **recorded and NEUTRALIZED — counted, not performed**; every other `fs.rmSync` delegates to the real one. Neutralizing is what makes a later invocation observable: the helper returns at `validate.js:1180` whenever the directory is at or below the cap, and a performed prune leaves it exactly at the cap, so **an un-neutralized later invocation deletes nothing and is invisible**. The scoping to seeded basenames is mandatory and **measured**: neutralizing *every* `rmSync` under `redacted/` also swallows `quarantinePreserve`'s own temp cleanup and the run throws `quarantinePreserve: "…/.tmp-…" still exists after its removal was attempted` |
+| **P-7** | **the fixture** | built from the suite's own existing helpers — `setup()` (`:288`), `brainWrites()` (`:1162`), `runDream()` (`:347`). **Leg one:** two notes, each carrying a distinct context-free high-entropy blob (REDACT severity, established by the suite's `:1349` test), plus **50** seeded files in `<state>/quarantine/redacted/` that this run did not create, named `<YYYY-MM-DD>-<name>` so N3's date-prefix filter admits them, mode `0600` inside `0700`. **50 is the load-bearing number, and 49 is a measured defect** (design round 1, Astra, band B): at 49 the directory is at the cap after the first redaction, so a per-redaction prune returns without deleting and the run's total is **one** — identical to a correct once-per-run prune, and the detector misses the regression N2 exists for. At 50 the directory is **two** over the cap at the end of the run, so every schedule in P-8 separates. **Leg two:** one clean note and **51** seeded files, one over the cap, so an unconditional prune would attempt a deletion. **Reuse the suite's helpers; add no shared helper** |
+| **P-8** | **the regression schedules the test must catch** | **three, every one of them N2-only** — the accumulated set is untouched in all three, so N3 stays satisfied and no existing `EP2 retention:` test moves. **(a) DUPLICATE AT THE CALL SITE:** a second `gates.pruneRedacted();` beside `src/cli/dream.js:1102`. This is the mutation `WP-ep2-n2-rehome` re-keys M-48 to (that spec's Table N2R row N2R-9), so the row and proof (a) state one mutation byte-for-byte. **(b) PER-REDACTION, ADDED:** `pruneRedactedOriginals(stateDir, redactedCreated);` inserted immediately after `completedRedactions += 1;` in the secret gate's redact arm (`src/core/dream/validate.js:1418`), the end call left in place. **This is the modern spelling of M-48's own 2026-07-28 mutation** and the schedule the 49-seed fixture missed. **(c) PER-REDACTION, MOVED:** (b) with the `src/cli/dream.js:1102` call removed — a true move. **(a) and (b) are single-file and are declared (P-9); (c) spans two files, so a RED proof cannot express it and it is measured by hand (P-10).** All three attempt a delete count different from P-4's two |
+| **P-9** | **the RED declaration** | **two proofs** in `tests/red-proofs/ep2-prune-once-per-run.proofs.json`. Shared by both: `suite` = P-1; `wp` = `WP-ep2-prune-once-per-run-test`; `criterion` = `2`; `occurrences` = `1`; `testNamePattern` = `retention prune runs EXACTLY ONCE`; `expectRed[0].test` = `[P-2]`; `expectRed[0].signal` = P-3. **Proof (a)** — `id` = `ep2-prune-runs-once-per-run`; `file` = `src/cli/dream.js`; `find` = the exact `gates.pruneRedacted();` line at `:1102`, **including its six leading spaces**; `replace` = that line plus a newline and a duplicate carrying the marker; `marker` = `RP_MUT_EP2_PRUNE_TWICE`. **Proof (b)** — `id` = `ep2-prune-not-once-per-redaction`; `file` = `src/core/dream/validate.js`; `find` = the exact `completedRedactions += 1; // increments LAST, only after a verified scrub` line at `:1418`, **including its ten leading spaces** (measured: it occurs once in the file); `replace` = that line plus a newline and `pruneRedactedOriginals(stateDir, redactedCreated);` at the same indent carrying the marker; `marker` = `RP_MUT_EP2_PRUNE_PER_REDACTION`. Both identifiers are module-scope or closure-scope at that point, so the insertion compiles |
+| **P-10** | **the MEASURED red sets** | each schedule hand-applied at `08de2bc3` in a worktree carrying the candidate test, the **whole** suite run each time. **Every one of the three gives `tests 2905, pass 2892, fail 1, skipped 12`, the single failure being P-2 and NOTHING ELSE IN THE REPOSITORY reddening.** The delete counts the diagnostic reports: **(a) duplicate → 4** (`n2seed-00, n2seed-01, n2seed-00, n2seed-01`); **(b) per-redaction added → 5**; **(c) per-redaction moved → 3**. Control, same tree unmutated: **`tests 2905, pass 2893, fail 0, skipped 12`**, delete count **2**. *These are measurements of the candidate implementation, not promises about the implementer's; the implementer re-establishes (a) and (b) mechanically through P-11* |
 | **P-11** | **the check** | the **UNFILTERED** `npm run red-proofs` → `RUN: PROVEN`, zero `FAILED`, `VACUOUS`, `UNCONTROLLED`, `FILTERED` or `ERROR`. **A `--wp`-scoped run reports `RUN: FILTERED` and exits 1 by construction, so it can never satisfy a criterion and must never be written as a must-pass line** |
 | **P-12** | **what this WP does NOT assert** | N1, N3, N4, N5, N6, N7 — all six already have cases in `tests/unit/dream-validate.test.js` (five `EP2 retention:` tests). **Adding a second test for any of them exceeds this WP** |
 
@@ -254,8 +255,8 @@ time pressure. Each verdict is a measurement, not a reading.**
 
 | id | candidate | verdict and evidence at `08de2bc3` |
 |----|-----------|------------------------------------|
-| **S-1** | **replace or wrap `makeGates` from the test** | **IMPOSSIBLE without a production change.** `src/cli/dream.js:33-38` destructures `makeGates` at require time, so `t.mock.method(validateLib, 'makeGates', …)` cannot reach the binding `dream.js` captured at `:1060`. `dream.run`'s JS-only opts seam carries `now`, `spawnGit`, `platform`, `probeCmd`, `skipContainmentProbe`, `reapTree`, `reapGroup`, `writeFilePrivate`, `pollDelayMs` and `writeFile` — **no gates seam**. Adopting S-1 puts `src/` in the Deliverables and makes this a different, larger package |
-| **S-2** | **count `fs.readdirSync` calls on `<stateDir>/quarantine/redacted/`** | **MEASURED CONTAMINATED — 3 reads, not 1**, on a two-redaction pipeline run. One is the prune (`validate.js:1178`); the other two come from `scanPrivateModes` → `insecureEntries` → `listPrivateEntries` → `listNames` (`src/core/private-fs.js:393`), the private-mode audit. A cardinality assertion over that count measures the audit as much as the prune, and it goes red whenever an unrelated package changes how the audit walks the private tree |
+| **S-1** | **replace or wrap `makeGates` from the test** | **IMPOSSIBLE without a production change.** `src/cli/dream.js:34-39` destructures `makeGates` at require time, so `t.mock.method(validateLib, 'makeGates', …)` cannot reach the binding `dream.js` captured at `:1060`. `dream.run`'s JS-only opts seam carries `now`, `spawnGit`, `platform`, `probeCmd`, `skipContainmentProbe`, `reapTree`, `reapGroup`, `writeFilePrivate`, `pollDelayMs` and `writeFile` — **no gates seam**. Adopting S-1 puts `src/` in the Deliverables and makes this a different, larger package |
+| **S-2** | **count `fs.readdirSync` calls on `<stateDir>/quarantine/redacted/`** | **MEASURED CONTAMINATED — 3 reads, not 1**, on a two-redaction pipeline run. One is the prune (`validate.js:1178`); the other two come from `scanPrivateModes` → `insecureEntries` → `listPrivateEntries` → `listNames` (`src/core/private-fs.js:393`), the private-mode audit, which a successful run reaches **twice** through `regenerateDigest` (`src/cli/dream.js:1300` and `:1341`). A cardinality assertion over that count measures the audit as much as the prune, and it goes red whenever an unrelated package changes how the audit walks the private tree |
 | **S-3** | **a plain observable side effect, with the deletes performed** | **MEASURED UNOBSERVABLE.** `pruneRedactedOriginals` returns at `validate.js:1180` whenever the directory is at or below the cap, and the delete loop breaks at the same bound (`:1192`), so a performed first prune leaves the directory exactly at the cap and a second invocation returns before it stats or deletes anything. Every post-read step is gated on `total > cap` — which is why P-6 neutralizes the seeded deletes rather than performing them |
 
 ### Mirrored Surface Checklist
@@ -283,18 +284,24 @@ is why Table P exists**
 - [ ] **the test's title string in `tests/unit/dream-pipeline.test.js`** = **P-2**,
       byte-exact.
 - [ ] **every assertion message in that test** contains **P-3**, byte-exact.
-- [ ] **`expectRed[0].test[0]` in the proofs JSON** = **P-2**, byte-exact.
-- [ ] **`expectRed[0].signal` in the proofs JSON** = **P-3**, byte-exact.
-- [ ] **`testNamePattern` in the proofs JSON** = P-9's value, and it must **match
+- [ ] **`expectRed[0].test[0]` in BOTH proofs** = **P-2**, byte-exact.
+- [ ] **`expectRed[0].signal` in BOTH proofs** = **P-3**, byte-exact.
+- [ ] **`testNamePattern` in BOTH proofs** = P-9's value, and it must **match
       P-2** — a pattern that matches nothing exits 0 with a pass count, which is a
       failure mode ADR-0042's Context names explicitly.
+- [ ] **the delete count asserted in the test body** = **P-4**'s two, and it is
+      the number P-7's seed count of 50 produces. **A change to either moves the
+      other and both move here**, because the seed count and the expected count
+      are one fact written twice.
 
 **C. The cross-package mirror:**
 
 - [ ] **`WP-ep2-n2-rehome`'s Table N2R row N2R-9** states the same mutation as
-      **P-8**. The two packages ship in that order and neither may restate the
-      other's value in a different form. *Registered here rather than assumed: this
-      is the only fact this WP shares with its dependency.*
+      **P-8 schedule (a)**, byte-for-byte. M-48 states exactly one mutation
+      (ADR-0036 row A3), so schedules (b) and (c) are this package's alone and the
+      ep2 spec gains no row for them. The two packages ship in that order and
+      neither may restate the other's value in a different form. *Registered here
+      rather than assumed: this is the only fact this WP shares with its dependency.*
 
 ## Implementation notes & constraints
 
@@ -308,6 +315,9 @@ is why Table P exists**
   and the un-scoped form is measured to break the run (P-6).
 - **Two redactions, not one (P-4).** A run with a single redaction cannot
   distinguish once-per-run from once-per-redaction; both fire once.
+- **Fifty seeded, not forty-nine (P-7).** The seed count is what makes the
+  schedules separable, and it was a band-B finding in design round 1. Changing it
+  changes P-4's expected count in the same edit.
 - **The zero-redaction leg is not optional (P-5).** Without it, a mutation that
   makes the prune unconditional passes the cardinality half.
 - **`t.mock.restoreAll()` between the two legs**, so leg two's interception counts
@@ -334,9 +344,10 @@ ADR-0042 decision 1 requires it to be parsed and validated, never executed.
       already over the cap. (V-4)
 - [ ] **AC-3 (P-8, P-9, P-11)** The **UNFILTERED** `npm run red-proofs` reports
       `RUN: PROVEN` with zero `FAILED`, `VACUOUS`, `UNCONTROLLED`, `FILTERED` or
-      `ERROR`, **including this package's declaration
-      `ep2-prune-runs-once-per-run`**. This is the whole of the RED evidence; no
-      hand-applied mutation is pasted into the PR. (V-4)
+      `ERROR`, **including BOTH of this package's proofs,
+      `ep2-prune-runs-once-per-run` and `ep2-prune-not-once-per-redaction`**. This
+      is the whole of the machine-run RED evidence; schedule (c) is hand-measured
+      provenance only (P-10) and is not re-run. (V-4)
 - [ ] **AC-4 (Checklist B)** The four identity spellings agree byte-exactly: the
       test title, `expectRed[0].test[0]`, the `signal` in every assertion message
       and in the JSON, and a `testNamePattern` that actually matches P-2. Asserted
@@ -344,7 +355,7 @@ ADR-0042 decision 1 requires it to be parsed and validated, never executed.
 - [ ] **AC-5 (P-12)** The five existing `EP2 retention:` tests in
       `tests/unit/dream-validate.test.js` are **unchanged and still green**, and
       that file is not in the diff. (V-3)
-- [ ] **AC-6 (Checklist C)** The mutation the declaration applies is the one
+- [ ] **AC-6 (Checklist C)** Proof (a)'s mutation is the one
       `WP-ep2-n2-rehome`'s Table N2R row N2R-9 names, and mutation row M-48 of the
       ep2 spec already states it. **If it does not, the dependency has not landed
       and this package is not dispatchable** — stop and report rather than editing
@@ -357,9 +368,10 @@ ADR-0042 decision 1 requires it to be parsed and validated, never executed.
 
 > **Both directions were observed while this spec was written, at `08de2bc3`,
 > against a candidate implementation of Table P** — green on the compliant tree
-> and red under P-8's mutation, with the measured red set recorded as **P-10**.
-> The implementer re-establishes it mechanically through V-4's unfiltered
-> `npm run red-proofs`; the hand measurement is provenance, not the evidence.
+> and red under **all three** of P-8's schedules, with the measured red sets
+> recorded as **P-10**. The implementer re-establishes (a) and (b) mechanically
+> through V-4's unfiltered `npm run red-proofs`; the hand measurements are
+> provenance, not the evidence.
 
 ```bash
 set -euo pipefail
@@ -385,18 +397,25 @@ const [, , file, title, signal] = process.argv;
 const d = JSON.parse(fs.readFileSync(file, 'utf8'));
 const fail = (m) => { console.error('FAIL V-2: ' + m); process.exit(1); };
 if (d.suite !== 'tests/unit/dream-pipeline.test.js') fail(`suite is ${d.suite}`);
-if (!Array.isArray(d.proofs) || d.proofs.length !== 1) fail('want exactly 1 proof');
-const p = d.proofs[0];
-if (p.id !== 'ep2-prune-runs-once-per-run') fail(`id is ${p.id}`);
-if (p.file !== 'src/cli/dream.js') fail(`file is ${p.file}`);
-if (p.occurrences !== 1) fail(`occurrences is ${p.occurrences}, want 1`);
-if (!p.replace.includes(p.marker)) fail('the replacement does not carry its marker');
-if (p.replace === p.find) fail('replace equals find');
-if (p.expectRed.length !== 1) fail('want exactly one expectRed entry');
-if (p.expectRed[0].test.length !== 1 || p.expectRed[0].test[0] !== title) fail('expectRed[0].test[0] != the test title');
-if (p.expectRed[0].signal !== signal) fail('expectRed[0].signal != the signal');
-if (!new RegExp(p.testNamePattern).test(title)) fail(`testNamePattern ${JSON.stringify(p.testNamePattern)} does not match the title`);
-console.log('ok V-2: all four spellings agree');
+if (!Array.isArray(d.proofs) || d.proofs.length !== 2) fail(`want exactly 2 proofs, got ${d.proofs && d.proofs.length}`);
+const want = new Map([
+  ['ep2-prune-runs-once-per-run', 'src/cli/dream.js'],
+  ['ep2-prune-not-once-per-redaction', 'src/core/dream/validate.js'],
+]);
+for (const p of d.proofs) {
+  if (!want.has(p.id)) fail(`unexpected proof id ${p.id}`);
+  if (p.file !== want.get(p.id)) fail(`${p.id}: file is ${p.file}`);
+  want.delete(p.id);
+  if (p.occurrences !== 1) fail(`${p.id}: occurrences is ${p.occurrences}, want 1`);
+  if (!p.replace.includes(p.marker)) fail(`${p.id}: the replacement does not carry its marker`);
+  if (p.replace === p.find) fail(`${p.id}: replace equals find`);
+  if (p.expectRed.length !== 1) fail(`${p.id}: want exactly one expectRed entry`);
+  if (p.expectRed[0].test.length !== 1 || p.expectRed[0].test[0] !== title) fail(`${p.id}: expectRed[0].test[0] != the test title`);
+  if (p.expectRed[0].signal !== signal) fail(`${p.id}: expectRed[0].signal != the signal`);
+  if (!new RegExp(p.testNamePattern).test(title)) fail(`${p.id}: testNamePattern ${JSON.stringify(p.testNamePattern)} does not match the title`);
+}
+if (want.size) fail(`missing proof(s): ${[...want.keys()].join(', ')}`);
+console.log('ok V-2: both proofs carry all four spellings');
 CHK
 
 # V-3  AC-5 — the sibling suite is untouched and its five cases are intact.
@@ -414,7 +433,7 @@ npm run red-proofs        # UNFILTERED. Expect RUN: PROVEN, zero FAILED/VACUOUS/
                           # a scoped run is RUN: FILTERED, exit 1, by construction.
 npm run lint
 
-# V-5  AC-6 — the dependency landed: M-48 already states P-8's mutation.
+# V-5  AC-6 — the dependency landed: M-48 already states P-8 schedule (a).
 EP2=docs/specs/done/WP-secret-fence-ep2-redact-arm.md
 mrow=$(grep -n '^| \*\*M-48\*\* |' "$EP2" | tail -1 | cut -d: -f1)
 row=$(sed -n "${mrow}p" "$EP2")
@@ -440,8 +459,9 @@ echo "ok V-5: the dependency landed"
   architect can route it; do not do it here.**
 - **Do not touch `docs/specs/WP-ep2-retention-prune-timing-test.md`.** It is parked
   with a `SUPERSEDED-PENDING` banner; retiring it is the owner's call.
-- **Do not add a second proof to the declaration**, and do not re-run or re-record
-  any other mutation row.
+- **Do not add a THIRD proof to the declaration** (P-9 fixes it at two), and do
+  not re-run or re-record any other mutation row. Schedule (c) is deliberately not
+  declared: it spans two files and a RED proof mutates one.
 
 ## Definition of done
 
