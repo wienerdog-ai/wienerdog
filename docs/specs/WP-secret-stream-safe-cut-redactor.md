@@ -1,7 +1,7 @@
 ---
 id: WP-secret-stream-safe-cut-redactor
 title: Give the detector a bounded stream redactor that cuts only where no rule can match across
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-secret-sink-wiring-probes]
@@ -616,7 +616,16 @@ acceptance.
    package as **recommendations adopted under standing authorization**; a
    reversal is applied by a committed revision of this spec, never by a dispatch
    message, because `scripts/boundary-check.js` reads the Deliverables table in
-   this file. (b) The design gate is closed per `docs/runbooks/codex-review.md`.
+   this file. (b) **THE DESIGN GATE IS CLOSED, at round 3, 2026-09-18**
+   (`docs/runbooks/codex-review.md`), which is what makes this spec `Ready`.
+   Rounds 1 and 2 landed HEAVY product findings and round 3 landed one LIGHT
+   verification-machinery finding, all accepted in full and none dispositioned
+   away; each round's raw reviewer output was committed **before** adjudication
+   — `efd7d619` (r1), `c2490b4a` (r2), `dd6fb9e0` (r3) — and the dispositions
+   table is `docs/specs/logbook/2026-09-18-secret-sink-fix-design-review.md`.
+   **A closed design gate is a review gate, not owner approval**: the owner
+   items below stay open in the standing form, and nothing in this repo records
+   the owner approving, accepting or ratifying any of them or ADR-0043.
    (c) **THE DISPATCHER RE-DERIVES EVERY CITATION.** They are pinned to `main` at
    **`08de2bc3`**; every `src/core/secret-scan.js` line number in Current state
    and Table S must be re-confirmed by grepping for the construct, not by the

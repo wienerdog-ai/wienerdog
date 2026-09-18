@@ -1,7 +1,7 @@
 ---
 id: WP-secret-sink-chunk-fix
 title: Close the whole-credential chunk-boundary leak at the four durable-log stream sinks
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-secret-sink-redact-before-truncate, WP-secret-stream-safe-cut-redactor]
@@ -739,13 +739,19 @@ need "$(grep -cF 'const { child, done, shutdown } = spawnBrain({' src/cli/dream.
 # differ only in whitespace.
 DREAM_ADD="$(git diff -w --numstat main... -- src/cli/dream.js | awk '{print $1+0}')"
 DREAM_DEL="$(git diff -w --numstat main... -- src/cli/dream.js | awk '{print $2+0}')"
-[ "${DREAM_ADD:-0}" -le 12 ] && [ "${DREAM_DEL:-0}" -le 2 ] || {
-  echo "GATE FAIL: src/cli/dream.js non-whitespace churn +${DREAM_ADD}/-${DREAM_DEL} exceeds the three edits"; exit 1; }
-echo "ok: src/cli/dream.js non-whitespace churn +${DREAM_ADD}/-${DREAM_DEL}"
+[ "${DREAM_ADD:-0}" -le 12 ] || {
+  echo "GATE FAIL: src/cli/dream.js added ${DREAM_ADD} non-whitespace lines, more than the three edits need"; exit 1; }
+echo "ok: src/cli/dream.js non-whitespace churn +${DREAM_ADD}/-${DREAM_DEL} (measured +9/-1 against the literal block)"
+# Exactly one source line is replaced — the destructure. Read it from NUMSTAT,
+# never by counting `^-` in the diff body: a unified diff also carries the
+# `--- a/src/cli/dream.js` header, so `grep -cE '^-'` returns 2 on a compliant
+# tree and fails every correct implementation under `set -e` (round 3, measured).
+need "${DREAM_DEL:-0}" 1 "exactly one line replaced (the destructure)"
 # The wrap must open AFTER the spawn and close AFTER the existing reap finally.
+# These two patterns are anchored to the statement text, so the `+++ b/…` header
+# cannot satisfy them; they are safe as body greps.
 need "$(git diff -w main... -- src/cli/dream.js | grep -cE '^\+\s*try \{$' || true)" 1 "exactly one try { added"
 need "$(git diff -w main... -- src/cli/dream.js | grep -cE '^\+\s*\} finally \{$' || true)" 1 "exactly one } finally { added"
-need "$(git diff -w main... -- src/cli/dream.js | grep -cE '^-' || true)" 1 "exactly one line replaced (the destructure)"
 git diff main... -- src/cli/dream.js   # paste this whole hunk into the PR
 
 # AC6 — neither Table V sentence survives.
@@ -906,7 +912,16 @@ ADR-0043's own standing-authorization status; it is not restated here.
    as a **recommendation adopted under standing authorization**; a reversal is
    applied by a committed revision of this spec, never by a dispatch message,
    because `scripts/boundary-check.js` reads the Deliverables table in this file.
-   (b) The design gate is closed per `docs/runbooks/codex-review.md`.
+   (b) **THE DESIGN GATE IS CLOSED, at round 3, 2026-09-18**
+   (`docs/runbooks/codex-review.md`), which is what makes this spec `Ready`.
+   Rounds 1 and 2 landed HEAVY product findings and round 3 landed one LIGHT
+   verification-machinery finding, all accepted in full and none dispositioned
+   away; each round's raw reviewer output was committed **before** adjudication
+   — `efd7d619` (r1), `c2490b4a` (r2), `dd6fb9e0` (r3) — and the dispositions
+   table is `docs/specs/logbook/2026-09-18-secret-sink-fix-design-review.md`.
+   **A closed design gate is a review gate, not owner approval**: the owner
+   items below stay open in the standing form, and nothing in this repo records
+   the owner approving, accepting or ratifying any of them or ADR-0043.
    (c) **BOTH DEPENDENCIES MUST BE `Done`** — `createStreamRedactor` and
    `ScanLimits.STREAM_REGION_MAX` do not exist without
    `WP-secret-stream-safe-cut-redactor`, and Table Z's "all seven" claim is false
