@@ -579,5 +579,123 @@
    }
   ],
   "expected": false
+ },
+ {
+  "name": "DIV-1 codex message payload whose content is NOT an array (taints, no dialogue)",
+  "harness": "codex",
+  "events": [
+   {
+    "line": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"d\", \"timestamp\": \"t\", \"cwd\": \"/w\"}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"user\", \"content\": \"oops\"}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"assistant\", \"phase\": \"final_answer\", \"content\": [{\"type\": \"output_text\", \"text\": \"ok\"}]}}"
+   }
+  ],
+  "expected": true
+ },
+ {
+  "name": "DIV-2 rollout with NO session_meta supplies nothing",
+  "harness": "codex",
+  "events": [
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"go\"}], \"internal_chat_message_metadata_passthrough\": {\"content_item_kinds\": [\"user.text\"]}}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"assistant\", \"phase\": \"final_answer\", \"content\": [{\"type\": \"output_text\", \"text\": \"ok\"}]}}"
+   }
+  ],
+  "expected": null
+ },
+ {
+  "name": "DIV-3 claude ASSISTANT record with isSidechain:true is declined",
+  "harness": "claude",
+  "events": [
+   {
+    "line": "{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": \"go\"}}"
+   },
+   {
+    "line": "{\"type\": \"assistant\", \"isSidechain\": true, \"message\": {\"role\": \"assistant\", \"stop_reason\": \"end_turn\", \"content\": [{\"type\": \"text\", \"text\": \"copied\"}]}}"
+   },
+   {
+    "line": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"stop_reason\": \"end_turn\", \"content\": [{\"type\": \"text\", \"text\": \"ok\"}]}}"
+   }
+  ],
+  "expected": false
+ },
+ {
+  "name": "DIV-4 malformed FIRST header keeps the rollout ineligible for the whole file",
+  "harness": "codex",
+  "events": [
+   {
+    "line": "{\"type\": \"session_meta\", \"payload\": \"not-an-object\"}"
+   },
+   {
+    "line": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"d\", \"timestamp\": \"t\", \"cwd\": \"/w\"}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"go\"}], \"internal_chat_message_metadata_passthrough\": {\"content_item_kinds\": [\"user.text\"]}}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"assistant\", \"phase\": \"final_answer\", \"content\": [{\"type\": \"output_text\", \"text\": \"ok\"}]}}"
+   }
+  ],
+  "expected": null
+ },
+ {
+  "name": "DIV-4b CONTROL a good first header then a subagent header stays eligible",
+  "harness": "codex",
+  "events": [
+   {
+    "line": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"d\", \"timestamp\": \"t\", \"cwd\": \"/w\"}}"
+   },
+   {
+    "line": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"d\", \"timestamp\": \"t\", \"cwd\": \"/w\", \"thread_source\": \"subagent\"}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"go\"}], \"internal_chat_message_metadata_passthrough\": {\"content_item_kinds\": [\"user.text\"]}}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"assistant\", \"phase\": \"final_answer\", \"content\": [{\"type\": \"output_text\", \"text\": \"ok\"}]}}"
+   }
+  ],
+  "expected": false
+ },
+ {
+  "name": "DIV-5 claude text block with a non-string value is declined, no taint, no throw",
+  "harness": "claude",
+  "events": [
+   {
+    "line": "{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": \"go\"}}"
+   },
+   {
+    "line": "{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": {}}]}}"
+   },
+   {
+    "line": "{\"type\": \"assistant\", \"message\": {\"role\": \"assistant\", \"stop_reason\": \"end_turn\", \"content\": [{\"type\": \"text\", \"text\": \"ok\"}]}}"
+   }
+  ],
+  "expected": false
+ },
+ {
+  "name": "DIV-5b codex output_text with a non-string value is declined, no taint",
+  "harness": "codex",
+  "events": [
+   {
+    "line": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"d\", \"timestamp\": \"t\", \"cwd\": \"/w\"}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"go\"}], \"internal_chat_message_metadata_passthrough\": {\"content_item_kinds\": [\"user.text\"]}}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"assistant\", \"phase\": \"final_answer\", \"content\": [{\"type\": \"output_text\", \"text\": 7}]}}"
+   },
+   {
+    "line": "{\"type\": \"response_item\", \"payload\": {\"type\": \"message\", \"role\": \"assistant\", \"phase\": \"final_answer\", \"content\": [{\"type\": \"output_text\", \"text\": \"ok\"}]}}"
+   }
+  ],
+  "expected": false
  }
 ]
