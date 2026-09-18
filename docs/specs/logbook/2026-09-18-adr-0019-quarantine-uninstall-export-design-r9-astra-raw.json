@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b5ea-9674-7b32-aaa2-afbf7d2166bc",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r9",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Not ready to implement: the replay guard still permits recursive deletion of a shelf ancestor.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect shelf ancestors from recursive manifest replay\",\n      \"body\": \"X16 guards targets at or below a shelf, but not recursive deletion of its ancestors. If <core>/app is a symlink to <core>/state, a forged {kind:'vendored-tree', path:'<core>/state'} passes the existing app-root equality check. Its target is outside both shelf subtrees, so X16 permits it. A preserve completed after the empty-shelf gate is then destroyed with state/. An in-memory probe of the actual reverse() confirmed that this entry validates and invokes recursive rmSync(state), with all resolutions succeeding.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 386,\n      \"line_end\": 386,\n      \"confidence\": 0.98,\n      \"recommendation\": \"For recursively deleting entry kinds, require the pre-dispatch guard to reject targets that contain a shelf root, including resolved aliases. Add an interleaving regression with app symlinked to state, the forged vendored-tree entry, and a preserve completed after the initial inventory.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Extend X16 and its acceptance test to cover recursive ancestor deletion before closing the design gate.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Not ready to implement: the replay guard still permits recursive deletion of a shelf ancestor.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Protect shelf ancestors from recursive manifest replay",
+        "body": "X16 guards targets at or below a shelf, but not recursive deletion of its ancestors. If <core>/app is a symlink to <core>/state, a forged {kind:'vendored-tree', path:'<core>/state'} passes the existing app-root equality check. Its target is outside both shelf subtrees, so X16 permits it. A preserve completed after the empty-shelf gate is then destroyed with state/. An in-memory probe of the actual reverse() confirmed that this entry validates and invokes recursive rmSync(state), with all resolutions succeeding.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 386,
+        "line_end": 386,
+        "confidence": 0.98,
+        "recommendation": "For recursively deleting entry kinds, require the pre-dispatch guard to reject targets that contain a shelf root, including resolved aliases. Add an interleaving regression with app symlinked to state, the forged vendored-tree entry, and a preserve completed after the initial inventory."
+      }
+    ],
+    "next_steps": [
+      "Extend X16 and its acceptance test to cover recursive ancestor deletion before closing the design gate."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Not ready to implement: the replay guard still permits recursive deletion of a shelf ancestor.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect shelf ancestors from recursive manifest replay\",\n      \"body\": \"X16 guards targets at or below a shelf, but not recursive deletion of its ancestors. If <core>/app is a symlink to <core>/state, a forged {kind:'vendored-tree', path:'<core>/state'} passes the existing app-root equality check. Its target is outside both shelf subtrees, so X16 permits it. A preserve completed after the empty-shelf gate is then destroyed with state/. An in-memory probe of the actual reverse() confirmed that this entry validates and invokes recursive rmSync(state), with all resolutions succeeding.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 386,\n      \"line_end\": 386,\n      \"confidence\": 0.98,\n      \"recommendation\": \"For recursively deleting entry kinds, require the pre-dispatch guard to reject targets that contain a shelf root, including resolved aliases. Add an interleaving regression with app symlinked to state, the forged vendored-tree entry, and a preserve completed after the initial inventory.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Extend X16 and its acceptance test to cover recursive ancestor deletion before closing the design gate.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
