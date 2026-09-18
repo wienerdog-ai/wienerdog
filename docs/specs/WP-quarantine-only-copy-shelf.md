@@ -11,12 +11,22 @@ epic: dream-promotion
 
 # WP-quarantine-only-copy-shelf: what the `redacted/` shelf owes an only-copy
 
+- Authoring rules live in `docs/runbooks/spec-authoring.md` — the
+  template gives the skeleton, the runbook the rules. Read both.
+
 > **Matured from a Draft stub 2026-09-18.** Every claim below was re-derived
 > against `main` at **`c05a575b`** — construct by construct, with the code read
 > and the behaviour measured, not inherited from the stub. The stub's three
 > routed questions are **live**: nothing in `docs/specs/done/` and no ADR has
-> decided them. The measurement changed the shape of the answer, and the change
-> is the point of this revision — see **Table O row O1**.
+> decided them.
+>
+> **REVISED at design-gate round 1 (Astra, 2026-09-18), all three findings
+> ACCEPTED IN FULL, none dispositioned away.** Round 1's HEAVY finding showed
+> the first revision's central premise FALSE: the shelf is **not** uniformly
+> only-copies. Table O row **O1** now partitions it into three classes and every
+> dependent row is re-derived per class; the decision — candidate (a) — survives,
+> but the argument and the user-facing clauses are different. Dispositions:
+> `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-review.md`.
 >
 > **`model: opus` is retained deliberately.** The build is small, but two of its
 > four deliverables are user-facing sentences about irrecoverable data loss that
@@ -251,59 +261,90 @@ omission.** See Table O rows O5, O6 and O7 and the owner items.
 string, so a changed name silently unhooks the proof:
 
 ```
-EP2 retention [OC-1]: the prune destroys an ONLY copy — the shelf holds the sole pre-scrub form, and after the cap fires those bytes exist nowhere (Table O rows O1, O2)
+EP2 retention [OC-1]: the prune destroys a SOLE-SURVIVING copy — a class-A original is evicted and its bytes then exist nowhere under the core (Table O rows O1, O2)
 ```
 
-Fixture shape, chosen so the evicted file is a **real product of the redact arm**
-and not a hand-seeded blob (a seeded blob would prove the eviction but not that
-an only-copy was destroyed):
+**Scope, set by design-gate round 1.** `[OC-1]` pins **class A** end to end (Table
+O row O1). It does **not** assert a universal over the shelf, because classes B
+and C exist and a class-C file is not an only-copy. Classes B and C are
+established by code derivation in Table O row O1 and, for B, by the existing test
+at `tests/unit/dream-validate.test.js:2052`; **do not add assertions for them
+here.**
 
-1. Build `redactFixture()`. Drive one redacting run at date `2026-07-01` so the
-   shelf holds **one real pre-scrub original**, `R`. Read `R`'s bytes; set its
-   mtime to the oldest value in the fixture.
-2. `seedRedacted(f, 49, <newer mtime base>)` — 49 date-prefixed dummies, all
-   newer than `R` by mtime, so `R` is the unique oldest candidate under Table N
-   row N4. Shelf total: **50**. Assert the prune has not fired (Table N row N1).
-3. Drive a second redacting run at date `2026-07-02` (`publish: true`), which
-   creates its own copy and then prunes. Shelf total before the prune: **51**.
+Fixture shape. **Three properties are load-bearing and each was measured against
+`c05a575b`; a fixture missing any one of them cannot demonstrate the loss:**
+
+1. Build `redactFixture()` (its note is `04-Atomic/fp.md`, content `REDACT_NOTE`).
+   Drive one redacting run at date `2026-07-01` **with `publish: true`**, so the
+   scrubbed bytes actually land in the vault. The shelf now holds **one real
+   class-A original**, `R`. Read `R`'s bytes. Assert the run completed **exactly
+   one** redaction. **Why `publish` is mandatory (`OC-P7`):** `RUN` defaults to
+   `publish: false` (`tests/unit/dream-validate.test.js:235-239` — "OPT-IN: model
+   the PUBLISH that follows the decision"), which leaves the note unchanged, so
+   the vault never holds the scrubbed form and step 3 would re-judge the same
+   secret.
+2. `seedRedacted(f, 49, <mtime base NEWER than R>)`, then explicitly `fs.utimesSync`
+   `R` to a strictly older time, so `R` is the **unique** oldest candidate under
+   Table N row N4. Shelf total: **50**. Assert the prune has **not** fired
+   (Table N row N1).
+3. Write a **different** secret-bearing note into the vault before the second run
+   — a distinct path **and a distinct secret token**, not a second copy of
+   `REDACT_NOTE`. Drive the second redacting run at date `2026-07-02` with
+   `publish: true`. Assert it completed **exactly one** redaction and that **its
+   preserved original differs from `R`** (`Buffer.compare(...) !== 0`) *before*
+   any absence assertion. Shelf total before the prune: **51**.
+   **Why distinctness is mandatory (`OC-P5`):** the shelf does not deduplicate.
+   Two runs over identical secret-bearing content leave **two byte-identical
+   shelf files** (measured: `["2026-07-01-same.md","2026-07-02-same.md"]`, both
+   byte-equal to `R`), so evicting `R` would leave its bytes on disk and the
+   absence assertion could never pass.
 
 Assertions, each carrying its literal signal substring in the assertion message
 so a RED run can attribute the failure:
 
-- `[O1-shelf-holds-the-sole-pre-scrub-form]` — `R`'s bytes equal the note's
+- `[O1-class-A-copy-is-the-sole-pre-scrub-form]` — `R`'s bytes equal the note's
   pre-scrub content; the vault holds the **scrubbed** form for that note; and
-  `listSecretQuarantine(f.stateDir)` is `[]`, so nothing on the withheld shelf
-  holds them either.
-- `[O2-the-prune-destroys-an-only-copy]` — after the second run the shelf holds
-  exactly `CAP` files, `R`'s basename is **gone**, and a recursive walk of the
-  **whole** `f.stateDir` tree finds **no file** whose contents `Buffer.compare`
-  equal to `R`'s bytes. The walk must visit every file under `stateDir` (not just
-  the two shelves) and must assert a non-empty set of visited files first, so an
-  empty walk cannot pass vacuously.
+  `listSecretQuarantine(f.stateDir)` is `[]`, so no withheld twin exists. (This
+  is class A's definition, not a claim about the shelf as a whole.)
+- `[O2-the-prune-destroys-a-sole-surviving-copy]` — after the second run the
+  shelf holds exactly `CAP` files, `R`'s basename is **gone**, and a recursive
+  walk of the **whole** `f.stateDir` tree finds **no file** whose contents
+  `Buffer.compare` equal to `R`'s bytes. The walk must visit every file under
+  `stateDir` (not just the two shelves), must assert a non-empty set of visited
+  files, and must be shown to **find** `R`'s bytes before the prune using the
+  same walk function.
 
-**The RED declaration**, `tests/red-proofs/quarantine-only-copy-shelf.proofs.json`:
+**The RED declaration**, `tests/red-proofs/quarantine-only-copy-shelf.proofs.json`.
+**Redesigned at round 1 and MEASURED, not reasoned.** Two constraints drove it:
+`expectRed[].test` is an **outermost-first identity PATH**, never a list of
+independent tests (`scripts/red-proofs.js:693-694`), so two top-level names in one
+array resolve to a nested test that does not exist and the BASELINE phase rejects
+the proof (`:1599-1602`); and an **undeclared** `testCodeFailure` throws
+(`:1668-1670`), so a mutation with collateral reds cannot simply be noted. The
+mutation below was applied to `src/core/dream/validate.js` at `c05a575b` and the
+**whole suite ran green (2895 pass, 0 fail)** while `[OC-1]`'s absence walk found
+the bytes — so `[OC-1]` is the sole red:
 
 ```json
 {
   "suite": "tests/unit/dream-validate.test.js",
   "proofs": [
     {
-      "id": "shelf-copy-gains-a-withheld-twin",
+      "id": "prune-keeps-a-copy-of-what-it-evicts",
       "wp": "WP-quarantine-only-copy-shelf",
       "criterion": "1",
-      "why": "row O1 is the premise every other row rests on: the redact-success arm writes to the redacted/ shelf and to NOTHING else, so the shelf copy is the sole surviving pre-scrub form and the prune's eviction is a total loss. Giving that arm a second, withheld preserve makes the bytes survive the eviction, which reddens [OC-1]'s O2 walk and its O1 empty-withheld-listing assertion, and reddens R8's own empty-listing assertion at the same site",
+      "why": "row O2 is that the prune DESTROYS the bytes for classes A and B, not merely that it unlinks a name from redacted/. A prune that copies the file aside before unlinking satisfies every shipped retention assertion — the shelf still returns to the cap, the evicted basename is still gone, and the rmSync deletion still happens, so the AC-14 tests and the Table N row N2 deletion-count spy all stay green — while the secret-bearing bytes remain on disk. [OC-1]'s whole-tree byte-absence walk is the only assertion in the repo that can see it, which is exactly why it exists",
       "file": "src/core/dream/validate.js",
-      "find": "        redactCopy = quarantinePreserve(stateDir, afterBytes, rel, date, 'redacted');",
-      "replace": "        redactCopy = quarantinePreserve(stateDir, afterBytes, rel, date, 'redacted'); quarantinePreserve(stateDir, afterBytes, rel, date, 'withheld'); /* RP_MUT_OC_SHELF_GAINS_A_WITHHELD_TWIN */",
-      "marker": "RP_MUT_OC_SHELF_GAINS_A_WITHHELD_TWIN",
+      "find": "        fs.rmSync(path.join(dir, c.name), { force: true });",
+      "replace": "        { const aside = path.join(dir, '..', '.pruned'); fs.mkdirSync(aside, { recursive: true, mode: 0o700 }); fs.copyFileSync(path.join(dir, c.name), path.join(aside, c.name)); } /* RP_MUT_OC_PRUNE_KEEPS_A_COPY */\n        fs.rmSync(path.join(dir, c.name), { force: true });",
+      "marker": "RP_MUT_OC_PRUNE_KEEPS_A_COPY",
       "occurrences": 1,
       "expectRed": [
         {
           "test": [
-            "EP2 retention [OC-1]: the prune destroys an ONLY copy — the shelf holds the sole pre-scrub form, and after the cap fires those bytes exist nowhere (Table O rows O1, O2)",
-            "EP2 redact arm R8: preserve, scrub only the added lines, commit, count separately"
+            "EP2 retention [OC-1]: the prune destroys a SOLE-SURVIVING copy — a class-A original is evicted and its bytes then exist nowhere under the core (Table O rows O1, O2)"
           ],
-          "signal": "O1-shelf-holds-the-sole-pre-scrub-form"
+          "signal": "O2-the-prune-destroys-a-sole-surviving-copy"
         }
       ]
     }
@@ -311,34 +352,48 @@ so a RED run can attribute the failure:
 }
 ```
 
-**Both declared tests are expected to redden, and the second one is another
-package's.** That is deliberate and it is the honest declaration: the mutation
-adds a withheld twin on the redact-success path, and
-`tests/unit/dream-validate.test.js:1594` asserts there is none. **If the lane
-reports any red beyond these two, the mutation is too broad — narrow it and
-record the narrowing under "Decisions made"; do not widen `expectRed` to absorb
-a surprise.**
+**`expectRed` has exactly one entry with a one-element path, and that is the
+contract.** If the lane reports any red beyond `[OC-1]`, the mutation has been
+altered or the tree has moved — narrow it and record the narrowing under
+"Decisions made"; **never** widen `expectRed` to absorb a surprise, and never put
+two top-level test names in one `test` array.
 
-**The two doc clauses.** Both are single clauses inside existing sentences. They
-state the loss and nothing more; **neither may promise a warning, a banner, a
-record or a recovery path**, because this package ships none (Table O rows O5–O7).
+**The two doc clauses.** Both are single clauses inside existing sentences.
+**Round 1's HEAVY finding lands here:** the earlier draft would have had them
+assert a universal that is false for classes B and C, i.e. it would have told a
+user a recovery story that does not hold. They must be written to the corrected
+row **O1**:
 
-- `docs/runbooks/secret-incident.md:57-59`, inside the existing sentence
-  beginning "The folder keeps roughly the 50 most recent copies": add that the
-  deleted file is **the only copy of that original** — once it is gone the
-  pre-scrub text is not recoverable from anywhere, because the note in your vault
-  holds only the redacted form.
-- `docs/GLOSSARY.md:141-150`, inside the `secret quarantine` entry, beside
-  "disposable": say that each file there is the **only** surviving copy of that
-  note's pre-scrub text, so the cap's eviction is an irreversible loss rather
-  than the removal of a spare.
+- They say the deleted file **may be** the only copy of that original — never
+  that it always is (false for class C, whose twin is on `state/quarantine/`).
+- They must **not** say the vault note holds a redacted version of it (false for
+  class B, whose vault note is untouched at its baseline).
+- They promise **no** warning, banner, record or recovery path, because this
+  package ships none (Table O rows O5, O6, O7).
+
+`docs/runbooks/secret-incident.md:57-59`, inside the existing sentence beginning
+"The folder keeps roughly the 50 most recent copies": add that for most files
+there this is the **only** copy of that original, so once it is deleted the
+original text cannot be recovered — which is why the review window matters.
+
+`docs/GLOSSARY.md:141-150`, inside the `secret quarantine` entry beside
+*"disposable"*: say that a file there is usually the **only** surviving copy of
+that note's pre-scrub text, so the cap's eviction is generally an irreversible
+loss rather than the removal of a spare.
+
+  fails there, before the lane.
+- **Ambiguity → choose the simpler option and record it under "Decisions made".**
+  Do not expand scope to resolve it.
 
 ## Contract reference
 
 **Activation trigger (ADR-0031's 2-of-7): four of seven fire.**
-(ii) a **status taxonomy** is introduced — the only-copy class and the three
-shelf states it partitions into; (iv) **precedence** behaviour is decided —
-whether the cap yields to only-copy status; (v) an **authority boundary** is
+(ii) a **status taxonomy** is introduced — the shelf's three classes (A, B, C)
+and which of them a file's bytes survive in, which nothing in the code names
+today; (iv) **precedence** behaviour is *adjudicated* — whether the cap yields to
+sole-surviving status. Table O row **O8** decides it **NO** and ships **no** Table
+N change, so this trigger fires on the decision being recorded here, not on a
+contract being edited here; (v) an **authority boundary** is
 crossed — the EP2 gate writes the copy, and a *different* call in a *later* run
 owns its lifecycle with no record passing between them; (vi) **multiple
 successor specs** inherit the result — three routed questions from three
@@ -372,14 +427,14 @@ spec's fixture description and are re-derived by deliverable `[OC-1]`.)*
 
 | # | Fact / rule | Value |
 |---|-------------|-------|
-| **O1** | **THE SHELF'S TYPE — the measurement that reshapes the question.** Is "only-copy" a predicate that *partitions* `state/quarantine/redacted/`? | **NO. Every file that survives on the shelf is, by construction, the only surviving copy of the bytes it holds.** Derivation: there is exactly **one** write site (`src/core/dream/validate.js:1416`) and exactly **one** in-gate delete (`:1489-1504`), and that delete fires **only** on proven byte-identity with a surviving withheld copy — i.e. it removes precisely the files that are *not* only-copies. The redact-success arm writes **no** withheld copy at all. Measured (`OC-P1`): after one successful redaction the shelf holds the pre-scrub bytes, `listSecretQuarantine(stateDir)` is `[]`, the withheld directory has no file entries, and the vault gets `ref [REDACTED:high-entropy] …`. **So "only-copy" is not a subset of the shelf; it is the shelf's type.** The code says so in its own words at `:1480-1481`: keeping the copy is right "because it is then the only copy of a version of the user's note that exists anywhere" |
-| **O2** | **WHAT THE PRUNE THEREFORE IS.** | `pruneRedactedOriginals` is **the only code path in `src/` that destroys an only-copy.** Every other delete over these bytes is gated on a proven surviving twin. Measured (`OC-P2`), accumulating 50 shelf copies through 50 real runs and then running a 51st: the shelf sits untouched at 50; the 51st run takes it to 51; the prune evicts exactly the oldest; a full walk of the core `state/` tree then finds those bytes **nowhere**, and `listSecretQuarantine` is `[]`. No record, report, banner or file names the artifact that was destroyed |
+| **O1** | **THE SHELF'S THREE CLASSES — corrected at design-gate round 1, finding HEAVY 1, which showed the earlier universal FALSE.** Is every surviving shelf file the only copy of its bytes? | **NO — a shelf file MAY be the sole surviving copy, and which it is depends on the arm that wrote it.** The earlier draft of this row claimed a universal and every dependent row inherited the error. There is exactly **one** write site (`src/core/dream/validate.js:1416`), reached from three outcomes. **Class A — successful redaction** (`:1419-1432`): the arm writes NO withheld copy, the vault gets the scrubbed note, and the shelf copy is **the sole surviving pre-scrub form**. Measured `OC-P1`. **Class B — refused fall-through with no withheld twin** (`preserved === null`, `redactCopy` non-null, `:1452-1473`): nothing is promoted, the vault note is left at its **baseline** — NOT a redacted form — and the shelf copy is **the sole surviving form of the added content**. Asserted today by `tests/unit/dream-validate.test.js:2052`. **Class C — retained duplicate** (`:1489-1504`): a withheld twin exists but byte-identity was NOT proven — the read threw, or the buffers differ — so the `else` arm KEEPS the shelf copy; and the best-effort `rmSync` at `:1500` can itself throw, leaving both copies with the record naming only the twin. **A class-C file is NOT an only-copy:** its twin sits on `state/quarantine/`, which is unbounded AND banner-announced. **Fourth caveat, also round 1's:** the shelf does not deduplicate — two notes carrying the same secret line yield two byte-identical shelf files under different names (measured `OC-P5`), so byte-level absence is a property of a fixture, never of the shelf |
+| **O2** | **WHAT THE PRUNE THEREFORE IS, per class.** | `pruneRedactedOriginals` is **the only code path in `src/` that CAN destroy a sole-surviving copy** — every other delete over these bytes is gated on proven identity with a twin. Its effect is per class: on **A** and **B** it destroys the sole surviving form; on **C** it deletes a duplicate whose twin is on the unbounded, banner-announced withheld shelf, which is **no loss at all**. **The prune cannot tell them apart:** Table N row N3's candidate set is a date-prefix regex minus this run's own basenames, and no class marker is written anywhere — the preservation record that knows the class (`:1431`) is never persisted past the run. Measured (`OC-P2`, class A): 50 sits untouched; a 51st run evicts exactly the oldest; a full walk then finds those bytes nowhere, and no record, report, banner or file names what was destroyed |
 | **O3** | **DOES THE SHIPPED "never destroy the only copy" RULE ALREADY BIND THE PRUNE?** | **NO — and this was checked against the governing text, not inferred.** The rule is the **only-copy invariant**, `docs/specs/done/WP-dream-promote-module.md:703` Table Q row **Q4**: *"nothing may destroy **the working copy of a note** unless some durable artifact byte-identically holds THE BYTES THAT ARE THERE NOW … **the invariant binds the pipeline's teardown too**"*. Its protected object is the **working copy in the workspace**; a shelf copy is the thing that *satisfies* the invariant, never the thing it protects. `docs/specs/done/WP-preservation-abort-widening.md:107-121` restates the scope as *"every party that could destroy a **working copy**"*, and its Table P enumerates its parties as the gate's arms, `promote()` and pipeline teardown — **`pruneRedactedOriginals` is not among them.** `docs/specs/done/WP-quarantine-preserve-durability.md:944` Table F row **F7(a)** puts *"`pruneRedactedOriginals`' evictions"* **permanently outside** its own scope. `docs/specs/done/WP-quarantine-failed-preserve-disposal-flush.md:499-504` routes the prune's selection and persistence questions **here** by name. **The rule as sited is write-time, single-invocation and scoped to the bytes this run is judging; the prune is a cross-run delete over other runs' bytes that consults no record.** It does not reach it |
 | **O4** | **HAS ANY LATER PACKAGE OR ADR DECIDED THE QUESTION?** | **NO.** Swept at `c05a575b` over `docs/specs/`, `docs/specs/done/`, `docs/adr/` and `docs/specs/logbook/`. No ADR mentions an only-copy, the retention cap or `REDACTED_RETENTION_CAP` at all. Three packages measured the loss and each **explicitly reserved the answer to this file**: `docs/specs/done/WP-quarantine-banner-location.md:1415-1426` (naming the three candidate answers — *"moved to the withheld shelf, recorded durably, or exempted from the retention cap"*), `docs/specs/done/WP-quarantine-disposal-durability.md:644-648`, and the owner ruling at `docs/specs/logbook/2026-09-05-owner-rulings-banner-queue.md:52-55` (*"Ruled: routed, not absorbed"*). **The question is live** |
-| **O5** | **CANDIDATE (b) — refuse to prune below a floor of only-copies.** | **REJECTED, by measurement rather than by taste.** By row **O1** the floor is the entire shelf, so (b) is exactly *"never prune"* — which deletes the cap. The cap's value is owner-approved (Table N row **N1**) and this package is forbidden to re-litigate it. Measured cost of adopting it (`OC-P4`): a single run that redacts 60 notes leaves 60 and no later run ever reduces them; growth is bounded only by how much the user writes. **(b) is not a middle option; it is the cap's repeal wearing a predicate** |
-| **O6** | **CANDIDATE (c) — mark and warn before deleting.** | **REJECTED in both halves, for different reasons.** *Mark:* vacuous by row **O1** — a mark every file carries distinguishes nothing. *Warn:* not vacuous, but unbuyable at the price this package may pay. `reports/warnings.md` cannot carry the line: `composeWarnings` is **a pure function of the transcript ledger alone** and that purity is a stated contract (`src/core/dream/warnings.js:21-26`: *"THE RENDER IS A PURE FUNCTION OF THE LEDGER ALONE … no byte a user leaves in the file can be laundered into Wienerdog's own render"*), so a warning line needs a **new durable per-artifact ledger record class**. The digest's pending-review banner cannot carry it either: it is the **withheld** shelf's by design (`src/core/digest.js:848-856`), and pointing it at `redacted/` reverses a shipped decision. Both are new durable state, which the stub required be priced rather than assumed, and both are larger than this package |
-| **O7** | **CANDIDATE (d) — what the code already implies, and the limit of it.** | **PARTLY TRUE, and the part that is true is load-bearing.** The dream report **already names every shelf copy in the run that creates it**: the gate returns `preserved: [{artifact, location: 'quarantine/redacted'}]` (`src/core/dream/validate.js:1431`) and `redactionLine` renders it (`src/core/dream/promote.js:733-748`). And the user-facing runbook **already discloses the cap** (`docs/runbooks/secret-incident.md:57-59`: *"keeps roughly the 50 most recent copies and then deletes the oldest, so review a redaction within about two months"*). **What is NOT implied anywhere:** that the deleted file is the *only* copy — the runbook implies loss without naming it as total — and there is no notice **at deletion time**, which by rows **O2** and **O6** cannot be added without new durable state |
-| **O8** | **THE DECISION — candidate (a), delete anyway, and say so.** | **(a) IS ALREADY THE OWNER'S DECISION, and row O1 is why:** approving a count cap on a shelf whose every file is an only-copy **is** approving the bounded destruction of only-copies. This package does not re-decide it; it makes the bargain legible and pins the premise. It ships **(O8a)** one clause in `docs/runbooks/secret-incident.md` naming the loss as total, **(O8b)** one clause in `docs/GLOSSARY.md` beside *"disposable"* saying each file is the sole surviving pre-scrub copy, and **(O8c)** the `[OC-1]` test that pins row **O1**. **Why the test is the real deliverable:** rows O3–O7 and both accepted residuals all rest on O1, and O1 is a property of the *design* (one write site, one identity-gated delete) that no current test states. A future second write into `redacted/`, or a second delete, would falsify it **silently** and turn two accepted residuals into wrong ones |
+| **O5** | **CANDIDATE (b) — refuse to prune below a floor of only-copies.** | **REJECTED, and the corrected O1 makes the rejection narrower but not weaker.** The floor is now classes **A + B**, not the whole shelf — but nothing bounds how many A/B copies accumulate, so the floor is still unbounded and (b) is still the cap's repeal for every file that matters. Measured cost (`OC-P4`): a single run redacting 60 notes leaves 60, and no later run reduces them. **And (b) is now strictly harder than before:** separating A/B from C at prune time requires knowing the class, which by row **O2** is a fact no durable artifact holds — the same missing record candidate (c) needs. The cap's value is owner-approved (Table N row **N1**) and this package may not re-litigate it |
+| **O6** | **CANDIDATE (c) — mark and warn before deleting.** | **REJECTED, on re-derived grounds.** *Mark:* the earlier draft called it vacuous because every file was an only-copy; under the corrected O1 **that argument is withdrawn** — a mark would now genuinely distinguish A/B from C. It is rejected instead because **the mark IS the missing durable record**: the class is known only inside the run that wrote the file (`:1431` builds the record; nothing persists it), so marking means new per-artifact durable state, which is what the stub required be priced. *Warn:* `reports/warnings.md` cannot carry the line — `composeWarnings` is **a pure function of the transcript ledger alone** and that purity is a stated contract (`src/core/dream/warnings.js:21-26`: *"THE RENDER IS A PURE FUNCTION OF THE LEDGER ALONE … no byte a user leaves in the file can be laundered into Wienerdog's own render"*), so it needs the same new record class. The digest's pending-review banner cannot carry it either: it is the **withheld** shelf's by design (`src/core/digest.js:848-856`). Both are new durable state, and both are larger than this package |
+| **O7** | **CANDIDATE (d) — what the code already implies, and the limit of it.** | **PARTLY TRUE, and the part that is true is load-bearing.** The dream report **already names every shelf copy in the run that creates it**, for all three classes: the gate returns `preserved: [{artifact, location: 'quarantine/redacted'}]` (`src/core/dream/validate.js:1431`) and `redactionLine` / `preservedLine` render it (`src/core/dream/promote.js:744-760`). The user-facing runbook **already discloses the cap** (`docs/runbooks/secret-incident.md:57-59`). **What is NOT implied anywhere:** that for classes **A** and **B** the deleted file is the only copy — the runbook implies loss without naming it as total — and there is no notice **at deletion time**, which by rows **O2** and **O6** cannot be added without the record that does not exist. **What the runbook must NOT be made to say (round 1, HEAVY 1):** that the deleted file is *always* the only copy (false for **C**), or that the vault note holds a redacted form of it (false for **B**) |
+| **O8** | **THE DECISION — candidate (a), delete anyway, argued per class.** | **(a) SURVIVES THE CORRECTION, and the per-class argument is now the argument.** **Class C:** the prune deletes a duplicate whose twin is on the unbounded, banner-announced shelf — pure housekeeping, no loss, (a) is plainly right. **Classes A and B:** the prune destroys the sole surviving form, and that is the bargain the owner already struck — approving a *count* cap on a shelf that holds sole-surviving copies **is** approving their bounded destruction, and `REDACTED_RETENTION_CAP = 50` is owner-approved (Table N row **N1**). Rows **O5** and **O6** show that every alternative needs a durable class record the product does not have. This package therefore re-decides nothing; it makes the bargain legible **without overstating it**, and pins the premise. It ships **(O8a)** one clause in `docs/runbooks/secret-incident.md` saying the deleted file **may be** the only copy of that original and that where it is, the text is unrecoverable — **not** that it always is; **(O8b)** one clause in `docs/GLOSSARY.md` beside *"disposable"* removing the implication of spareness; and **(O8c)** the `[OC-1]` test pinning class **A** end to end. **Why the test is the real deliverable:** every row above rests on the class partition, and that partition is a property of the *design* — one write site, three arms, one identity-gated delete — that no current test states end to end |
 | **O9** | **WHAT DOES NOT SHIP, and why it is an owner item rather than a fold-in.** | The **selection guard** of owner item **O9** in `docs/specs/done/WP-quarantine-disposal-durability.md:90-130` — refusing to prune while the pruning run's own `created` set has reached the cap — is **recommended and NOT taken here**. It changes Table N rows **N3** and **N5**, which are contract rows of a `Done` package, and the stub's own rule is that such a change is an owner item with a recommendation and a cost of overruling, never a fold-in. See **Dispatch precondition — owner items**, item 2 |
 
 ### Mirrored Surface Checklist
@@ -408,6 +463,12 @@ Mirrors of **Table O** (canonical source: this file):
 - [ ] **Acceptance criteria 1–5** (mirror O1, O2, O8a, O8b, O9)
 - [ ] **Verification steps** — the two greps and the `[OC-1]` pattern (mirror O8a, O8b, O8c)
 - [ ] **Implementation notes** — the vacuous-walk trap (mirrors O2) and the no-`src/` constraint (mirrors O8, O9)
+- [ ] **Exact contracts → "Scope, set by design-gate round 1"** — the class-A
+      scoping of `[OC-1]` and the refusal to assert a universal (mirrors O1)
+- [ ] **Exact contracts → the fixture's three load-bearing properties** — the
+      `publish` and distinct-secret requirements (mirror O1's dedup caveat, O2)
+- [ ] **Exact contracts → the two doc clauses** — the "may be" hedge and the two
+      prohibitions (mirror O1's classes B and C, and O7's closing sentence)
 - [ ] **Out of scope** — the (b)/(c) exclusions (mirror O5, O6)
 - [ ] **Dispatch precondition — owner items** — items 1, 2 and 3 (mirror O8, O9, and O6/O7 respectively)
 
@@ -424,6 +485,15 @@ Mirrors of **Table O** (canonical source: this file):
   **before** the prune, in the same run of the same walk function. An absence
   assertion whose corresponding presence was never demonstrated is not a
   measurement (ADR-0042's own account of the false-green class).
+- **TWO FIXTURE TRAPS, both measured; neither is inferable from the code.**
+  (1) `RUN` defaults to `publish: false`, so a run whose bytes you need in the
+  vault must pass `publish: true` — otherwise run 2 re-judges the same secret and
+  the vault never holds the scrubbed form (`OC-P7`: the gate returns `{ok:true}`
+  on an already-scrubbed note, so a published run 1 followed by an unchanged
+  run 2 completes **no** redaction and never prunes).
+  (2) The shelf does **not** deduplicate: two runs over identical secret-bearing
+  content leave two byte-identical shelf files (`OC-P5`), so run 2 must carry a
+  **different** secret token or the byte-absence assertion is unprovable.
 - **No new test helper.** `redactFixture`, `RUN`, `seedRedacted`, `seedNotes`,
   `lsRedacted`, `redactedDir`, `CAP` and `listSecretQuarantine` are all already
   in scope in `tests/unit/dream-validate.test.js`. Adding a sixth helper to a
@@ -470,30 +540,38 @@ Mirrors of **Table O** (canonical source: this file):
 
 - [ ] **1.** `[OC-1]` exists in `tests/unit/dream-validate.test.js` with exactly
       the name given under **Exact contracts**, passes, and asserts both signals
-      `O1-shelf-holds-the-sole-pre-scrub-form` and
-      `O2-the-prune-destroys-an-only-copy` (Table O rows O1, O2).
-- [ ] **2.** `[OC-1]` demonstrates the presence of `R`'s bytes on the shelf
+      `O1-class-A-copy-is-the-sole-pre-scrub-form` and
+      `O2-the-prune-destroys-a-sole-surviving-copy` (Table O rows O1, O2). It
+      asserts **class A only** and makes **no universal claim** about the shelf.
+- [ ] **2.** `[OC-1]`'s fixture has all three load-bearing properties: run 1 uses
+      `publish: true`; `R` is the unique oldest candidate by an explicit
+      `utimesSync`; and run 2 judges a **different** note with a **different**
+      secret token, asserted to have preserved bytes differing from `R` before
+      any absence assertion (Table O row O1's dedup caveat; `OC-P5`, `OC-P7`).
+- [ ] **3.** `[OC-1]` demonstrates the presence of `R`'s bytes on the shelf
       **before** the prune and their absence from the whole `stateDir` tree
-      **after** it, using the same walk, and asserts the walk visited at least
-      one file (Table O row O2; the vacuous-walk trap).
-- [ ] **3.** `tests/red-proofs/quarantine-only-copy-shelf.proofs.json` exists,
-      is byte-for-byte the declaration under **Exact contracts** (modulo a
-      narrowed `find`/`replace` recorded under "Decisions made"), and
-      `npm run red-proofs` reports this package's criterion `1` as `PROVEN`
-      with **no red outside the two declared tests** (Table O row O9's
-      neighbouring discipline; ADR-0042).
-- [ ] **4.** `docs/runbooks/secret-incident.md` states, inside the existing
-      bullet, that the evicted copy is the **only** copy of that pre-scrub
-      original and that the vault note holds only the redacted form
-      (Table O row O8a). It promises **no** warning, banner or record.
-- [ ] **5.** `docs/GLOSSARY.md`'s `secret quarantine` entry states that each
-      file on the `redacted/` shelf is the sole surviving copy of that note's
-      pre-scrub text (Table O row O8b). It promises **no** warning, banner or
+      **after** it, **using the same walk function**, and asserts the walk
+      visited at least one file (Table O row O2; the vacuous-walk trap).
+- [ ] **4.** `tests/red-proofs/quarantine-only-copy-shelf.proofs.json` exists and
+      is byte-for-byte the declaration under **Exact contracts**, with
+      `expectRed` holding **exactly one** entry whose `test` is a **one-element**
+      identity path, and `npm run red-proofs` reports this package's criterion
+      `1` as `PROVEN` with **`[OC-1]` as the sole red** (ADR-0042;
+      `scripts/red-proofs.js:693-694`, `:1599-1602`, `:1668-1670`).
+- [ ] **5.** `docs/runbooks/secret-incident.md` states, inside the existing
+      bullet, that the deleted file **may be** the only copy of that original and
+      that where it is, the text cannot be recovered (Table O row O8a). It does
+      **not** claim the file is always the only copy, does **not** say the vault
+      note holds a redacted form of it, and promises **no** warning, banner or
       record.
-- [ ] **6.** `git diff --stat` against the base commit touches **only** the four
+- [ ] **6.** `docs/GLOSSARY.md`'s `secret quarantine` entry states that a file on
+      the `redacted/` shelf is **usually** the only surviving copy of that note's
+      pre-scrub text, so the eviction is generally irreversible rather than the
+      removal of a spare (Table O row O8b). Same three prohibitions as criterion 5.
+- [ ] **7.** `git diff --stat` against the base commit touches **only** the four
       Deliverables paths plus this spec file. **`src/` is untouched.**
-- [ ] **7.** `npm test` and `npm run lint` pass.
-- [ ] **8. Idempotence:** `N/A — this WP ships one test, one RED declaration and
+- [ ] **8.** `npm test` and `npm run lint` pass.
+- [ ] **9. Idempotence:** `N/A — this WP ships one test, one RED declaration and
       two documentation clauses; it adds no command and writes nothing outside
       the repo.**
 
@@ -503,12 +581,12 @@ Mirrors of **Table O** (canonical source: this file):
 # 1 — the new test, by name
 npm test -- --test-name-pattern 'OC-1'
 
-# 2 — the two tests the RED declaration names must both exist, spelled exactly
-grep -c 'EP2 retention \[OC-1\]: the prune destroys an ONLY copy' tests/unit/dream-validate.test.js
-grep -c 'EP2 redact arm R8: preserve, scrub only the added lines, commit, count separately' tests/unit/dream-validate.test.js
+# 2 — the ONE test the RED declaration names must exist, spelled exactly
+grep -c 'EP2 retention \[OC-1\]: the prune destroys a SOLE-SURVIVING copy' tests/unit/dream-validate.test.js
 
-# 3 — the declaration is valid JSON and names this WP
-node -e "const d=require('./tests/red-proofs/quarantine-only-copy-shelf.proofs.json');console.log(d.suite,d.proofs.length,d.proofs[0].wp,d.proofs[0].expectRed[0].test.length)"
+# 3 — the declaration is valid JSON, names this WP, and holds exactly ONE
+#     expectRed entry whose identity path has exactly ONE element
+node -e "const d=require('./tests/red-proofs/quarantine-only-copy-shelf.proofs.json');const p=d.proofs[0];console.log(d.suite,d.proofs.length,p.wp,'expectRed='+p.expectRed.length,'pathLen='+p.expectRed[0].test.length)"
 
 # 4 — the RED lane, BARE and unfiltered (a filtered run is reported as filtered,
 #     never as proven — ADR-0042 Decision 1)
@@ -565,21 +643,29 @@ and **the owner reverses it by dated amendment.** Nothing in this repo records
 the owner approving, accepting or ratifying any of them, and this spec asserts no
 such acceptance.
 
-1. **Does the retention cap delete an only-copy anyway — candidate (a)?**
+1. **Does the retention cap delete a sole-surviving copy anyway — candidate (a)?**
    *Recommendation: YES, and the reasoning is that the owner has already decided
-   it.* By Table O row **O1** the shelf is a shelf of only-copies, measured; a
-   count cap on such a shelf **is** a standing decision to destroy the oldest
-   only-copy, and `REDACTED_RETENTION_CAP = 50` is owner-approved (Table N row
-   N1). Candidate (b) is that decision's repeal (row O5) and candidate (c) is
-   unbuyable without new durable state (row O6). What was genuinely missing is
-   that **nothing said the loss was total** (row O7), and this package's two
-   clauses say it. *Cost of overruling:* the shelf becomes unbounded (b) or the
-   product grows a per-artifact ledger record class plus a second banner
-   consumer (c) — in both cases a Table N amendment, an `src/` deliverable, and
-   a package larger than `S` that this one would have to be split into.
+   it.* **Restated at design-gate round 1: the shelf is NOT uniformly
+   only-copies** (Table O row **O1**), so the item is now answered per class.
+   *Class C* — a retained duplicate whose twin sits on the unbounded,
+   banner-announced `state/quarantine/` — is deleted at no loss at all, and (a) is
+   plainly right for it. *Classes A and B* hold the sole surviving form, and for
+   those a **count** cap **is** a standing decision to destroy the oldest of them;
+   `REDACTED_RETENTION_CAP = 50` is owner-approved (Table N row N1). Candidate (b)
+   is that decision's repeal for every file that matters (row O5) and candidate
+   (c) needs the same durable class record the product does not have (row O6).
+   What was genuinely missing is that **nothing said the loss was total** where it
+   is (row O7), and this package's two clauses say so — **hedged, because saying
+   it unconditionally would be false for class C.**
+   *Cost of overruling:* the shelf becomes unbounded (b) or the product grows a
+   per-artifact durable class record plus a second banner consumer (c) — in both
+   cases a Table N amendment, an `src/` deliverable, and a package larger than
+   `S` that this one would have to be split into.
    *Cost of accepting, stated rather than implied:* a user who does not read the
-   dream report within roughly fifty redactions loses the pre-scrub text of the
-   oldest note permanently, and nothing tells them at the moment it happens.
+   dream report within roughly fifty redactions permanently loses the pre-scrub
+   text of the oldest class-A or class-B note, and nothing tells them at the
+   moment it happens. **The product cannot even tell them which class a file was**
+   — that fact is never persisted (row O2).
 
 2. **Should the prune's selection guard be taken here?**
    *Recommendation: TAKE IT — but not in this package.* The measured defect is
