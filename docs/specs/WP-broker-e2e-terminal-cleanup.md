@@ -1,7 +1,7 @@
 ---
 id: WP-broker-e2e-terminal-cleanup
 title: Retire LP2's AUTH-BLOCKED residue and fix the weekly-review non-vacuity floor
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-scenario-harness-auth-repair, WP-cleanenv-keychain-auth]
