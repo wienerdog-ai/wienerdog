@@ -1,7 +1,7 @@
 ---
 id: WP-dream-primary-dialogue-collection
 title: Collect primary dialogue into scratch and keep the code-owned gates on the original timeline
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-dream-primary-dialogue-projection]
@@ -10,6 +10,186 @@ epic: dream-primary-dialogue
 ---
 
 # WP-dream-primary-dialogue-collection: Collect primary dialogue into scratch and keep the code-owned gates on the original timeline
+
+> **Errata, 2026-09-18 (post-merge) — nine stale, contradictory or unregistered
+> spec-prose facts. None is a defect in what shipped.**
+>
+> Implemented in PR #269 (merge `297ef1df`, 2026-09-18), tip `119137d2`. **Both
+> PR gates are clean on that tip:** wd-reviewer returned APPROVE with executed
+> evidence, and the independent gate (Codex plugin `review` on `gpt-6-astra`)
+> returned *"No actionable regressions found"*; CI seven checks pass. Final
+> numbers on `119137d2`: `npm test` 2895 tests / 2883 pass / **0 fail** / 12
+> skipped; `npm run lint` clean; the **UNFILTERED** `npm run red-proofs` →
+> `RUN: PROVEN`, **157 PROVEN**, zero `FAILED`, `VACUOUS`, `UNCONTROLLED`,
+> `FILTERED` or `ERROR`, including this package's three declarations
+> (`admission-measured-on-intake-not-projection`,
+> `filename-collision-evicts-the-overwritten-session`,
+> `ledger-gate-reads-the-original-timeline-not-scratch`). The reviewer's own
+> `--wp`-scoped run selected 3 of 3 and proved all 3, and reported
+> `RUN: FILTERED` with exit 1 **by construction** — see Erratum 7.
+>
+> **Every erratum below was measured by the fidelity gate on `119137d2`**, not
+> inferred, and each cites the spec line as it stood at merge.
+>
+> **Erratum 1 — AC1b (`:591-605`) is internally contradictory: the write order
+> it fixes makes its own non-vacuity control impossible.** *What is wrong:* AC1b
+> demands **both** that the survivor be `s_1` **and** that "the same test run
+> against a map built without the eviction **accepts** it, so the assertion is
+> not vacuous". *What is true:* `src/core/dream/validate.js:474` is
+> `SID_RE = /^[a-z0-9]+:[A-Za-z0-9_-]+$/`, which is **exactly** `sanitize`'s
+> alphabet (`src/core/dream/scratch.js:18-20`,
+> `String(id).replace(/[^A-Za-z0-9_-]/g, '_')`). So any id that collides with
+> `s_1` without *being* `s_1` necessarily contains a character outside that
+> alphabet and is therefore **also** a malformed Session-ID — refused whatever
+> the gate map holds. In the order AC1b names, the overwritten session's refusal
+> is **over-determined** and the no-eviction control cannot accept it; the
+> control is impossible, not merely weak. The round-3 review's reasoning ("`s.1`
+> fails the schema in both designs, so a fixture in which `s.1` survives proves
+> less than it looks like") is correct about the *survivor* and was carried into
+> the criterion as a constraint on the *overwritten* id, which inverts it.
+> *What shipped:* **both orders, as two named cases** —
+> `tests/unit/dream-collect.test.js:1470-1525` keeps AC1b's order (survivor
+> `s_1`) for the survivor / empty-projection / nothing-else-moved assertions and
+> asserts the over-determination explicitly at `:1523-1524`, and
+> `:1527-1565` runs the **other** order (survivor `s.1`, overwritten `s_1`
+> schema-clean) to carry AC1b's actual authorization claim: refused as *not
+> among this run's processed extracts* at `:1545-1550`, and **accepted** at
+> `:1562-1564` against a session-keyed map built without the eviction.
+> *Found:* the implementer, under Decisions made. *Routing:* AC1b is rewritten
+> below as **two named cases with the reason each exists**, so no later reader
+> "fixes" the order back. **Class: an acceptance criterion whose two clauses
+> cannot both hold, caught only by executing it.**
+>
+> **Erratum 2 — the Mirrored Surface Checklist (`:348`) names two proof-backed
+> criteria where three shipped.** *What is wrong:* "`npm run red-proofs` mirrors
+> AC1 and AC4". *What is true:* the implementer declared a **third** proof,
+> `filename-collision-evicts-the-overwritten-session`, criterion `1b`, in
+> `tests/red-proofs/dream-primary-collection.proofs.json` — row C4's eviction is
+> the one line with an authorization consequence, so it earns a declaration.
+> The unfiltered run proves all three. *Found:* the implementer, Decision 2.
+> *Routing:* **ratified** — the checklist clause now reads AC1, **AC1b** and
+> AC4, corrected in place below. **Class: a registered mirror the implementation
+> legitimately grew past; the register is updated rather than the code narrowed.**
+>
+> **Erratum 3 — Implementation notes (`:441`) still says the `expectRed` sets
+> are derived.** *What is wrong:* "**The RED proofs' `expectRed` sets are
+> DERIVED, not measured** — the code they mutate does not exist yet." *What is
+> true:* the code exists; each set was **measured by hand-applying its mutation
+> and corrected** before the declaration was written, then confirmed by the
+> unfiltered run at `119137d2`. *Found:* the architect, filing. *Routing:*
+> corrected in place below to record the measurement and the tip it was taken
+> at; the instruction that a correction here is a **prose** change routed back to
+> the architect is kept, because it is what produced this errata block.
+> **Class: a to-be-measured marker left standing after the measurement.**
+>
+> **Erratum 4 — AC4 (`:632`) names one reddening case where three redden.**
+> *What is wrong:* "Its RED proof reddens on rebuilding `extractsBySession` from
+> the scratch files, which is case (c) turning red." *What is true:* the
+> measured `expectRed` set of
+> `ledger-gate-reads-the-original-timeline-not-scratch` is **three** tests —
+> cases (a), (b) and (c) all redden under that mutation, and the declaration
+> names all three. *Found:* the implementer, Discovered issues. *Routing:*
+> corrected in place below. **Class: prose that a measured `expectRed` set
+> falsified — the same class as Erratum 3.**
+>
+> **Erratum 5 — the byte arithmetic after the literal scratch file (`:284`) says
+> 30 where the spec's own literals say 31.** *What is wrong:* "a session that is
+> already pure dialogue grows by **30** bytes per message". *What is true:*
+> `,"derived_from_untrusted":false` is **31** compact bytes, and the spec's own
+> figures on the two lines above — compact projection **233**, `intakeBytes`
+> **202** — already differ by exactly 31. The shipped test asserts 31 with a
+> comment. Nothing downstream depended on the wrong number: row C1 is what makes
+> the direction harmless, not the magnitude. *Found:* the implementer,
+> Discovered issues. *Routing:* corrected in place below. **Class: an
+> arithmetic slip a measured assertion falsified.**
+>
+> **Erratum 6 — AC2's literal file (`:243-273`, asserted at `:606-611`) cannot
+> be reproduced byte-for-byte under a temp home.** *What is wrong:* AC2 asks
+> that each scratch file be "byte-identical to the literal above for the literal
+> input", and the literal carries
+> `"source_path": "/samples/rollout-demo.jsonl"`. *What is true:* the test must
+> build its corpus under a disposable temporary home, so the discovered file's
+> real path — and therefore `source_path`, which the parser bounds through
+> `boundExtractPath` — can never be `/samples/rollout-demo.jsonl`. *What
+> shipped:* the test compares the written file with the literal **byte-for-byte
+> with only `source_path` substituted**, so key order, the added per-message
+> `derived_from_untrusted` key, the `null`s and the absence of a trailing
+> newline are all still pinned exactly. *Found:* the implementer, Decision 6.
+> *Routing:* recorded at the literal and in AC2 below, as the one substitution
+> the comparison is allowed. **Class: a byte-exact fixture stated without its
+> one environment-dependent field.**
+>
+> **Erratum 7 — the `--wp`-scoped `npm run red-proofs` at `:699` is listed under
+> "must pass before the PR" and can never exit 0.** *What is wrong:*
+> `npm run red-proofs -- --wp WP-dream-primary-dialogue-collection` appears in
+> the block headed "Implementation checks — these must pass before the PR".
+> *What is true:* scoping by `--wp` leaves every other work package's
+> declarations **unselected**, and `scripts/red-proofs.js`'s roll-up
+> (`rollUp`, `:2152-2154`) marks any pair with a left-out declaration
+> `FILTERED`; the run verdict is the worst pair verdict, and the exit code is
+> `verdict === 'PROVEN' ? 0 : 1` (`:1893`). So a scoped run reports
+> `RUN: FILTERED` and exits **1** by construction, however green the selected
+> proofs are — which is exactly what the reviewer's scoped run did (3 selected,
+> 3 PROVEN, `RUN: FILTERED`, exit 1). **The gating check is the UNFILTERED
+> run**; the `--wp` form is a fast non-gating reading. *Found:* the architect,
+> filing. *Routing:* corrected in place below. **This is the second recorded
+> occurrence of this exact defect** — the first was erratum 1 of
+> `WP-quarantine-failed-preserve-disposal-flush`, landed on its branch before
+> merge (`3cd68a85`), recorded in HANDOVER status pass #10. **Class: a
+> verification command whose documented success condition the runner cannot
+> produce — recurring, and now carried by another spec (see the PR's Discovered
+> issues).**
+>
+> **Erratum 8 — the `SKILL.md` sentences `tests/unit/dream-skill-structure.test.js`
+> pins are an unregistered mirror of rows D2/D3/D6.** *What is wrong:* the
+> Mirrored Surface Checklist registers the three-token absent `rg` over
+> `SKILL.md` but not the structure suite, although row D4 puts that suite in the
+> Deliverables to "assert rows D2–D3's prose contract". A later reviewer
+> correcting a row would have no register entry telling them those sentences
+> must move with it. *What is true, measured at `119137d2`:* the five test cases
+> at `tests/unit/dream-skill-structure.test.js:80-141` pin **seventeen**
+> verbatim `SKILL.md` strings positively, forbid **two** superseded formulations
+> by name (`RAISES your flag`, `it never accepts a value LOWER than the derived
+> one`), and require the three superseded tokens (`tool_result`,
+> `skill_invocations`, `errored`) to occur **zero** times. *Found:* the
+> architect, filing; the count is measured, not the "nine" the filing brief
+> carried. *Routing:* **registered** as a mirror in the checklist below.
+> **Class: register-new-mirrors applied late — the mirror existed at merge and
+> was not in the register.**
+>
+> **Erratum 9 — the `collectExtracts` JSDoc block (`:237`) lists
+> `skippedQuarantined` twice.** *What is wrong:* the `@returns` line reads
+> `…, skippedQuarantined, skippedQuarantined, gateExtracts: …`. *What is true:*
+> the field occurs once; the shipped JSDoc
+> (`src/core/dream/scratch.js:55-62`) writes it once. *Found:* the implementer,
+> Decision 5. *Routing:* corrected in place below. **Class: a transcription
+> duplicate in a spec literal, not copied into the code.**
+>
+> **Recorded, not errata:**
+> (i) **The two `tests/red-proofs/…` Deliverables cells are NOT stale**, although
+> PR #269's body listed them as prose the measured sets falsified. Their notes
+> name only each file's `suite` — `tests/unit/dream-collect.test.js` and
+> `tests/unit/dream-pipeline.test.js` — which is what shipped; nothing in either
+> cell speaks about `expectRed`. They are left exactly as written.
+> (ii) **ADR-0042 runner contract, worth knowing before declaring a proof:**
+> `signal` is searched in the failing test's TAP **diagnostic**
+> (`scripts/red-proofs.js:1658`), so a bare `assert.deepEqual`/`assert.ok`
+> cannot carry it. The first unfiltered run reported `FAILED` on all three
+> declarations for missing signals — not for a wrong red set; `119137d2` puts
+> the tag in each reddening assertion's message.
+> (iii) **The `sanitize` collision is still a live, pre-existing defect.** Row
+> C4's eviction only stops the authorization gate weakening over it; one
+> session's dialogue is still silently lost while both sessions are marked
+> processed. It stays under Discovered issues below, unfixed and routed.
+> (iv) **AC7's logbook entry has its own dated correction.** The Regime-1
+> admitted list in
+> `docs/specs/logbook/2026-09-18-dream-primary-dialogue-collection-ac7-measurement.md`
+> was rendered as a range spanning 67 ids against a measured count of 81; the
+> entry does not record the corpus composition needed to reconstruct the list, so
+> the correction says so rather than inventing ids. The counts, the arms and the
+> byte figures are unaffected.
+
+<!-- errata above; the spec as it shipped follows -->
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -234,7 +414,7 @@ sees, and what code keeps to itself). Everything here mirrors them.
 /** Unchanged signature; two added return fields (Table C rows C4, C5).
  *  @returns {{entries, scratchDir, processed, newlyQuarantined, deferred,
  *             droppedForSize, dropped, truncated, wrote, deadlineDeferred,
- *             readDeferred, oversized, oversizedExtracts, skippedQuarantined, skippedQuarantined,
+ *             readDeferred, oversized, oversizedExtracts, skippedQuarantined,
  *             gateExtracts: Map<string, {harness, session_id, messages:[{role:string}], skill_invocations?:Array}>,
  *             intakeBytesTotal: number}} */
 function collectExtracts(paths, ledger, maxInputBytes, options)
@@ -274,16 +454,27 @@ newline**:
 
 The key order above is the emitted order and was confirmed by running the real
 parser at the base commit on this exact input; only the per-message
-`derived_from_untrusted` key is new. **The byte count this admission was
-measured against is not the size of that file.** For this input the file is 307
-bytes on disk, its compact form is 233 bytes, and `intakeBytes` — the compact
-JSON length of the raw capped extract, which is what X is measured against
-(row C1) — is **202**. It is smaller than the projection here because this
-source has nothing to remove and the projection *adds* a `derived_from_untrusted`
-key per message: **projection shrinks extracts in aggregate, not on every
-session**, and a session that is already pure dialogue grows by 30 bytes per
-message. Row C1 is what makes that harmless — admission is decided on the
-intake number, so neither direction of the difference moves the admitted set.
+`derived_from_untrusted` key is new. **One field of this literal is
+environment-dependent and is the single substitution the byte comparison
+allows (Erratum 6):** `source_path` is derived from the discovered file's real
+path through `boundExtractPath`, and a test building its corpus under a
+disposable temporary home can never produce `/samples/rollout-demo.jsonl`. The
+comparison substitutes `source_path` with the corpus's actual bounded path and
+is byte-for-byte on everything else — key order, the added per-message key, the
+`null`s and the absence of a trailing newline.
+
+**The byte count this admission was measured against is not the size of that
+file.** For this input the file is 307 bytes on disk, its compact form is 233
+bytes, and `intakeBytes` — the compact JSON length of the raw capped extract,
+which is what X is measured against (row C1) — is **202**. It is smaller than
+the projection here because this source has nothing to remove and the projection
+*adds* a `derived_from_untrusted` key per message: **projection shrinks extracts
+in aggregate, not on every session**, and a session that is already pure dialogue
+grows by **31** bytes per message — `,"derived_from_untrusted":false` is 31
+compact bytes, and the two figures above already differ by exactly that
+(233 − 202 = 31; corrected by Erratum 5). Row C1 is what makes that harmless —
+admission is decided on the intake number, so neither direction of the
+difference moves the admitted set.
 
 ## Contract reference (optional — mark N/A if this WP is not contract-dense)
 
@@ -345,8 +536,26 @@ a newly found mirror is registered here on the spot.
       cites; the three-token absent grep over `SKILL.md`
       (`skill_invocations|tool_result|errored`) mirrors D2's zero-occurrence
       clause and D3; the ADR `Status:` grep and the owner-phrase prohibition
-      grep mirror D5; `npm run red-proofs` mirrors AC1 and AC4; **the `rg` over
-      `scratch.js`'s deadline check mirrors C1a**.
+      grep mirror D5; the **UNFILTERED** `npm run red-proofs` mirrors AC1,
+      **AC1b** and AC4 (three declarations; corrected by Erratum 2, and the
+      unfiltered form by Erratum 7 — a `--wp`-scoped run is `RUN: FILTERED`,
+      exit 1, by construction); **the `rg` over `scratch.js`'s deadline check
+      mirrors C1a**.
+- [ ] **`tests/unit/dream-skill-structure.test.js` — the `SKILL.md` prose
+      contract, registered by Erratum 8.** Rows D2, D3 and D6 are mirrored not
+      only by the three-token `rg` above but by the five test cases at
+      `:80-141`, which pin **seventeen** verbatim `SKILL.md` strings positively
+      (the two documented roles, the per-message-flag sentence, both example
+      flag values, both arms of the Phase 2 rule, the never-infer-from-role
+      clause, the unknown-provenance clause, the three code/prompt-boundary
+      sentences of D6, the one-rule-for-both-harnesses clause, the
+      absence-of-evidence rule and its rationale, the REFUSES sentence and the
+      reverted-unchanged cost), forbid **two** superseded formulations by name
+      (`RAISES your flag`; `it never accepts a value LOWER than the derived
+      one`), and require `tool_result`, `skill_invocations` and `errored` to
+      occur **zero** times. **A correction to D2, D3 or D6 must move those
+      strings in the same commit**, or the suite pins prose the table no longer
+      says.
 - [ ] **Current-state description** — walked: `scratch.js:128`/`:139` back C1
       and C2; **`scratch.js:50` and `:105-108` back C1a's elapsed-clock argument**;
       `scratch.js:76-84`/`:112-115`/`:130` and `ledger.js:112-120` back
@@ -438,8 +647,14 @@ a newly found mirror is registered here on the spot.
   ownership-checked cleanup order untouched.
 - **Regenerate the skill digest with the repo's own tooling**, not by hand, and
   check the diff touches exactly one entry (row D4).
-- **The RED proofs' `expectRed` sets are DERIVED, not measured** — the code they
-  mutate does not exist yet. The implementer measures each set by running
+- **The RED proofs' `expectRed` sets were MEASURED AND CORRECTED at `119137d2`**
+  (Erratum 3; this bullet read "DERIVED, not measured" when the spec was
+  written, because the code they mutate did not exist yet). Each set was
+  measured by hand-applying its mutation before its declaration was written,
+  then confirmed by the **unfiltered** `npm run red-proofs`. Three declarations
+  shipped, not two: AC1, **AC1b** and AC4 (Erratum 2). The instruction that
+  produced this errata block stands for the next package:
+  the implementer measures each set by running
   `npm run red-proofs` and **corrects the declaration**. Correcting a set may
   falsify prose, so these are the sentences that depend on it and must be
   re-read in the same pass: both `tests/red-proofs/…` Deliverables notes; this
@@ -589,23 +804,49 @@ carries forward from the role-based one it replaces rather than a new one.
       under the same limit, which is the case that shows one run finishing in
       time is not the condition.
 - [ ] **AC1b — a filename collision evicts the overwritten session's gate
-      evidence (Table C rows C4, C4a).** A collector-to-validator test with two
-      Claude sessions whose ids sanitize to one filename (`s_1` and `s.1` both
-      give `claude-s_1.json`). Assert: `sel.gateExtracts` holds **exactly one**
-      entry for that filename, the last-written session; a learnings-ledger entry
-      counting the **overwritten** session is refused as not among this run's
-      processed extracts, which is what the base commit does; and the same test
-      run against a map built without the eviction **accepts** it, so the
-      assertion is not vacuous. **Choose the write order so the SURVIVOR is
-      `s_1`**: the round-3 review established that `s.1` fails the existing
-      Session-ID schema in both designs, so a fixture in which `s.1` survives
-      proves less than it looks like — the refusal would be over-determined.
-      Cover the empty-primary-messages case for the survivor too. Assert also that nothing else moved: both
-      sessions remain in `entries` and `processed`, and the colliding path
-      appears in `wrote` twice.
+      evidence (Table C rows C4, C4a).** **Rewritten by Erratum 1: TWO named
+      cases, in BOTH write orders. Do not collapse them back into one.** A
+      collector-to-validator test with two Claude sessions whose ids sanitize to
+      one filename (`s_1` and `s.1` both give `claude-s_1.json`).
+      **Why two cases, and why neither order alone is enough — read this before
+      changing either.** `src/core/dream/validate.js:474` is
+      `SID_RE = /^[a-z0-9]+:[A-Za-z0-9_-]+$/`, which is **exactly** `sanitize`'s
+      alphabet (`scratch.js:18-20`). So any id colliding with `s_1` without
+      *being* `s_1` must contain a character outside that alphabet and is
+      therefore **also** a malformed Session-ID, refused whatever the gate map
+      holds. That cuts both ways: with `s_1` surviving (the order the spec
+      originally fixed, on the round-3 reasoning that `s.1` fails the schema in
+      both designs) the **overwritten** id is `s.1`, its refusal is
+      **over-determined**, and a no-eviction control cannot accept it — the
+      control is impossible, not merely weak. With `s.1` surviving, the
+      overwritten id is the schema-clean `s_1` and the map is the **only** thing
+      that can refuse it, which is what makes the control real; but then the
+      survivor is a session the schema would refuse anyway, so that order proves
+      less about the survivor. Each order proves what the other cannot.
+      **Case 1 — survivor `s_1` (the shape and the over-determination).** Write
+      `s.1` first, `s_1` last. Assert: `sel.gateExtracts` holds **exactly one**
+      entry for that filename, the last-written session; the survivor still
+      authorizes a learning; the survivor's empty-primary-messages case is
+      covered; and **the over-determination is asserted explicitly** — a ledger
+      counting `claude:s.1` is refused as a *malformed Session-ID*, so a later
+      reader cannot mistake this case for evidence about the eviction. Assert
+      also that nothing else moved: both sessions remain in `entries` and
+      `processed`, and the colliding path appears in `wrote` twice.
+      **Case 2 — survivor `s.1` (the authorization claim and its control).**
+      Write `s_1` first, `s.1` last, so the **overwritten** id is schema-clean.
+      Assert: the gate map's only key is `claude:s.1`; a learnings-ledger entry
+      counting the overwritten `claude:s_1` is refused as **not among this run's
+      processed extracts**, which is bit-for-bit what the base commit does by
+      re-reading the surviving file; and the same gate and ledger run against a
+      session-keyed map built **without** the eviction **accepts** it — the
+      non-vacuity control, which is possible only in this order.
+      Shipped as `tests/unit/dream-collect.test.js:1470-1525` (case 1) and
+      `:1527-1565` (case 2).
 - [ ] **AC2 — what is written, and the memo (Table C rows C2, C3).** Each
       scratch file is the projection, byte-identical to the literal above for
-      the literal input; a session whose projection retains no messages is still
+      the literal input **with `source_path` substituted — the one field a temp
+      home makes unreproducible, and the only substitution allowed (Erratum 6)**;
+      a session whose projection retains no messages is still
       written with an empty `messages` array and appears in `entries` and
       `wrote`; an oversized memo written by the base commit is still honoured
       unchanged after this package, and no memo record gains a field.
@@ -629,7 +870,10 @@ carries forward from the role-based one it replaces rather than a new one.
       counting a Claude session that did not invoke the skill is still refused,
       and a run in which the brain writes a file into the scratch directory
       still reaches the same verdicts. Its RED proof reddens on rebuilding
-      `extractsBySession` from the scratch files, which is case (c) turning red.
+      `extractsBySession` from the scratch files; the measured `expectRed` set is
+      **three** tests — cases **(a), (b) and (c) all redden**, and the
+      declaration names all three (corrected by Erratum 4; the spec as written
+      named case (c) alone).
 - [ ] **AC5 — the skill's contract (Table D rows D2–D4).** `SKILL.md` documents
       the projection's message shape including `derived_from_untrusted`, states
       the Phase 2 rule in terms of that flag rather than of a role, instructs
@@ -696,7 +940,7 @@ test -f docs/adr/0020-skill-revision-lifecycle.md && ! rg -qi "owner (approved|a
 npm test -- tests/unit/dream-collect.test.js tests/unit/dream-pipeline.test.js tests/unit/dream-skill-structure.test.js tests/unit/dream-validate.test.js tests/integration/dream.test.js
 npm test
 npm run lint
-npm run red-proofs -- --wp WP-dream-primary-dialogue-collection
+npm run red-proofs   # UNFILTERED — see the note below; redirect to a file, read the verdict
 node scripts/boundary-check.js docs/specs/WP-dream-primary-dialogue-collection.md src/core/dream/scratch.js src/cli/dream.js skills/wienerdog-dream/SKILL.md src/core/runtime-skill-digests.json docs/adr/0020-skill-revision-lifecycle.md tests/unit/dream-collect.test.js tests/unit/dream-pipeline.test.js tests/unit/dream-skill-structure.test.js tests/integration/dream.test.js tests/red-proofs/dream-primary-collection.proofs.json tests/red-proofs/dream-primary-collection-pipeline.proofs.json
 git diff --check
 ```
@@ -705,6 +949,19 @@ The second, third and fourth commands are **guarded** on purpose: a bare
 negated `rg` exits 0 when the file is missing, so the check would read greenest
 exactly where the work was never done. `test -f` runs first, and each line fails
 if its file is absent.
+
+**The red-proofs line is the UNFILTERED run, and that is not a preference
+(Erratum 7).** This spec originally listed
+`npm run red-proofs -- --wp WP-dream-primary-dialogue-collection` here, which
+**cannot exit 0**: `--wp` leaves every other package's declarations unselected,
+`rollUp` (`scripts/red-proofs.js:2152-2154`) marks any pair with a left-out
+declaration `FILTERED`, the run verdict is the worst pair verdict, and the exit
+code is `verdict === 'PROVEN' ? 0 : 1` (`:1893`). A scoped run therefore reports
+`RUN: FILTERED` and exits 1 however green its selected proofs are. The
+`--wp` form is a **fast non-gating reading** while iterating; the check that
+must pass before the PR is the unfiltered run, which takes 15–20 minutes — so
+redirect its whole output to a file, wait on its own PID, and read the
+`RUN:` line from the file.
 
 ## Out of scope (do NOT do these)
 
@@ -855,3 +1112,19 @@ a numbered design-review round and carries its round in the logbook entry
    dispositioned — they are defined in `docs/runbooks/codex-review.md`
    and not restated here. `In-Review` marks the START of review: this
    list is complete only when review is.
+6. **Closed 2026-09-18.** Implementation PR **#269**, merge `297ef1df`, tip
+   `119137d2`. Both gates clean on that tip: wd-reviewer **APPROVE** with
+   executed evidence; the independent gate (Codex plugin `review`,
+   `gpt-6-astra`) *"No actionable regressions found"*; CI seven checks pass.
+   Item 1's evidence as measured on `119137d2`: `npm test` 2895 / 2883 pass /
+   **0 fail** / 12 skipped; `npm run lint` clean; the **UNFILTERED**
+   `npm run red-proofs` → `RUN: PROVEN`, **157 PROVEN**, zero `FAILED`,
+   `VACUOUS`, `UNCONTROLLED`, `FILTERED` or `ERROR` — including this package's
+   three declarations, at criteria 1, **1b** and 4. The reviewer's
+   `--wp`-scoped run selected 3 of 3 and proved all 3 while reporting
+   `RUN: FILTERED` with exit 1, which is the scoped form's construction and not
+   a finding (Erratum 7). AC7's measurement is
+   `docs/specs/logbook/2026-09-18-dream-primary-dialogue-collection-ac7-measurement.md`
+   (with its own dated correction of the Regime-1 admitted-list notation).
+   Nine errata are recorded at the head of this file; none is a defect in what
+   shipped.

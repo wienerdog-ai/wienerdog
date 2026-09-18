@@ -1,3 +1,9 @@
+---
+date: 2026-09-18
+title: "AC7: the admitted-count measurement for WP-dream-primary-dialogue-collection"
+related_wps: [WP-dream-primary-dialogue-collection]
+---
+
 # 2026-09-18 — AC7: the admitted-count measurement (WP-dream-primary-dialogue-collection)
 
 AC7 of `docs/specs/WP-dream-primary-dialogue-collection.md`: run the base
@@ -45,10 +51,32 @@ direction of the difference when they do.
 | BASE | capacity stop | 81 | 2,017,890 |
 | PROJECTED | capacity stop | 81 | 65,331 |
 
-- **Admitted lists identical: yes** — `claude:synthetic-0000` … `claude:synthetic-0066`,
-  element for element.
+- **Admitted lists identical: yes** — compared element for element, 81 ids on
+  each side, in the same newest-first order. **The list itself is not
+  reproducible from this entry — see the correction below.**
 - Arms identical on both sides: `deferred` 279, `deadlineDeferred` 0,
   `oversized` 0, `readDeferred` 0, `newlyQuarantined` 0.
+
+> **Correction, 2026-09-18 (filing `WP-dream-primary-dialogue-collection` as
+> Done).** The bullet above originally rendered the admitted list as
+> `claude:synthetic-0000` … `claude:synthetic-0066`. That notation spans **67**
+> ids against a measured admitted count of **81**, so it cannot be the list.
+> The corpus is mixed — Regime 2 below names `codex:rollout-*` ids from the same
+> newest-first order — so the admitted 81 plainly interleaves `claude:synthetic-*`
+> and `codex:rollout-*` ids, and a contiguous `claude:synthetic-*` range was
+> never the right shape for it. **The actual list cannot be reconstructed from
+> what this entry records:** the entry does not carry the corpus composition (how
+> many files of each harness, or their mtimes), and the two regimes' terminal ids
+> cannot be reconciled into one ordering from the figures given — Regime 1's
+> first 81 would have to hold 67 `claude:synthetic-*` ids, while Regime 2's first
+> 50 end at `codex:rollout-0040`. Rather than guess at the missing 14 ids, the
+> rendering is withdrawn. **What is unaffected:** every measured number in this
+> entry — the admitted counts (81/81, 50/44), the scratch-byte totals, the arm
+> counts, the corpus size and the configuration — and the element-for-element
+> identity finding itself, which was asserted on the two lists as the runs
+> produced them, not on this rendering. **What a future AC7 entry must record so
+> its list is reproducible:** the corpus composition per harness, and either the
+> admitted list in full or its ordered head and tail with the count.
 
 Neither run deferred on the deadline, which is the condition row C1a states, so
 row C1's guarantee applies and the lists must be identical. They are.
