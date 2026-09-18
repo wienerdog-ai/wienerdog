@@ -15,8 +15,11 @@
  */
 
 /**
- * Bounded-scan limits (audit A5, ADR-0024). Values OWNER-APPROVED — see the
- * WP-122 spec's OWNER-APPROVED block. Named so the tests import ONE definition.
+ * Bounded-scan limits (audit A5, ADR-0024). Named so the tests import ONE
+ * definition. The four SCAN values are OWNER-APPROVED — see the WP-122 spec's
+ * OWNER-APPROVED block. `STREAM_REGION_MAX` is NOT one of them: it is
+ * ADR-0043's, adopted under standing authorization, and nothing records the
+ * owner approving it.
  */
 const ScanLimits = {
   SCAN_MAX_BYTES: 256 * 1024, // a text longer than this is NOT regex-scanned
@@ -342,28 +345,17 @@ function hasHardFinding(findings) {
 // `createStreamRedactor`.
 // ---------------------------------------------------------------------------
 
-/** How far back Table S row S2's binder reaches for its keyword, counted in
- *  NON-whitespace characters. DERIVED from the two alternations the binder is
- *  built out of and never a literal: a written alternation is always at least as
- *  long as any string it matches, so `SENSITIVE_KEYS.length` bounds the longest
+/** How many NON-whitespace characters of the buffered prefix row S2's binder can
+ *  possibly reach across. DERIVED from the two alternations the binder is built
+ *  out of and never a literal: a written alternation is always at least as long
+ *  as any string it matches, so `SENSITIVE_KEYS.length` bounds the longest
  *  keyword and `SEP.length` the longest separator token; the 2 is the binder's
- *  two optional quote slots. Over-estimating only widens the window, which can
- *  never fail open. Whitespace does not count against this budget — the binder's
- *  whitespace runs may span blank lines — and is bounded separately by
- *  `CUT_BINDER_SPACE_MAX` below. */
+ *  two optional quote slots. Every other character the binder can match is
+ *  whitespace, of which it accepts ANY amount (Table S row S2: the keyword may
+ *  sit any number of blank lines back) — which is why the window below carries
+ *  whitespace as presence, not as length. Over-estimating only widens the
+ *  window, which can never change an answer. */
 const CUT_BINDER_LOOKBACK = SENSITIVE_KEYS.length + SEP.length + 2;
-
-/** The most WHITESPACE that same walk will traverse before it stops looking.
- *  Row S2 says the keyword may sit any number of blank lines back, and walking
- *  the whole run is correct but QUADRATIC: the descending scan in
- *  `nextRegionEnd` tests every newline in the run, and each test walks the run
- *  again. MEASURED: one region of blank lines took 8660 ms inside a single
- *  `push`, which a child doing nothing more exotic than `yes ''` produces.
- *  Past this bound the walk stops and REFUSES the cut instead of guessing —
- *  the FAIL-CLOSED direction, because a blocked cut is never a leak and Table
- *  B's `STREAM_REGION_MAX` still bounds the buffer. 1024 characters is over a
- *  thousand consecutive blank lines, far past any real key/value gap. */
-const CUT_BINDER_SPACE_MAX = 1024;
 
 /** Table S row S2 — an OPEN key binder at the end of the buffered text, spelled
  *  by interpolating the detector's own `SENSITIVE_KEYS` and `SEP`, exactly as
@@ -374,17 +366,28 @@ const CUT_BINDER_SPACE_MAX = 1024;
  *  in the bare word `token`), and the whitespace class is `\s`, which spans CR
  *  and LF (so `password:\n\n` and `password\n:\n` both still block).
  *
- *  The middle is spelled as the ALTERNATION `(?:\s*SEP\s*|\s*)` and NOT as the
- *  shorter `\s*(?:SEP)?\s*`. The two accept exactly the same language — with no
- *  separator, two adjacent `\s*` are one whitespace run — but the shorter form
- *  is AMBIGUOUS over that run, and on a failing match the engine redistributes
- *  it one character at a time. MEASURED on the shorter form: a keyword followed
- *  by 50000 blank lines and a word took 7949 ms inside one `push`. Keep the
- *  alternation; it is the linear-time spelling. */
+ *  THE TWO FACTS `cutS2Window` BELOW RESTS ON, both readable off this pattern:
+ *  (1) its only whitespace consumers are the `\s*` tokens — the keyword
+ *  alternation, `SEP` and the two quote slots contain no whitespace, and `$`
+ *  consumes nothing; (2) no two `\s*` are ever adjacent — inside the first
+ *  branch they are separated by a non-empty `SEP`, and the second branch has
+ *  only one. Fact (2) is why the middle is spelled as the ALTERNATION
+ *  `(?:\s*SEP\s*|\s*)` rather than the shorter `\s*(?:SEP)?\s*`: the two accept
+ *  exactly the same language, but only this spelling makes "each whitespace run
+ *  is consumed whole by exactly one `\s*`" true by inspection. It is not a
+ *  performance choice — the window keeps the subject short enough that both
+ *  spellings measure the same. */
 const CUT_OPEN_BINDER = new RegExp(
   `(?:${SENSITIVE_KEYS}|authorization)["'\`]?(?:\\s*(?:${SEP})\\s*|\\s*)["'\`]?$`,
   'i',
 );
+
+// The three `g` regexes below are module-level and therefore share their
+// `lastIndex` across every redactor instance. That is safe here and only here:
+// each user sets `lastIndex` explicitly on entry rather than trusting what it
+// held, the whole predicate is synchronous with no `await` and no callback
+// between the set and the last read, and nothing re-enters it. Add neither an
+// `exec` loop that skips the reset nor an async seam without making them local.
 
 /** Table S row S3 — a sensitive JSON key plus the opening quote of its value.
  *  The key set is `SENSITIVE_KEYS`; the quote and separator shapes are the JSON
@@ -406,43 +409,90 @@ function cutS1EndsWithNewline(buffer, i) {
 }
 
 /** True iff `code` is a character JS `\s` matches. The ASCII cases are spelled
- *  out because the S2 walk below tests one character at a time, and
- *  `/\s/.test(p[j])` allocates a single-character string on every one of them —
- *  PROFILED as essentially the entire cost of a blank-line-heavy region.
- *  Anything outside ASCII falls back to the regex, so the fast path and `\s`
- *  agree by construction rather than by a second hand-written list.
- *  @param {number} code @returns {boolean} */
+ *  out because `nextRegionEnd` classifies every character of the buffer one at
+ *  a time, and `/\s/.test(s[k])` allocates a single-character string on every
+ *  one of them. Anything outside ASCII falls back to the regex, so the fast
+ *  path and `\s` agree by construction rather than by a second hand-written
+ *  list. @param {number} code @returns {boolean} */
 function isCutWhitespace(code) {
   if (code === 32 || (code >= 9 && code <= 13)) return true;
   return code > 127 && /\s/.test(String.fromCharCode(code));
 }
 
-/** Table S row S2: no open key binder at the end of `p`. @param {string} p */
-function cutS2NoOpenKeyBinder(p) {
-  let j = p.length;
-  let budget = CUT_BINDER_LOOKBACK;
-  let space = CUT_BINDER_SPACE_MAX;
-  while (j > 0 && budget > 0) {
-    j -= 1;
-    if (!isCutWhitespace(p.charCodeAt(j))) budget -= 1;
-    else if (space > 0) space -= 1;
-    // Still inside whitespace with the whitespace budget spent: a keyword may
-    // sit further back than this walk will go, so refuse the cut rather than
-    // guess. Fail-closed, and the only direction that is never a leak.
-    else return false;
+/**
+ * The COLLAPSED WINDOW for row S2 at a cut before `buffer[i]`: the tail of
+ * `P = buffer.slice(0, i)` that `CUT_OPEN_BINDER` can see, with every
+ * whitespace run reduced to a single space.
+ *
+ * WHY COLLAPSING IS EXACT, not an approximation. `CUT_OPEN_BINDER`'s only
+ * whitespace consumers are its `\s*` tokens, and no two of them are adjacent
+ * (see that constant's JSDoc). So in any match, each maximal whitespace run of
+ * the subject is consumed WHOLE by exactly one `\s*`. `\s*` accepts a run of any
+ * length ≥ 0, so replacing a run by one space maps matches to matches; and every
+ * whitespace character of the collapsed subject is one of those inserted spaces,
+ * so expanding maps them back. Hence **R matches a suffix W iff R matches
+ * collapse(W)** — the binder's language is closed under collapsing.
+ *
+ * WHY TRUNCATING TO `CUT_BINDER_LOOKBACK` NON-WHITESPACE CHARACTERS IS EXACT.
+ * A match must end at `$`, and its non-whitespace content is at most one
+ * keyword, one separator token and two quotes — fewer than
+ * `CUT_BINDER_LOOKBACK` characters — so a match that exists at all lies inside
+ * the window. Dropping what precedes the window cannot invent one either: the
+ * pattern has no `^`, no `\b` and no look-behind, so it never asks anything of
+ * the text to its left.
+ *
+ * This is what makes row S2 exact AND linear with NO bound on how far back the
+ * keyword may sit: the whitespace is carried as presence, never as length.
+ *
+ * `solid` is the ascending list of non-whitespace indices of `buffer` and
+ * `solidCount` how many of them are `< i`; `nextRegionEnd` supplies both so the
+ * window costs `O(CUT_BINDER_LOOKBACK)` instead of a walk back over the run.
+ *
+ * @param {string} buffer @param {number} i
+ * @param {number[]} solid @param {number} solidCount @returns {string}
+ */
+function cutS2Window(buffer, i, solid, solidCount) {
+  const from = Math.max(0, solidCount - CUT_BINDER_LOOKBACK);
+  let window = '';
+  for (let k = from; k < solidCount; k += 1) {
+    // A gap between two kept characters was a whitespace run: one space stands
+    // in for it, whatever its length.
+    if (k > from && solid[k] !== solid[k - 1] + 1) window += ' ';
+    window += buffer[solid[k]];
   }
-  return !CUT_OPEN_BINDER.test(p.slice(j));
+  // `P` itself ending in whitespace is the run the binder most often needs.
+  if (i > 0 && (solidCount === 0 || solid[solidCount - 1] !== i - 1)) window += ' ';
+  return window;
 }
 
-/** Table S row S3: no sensitive quoted value left open anywhere in `p`. Each
- *  opener is skipped past its own closing quote, so the walk is linear.
- *  @param {string} p */
+/** Table S row S2: no open key binder at the end of `P = buffer.slice(0, i)`.
+ *  Exact — this is `CUT_OPEN_BINDER.test(P)`, evaluated on the collapsed window
+ *  rather than on `P`, which `cutS2Window` proves is the same answer.
+ *  @param {string} buffer @param {number} i
+ *  @param {number[]} solid @param {number} solidCount @returns {boolean} */
+function cutS2NoOpenKeyBinder(buffer, i, solid, solidCount) {
+  return !CUT_OPEN_BINDER.test(cutS2Window(buffer, i, solid, solidCount));
+}
+
+/** Table S row S3: no sensitive quoted value left open anywhere in `p`.
+ *
+ *  The resume point after a closed value is its CLOSING QUOTE, not the
+ *  character after it: in malformed log text that same quote can open the next
+ *  opener, as in `"token":"x"client_secret": "…` — resuming one character later
+ *  skips `"client_secret"` and accepts a cut inside its value.
+ *
+ *  Still linear. `lastIndex` is strictly increasing, because the next opener
+ *  ends after the quote we resumed on, so its own value starts later and its
+ *  closing quote is found strictly beyond the previous one; and each `indexOf`
+ *  begins where the previous opener's value began, so the scans advance
+ *  monotonically over `p` rather than re-reading it.
+ *  @param {string} p @returns {boolean} */
 function cutS3NoOpenQuotedValue(p) {
   CUT_JSON_VALUE_OPEN.lastIndex = 0;
   for (let m = CUT_JSON_VALUE_OPEN.exec(p); m; m = CUT_JSON_VALUE_OPEN.exec(p)) {
     const close = p.indexOf('"', m.index + m[0].length);
     if (close === -1) return false;
-    CUT_JSON_VALUE_OPEN.lastIndex = close + 1;
+    CUT_JSON_VALUE_OPEN.lastIndex = close;
   }
   return true;
 }
@@ -474,12 +524,13 @@ function cutS4NoOpenPrivateKey(p) {
  * THIS PREDICATE AND TABLE S IN THE SAME CHANGE (ADR-0043 decision 3). A rule
  * whose alphabet excludes `\n` is kept whole by S1 and needs nothing.
  *
- * @param {string} buffer @param {number} i @returns {boolean}
+ * @param {string} buffer @param {number} i
+ * @param {number[]} solid @param {number} solidCount @returns {boolean}
  */
-function isAcceptedCut(buffer, i) {
+function isAcceptedCut(buffer, i, solid, solidCount) {
   if (!cutS1EndsWithNewline(buffer, i)) return false;
+  if (!cutS2NoOpenKeyBinder(buffer, i, solid, solidCount)) return false;
   const p = buffer.slice(0, i);
-  if (!cutS2NoOpenKeyBinder(p)) return false;
   if (!cutS3NoOpenQuotedValue(p)) return false;
   if (!cutS4NoOpenPrivateKey(p)) return false;
   return true;
@@ -499,8 +550,19 @@ function isAcceptedCut(buffer, i) {
  *  @param {string} buffer @param {number} rejected @returns {number} */
 function nextRegionEnd(buffer, rejected) {
   const limit = Math.min(buffer.length, ScanLimits.STREAM_REGION_MAX);
+  // Row S2's window needs the non-whitespace characters near each candidate,
+  // and walking back to them through a whitespace run is quadratic in the run.
+  // `buffer` cannot change while this function runs, so their indices are
+  // gathered once, ascending, and `solidCount` — how many are below the current
+  // candidate — is carried down with `i` rather than searched for.
+  const solid = [];
+  for (let k = 0; k < limit; k += 1) {
+    if (!isCutWhitespace(buffer.charCodeAt(k))) solid.push(k);
+  }
+  let solidCount = solid.length;
   for (let i = limit; i > rejected; i -= 1) {
-    if (isAcceptedCut(buffer, i)) return i;
+    while (solidCount > 0 && solid[solidCount - 1] >= i) solidCount -= 1;
+    if (isAcceptedCut(buffer, i, solid, solidCount)) return i;
   }
   return buffer.length >= ScanLimits.STREAM_REGION_MAX ? ScanLimits.STREAM_REGION_MAX : 0;
 }

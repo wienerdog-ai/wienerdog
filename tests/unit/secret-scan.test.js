@@ -504,30 +504,192 @@ test('stream-redactor: two instances share no state (AC5)', () => {
   assert.equal(a.end(), '');
 });
 
-test('stream-redactor: adversarial chunk shapes stay bounded in time and memory', () => {
-  // Table B prices the adversarial cases as bounded work; these are the shapes
-  // that reach the bound without ever offering an accepted cut. The blank-line
-  // baits are the ones that matter: an ambiguous `\s*(?:SEP)?\s*` in the row S2
-  // binder, or a per-character `/\s/.test(p[j])`, turns each of them into
-  // seconds of blocking CPU inside one `push`.
-  const max = ScanLimits.STREAM_REGION_MAX;
-  const baits = [
-    `password${'\n'.repeat(max + 10)}abc\n`, // keyword, then a region of blank lines
-    '\n'.repeat(max + 10), // plain blank-line spam, as `yes ''` emits
-    '\r\n'.repeat(max), // the same with CRLF endings
-    `${'token:\n'.repeat(Math.ceil(max / 7) + 2)}`, // every line ends in an open binder
-    'a'.repeat(max * 2 + 7), // one unbroken line, two forced cuts
-    `-----BEGIN RSA PRIVATE KEY-----\n${'MIIBOgIBAAJBAKj\n'.repeat(3000)}`, // never closed
-    `"token":${'"x'.repeat(15000)}\n`, // a quoted sensitive value never closed
-  ];
-  const started = Date.now();
-  for (const bait of baits) {
+test('stream-redactor: adversarial chunk shapes cost a bounded time PER BYTE', () => {
+  // Table B prices the adversarial shapes as bounded work. The RATE is what has
+  // to be asserted, not a total: the way row S2 goes super-linear here is
+  // walking back to the keyword through the whitespace run at every newline in
+  // it instead of indexing past the run, which is quadratic IN THE RUN — so a
+  // one-region bait against a combined budget cannot see it. Each bait is
+  // therefore at least 256 KiB and is timed on its own. Confirmed non-vacuous:
+  // this test goes red against the walking row S2 this package first shipped.
+  const KIB = 1024;
+  const baits = {
+    // The shape that actually stalled: a keyword, then one enormous whitespace
+    // run. Row S2 must look back across all of it, at every newline in it.
+    'keyword + 256 KiB whitespace run': `password:${'\n'.repeat(256 * KIB)}`,
+    // Plain blank lines, as `yes ''` emits them.
+    "plain blank lines, 256 KiB (`yes ''`)": '\n'.repeat(256 * KIB),
+    'CRLF blank lines, 256 KiB': '\r\n'.repeat(128 * KIB),
+    'every line ends in an open binder, 256 KiB': 'token:\n'.repeat(Math.ceil((256 * KIB) / 7)),
+    'one unbroken line, 256 KiB': 'a'.repeat(256 * KIB),
+    'never-closed private key, 256 KiB': `-----BEGIN RSA PRIVATE KEY-----\n${'MIIBOgIBAAJBAKj\n'.repeat(17000)}`,
+    'never-closed quoted value, 256 KiB': `"token":${'"x'.repeat(128 * KIB)}`,
+  };
+  // Generous by ~20x against the slowest bait measured on this tree, so the
+  // assertion catches a return to quadratic rather than ordinary CI jitter.
+  const maxMicrosPerChar = 1;
+  for (const [name, bait] of Object.entries(baits)) {
+    assert.ok(bait.length >= 256 * KIB, `${name}: bait must be at least 256 KiB`);
+    const started = process.hrtime.bigint();
     const redactor = createStreamRedactor();
     let out = '';
     for (let i = 0; i < bait.length; i += 4096) out += redactor.push(bait.slice(i, i + 4096));
     out += redactor.end();
-    assert.ok(out.length > 0, 'a bait must still produce output');
+    const microsPerChar = Number(process.hrtime.bigint() - started) / 1e3 / bait.length;
+    assert.equal(out.length, bait.length, `${name}: every byte must come back`);
+    assert.ok(
+      microsPerChar < maxMicrosPerChar,
+      `${name}: ${microsPerChar.toFixed(3)} us/char exceeds ${maxMicrosPerChar} us/char`,
+    );
   }
-  const elapsedMs = Date.now() - started;
-  assert.ok(elapsedMs < 5000, `stream redactor too slow on adversarial input: ${elapsedMs}ms`);
+});
+
+// --- round-1 review reproductions (both were real leaks) ---
+
+test('stream-redactor: a closing quote that also opens the next sensitive key keeps the cut blocked', () => {
+  // Review finding [P1]. Resuming one character PAST the closing quote skipped
+  // an opener that begins AT that quote, so row S3 reported "nothing open", the
+  // cut landed inside `client_secret`'s value, and the value reached the log raw
+  // even though scanning the same bytes whole redacts it.
+  const parts = ['"token":"x"client_secret": "abc\n', 'defghijkl"\n'];
+  const whole = redactOnly(parts.join(''));
+  assert.ok(whole.includes('[REDACTED:client_secret]'), 'fixture must redact when scanned whole');
+  assert.ok(!whole.includes('abc\ndefghijkl'), 'fixture must not leave the value in the whole scan');
+  assert.equal(streamThrough(parts), whole, 'S3-no-open-quoted-value-at-a-cut');
+});
+
+test('stream-redactor: a completed sensitive value before the bound still offers its safe cut', () => {
+  // Review finding [P2], and the reason row S2 carries NO look-back bound.
+  // Refusing a cut is NOT fail-closed: the fallback to a refused cut is the
+  // FORCED cut, which can land inside a secret that the refused cut would have
+  // kept whole. Here the JSON value closes at offset 32749 — a safe cut — and a
+  // bounded S2 refused it, so the forced cut at STREAM_REGION_MAX split the key
+  // on the following line and returned it raw.
+  const key = 'sk-ant-api03-AAAABBBBCCCCDDDDEEEEFFFF';
+  const text = `"client_secret":"${'\n'.repeat(32730)}"\n${key}\n`;
+  const whole = redactOnly(text);
+  assert.ok(!whole.includes(key), 'fixture must redact the key when scanned whole');
+  const redactor = createStreamRedactor();
+  const out = redactor.push(text) + redactor.end();
+  assert.ok(!out.includes(key), 'the key must not reach the log in one piece');
+  assert.equal(out, whole, 'S2-no-open-key-binder-at-a-cut');
+});
+
+/** Row S2's binder applied NAIVELY — to the whole prefix, with no window and no
+ *  collapsing. Built from the detector's OWN source text so the two alternations
+ *  cannot drift apart: a rename or respelling makes the extraction fail loudly
+ *  instead of quietly narrowing the oracle. */
+function naiveRowS2Reference() {
+  const fs = require('node:fs');
+  const src = fs.readFileSync(require.resolve('../../src/core/secret-scan'), 'utf8');
+  const keys = /^const SENSITIVE_KEYS =\s*\n\s*'([^']+)';$/m.exec(src);
+  const sep = /^const SEP = \/(.*)\/\.source;$/m.exec(src);
+  assert.ok(keys, 'could not read SENSITIVE_KEYS out of the detector source');
+  assert.ok(sep, 'could not read SEP out of the detector source');
+  return {
+    binder: new RegExp(
+      `(?:${keys[1]}|authorization)["'\`]?(?:\\s*(?:${sep[1]})\\s*|\\s*)["'\`]?$`,
+      'i',
+    ),
+    jsonOpen: new RegExp(`"(?:${keys[1]})"\\s*:\\s*"`),
+  };
+}
+
+test('stream-redactor: row S2 agrees with the naive whole-prefix binder at every candidate', () => {
+  // The collapsed window and the `CUT_BINDER_LOOKBACK` truncation are claimed to
+  // be EXACT, not conservative. This is that claim under fuzz: for every
+  // candidate cut in every generated prefix, "the redactor accepted here" must
+  // equal "the naive binder finds nothing open here". Whitespace runs longer
+  // than the look-back — and longer than the 1024-character bound this package
+  // used to carry — are generated on purpose, because that is precisely where a
+  // windowed or bounded row S2 diverges from the naive one.
+  const ref = naiveRowS2Reference();
+  const PEM_OPEN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
+  let seed = 0x5eed1;
+  const rand = (n) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed % n;
+  };
+  const pick = (a) => a[rand(a.length)];
+  const keywords = [
+    'password', 'passwd', 'token', 'secret', 'client_secret', 'refresh_token',
+    'access_token', 'api_key', 'api-key', 'apikey', 'credentials', 'credential',
+    'bearer', 'authorization', 'aws_secret_access_key', 'TOKEN', 'Password',
+  ];
+  const seps = [':', '=', '>', '=>', '?=', ':=', '::=', ':::='];
+  const quotes = ['"', "'", '`'];
+  const fillers = ['ab', 'xyz', 'log', '7', 'q9', 'msg', 'id', 'ok'];
+  // Weighted toward line breaks: every `\n` in a text is another candidate cut,
+  // and a long run of them is the case the window has to get right.
+  const wsUnits = [' ', '\t', '\n', '\n', '\n', '\r\n', '\r\n'];
+  const whitespaceRun = () => {
+    const roll = rand(100);
+    // 1100 clears the retired 1024-character bound; 200 clears the look-back.
+    const n = roll < 4 ? 1100 + rand(200) : roll < 12 ? 200 + rand(60) : 1 + rand(4);
+    return pick(wsUnits).repeat(n);
+  };
+  const token = () => {
+    switch (rand(5)) {
+      case 0: return pick(keywords);
+      case 1: return pick(seps);
+      case 2: return pick(quotes);
+      case 3: return pick(fillers);
+      default: return whitespaceRun();
+    }
+  };
+
+  // Fed one character at a time, the redactor tests exactly one new candidate
+  // per `push` (everything below is already on the rejected watermark) and so
+  // closes at most one region per `push`. That makes the cut offsets directly
+  // observable, and each one is a separate verdict to check — comparing only
+  // the total consumed would miss a wrong verdict that another cut compensates
+  // for, which is how a bounded row S2 hides.
+  const naiveCuts = (text) => {
+    const cuts = [];
+    let base = 0;
+    for (let i = 1; i <= text.length; i += 1) {
+      if (text.charCodeAt(i - 1) !== 10 || i <= base) continue;
+      // Row S2 is a statement about the BUFFERED prefix, so that is what the
+      // naive binder is applied to — whole, with no window and no collapsing.
+      if (!ref.binder.test(text.slice(base, i))) {
+        cuts.push(i);
+        base = i;
+      }
+    }
+    return cuts;
+  };
+
+  let prefixes = 0;
+  let texts = 0;
+  let longRuns = 0;
+  for (let attempt = 0; attempt < 4000 && prefixes < 6000; attempt += 1) {
+    let text = '';
+    for (let n = 6 + rand(14); n > 0; n -= 1) text += token();
+    text += '\n';
+    // Rows S1 and S2 alone must decide the cut, and a region's emitted length
+    // must equal its input length: so no open quoted value, no private key, and
+    // nothing the detector redacts.
+    if (ref.jsonOpen.test(text) || PEM_OPEN.test(text)) continue;
+    if (redactOnly(text) !== text) continue;
+    texts += 1;
+    if (/\s{1025,}/.test(text)) longRuns += 1;
+    const redactor = createStreamRedactor();
+    const observed = [];
+    let consumed = 0;
+    for (let i = 0; i < text.length; i += 1) {
+      const out = redactor.push(text[i]);
+      if (out.length > 0) {
+        consumed += out.length;
+        observed.push(consumed);
+      }
+      if (text.charCodeAt(i) === 10) prefixes += 1;
+    }
+    assert.deepEqual(
+      observed,
+      naiveCuts(text),
+      `row S2 disagreed with the naive binder somewhere in ${JSON.stringify(text)}`,
+    );
+  }
+  assert.ok(prefixes >= 5000, `fuzz corpus too small: ${prefixes} prefixes over ${texts} texts`);
+  assert.ok(longRuns > 0, 'corpus must contain whitespace runs past the retired 1024 bound');
 });
