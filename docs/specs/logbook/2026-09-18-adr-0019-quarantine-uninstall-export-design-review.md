@@ -362,5 +362,52 @@ step later.** The `dir` kind is the single exemption and it is provable.
 **Declaration count after round 13:** seventeen declarations over eleven criteria;
 ten have a pre-measurable anchor, seven mutate code this package authors.
 
-**One confirming round remains.** The gate closes on a clean or LIGHT-only return
+## Round 14 — Astra, 2026-09-18
+
+- **Reviewed tip:** `6ddae885`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r14-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r14-astra-focus.txt`
+- **Committed before adjudication at:** `e33c9666`
+- **Verdict:** `needs-attention` — *"recursive cleanup can still break a shelf's
+  resolution chain and destroy its originals on the second sweep."*
+- **Held from round 13:** **X20** was **not** re-opened. The finding is a
+  **definition gap**, not a new site.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R14-1** | **Protect intermediate links from recursive ancestor deletion.** Table X row **X18** checked deletion targets against the shelf **anchors**, but not against the **LOCATIONS** of intermediate links on the chain. With `<state>/quarantine` → `<state>/cache/link` → `<core>/logs/recovery` holding an original, step 2 may recursively delete `<state>/cache`: it overlaps **neither** the lexical shelf **nor** its resolved target. That removes the intermediate link. The **first** sweep still protects `logs` from its cached anchors; the **second** rebuilds anchors through the now-dangling shelf, no longer protects `logs`, and deletes the original. Reproduced against a model of the prescribed checks. **X20**'s symlink-entry guard does not cover recursive deletion of the link's *parent* | A | HEAVY (high, conf. 0.98) | **ACCEPTED IN FULL, and fixed ONCE as a definition rather than per site** — **X17 (1a)**: the **PROTECTED SET is the closure of each shelf's resolution chain**, walked **component by component** with `lstat`/`readlink`, comprising **each link's own LOCATION**, **each intermediate target**, and **the final resolved target**. **X16**, **X18**, **X19** and **X20** all test against that **set**, so a recursive deleter preserves any directory that **contains a chain link**, not merely one that overlaps an anchor. **Acceptance criterion 1** gains the two-hop arm across **both** disposer calls **and a retry**, asserting the **intermediate link first**, then `cache`, then the bytes — the order in which the failure cascades, and the reason asserting only the bytes on the first call passes against the defect. New RED proof **`quse-protected-set-is-anchors-only`**: **under it the first call still passes**, so the declaration is what forces the two-call fixture and is the only one that distinguishes *"the anchors were right"* from *"the closure was computed"* |
+
+## Bounding the alias family (round 14) — the surface is frozen
+
+Rounds 11, 12, 13 and 14 each produced **one more alias shape**, and
+`docs/runbooks/codex-review.md`'s convergence rule is that the loop converges
+**by freezing surface, not by patience**. New **Table X row X21** does that:
+
+- **IN SCOPE:** links, at any depth, inside the **resolved chain closure of a
+  shelf as computed at protected-set-computation time** (**X17 (1a)**).
+- **OUT OF SCOPE — named residual `R-alias-outside-closure`:** any alias shape not
+  on a shelf's chain at that moment — concretely, **a link created after the
+  protected set is computed that redirects a chain component**.
+- **Why accepted:** the shelves are `0700` under a `0700` core owned by the user
+  running the uninstall, so such a link is **the same user's own act on their own
+  files** — the boundary ADR-0035 and ADR-0034 already draw. **Closing it needs a
+  filesystem transaction no platform offers** (atomicity of the protected-set
+  computation with respect to concurrent renames and symlink creation), and the
+  resident process that could hold a lock is forbidden by ADR-0004. Every
+  alternative enumerates the adversary's options, which this repo has twice paid
+  for.
+- **Overrule path — owner item 4**, drafted with its cost: refuse the uninstall
+  whenever **any** symlink exists anywhere under `<core>`. **An ordinary install
+  with a symlinked vault or app directory — a supported layout — could then not
+  uninstall at all.** Recommendation: **no**.
+
+**Binding on later rounds: a further alias finding that falls inside the
+residual's definition is CLOSED BY CITING THE RESIDUAL, not by a fifteenth
+revision of the deletion contracts.**
+
+**Declaration count after round 14:** eighteen declarations over eleven criteria;
+ten have a pre-measurable anchor, eight mutate code this package authors.
+
+**One confirming round remains.** The gate closes on a clean return, a LIGHT-only
+return, **or a finding that falls inside `R-alias-outside-closure`**
 (`docs/runbooks/codex-review.md`, "Weighted closure").
