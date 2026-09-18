@@ -389,7 +389,65 @@ carve-out, and stated that a site which cannot follow the rules becomes a **name
 residual, never a new exception**. Round 8 is the first finding to take that
 branch, and it took it without adding a predicate, a condition or a code path.
 
-## Round 9
+## Round 9 (Astra)
+
+- **Reviewed tip:** `131189d6` (round-8 R9 and the narrowed amendment applied).
+- **Raw + focus committed BEFORE adjudication:** `9a32963b`.
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r9-astra-raw.json`
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r9-astra-focus.txt`
+- **Verdict:** `needs-attention` — *"the act-time absence exception can still
+  leave registered jobs pointing at a deleted core."*
+- **R9, the narrowed amendment and D3 held.** The finding is the **absence**
+  exception — the one special case D15 kept at every site.
+
+### Disposition
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| 13 | **A vanished file does not prove the registration vanished.** D6 dropped a disclosed candidate on `ENOENT`/`ENOTDIR` and continued teardown. A disclosed, unrecorded `wienerdog-dream.xml` deleted during the confirmation prompt therefore got **no unload**, while the registered Windows task survived — registration stores the command in the Task Scheduler database, the XML being only the import source (`schedule.js:416`, `schtasks /create … /xml <path> /f`). The core is then removed around a registered task. **No spawn was attempted, so `R-failed-unload` does not cover it** | A | HEAVY | **ACCEPTED, and fixed by removing the dependency rather than by aborting.** The raw recommendation was to *"stop core teardown with recovery metadata retained"*; that was **not** adopted, because it adds an abort site and leaves the unload conditioned on file state. Instead **phase D5a performs no filesystem check at all**: its input is the disclosed list, its argv is re-derived purely from `path.basename` by `deriveUnloadArgv` (verified: zero `fs.` uses in its body), and it unloads **every disclosed item unconditionally**. The act-time re-check moves entirely to **phase D5b**, where it governs **removal** only, with absence = nothing to remove |
+
+### Why the file was never the right precondition — per platform
+
+- **win32** — the XML is an *import source*; `schtasks /create /tn <task> /xml
+  <path> /f` (`schedule.js:416`) copies it into the Task Scheduler store. Delete
+  the XML and the task stays registered. This is the case the gate executed.
+- **launchd** — a booted job remains loaded in the domain until it is booted out
+  or the session ends, plist present or not.
+- **systemd** — enablement is a symlink in `timers.target.wants/` plus the
+  manager's loaded state; the unit file is neither. (`disable --now` against a
+  missing unit file exits non-zero, which **D13** already covers as discarded.)
+
+### The consent argument, re-derived
+
+It holds, and it is now stated in two halves rather than one: for the **unload**
+the acted set **equals** the disclosed set exactly — D5a acts on the disclosed
+list and nothing else, in either direction; for the **removal** the acted set is
+a **subset**, because D5b can only skip. Nothing outside the disclosed list is
+ever unloaded or deleted.
+
+### This removed an exception; it did not add one
+
+D15 previously carried absence as a special case **at every site**, including at
+act time where it could skip an unload. After round 9 the unload site resolves
+nothing, so absence cannot arise there at all; absence survives only where it is
+tautological — you cannot remove a file that is not there. **D15 now has exactly
+one abort site, D9, in discovery.** Round 7 removed the "can only preserve"
+carve-out for unloads; round 9 removes the last way an unload could be skipped,
+which is what makes D5b's skip safe for a genuinely different reason than the one
+round 7 falsified: a skip there forgoes a *deletion*, never an *unload*. Where
+that leftover is a launchd plist it is Table R row **R9**'s class, and D5b prints
+R9's plain-language warning at that moment.
+
+### Convergence note, extended
+
+Round 3 froze the shape, round 6 the resolution semantics, round 7 the last
+carve-out inside them, round 8 exercised the named-residual branch — and **round
+9 adds the sharpest invariant of the set: the unload phase is filesystem-free.**
+What gets unloaded is fixed at disclosure and cannot be changed by any file
+state, race, permission or error afterwards. A finding that proposes conditioning
+an unload on something observable on disk is answered by pointing here.
+
+## Round 10
 
 Pending. Per the coordinator's standing instruction, a clean or LIGHT-only round
 closes the gate.
