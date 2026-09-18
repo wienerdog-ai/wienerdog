@@ -482,7 +482,7 @@ const INFORMATIONAL_SENTENCE_OPENER = 'session transcript(s) are being skipped a
 test('ledger: the decay constants are exported — a 7-day window and the informational reason set', () => {
   assert.equal(ledgerLib.QUARANTINE_BANNER_WINDOW_MS, WINDOW);
   assert.equal(ledgerLib.QUARANTINE_BANNER_WINDOW_MS, 604800000);
-  assert.deepEqual([...ledgerLib.INFORMATIONAL_QUARANTINE_REASONS].sort(), ['over-ceiling', 'read-error', 'too-many-lines']);
+  assert.deepEqual([...ledgerLib.INFORMATIONAL_QUARANTINE_REASONS].sort(), ['over-ceiling', 'parse-threw', 'read-error', 'too-many-lines']);
   // The exhausted reason is ACTIONABLE and must never be classified as one that
   // may decay — the whole partition rests on this.
   assert.ok(!ledgerLib.INFORMATIONAL_QUARANTINE_REASONS.includes(ledgerLib.SECRET_REVERT_EXHAUSTED_REASON));
@@ -552,6 +552,26 @@ test('ledger: while ONE record is fresh the sentence renders, and <N> counts the
     ['new.jsonl', 'over-ceiling', ANCIENT]
   );
   assert.equal(ledgerLib.quarantineBannerLine(allStale, { now: NOW }), '');
+});
+
+// WP-dream-collect-parse-throw-quarantine, Table A row A3: the new intake
+// quarantine reason decays with its three siblings, and an unrecognized reason
+// still never decays. Observed through `quarantineBannerLine`, the exported
+// surface — `hasFreshInformationalQuarantine` is module-private.
+test('ledger: parse-threw decays exactly as read-error does, and an unrecognized reason still does not', () => {
+  /** @param {string} reason @param {number} ms @returns {string} */
+  const at = (reason, ms) => ledgerLib.quarantineBannerLine(quarantined(['a.jsonl', reason, iso(ms)]), { now: NOW });
+  const DAY = 24 * 60 * 60 * 1000;
+  for (const reason of ['parse-threw', 'read-error']) {
+    assert.ok(at(reason, NOW).includes(INFORMATIONAL_SENTENCE_OPENER), `${reason} renders at day 0`);
+    assert.equal(at(reason, NOW - 8 * DAY), '', `${reason} has retired by day 8`);
+  }
+  assert.equal(at('parse-threw', NOW - 8 * DAY), at('read-error', NOW - 8 * DAY), 'parse-threw matches read-error exactly');
+  // Membership is what buys the decay: a reason outside the set still fails loud.
+  assert.ok(
+    at('a-reason-from-the-future', NOW - 8 * DAY).includes(INFORMATIONAL_SENTENCE_OPENER),
+    'an unrecognized reason never decays'
+  );
 });
 
 test('ledger: the freshness boundary is exact on BOTH sides of 7 days', () => {

@@ -90,6 +90,7 @@ test('dream-warnings: every reason class renders under its own heading, in the f
     '/x/p/nonstring.jsonl': ['quarantined', { evil: true }, '5:1:1:1'],
     '/x/p/spent.jsonl': ['quarantined', 'secret-revert-exhausted', '5:1:1:1'],
     '/x/p/unreadable.jsonl': ['quarantined', 'read-error', '5:1:1:1'],
+    '/x/p/crafted.jsonl': ['quarantined', 'parse-threw', '5:1:1:1'],
     '/x/p/lines.jsonl': ['quarantined', 'too-many-lines', '5:1:1:1'],
     '/x/p/huge.jsonl': ['quarantined', 'over-ceiling', '52428800:1:1:1'],
     // Non-quarantine outcomes are never members.
@@ -120,6 +121,10 @@ test('dream-warnings: every reason class renders under its own heading, in the f
       '',
       '- unreadable.jsonl',
       '',
+      '### Something in the session file stopped Wienerdog from reading it — 1',
+      '',
+      '- crafted.jsonl',
+      '',
       '### The notes made from these sessions were withheld by the secret check too many times in a row — 1',
       '',
       'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.',
@@ -131,6 +136,31 @@ test('dream-warnings: every reason class renders under its own heading, in the f
       '- none.jsonl',
       '- nonstring.jsonl',
       '- weird.jsonl',
+      '',
+    ].join('\n')
+  );
+});
+
+// WP-dream-collect-parse-throw-quarantine, Table A row A4: the whole document
+// for a ledger whose only quarantine is one `parse-threw` record, byte for byte.
+test('dream-warnings: a lone parse-threw record renders the whole document byte for byte', () => {
+  const ledger = ledgerOf({
+    '/x/p/rollout-2026-01-01T00-00-00-abc.jsonl': ['quarantined', 'parse-threw', '5:1:1:1'],
+  });
+  assert.equal(
+    render(ledger),
+    [
+      '# Wienerdog warnings',
+      '',
+      'Wienerdog writes this file itself, from its own record of which session',
+      'transcripts it could not read. Do not edit it — it is rewritten whenever the list',
+      'below changes.',
+      '',
+      '## Current conditions',
+      '',
+      '### Something in the session file stopped Wienerdog from reading it — 1',
+      '',
+      '- rollout-2026-01-01t00-00-00-abc.jsonl',
       '',
     ].join('\n')
   );

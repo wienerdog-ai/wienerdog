@@ -35,10 +35,16 @@ const SECRET_REVERT_MAX_DEFERRALS = 3;
  *  than re-deciding it. `read-error` is here by owner decision, 2026-08-29: a
  *  genuinely actionable read failure still surfaces through the durable
  *  pull-based surfaces, which never decay.
+ *  `parse-threw` is here for the same reason plus one of its own: a third party
+ *  can cause one crafted session file to be written, and leaving that reason out
+ *  would hand them a warning pinned into the digest forever — exactly the
+ *  banner-blindness Amendment 2 was written to stop. After night one the
+ *  condition is standing state, not news: the dream keeps working over every
+ *  other session, and reports/warnings.md and `wienerdog doctor` never decay.
  *  A reason OUTSIDE this set and outside SECRET_REVERT_EXHAUSTED_REASON is
  *  UNRECOGNIZED: still counted, and never decayed — fail loud, so a future
  *  reason class cannot be retired by old code that assumed it was harmless. */
-const INFORMATIONAL_QUARANTINE_REASONS = Object.freeze(['over-ceiling', 'too-many-lines', 'read-error']);
+const INFORMATIONAL_QUARANTINE_REASONS = Object.freeze(['over-ceiling', 'too-many-lines', 'read-error', 'parse-threw']);
 
 /** How long after a record's `updated_at` the informational quarantine sentence
  *  keeps rendering: 7 days (owner decision, 2026-08-29: 7 over 14). Past it the
@@ -90,6 +96,7 @@ function ledgerPath(stateDir) {
  *            files: Record<string, {fingerprint:string,
  *                                   outcome:'processed'|'quarantined'|'deferred',
  *                                   reason?:'over-ceiling'|'too-many-lines'|'read-error'|
+ *                                           'parse-threw'|
  *                                           'secret-revert'|'secret-revert-exhausted',
  *                                   deferrals?:number,
  *                                   updated_at:string, harness:'claude'|'codex'}>,
