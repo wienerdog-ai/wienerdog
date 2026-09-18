@@ -1,7 +1,7 @@
 ---
 id: WP-ep2-n2-rehome
 title: Re-home Table N row N2 and every registered mirror onto the real prune call site
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: []
