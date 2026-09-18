@@ -1179,3 +1179,312 @@ test('the probe type contract, LIVE payloads: absent/empty stays LIVE, malformed
   assert.match(named.message, /ai\.wienerdog\.dream, ai\.wienerdog\.catchup/);
   assert.deepEqual(snapshot(core), before, 'nothing was deleted');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WP-scheduler-replay-manifest-independent — `uninstall` replays the scheduler
+// from the schedule FILES in this install's own roots, not from the ledger alone.
+//
+// Every test below carries a UNIQUE SIGNAL TOKEN in each of its assertion
+// messages, so the ADR-0042 red-proof declarations can tie a mutation to the
+// assertion that catches it (`tests/red-proofs/scheduler-replay-manifest-independent.proofs.json`).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const generatorsMod = require('../../src/scheduler/generators');
+
+/** Plant `names` in `dir` and return their absolute paths. */
+function plantSchedules(dir, names) {
+  fs.mkdirSync(dir, { recursive: true });
+  return names.map((n) => {
+    const p = path.join(dir, n);
+    fs.writeFileSync(p, 'x');
+    return p;
+  });
+}
+
+/** An install fixture whose manifest we can rewrite by hand. */
+function schedInstall() {
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const la = path.join(root, 'Library', 'LaunchAgents');
+  fs.mkdirSync(la, { recursive: true });
+  const addEntries = (entries) => {
+    const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    m.entries.push(...entries);
+    fs.writeFileSync(manifestPath, JSON.stringify(m, null, 2));
+  };
+  return { root, core, env, manifestPath, la, addEntries };
+}
+
+/**
+ * Drive the in-process `uninstall` with the scheduler mutation chokepoint
+ * replaced by a counting stub and `console.log` captured. Authority is ABSENT and
+ * an injected CLEAN probe grants clearance, so nothing here can reach a real
+ * scheduler domain. @param {NodeJS.ProcessEnv} env @param {string[]} argv
+ * @param {{platform?:NodeJS.Platform}} [inject]
+ */
+async function uninstallInProcess(env, argv, inject = {}) {
+  const spawnMod = require('../../src/scheduler/spawn');
+  const { run: runUninstall } = require('../../src/cli/uninstall');
+  const origSpawn = spawnMod.schedulerSpawn;
+  const origDerive = generatorsMod.deriveUnloadArgv;
+  const origLog = console.log;
+  /** @type {string[][]} */ const calls = [];
+  /** @type {string[]} */ const lines = [];
+  spawnMod.schedulerSpawn = (a) => { calls.push(a); return { status: 0 }; };
+  // The Platform-scope table's injection: derive for the named platform on this
+  // host, without ever mocking `process.platform`.
+  if (inject.platform) generatorsMod.deriveUnloadArgv = (p) => origDerive(p, inject.platform);
+  console.log = (...args) => { lines.push(args.map(String).join(' ')); };
+  /** @type {any} */ let err = null;
+  try {
+    await withProcessEnv(env, async () => {
+      try {
+        await runUninstall(argv, { probe: cleanProbe() });
+      } catch (e) {
+        err = e;
+      }
+    });
+  } finally {
+    spawnMod.schedulerSpawn = origSpawn;
+    generatorsMod.deriveUnloadArgv = origDerive;
+    console.log = origLog;
+  }
+  return { calls, out: lines.join('\n'), err };
+}
+
+/** Make `fs.realpathSync` throw `code` for exactly `target`. */
+function withRealpathFault(target, code, fn) {
+  const orig = fs.realpathSync;
+  /** @type {any} */
+  const patched = (p, ...rest) => {
+    if (p === target) {
+      const e = new Error(`injected ${code}`);
+      /** @type {any} */ (e).code = code;
+      throw e;
+    }
+    return orig(p, ...rest);
+  };
+  patched.native = orig.native;
+  fs.realpathSync = patched;
+  try {
+    return fn();
+  } finally {
+    fs.realpathSync = orig;
+  }
+}
+
+const bootout = (label) => ['launchctl', 'bootout', `gui/${process.getuid()}/${label}`];
+
+test('WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-1-orphan-unloaded-and-disposed';
+  const { core, env, la } = schedInstall();
+  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+  const { calls, err } = await uninstallInProcess(env, ['--yes']);
+  assert.equal(err, null, `${S}: the uninstall completed — ${err && err.message}`);
+  assert.deepEqual(calls, [bootout('ai.wienerdog.orphan')], `${S}: the re-derived argv reached the chokepoint`);
+  assert.equal(fs.existsSync(orphan), false, `${S}: the orphaned schedule file is gone`);
+  assert.equal(fs.existsSync(core), false, `${S}: the uninstall itself still completed`);
+});
+
+test('WP-scheduler-replay AC3: the disk-derived block is disclosed BEFORE consent, and again in --dry-run', (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-3-disclosed-before-consent';
+  const { env, la } = schedInstall();
+  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+
+  // Answering "n" at the prompt: the plan must already name the file.
+  const declined = (() => {
+    try {
+      return execFileSync('node', [bin, 'uninstall'], { env, encoding: 'utf8', input: 'n\n' });
+    } catch (e) {
+      return `${e.stdout || ''}${e.stderr || ''}`;
+    }
+  })();
+  assert.ok(declined.includes('Scheduled jobs found on disk:'), `${S}: the plan carries the labeled block — ${declined}`);
+  assert.ok(declined.includes(`would run: ${bootout('ai.wienerdog.orphan').join(' ')}`), `${S}: the plan discloses the re-derived command`);
+  assert.ok(declined.includes(`remove ${orphan}`), `${S}: the plan discloses the deletion`);
+  assert.ok(declined.indexOf('Planned actions:') < declined.indexOf('Scheduled jobs found on disk:'),
+    `${S}: the block follows the manifest-derived lines in the same pre-consent plan`);
+  assert.equal(fs.existsSync(orphan), true, `${S}: declining deletes nothing`);
+
+  const dry = run(['uninstall', '--dry-run'], env);
+  assert.equal(dry.status, 0, `${S}: --dry-run exits 0 — ${dry.stderr}`);
+  assert.ok(dry.stdout.includes('Scheduled jobs found on disk:'), `${S}: --dry-run carries the same block`);
+  assert.ok(dry.stdout.includes(`would run: ${bootout('ai.wienerdog.orphan').join(' ')}`), `${S}: --dry-run discloses the command`);
+  assert.equal(fs.existsSync(orphan), true, `${S}: --dry-run deletes nothing`);
+});
+
+test('WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-2-loose-basename-is-not-evidence';
+  const { env, la } = schedInstall();
+  const [loose, spaced, real] = plantSchedules(la, ['ai.wienerdog...plist', 'ai.wienerdog. .plist', 'ai.wienerdog.orphan.plist']);
+  assert.equal(
+    require('../../src/core/manifest').withinSchedulerRoot(loose, [la]), true,
+    `${S}: the loose gate really does accept it, so the strict rule is what is under test`
+  );
+  const { calls, err } = await uninstallInProcess(env, ['--yes']);
+  assert.equal(err, null, `${S}: the uninstall completed — ${err && err.message}`);
+  assert.deepEqual(calls, [bootout('ai.wienerdog.orphan')], `${S}: only the R2-recognized file reached the chokepoint`);
+  assert.equal(fs.existsSync(loose), true, `${S}: the dot-only basename survives`);
+  assert.equal(fs.existsSync(spaced), true, `${S}: the space-bearing basename survives`);
+  assert.equal(fs.existsSync(real), false, `${S}: the control file WAS acted on`);
+});
+
+test('WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-3b-act-time-recheck-narrows-removal-only';
+  const { core, env, la } = schedInstall();
+  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+  // The fault is armed only once discovery has already resolved this path, so
+  // the item is disclosed and then fails phase D5b's re-check.
+  let seen = 0;
+  const origRealpath = fs.realpathSync;
+  /** @type {any} */
+  const patched = (p, ...rest) => {
+    if (p === orphan) {
+      seen += 1;
+      if (seen > 1) {
+        const e = new Error('injected EIO');
+        /** @type {any} */ (e).code = 'EIO';
+        throw e;
+      }
+    }
+    return origRealpath(p, ...rest);
+  };
+  patched.native = origRealpath.native;
+  fs.realpathSync = patched;
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.realpathSync = origRealpath;
+  }
+  assert.equal(res.err, null, `${S}: a skipped REMOVAL never aborts the run — ${res.err && res.err.message}`);
+  assert.deepEqual(res.calls, [bootout('ai.wienerdog.orphan')], `${S}: the unload had already happened, unconditionally`);
+  assert.equal(fs.existsSync(orphan), true, `${S}: the file is kept rather than deleted on an unresolvable re-check`);
+  assert.equal(fs.existsSync(core), false, `${S}: the rest of the uninstall completed`);
+});
+
+test('WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-4-disposition-unload-and-remove';
+  const manifestLib = require('../../src/core/manifest');
+  const { env, la } = schedInstall();
+  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+  const { calls, err } = await uninstallInProcess(env, ['--yes']);
+  assert.equal(err, null, `${S}: the uninstall completed — ${err && err.message}`);
+  assert.equal(manifestLib.DISCOVERED_DISPOSITION, 'unload-and-remove', `${S}: Table R row R4's cell as shipped`);
+  assert.equal(calls.length, 1, `${S}: it was unloaded`);
+  assert.equal(fs.existsSync(orphan), false, `${S}: under unload-and-remove the file is GONE; the unload-only arm does NOT occur`);
+});
+
+test('WP-scheduler-replay AC9: an unreadable scheduler root aborts a real uninstall and only warns in --dry-run', async (t) => {
+  const asRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+  if (process.platform !== 'darwin' || asRoot) return t.skip('needs a non-root darwin host');
+  const S = 'SRM-9-unreadable-root-aborts';
+  const { core, env, la } = schedInstall();
+  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+  fs.chmodSync(la, 0o000);
+  let res;
+  let dry;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+    dry = run(['uninstall', '--dry-run'], env);
+  } finally {
+    fs.chmodSync(la, 0o755);
+  }
+  assert.ok(res.err, `${S}: a root that cannot be read is not an empty root`);
+  assert.ok(res.err.message.includes(la), `${S}: the refusal names the directory — ${res.err.message}`);
+  assert.match(res.err.message, /EACCES|EPERM/, `${S}: and its code`);
+  assert.equal(res.calls.length, 0, `${S}: nothing was unloaded`);
+  assert.equal(fs.existsSync(core), true, `${S}: nothing was removed`);
+  assert.equal(fs.existsSync(orphan), true, `${S}: the schedule file is still present`);
+  assert.equal(dry.status, 0, `${S}: --dry-run does not abort — ${dry.stderr}`);
+  assert.ok(dry.stdout.includes(la), `${S}: --dry-run reports the unreadable root`);
+});
+
+test('WP-scheduler-replay AC17: a root that cannot be CANONICALIZED aborts with zero removals and zero chokepoint calls', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-17-resolution-failure-is-not-external';
+  const { core, env, la } = schedInstall();
+  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+  const res = await withRealpathFault(la, 'EACCES', () => uninstallInProcess(env, ['--yes']));
+  assert.ok(res.err, `${S}: an unresolvable root is unreadable, never "not contained"`);
+  assert.ok(res.err.message.includes(la), `${S}: the refusal names the root — ${res.err.message}`);
+  assert.ok(res.err.message.includes('EACCES'), `${S}: and its code`);
+  assert.equal(res.calls.length, 0, `${S}: zero chokepoint calls`);
+  assert.equal(fs.existsSync(core), true, `${S}: zero files removed`);
+  assert.equal(fs.existsSync(orphan), true, `${S}: the schedule file survives the refusal`);
+});
+
+test('WP-scheduler-replay AC11: a user file inside a vault at <core>/schedules survives the widened pass', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-11-vault-resident-candidate-survives';
+  const { core, env } = schedInstall();
+  const vault = path.join(core, 'schedules');
+  const [notes] = plantSchedules(vault, ['wienerdog-notes.xml']);
+  fs.writeFileSync(path.join(core, 'config.yaml'), `version: 1\nvault: ${vault}\n`);
+  const { calls, err } = await uninstallInProcess(env, ['--yes']);
+  assert.equal(err, null, `${S}: the uninstall completed — ${err && err.message}`);
+  assert.equal(calls.length, 0, `${S}: a vault-resident candidate is never unloaded`);
+  assert.equal(fs.existsSync(notes), true, `${S}: and the user's file is still on disk after the run`);
+});
+
+test('WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('the fixture plants POSIX paths');
+  const S = 'SRM-12-unload-precedes-the-entry-loop';
+  const { core, env, addEntries } = schedInstall();
+  const [xml] = plantSchedules(path.join(core, 'schedules'), ['wienerdog-dream.xml']);
+  addEntries([{ kind: 'file', path: xml }]); // deletable: <core>/schedules is an allowed root
+  const { calls, err } = await uninstallInProcess(env, ['--yes'], { platform: 'win32' });
+  assert.equal(err, null, `${S}: the uninstall completed — ${err && err.message}`);
+  assert.deepEqual(calls, [['schtasks', '/delete', '/tn', '\\Wienerdog\\dream', '/f']],
+    `${S}: the unload reached the chokepoint even though the file reverser destroyed its evidence`);
+  assert.equal(fs.existsSync(xml), false, `${S}: the file record removed the file, as it always did`);
+});
+
+test('WP-scheduler-replay AC13: no manifest record of any shape prevents an unload', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-13-no-record-suppresses-an-unload';
+  const { core, env, la, addEntries } = schedInstall();
+  const [otherKind] = plantSchedules(la, ['ai.wienerdog.digest.plist']);
+  const [target] = plantSchedules(path.join(core, 'schedules'), ['wienerdog-dream.xml']);
+  const alias = path.join(core, 'schedules', 'wienerdog-alias.xml');
+  fs.symlinkSync(target, alias);
+  addEntries([
+    { kind: 'file', path: otherKind },            // a record of ANOTHER kind
+    { kind: 'scheduler-entry', path: alias },     // an in-root symlink alias
+    { kind: 'file', path: target },               // …whose evidence a LATER record deletes
+  ]);
+  const { calls, err } = await uninstallInProcess(env, ['--yes']);
+  assert.equal(err, null, `${S}: the uninstall completed — ${err && err.message}`);
+  const flat = calls.map((c) => c.join(' '));
+  assert.ok(flat.includes(bootout('ai.wienerdog.digest').join(' ')),
+    `${S}: a record of another kind never suppressed the unload — ${JSON.stringify(flat)}`);
+  assert.equal(fs.existsSync(otherKind), true, `${S}: and D11 still withheld its deletion`);
+});
+
+test('WP-scheduler-replay AC15/AC16: an XDG root outside this run\'s HOME contributes nothing; the same files inside it are discovered', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('the systemd arm is fixture-only off linux');
+  const S = 'SRM-15-external-xdg-root-is-not-a-discovery-root';
+  const { root, core, env } = schedInstall();
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-xdg-external-'));
+  const [externalTimer] = plantSchedules(path.join(external, 'systemd', 'user'), ['wienerdog-dream.timer']);
+  const outsideEnv = { ...env, XDG_CONFIG_HOME: external };
+  const outside = await uninstallInProcess(outsideEnv, ['--dry-run']);
+  assert.equal(outside.err, null, `${S}: --dry-run completed — ${outside.err && outside.err.message}`);
+  assert.ok(!outside.out.includes(externalTimer), `${S}: the external root appears in no disclosed plan`);
+  assert.equal(outside.calls.length, 0, `${S}: and produces no chokepoint call`);
+  assert.equal(fs.existsSync(externalTimer), true, `${S}: the developer's own timer is untouched`);
+
+  // The same file under an XDG root INSIDE the run's HOME IS discovered, so this
+  // measures the containment rule rather than "discovery found nothing".
+  const [insideTimer] = plantSchedules(path.join(root, '.config', 'systemd', 'user'), ['wienerdog-dream.timer']);
+  assert.ok(env.XDG_CONFIG_HOME.startsWith(root), `${S}: criterion 16 — the suite's own XDG_CONFIG_HOME resolves under its root`);
+  const inside = await uninstallInProcess(env, ['--dry-run']);
+  assert.ok(inside.out.includes(insideTimer), `${S}: an in-home XDG root IS a discovery root — ${inside.out}`);
+  assert.equal(fs.existsSync(core), true, `${S}: --dry-run removed nothing`);
+});

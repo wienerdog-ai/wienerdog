@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-replay-manifest-independent
 title: Derive uninstall's scheduler reversal from the schedule files on disk, not from the manifest alone
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-scheduler-mutation-home-authority]
