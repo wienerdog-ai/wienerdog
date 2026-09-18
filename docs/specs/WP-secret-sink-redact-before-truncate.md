@@ -1,7 +1,7 @@
 ---
 id: WP-secret-sink-redact-before-truncate
 title: Scan the whole field value before the 2000-character cap at the three truncate-then-redact sinks
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-secret-sink-wiring-probes]
