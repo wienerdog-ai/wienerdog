@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 08de2bc335baa4a97bba2f33bca224f2f3a28517",
+    "baseRef": "08de2bc335baa4a97bba2f33bca224f2f3a28517",
+    "explicit": true
+  },
+  "threadId": "01a0b47b-c507-7052-878d-f9db1e16edf1",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-succ-r1",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 08de2bc335baa4a97bba2f33bca224f2f3a28517 from merge-base 08de2bc335baa4a97bba2f33bca224f2f3a28517."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"The parser hardening lacks recovery for transcripts already quarantined by the defect it fixes.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Provide a bounded retry for existing parse-threw quarantines\",\n      \"body\": \"The spec preserves ledger behavior without providing an upgrade recovery path. `ledger.selectState()` skips unchanged quarantined files, and `collectExtracts()` applies that decision before parsing. I applied the four proposed filters in memory: the poisoned-text fixture then parsed successfully, but its pre-upgrade quarantine still returned `skip-quarantined`. Consequently, completed sessions affected before the upgrade remain excluded indefinitely unless their files change; the hardened parser never sees them.\",\n      \"file\": \"docs/specs/WP-transcript-parsers-harden-text-values.md\",\n      \"line_start\": 678,\n      \"line_end\": 680,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Specify a bounded recovery mechanism, such as a one-time retry of existing parse-threw quarantines for this parser revision, and expand the deliverables or require a companion migration. Add an upgrade test starting with an unchanged quarantined transcript; preserve unrelated quarantine reasons and re-quarantine inputs that still fail.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Define and test recovery from pre-upgrade parse-threw records before dispatching the parser work package.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "The parser hardening lacks recovery for transcripts already quarantined by the defect it fixes.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Provide a bounded retry for existing parse-threw quarantines",
+        "body": "The spec preserves ledger behavior without providing an upgrade recovery path. `ledger.selectState()` skips unchanged quarantined files, and `collectExtracts()` applies that decision before parsing. I applied the four proposed filters in memory: the poisoned-text fixture then parsed successfully, but its pre-upgrade quarantine still returned `skip-quarantined`. Consequently, completed sessions affected before the upgrade remain excluded indefinitely unless their files change; the hardened parser never sees them.",
+        "file": "docs/specs/WP-transcript-parsers-harden-text-values.md",
+        "line_start": 678,
+        "line_end": 680,
+        "confidence": 0.99,
+        "recommendation": "Specify a bounded recovery mechanism, such as a one-time retry of existing parse-threw quarantines for this parser revision, and expand the deliverables or require a companion migration. Add an upgrade test starting with an unchanged quarantined transcript; preserve unrelated quarantine reasons and re-quarantine inputs that still fail."
+      }
+    ],
+    "next_steps": [
+      "Define and test recovery from pre-upgrade parse-threw records before dispatching the parser work package."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"The parser hardening lacks recovery for transcripts already quarantined by the defect it fixes.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Provide a bounded retry for existing parse-threw quarantines\",\n      \"body\": \"The spec preserves ledger behavior without providing an upgrade recovery path. `ledger.selectState()` skips unchanged quarantined files, and `collectExtracts()` applies that decision before parsing. I applied the four proposed filters in memory: the poisoned-text fixture then parsed successfully, but its pre-upgrade quarantine still returned `skip-quarantined`. Consequently, completed sessions affected before the upgrade remain excluded indefinitely unless their files change; the hardened parser never sees them.\",\n      \"file\": \"docs/specs/WP-transcript-parsers-harden-text-values.md\",\n      \"line_start\": 678,\n      \"line_end\": 680,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Specify a bounded recovery mechanism, such as a one-time retry of existing parse-threw quarantines for this parser revision, and expand the deliverables or require a companion migration. Add an upgrade test starting with an unchanged quarantined transcript; preserve unrelated quarantine reasons and re-quarantine inputs that still fail.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Define and test recovery from pre-upgrade parse-threw records before dispatching the parser work package.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
