@@ -464,6 +464,13 @@ new mirror found in review is added here on the spot (register-new-mirrors).
       asserts Table X rows **X10**/**X11** and Table Y row **Y9**; criterion **15**
       asserts Table X row **X12** and Table K row **K1**; criterion 16
       asserts Table B
+- [ ] **Security-checklist bullets that restate a contract** *(registered at
+      round 4, when the first bullet was found stating **K1**/**Y4**'s
+      superseded "exactly two literal paths" claim)* — the untrusted-identifier
+      bullet mirrors **K1**/**Y4**/**X12**; the symlink bullet mirrors
+      **X10**/**X11**/**Y9**; the case-fold bullet mirrors **X12**; the
+      no-snapshot bullet mirrors **X1**/**X2**/**X3**; the emptying-the-shelf
+      bullet mirrors **K2**
 - [ ] **Verification commands / greps** — the two `quarantine` greps mirror Table
       K row **K1** and Table W row **W3**; the `preservedQuarantine` grep mirrors
       Table X row **X4**; the two `contains` greps mirror Table X row **X7**; the
@@ -787,12 +794,18 @@ platform, in any test.
 ## Security checklist
 
 - [x] **No untrusted identifier reaches a filesystem path or an argv.** The
-      package constructs exactly two paths, both literal joins of `paths.state`,
-      and builds no argv at all — Table K row **K1**, Table Y row **Y4**. There
-      is no name-matching pattern to anchor, because no entry's name is used for
-      anything: every entry under the two named roots is treated as the user's,
-      whatever it is called. **Our own good is enumerated (the two roots); no bad
-      is enumerated anywhere.**
+      package builds no argv at all, and every path it constructs is a literal
+      join of `paths.state` or that join with **one `readdirSync` name that has
+      already matched the closed ASCII-case-fold set** of Table X row **X12** —
+      Table K row **K1**, Table Y row **Y4**. **Our own good is enumerated
+      twice:** the accepted names are exactly the ASCII case variants of
+      `quarantine` and `redacted` — finite and closed, because our names are pure
+      ASCII with no combining marks — and every entry **under** the shelves is
+      treated as the user's whatever it is called. **No bad is enumerated
+      anywhere**, and no name is used to build a path before it has matched that
+      set. *(This bullet claimed "exactly two paths, both literal joins" until
+      round 4; it is registered as a mirror of **K1**/**Y4**/**X12** so it moves
+      with them.)*
 - [x] **No shelf byte and no shelf filename reaches any surface** — the inventory
       opens no file (Table K row **K6**) and the refusal prints directories,
       counts and a byte total only (Table Y row **Y1**). Asserted by criterion 5
