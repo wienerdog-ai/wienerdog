@@ -1,0 +1,45 @@
+{
+  "suite": "tests/unit/dream-collect.test.js",
+  "proofs": [
+    {
+      "id": "admission-measured-on-intake-not-projection",
+      "wp": "WP-dream-primary-dialogue-collection",
+      "criterion": "1",
+      "why": "row C1's whole guarantee is that X is measured against the TRANSCRIPT INTAKE, so that every byte decision stays the base commit's. Measuring the projection instead is the exact mistake that would silently admit more sessions per night and mark every one of them processed unread (finding F1), and it is invisible to any assertion that only checks what reaches scratch — the written bytes are identical under this mutation. The fixture is built so the difference is observable in two arms at once: the individually-oversized session's projection fits X, and the capacity-deferred session's projection fits the remainder",
+      "file": "src/core/dream/scratch.js",
+      "find": "const extractBytes = intakeBytes;",
+      "replace": "const extractBytes = Buffer.byteLength(JSON.stringify(extract)); /* RP_MUT_PDC_INTAKE */",
+      "marker": "RP_MUT_PDC_INTAKE",
+      "occurrences": 1,
+      "testNamePattern": "\\[PDC-",
+      "expectRed": [
+        {
+          "test": ["dream-collect: [PDC-AC1] every byte decision is the base commit's, and a session the projection would have fitted is still deferred"],
+          "signal": "[PDC-AC1]"
+        }
+      ]
+    },
+    {
+      "id": "filename-collision-evicts-the-overwritten-session",
+      "wp": "WP-dream-primary-dialogue-collection",
+      "criterion": "1b",
+      "why": "row C4's eviction is the one line that keeps the in-memory gate map equal to the disk rebuild it replaces. Without it the map holds BOTH sessions that share a scratch filename, so a learnings-ledger entry counting the session whose dialogue was overwritten — dialogue the model never saw a byte of — is ACCEPTED where the base commit refused it. That is an authorization difference, not a bookkeeping one, and no assertion about scratch contents can see it: the files on disk are identical either way",
+      "file": "src/core/dream/scratch.js",
+      "find": "if (evicted !== undefined) gateExtracts.delete(evicted); ",
+      "replace": "if (evicted !== undefined) { /* RP_MUT_PDC_EVICT */ } ",
+      "marker": "RP_MUT_PDC_EVICT",
+      "occurrences": 1,
+      "testNamePattern": "\\[PDC-",
+      "expectRed": [
+        {
+          "test": ["dream-collect: [PDC-AC1b] a filename collision keeps exactly the surviving session, and nothing else moves"],
+          "signal": "[PDC-AC1b]"
+        },
+        {
+          "test": ["dream-collect: [PDC-AC1b] the eviction is what refuses a learning counting the OVERWRITTEN session"],
+          "signal": "[PDC-AC1b]"
+        }
+      ]
+    }
+  ]
+}

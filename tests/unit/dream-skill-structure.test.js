@@ -69,8 +69,75 @@ test('dream-skill: dream report path and gated-out section are stated', () => {
   assert.ok(text.includes('## Gated out (and why)'), '## Gated out (and why) section missing');
 });
 
-test('dream-skill: the provenance rule references tool_result', () => {
-  assert.ok(text.includes('tool_result'), 'tool_result missing');
+// ── Rows D2-D4 (WP-dream-primary-dialogue-collection) ───────────────────────
+//
+// The model no longer reads roles or tool-record metadata: it reads PRIMARY
+// DIALOGUE plus a code-computed per-message `derived_from_untrusted` flag. The
+// three superseded tokens must be GONE rather than merely de-emphasised — a
+// surviving sentence about `tool_result` is a rule the model cannot apply, and
+// a count of zero is the only cheap way to prove none was left behind.
+
+test('dream-skill: the superseded role and tool-record vocabulary is gone entirely', () => {
+  for (const token of ['tool_result', 'skill_invocations', 'errored']) {
+    const hits = text.split(token).length - 1;
+    assert.equal(hits, 0, `${token} still occurs ${hits} time(s)`);
+  }
+});
+
+/** The file with every run of whitespace collapsed — the shape assertions below
+ *  are about WORDING, and a reflowed paragraph is not a contract change. */
+const flat = text.replace(/\s+/g, ' ');
+
+test('dream-skill: the documented extract shape is the projection, flag included', () => {
+  assert.ok(flat.includes('PRIMARY DIALOGUE'), 'the extract is named as primary dialogue');
+  assert.ok(
+    flat.includes('a `role` of `user` (the harness attributed this record to the person) or `assistant`'),
+    'exactly the two projection roles are documented'
+  );
+  assert.ok(
+    flat.includes('a `derived_from_untrusted` flag that code computed before you saw it and that you cannot change'),
+    'the per-message flag is documented as code-computed and unmodifiable'
+  );
+  assert.ok(text.includes('"derived_from_untrusted": false'), 'the example carries the per-message flag');
+  assert.ok(text.includes('"derived_from_untrusted": true'), 'the example shows a flagged message');
+});
+
+test('dream-skill: the Phase 2 provenance rule reads the flag, never a role', () => {
+  assert.ok(
+    text.includes('Set `derived_from_untrusted: true` if ANY supporting message'),
+    'the true arm is stated'
+  );
+  assert.ok(
+    text.includes('EVERY supporting message carries `derived_from_untrusted: false`'),
+    'the false arm requires every message to carry a false flag'
+  );
+  assert.ok(flat.includes("**Never infer `false` from a message's role**"), 'the role inference is forbidden');
+  assert.ok(flat.includes('Unknown or missing provenance is `true`.'), 'unknown provenance is true');
+});
+
+test('dream-skill: the code/prompt boundary is stated (row D6)', () => {
+  assert.ok(text.includes('**What code guarantees, and what is asked of you.**'), 'the boundary paragraph is present');
+  assert.ok(flat.includes('verified by no code'), 'the prompt-only half is named as unverified');
+  assert.ok(flat.includes('Nothing checks which messages supported an ordinary candidate'), 'the unverified step is named');
+});
+
+test('dream-skill: learning discovery is dialogue-only and never infers an outcome', () => {
+  assert.ok(flat.includes('This is the same rule for both harnesses'), 'one rule for both harnesses');
+  assert.ok(
+    flat.includes('**Never infer that an invocation succeeded or failed from the absence of evidence**'),
+    'the absent-evidence rule is stated'
+  );
+  assert.ok(flat.includes('an outcome you cannot see is an outcome you do not report'), 'the rationale is stated');
+});
+
+test('dream-skill: the orchestrator REFUSES an understated flag rather than raising it', () => {
+  assert.ok(
+    flat.includes('**The orchestrator does NOT raise your flag for you. It REFUSES the whole ledger write**'),
+    'the refusal correction is stated'
+  );
+  assert.ok(flat.includes('the candidate ledger is reverted unchanged'), 'the cost of understating is stated');
+  assert.ok(!flat.includes('RAISES your flag'), 'the superseded RAISES sentence is gone');
+  assert.ok(!flat.includes('it never accepts a value LOWER than the derived one'), 'the raise-only framing is gone');
 });
 
 test('dream-skill: skill-learnings section accumulates quarantined per-skill observations', () => {
@@ -79,14 +146,17 @@ test('dream-skill: skill-learnings section accumulates quarantined per-skill obs
   assert.ok(text.includes('Pattern-Key'), 'pattern-key present');
   assert.ok(text.includes('origin: dream'), 'dream-created-only scope present');
   assert.ok(text.includes('quarantined'), 'quarantine framing present');
-  assert.ok(text.includes('skill_invocations'), 'Claude signal referenced');
+  assert.ok(flat.includes('the retained dialogue shows it'), 'the dialogue-only usage signal is referenced');
   assert.ok(/append-only/i.test(text), 'append-only discipline present');
 });
 
 test('dream-skill: skill-learnings binds counted sessions to invocations with window trust', () => {
-  assert.ok(/skill_invocations/.test(text), 'invocation-binding prose present');
+  assert.ok(
+    flat.includes('reverts an entry that counts a Claude session which did not invoke the skill'),
+    'invocation-binding prose present'
+  );
   assert.ok(/window/i.test(text), 'invocation-window trust prose present');
-  assert.ok(/tool result/i.test(text), 'tool-result taint rule present');
+  assert.ok(/tool output/i.test(text), 'external-tool-output taint rule present');
   assert.ok(/Codex sessions do not authorize/i.test(text), 'Codex v1 scope limit present');
 });
 
