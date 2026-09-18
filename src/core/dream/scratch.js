@@ -38,10 +38,28 @@ function deferRemaining(candidates, start, target) {
  * Parse and write one session at a time; corpus metadata alone stays resident.
  * Capacity, elapsed preprocessing time and incomplete reads are separate causes.
  * Only selected inputs become candidates for the successful-dream processed gate.
+ * What is MEASURED and what is WRITTEN are two different extracts
+ * (WP-dream-primary-dialogue-collection, Table C rows C1 and C2). `X` is
+ * measured against `intakeBytes` — the compact JSON length of the RAW capped
+ * extract, byte-identical to what this loop computed before that package — so
+ * every byte-based admission decision is the one the previous collector made on
+ * the same input. What reaches scratch, and therefore the model, is the smaller
+ * PRIMARY DIALOGUE projection. The guarantee is byte-policy equivalence, not
+ * admitted-set identity: the soft preprocessing deadline below is wall-clock, and
+ * projection changes preprocessing cost in both directions, so a deadline-bound
+ * run can visit a different set of sessions (row C1a).
  * @param {ReturnType<import('../paths').getPaths>} paths
  * @param {import('./ledger').Ledger} ledger
  * @param {number} maxInputBytes
  * @param {{preprocessTimeoutMs?:number, now?:()=>number}} [options]
+ * @returns {{entries:Array<object>, scratchDir:string, processed:Array<object>,
+ *            newlyQuarantined:Array<object>, skippedQuarantined:number,
+ *            deferred:Array<object>, droppedForSize:number, dropped:Array<object>,
+ *            truncated:Array<object>, wrote:Array<string>,
+ *            deadlineDeferred:Array<object>, readDeferred:Array<object>,
+ *            oversized:Array<object>, oversizedExtracts:Record<string, object>,
+ *            gateExtracts:Map<string, import('../transcripts').GateExtract>,
+ *            intakeBytesTotal:number}}
  */
 function collectExtracts(paths, ledger, maxInputBytes, {
   preprocessTimeoutMs = 60_000,
@@ -94,6 +112,18 @@ function collectExtracts(paths, ledger, maxInputBytes, {
   const deadlineDeferred = [];
   const readDeferred = [];
   const oversized = [];
+  // Row C4: the text-free gate projections of the sessions this run WROTE,
+  // keyed `<harness>:<session_id>` in write order. It lives in memory for the
+  // run only — never written to any file, never placed anywhere a model can
+  // read, never handed to a model. `gateKeyByFile` is what implements the
+  // EVICTION: two session ids can sanitize to one scratch filename (row C4a),
+  // and on disk the later write overwrites the earlier one, so the map must
+  // hold exactly one session per distinct filename — the last one written.
+  /** @type {Map<string, import('../transcripts').GateExtract>} */
+  const gateExtracts = new Map();
+  /** @type {Map<string, string>} scratch filename -> the key it last wrote */
+  const gateKeyByFile = new Map();
+  let intakeBytesTotal = 0;
   let remaining = maxInputBytes;
   for (let i = 0; i < underCeiling.length; i++) {
     // Capacity takes precedence when a completed admission filled X exactly.
@@ -116,7 +146,8 @@ function collectExtracts(paths, ledger, maxInputBytes, {
     // Each session has its own finite emergency read-work allowance. A complete
     // session already started is measured/admitted even if the clock expires.
     delete oversizedExtracts[key];
-    const { extract, parse } = transcripts.parseWithOutcome(d, transcripts.newRunBudget());
+    const { extract, gateExtract, intakeBytes, parse } =
+      transcripts.parsePrimaryWithOutcome(d, transcripts.newRunBudget());
     if (parse.outcome !== 'ok') {
       newlyQuarantined.push({ ...d, reason: parse.outcome });
       continue;
@@ -125,7 +156,12 @@ function collectExtracts(paths, ledger, maxInputBytes, {
       readDeferred.push(deferralOf(d)); // discard partial content, then try older inputs
       continue;
     }
-    const extractBytes = Buffer.byteLength(JSON.stringify(extract));
+    // Row C1: X is measured against the TRANSCRIPT INTAKE, never against the
+    // projection. `intakeBytes` is the compact JSON length of the raw capped
+    // extract — the exact number this line computed before this package — so
+    // the capacity stop, the individually-oversized skip and the memo it writes
+    // all keep the verdicts they had.
+    const extractBytes = intakeBytes;
     if (extractBytes > maxInputBytes) {
       oversizedExtracts[key] = { fingerprint: ledgerLib.fingerprint(d), appVersion, extractBytes };
       oversized.push({ ...d, extractBytes, cached: false });
@@ -136,7 +172,15 @@ function collectExtracts(paths, ledger, maxInputBytes, {
       break;
     }
     const scratchFile = path.join(scratchDir, `${d.harness}-${sanitize(extract.session_id)}.json`);
+    // Row C2: the PROJECTION is what reaches disk — an extract whose projection
+    // retained no messages is still written, with its identity and an empty
+    // `messages` array.
     writeFilePrivate(scratchFile, JSON.stringify(extract, null, 2)); // 0600, no trailing newline
+    const gateKey = `${d.harness}:${extract.session_id}`;
+    const evicted = gateKeyByFile.get(scratchFile);
+    if (evicted !== undefined) gateExtracts.delete(evicted); // row C4's eviction
+    gateExtracts.set(gateKey, gateExtract);
+    gateKeyByFile.set(scratchFile, gateKey);
     entries.push({
       harness: d.harness,
       session_id: extract.session_id,
@@ -146,6 +190,7 @@ function collectExtracts(paths, ledger, maxInputBytes, {
     });
     wrote.push(scratchFile);
     processed.push(d);
+    intakeBytesTotal += intakeBytes;
     remaining -= extractBytes;
   }
 
@@ -164,6 +209,8 @@ function collectExtracts(paths, ledger, maxInputBytes, {
     readDeferred,
     oversized,
     oversizedExtracts,
+    gateExtracts,
+    intakeBytesTotal,
   };
 }
 
