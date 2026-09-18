@@ -30,6 +30,24 @@ contained run reported as failing, which is loud. The round-0 floor's failure mo
 asymmetry is the whole justification for the trade, and the spec forbids relaxing Table A
 to make a run green.
 
+## Round 2 (2026-09-18, Astra) — verdict `needs-attention`
+
+Target: tip `0114fc12`, the round-1 revision. Raw:
+`docs/specs/logbook/2026-09-18-broker-e2e-terminal-cleanup-design-r2-astra-raw.json`,
+focus: `…-design-r2-astra-focus.txt`, both introduced by **`71b5ffc5`**. The round-1 fix
+held: the two-leg floor and the transcript refusal were not re-opened.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---------|------|--------|-------------|
+| R2-1 | "Preserve failure detection when removing the auth short-circuit" (medium, conf 0.99) — E2 deleted the `AUTH-BLOCKED` check without replacing the failure it detected. `proveRoutine` catches a `runJob` exception into `threw` but never adds it to `failures`, so a run that authenticated, made a qualifying broker call and *then* failed would pass every remaining assertion and report `CONTAINED`. Astra reproduced it in memory against the prescribed E2/E3/E6 blocks with a marker-bearing draft followed by an auth exception: **zero failures**. The spec's own promise "a 401 remains a real failure" was therefore false as written | B | HEAVY | **ACCEPTED IN FULL.** E2 no longer deletes — it **re-dispositions**: the same detector runs, and instead of returning early it pushes into `failures`, so the failure is recorded **and** every containment/non-vacuity assertion still runs. New pure helper `primaryRunFailures(profileId, runLog, threw)` (added to E6 after `draftEchoesPoisonedNote`) emits an `AUTH FAILED` line on the same four case-insensitive patterns the deleted check used, and a `RUN FAILED` line whenever `threw` is non-empty; the two are independent because "did not authenticate" and "did not complete" are distinct facts. New **Table F** is its truth table, with **F3** the exact regression the finding names (qualifying draft, then auth failure → 2 failures, `CONTAINED` unreachable; the same inputs previously gave zero). New **V-12** extracts *both* committed functions from the harness source and proves all five rows plus the F3 composite — that the non-vacuity leg passes and the run is still recorded as failed. The grant-flip re-run stays outside: its failure is expected and keeps its own bare `catch`. Mirrored into Table C (E2 row + new E2 block, E6 row), Table F, the Mirrored Surface Checklist, new **AC-1b**, AC-1, the Security checklist bullet that had wrongly claimed deletion "can only make the proof stricter", the E1 header comment, V-11, V-12, DoD item 1 and the ADR-0025 Amendment 6 text |
+
+The Amendment 6 text now carries the general rule, not just this instance: *an execution
+or authentication failure of the primary run is itself a failure of the proof, recorded
+alongside the containment assertions rather than in place of them.* A proof that stops
+early reports nothing; a proof that records and continues reports both why it failed and
+what it observed.
+
 **Not asserted:** nothing here records the owner approving, accepting, ratifying or
-signing the spec, ADR-0025 Amendment 6, or either of the spec's two owner items. Round 1
-was HEAVY, so a fresh Astra round follows on the revised tip; the orchestrator runs it.
+signing the spec, ADR-0025 Amendment 6, or either of the spec's two owner items. Rounds 1
+and 2 were both HEAVY, so a fresh Astra round follows each revised tip; the orchestrator
+runs it.
