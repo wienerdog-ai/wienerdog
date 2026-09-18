@@ -1,0 +1,53 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b623-d853-7fe2-aff9-d61d34705a13",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r16",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not implement as written: late quarantine arrivals lose the retry ledger, and absent shelves can permanently block symlinked-state uninstall.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Preserve retryability when the second sweep keeps a quarantine\",\n      \"body\": \"W10 checks only the first live sweep at uninstall.js:408. That sweep can return no preservation, followed by a concurrent dream recreating the shelf through quarantinePreserve's recursive mkdir. The manifest and config are then deleted before the second sweep at :467 preserves the new copy. Retrying fails with “no install manifest found,” even after the user clears the shelf. Criterion 9 explicitly includes arrivals during either sweep, but W10 does not cover the second.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 407,\n      \"line_end\": 407,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Complete both shelf-capable sweeps before deleting the retry ledger, leaving only empty-core cleanup afterward. Define recovery for later arrivals and add an interleaving test that creates a copy after the first sweep, checks preservation reporting, and verifies cleanup remains retryable.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Resolve the absent-shelf contradiction for symlinked state\",\n      \"body\": \"For state -> /data/personal with no quarantine directory, X17 still derives protected anchors /data/personal/quarantine and its redacted child. X19 therefore preserves state because its target contains those anchors; class (ii) also protects the link itself. The specified unlink branch cannot run. With W10, uninstall repeatedly stops despite there being no copies to clear, contradicting criterion 14's required successful removal. A read-only containment model confirms this without concurrent mutation.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 387,\n      \"line_end\": 389,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Define when an absent-shelf state alias may be safely unlinked, distinguishing hypothetical anchors from existing recovery chains while retaining protection against subsequent recursive sweeps. Reconcile X17/X19 with criterion 14 and test the complete uninstall and retry behavior.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the terminal cleanup ordering and absent-shelf alias contracts before dispatching implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not implement as written: late quarantine arrivals lose the retry ledger, and absent shelves can permanently block symlinked-state uninstall.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Preserve retryability when the second sweep keeps a quarantine",
+        "body": "W10 checks only the first live sweep at uninstall.js:408. That sweep can return no preservation, followed by a concurrent dream recreating the shelf through quarantinePreserve's recursive mkdir. The manifest and config are then deleted before the second sweep at :467 preserves the new copy. Retrying fails with “no install manifest found,” even after the user clears the shelf. Criterion 9 explicitly includes arrivals during either sweep, but W10 does not cover the second.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 407,
+        "line_end": 407,
+        "confidence": 0.99,
+        "recommendation": "Complete both shelf-capable sweeps before deleting the retry ledger, leaving only empty-core cleanup afterward. Define recovery for later arrivals and add an interleaving test that creates a copy after the first sweep, checks preservation reporting, and verifies cleanup remains retryable."
+      },
+      {
+        "severity": "medium",
+        "title": "Resolve the absent-shelf contradiction for symlinked state",
+        "body": "For state -> /data/personal with no quarantine directory, X17 still derives protected anchors /data/personal/quarantine and its redacted child. X19 therefore preserves state because its target contains those anchors; class (ii) also protects the link itself. The specified unlink branch cannot run. With W10, uninstall repeatedly stops despite there being no copies to clear, contradicting criterion 14's required successful removal. A read-only containment model confirms this without concurrent mutation.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 387,
+        "line_end": 389,
+        "confidence": 0.99,
+        "recommendation": "Define when an absent-shelf state alias may be safely unlinked, distinguishing hypothetical anchors from existing recovery chains while retaining protection against subsequent recursive sweeps. Reconcile X17/X19 with criterion 14 and test the complete uninstall and retry behavior."
+      }
+    ],
+    "next_steps": [
+      "Revise the terminal cleanup ordering and absent-shelf alias contracts before dispatching implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not implement as written: late quarantine arrivals lose the retry ledger, and absent shelves can permanently block symlinked-state uninstall.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Preserve retryability when the second sweep keeps a quarantine\",\n      \"body\": \"W10 checks only the first live sweep at uninstall.js:408. That sweep can return no preservation, followed by a concurrent dream recreating the shelf through quarantinePreserve's recursive mkdir. The manifest and config are then deleted before the second sweep at :467 preserves the new copy. Retrying fails with “no install manifest found,” even after the user clears the shelf. Criterion 9 explicitly includes arrivals during either sweep, but W10 does not cover the second.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 407,\n      \"line_end\": 407,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Complete both shelf-capable sweeps before deleting the retry ledger, leaving only empty-core cleanup afterward. Define recovery for later arrivals and add an interleaving test that creates a copy after the first sweep, checks preservation reporting, and verifies cleanup remains retryable.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Resolve the absent-shelf contradiction for symlinked state\",\n      \"body\": \"For state -> /data/personal with no quarantine directory, X17 still derives protected anchors /data/personal/quarantine and its redacted child. X19 therefore preserves state because its target contains those anchors; class (ii) also protects the link itself. The specified unlink branch cannot run. With W10, uninstall repeatedly stops despite there being no copies to clear, contradicting criterion 14's required successful removal. A read-only containment model confirms this without concurrent mutation.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 387,\n      \"line_end\": 389,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Define when an absent-shelf state alias may be safely unlinked, distinguishing hypothetical anchors from existing recovery chains while retaining protection against subsequent recursive sweeps. Reconcile X17/X19 with criterion 14 and test the complete uninstall and retry behavior.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the terminal cleanup ordering and absent-shelf alias contracts before dispatching implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
