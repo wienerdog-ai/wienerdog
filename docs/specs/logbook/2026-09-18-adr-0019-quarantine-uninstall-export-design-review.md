@@ -80,5 +80,22 @@ implementer probe required rather than taken on trust — because the enumeratio
 in X1 step 1 is ours, and a guarantee inside `rmSync` says nothing about a
 `readdirSync` we wrote.
 
-**A further round is required**, on **X1** as it now stands with step 0 and on
-**X10**.
+## Round 3 — Astra, 2026-09-18
+
+- **Reviewed tip:** `9e48cde4`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r3-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r3-astra-focus.txt`
+- **Committed before adjudication at:** `a0693065`
+- **Verdict:** `needs-attention` — *"the specified cleanup order can follow a
+  quarantine symlink and remove an external directory."*
+- **Held from round 2:** **X10** and **X1** step 0 were **not** re-opened.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R3-1** | **Validate shelf ancestors before the bottom-up cleanup.** Table X row **X1** (`:345`) `lstat`-checked and removed `<state>/quarantine/redacted` **before** classifying `<state>/quarantine` itself. **`lstat` does not reject a symlink in an intermediate path component** — it classifies only the final one — so with `quarantine` pointing at an external directory containing an empty `redacted/`, the sequence removes `external/redacted` **before** it detects and preserves the `quarantine` link. Astra verified the filesystem semantics read-only and then executed X1 in memory, reproducing the external removal. **The gate does not cover it**: it refuses a *pre-existing* symlinked root (K2 counts it), but `disposeCoreMechanics` is exported and directly callable, and a link introduced *after* the gate is Table X row **X3**'s concurrent class. Criterion 14 checked surviving **file bytes** and the link, so it **misses the deletion of an empty external directory** | B | **HEAVY** — reclassified from the reviewer's `medium` because it changes the deletion order the implementer builds, and its failure removes a directory outside the core | **ACCEPTED IN FULL.** New canonical **Table X row X11**: *validation runs top-down, removal runs bottom-up, and they are two passes in opposite directions.* **X1 step 3** is rewritten accordingly — `lstat` `<state>`, then `quarantine`, then `redacted`, **stopping at the first level that is not a real directory**, with that level **and everything below it** off-limits (not accessed, not `lstat`ed further, not removed); then `rmdirSync` leaf→root **over the validated prefix only**. X11 also records **why the passes cannot be merged**: the safety property is about *ancestors* (downward), `rmdir`'s emptiness requirement is about *descendants* (upward), and one order serves one of them — the same shape as `WP-scheduler-replay-manifest-independent`'s Table D row **D5**. **Criterion 14 is extended** with the direct-sweep regression: a symlinked `quarantine` whose external target holds an **empty** `redacted/` leaves that directory present, asserted with `existsSync`/`lstatSync` **and explicitly not by file bytes**, because an empty directory has none — which is precisely the gap the reviewer named. Same assertion for a symlinked `<state>`. **Second RED proof** `quse-shelf-validated-leaf-first` (mutation: reverse X11's validation direction; new code, so no pre-measurable anchor), giving criterion 14 two declarations — round 2's defect and round 3's are different failures of the same rule |
+
+**Declaration count after round 3:** eight declarations over seven criteria; six
+carry a pre-measurable anchor, two mutate code this package authors.
+
+**One confirming round remains.** The gate closes on a clean or LIGHT-only return
+(`docs/runbooks/codex-review.md`, "Weighted closure").
