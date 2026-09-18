@@ -427,3 +427,26 @@ denial-of-service shape, at the moment the reviewer began constructing malformed
 probe files; the third attempt, phrased as a malformed-input robustness review
 with an instruction to reason over the code, completed and found the product
 design clean. All three focus texts are preserved beside the review.
+
+## 2026-09-18 — owner rulings, morning
+
+Verbatim, in reply to the session's closing report (numbering is the owner's,
+matching the report's list of items owed):
+
+> 1) perform the npm release (I will take the auth steaps when you get there)
+> 2) signed both
+> 3) spec the fix pls
+> 4) mature them
+> 5) I am here now and can perform the auth
+
+Reading, item by item: (1) cut the 0.14.0 release; the `npm publish` 2FA step is
+the owner's. (2) The owner edited the two ADR Status lines himself in the working
+tree — ADR-0012 part 6 (`WP-dream-lock-stale-owner-loud`) and ADR-0020
+(`WP-dream-primary-dialogue-collection`) now read `owner-signed 2026-09-18`; the
+session committed his edits unchanged. (3) Spec the fix for the `WD-SINK-*`
+defects (owner item O2 of `WP-secret-sink-wiring-probes`). (4) Mature the parked
+and unspecced items named in the report: the `doctor` arm for `parse-threw`, the
+parser-hardening successor, the two ep2 successor Drafts, the four Draft stubs,
+and the offline-evaluation design for `WP-dream-primary-dialogue-filter`.
+(5) `WP-broker-e2e-terminal-auth` may run now; the owner is at the terminal for
+the Keychain prompts.

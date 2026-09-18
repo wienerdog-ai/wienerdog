@@ -443,7 +443,7 @@ policy. This amendment adds no process or service (ADR-0004).
 
 ## Amendment (2026-09-17): a stale lock must be loud, and an implausible deadline is not trusted — WP-dream-lock-stale-owner-loud
 
-Status: **ACCEPTED under standing authorization 2026-09-17 — owner signature pending.**
+Status: **ACCEPTED under standing authorization 2026-09-17 — owner-signed 2026-09-18.**
 
 **Decision (amends part 6 again, after the 2026-09-15 live-owner amendment).**
 Table S in `docs/specs/WP-dream-lock-stale-owner-loud.md` is canonical. The

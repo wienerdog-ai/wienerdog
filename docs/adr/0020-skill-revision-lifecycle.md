@@ -399,7 +399,7 @@ this amendment is edited; it stands as the historical record.
 
 ## Amendment (2026-09-17): the model looks for skill learnings in dialogue only — WP-dream-primary-dialogue-collection
 
-Status: **ACCEPTED under standing authorization 2026-09-17 — owner signature pending.**
+Status: **ACCEPTED under standing authorization 2026-09-17 — owner-signed 2026-09-18.**
 
 **Decision.** The dream's model-visible input becomes primary dialogue: the
 person's requests and corrections, and the concluding assistant reply of each
