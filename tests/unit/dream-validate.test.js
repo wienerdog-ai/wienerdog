@@ -3843,6 +3843,293 @@ test('EP2 retention: a B5/B5a fall-through never prunes, and the prune stays ins
   assert.ok(lsRedacted(f).includes('not-dated.md'), 'a non-date-prefixed file is not a candidate');
 });
 
+// ── WP-quarantine-only-copy-shelf — what the bounded shelf owes an only-copy ─
+// Table O row O1 partitions the shelf into four classes and row O2 says what the
+// prune therefore is: the ONLY path in src/ that can destroy a sole-surviving
+// copy of the user's own text, because it performs no identity check at all.
+// [OC-1] pins class A end to end; [OC-2]/[OC-3] pin both entrances to class C2;
+// [OC-4] pins class C1's decay into a sole survivor. None of them changes the
+// gate: they ASSERT the loss, they do not prevent it.
+
+// A second secret-bearing token, distinct from REDACT_NOTE's. Table O row O1's
+// fifth caveat: the shelf does not deduplicate, so a fixture that judges the
+// same content twice leaves two byte-identical copies and can never prove a
+// byte-level absence (OC-P5).
+const OTHER_NOTE = 'ref Zk3VpQ8sXt6RmW1nJd5GbHcY in prose\n';
+
+test('EP2 retention [OC-1]: the prune destroys a SOLE-SURVIVING copy — a class-A original is evicted and its bytes then exist nowhere under the core (Table O rows O1, O2)', () => {
+  const mod = require('../../src/core/dream/validate');
+  const f = redactFixture();
+
+  // ── Run 1, PUBLISHED. `publish: true` is mandatory (OC-P7): RUN defaults to
+  //    `publish: false`, which leaves the note unchanged, so the vault would
+  //    never hold the scrubbed form and run 2 would re-judge the same secret.
+  const run1 = RUN(mod, f, { date: '2026-07-01', publish: true });
+  assert.equal(
+    run1.secretRedactions, 1,
+    '[O1-class-A-copy-is-the-sole-pre-scrub-form] run 1 completed exactly one redaction'
+  );
+  const Rname = '2026-07-01-fp.md';
+  assert.deepEqual(
+    lsRedacted(f), [Rname],
+    '[O1-class-A-copy-is-the-sole-pre-scrub-form] the shelf holds exactly the original this run preserved'
+  );
+  const Rbytes = fs.readFileSync(path.join(redactedDir(f), Rname));
+
+  // CLASS A's DEFINITION. Asserted on booleans and basenames only: a failing
+  // assertion's output reaches CI logs and these bytes are the fixture's
+  // simulated secret, so they are compared, never printed.
+  assert.equal(
+    Buffer.compare(Rbytes, Buffer.from(REDACT_NOTE)) === 0, true,
+    '[O1-class-A-copy-is-the-sole-pre-scrub-form] the shelf copy holds the PRE-SCRUB bytes of the note'
+  );
+  assert.equal(
+    Buffer.compare(fs.readFileSync(f.abs), Buffer.from(REDACT_SCRUBBED)) === 0, true,
+    '[O1-class-A-copy-is-the-sole-pre-scrub-form] the vault holds the SCRUBBED form of that note'
+  );
+  assert.deepEqual(
+    listSecretQuarantine(f.stateDir), [],
+    '[O1-class-A-copy-is-the-sole-pre-scrub-form] no withheld twin accompanies a completed redaction'
+  );
+
+  // THE WALK, local by contract (this block has five helpers and needs no
+  // sixth). It returns BOTH halves the absence assertion needs — how many files
+  // it visited, and how many of them hold `want` — because a walk that visits
+  // nothing "finds" nothing and passes vacuously. It never leaves stateDir and
+  // never follows a symlink: `isDirectory()`/`isFile()` report on the link
+  // itself, so a link is neither recursed into nor read.
+  const walkFor = (want) => {
+    const rootAbs = path.resolve(f.stateDir);
+    let visited = 0;
+    let matches = 0;
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (!path.resolve(full).startsWith(rootAbs + path.sep)) continue;
+        if (e.isDirectory()) { walk(full); continue; }
+        if (!e.isFile()) continue;
+        visited += 1;
+        if (Buffer.compare(fs.readFileSync(full), want) === 0) matches += 1;
+      }
+    };
+    walk(rootAbs);
+    return { visited, matches };
+  };
+
+  // Fill the shelf to exactly the cap, with R the UNIQUE oldest candidate by
+  // Table N row N4's `(mtimeMs, name)`. Every seeded copy is an hour in the
+  // future; R is pushed an hour into the past, so the ordering cannot turn on
+  // filesystem timestamp granularity.
+  seedRedacted(f, CAP - 1, Date.now() + 3600 * 1000);
+  const old = (Date.now() - 3600 * 1000) / 1000;
+  fs.utimesSync(path.join(redactedDir(f), Rname), old, old);
+  assert.equal(lsRedacted(f).length, CAP, 'at the cap, so nothing has been pruned yet (Table N row N1)');
+
+  // PRESENCE BEFORE THE PRUNE, through the same walk function that will be
+  // asked for absence after it (the vacuous-walk trap).
+  const before = walkFor(Rbytes);
+  assert.ok(before.visited > 0, 'the walk visits a non-empty set of files');
+  assert.equal(before.matches, 1, "R's bytes are on disk under the core before the prune");
+
+  // ── Run 2 judges a DIFFERENT note carrying a DIFFERENT secret, so its own
+  //    preserved original cannot stand in for R's bytes (OC-P5).
+  writeVault(f.vault, '04-Atomic/other-secret.md', OTHER_NOTE);
+  const run2 = RUN(mod, f, { date: '2026-07-02', publish: true });
+  assert.equal(run2.secretRedactions, 1, 'run 2 completed exactly one redaction');
+  const newName = '2026-07-02-other-secret.md';
+  assert.equal(
+    Buffer.compare(fs.readFileSync(path.join(redactedDir(f), newName)), Rbytes) !== 0, true,
+    "run 2's preserved original differs from R, so an absence of R's bytes is provable"
+  );
+
+  // THE LOSS. The shelf is back at the cap, R's name is gone, and R's BYTES are
+  // nowhere under the core — not on either shelf, not anywhere else in the tree.
+  const after = walkFor(Rbytes);
+  assert.equal(lsRedacted(f).length, CAP, 'the prune returned the shelf to the cap');
+  assert.equal(
+    lsRedacted(f).includes(Rname), false,
+    '[O2-the-prune-destroys-a-sole-surviving-copy] the oldest candidate was evicted'
+  );
+  assert.ok(after.visited > 0, 'the post-prune walk visits a non-empty set of files');
+  assert.equal(
+    after.matches, 0,
+    '[O2-the-prune-destroys-a-sole-surviving-copy] the evicted copy was the only one of those bytes: '
+      + `nothing under the core holds them any more (walked ${after.visited} files)`
+  );
+});
+
+test('EP2 retention [OC-2]: identity UNPROVEN because the buffers DIFFER — the redacted/ copy is kept, recorded, and is the only copy of its version (Table O row O1, class C2)', () => {
+  const f = redactFixture();
+  const withheldAbs = path.resolve(path.join(f.stateDir, 'quarantine', '2026-07-02-fp.md'));
+  const shelfName = '2026-07-02-fp.md';
+
+  // The refuse fall-through with the WITHHELD preserve SUCCEEDING (so
+  // `preserved` is non-null and the gate reaches the identity-gated delete),
+  // driven exactly as the R0b test at :2052 drives it. The one injected fact is
+  // the identity read of the WITHHELD path returning different bytes; every
+  // other read is untouched, and `quarantinePreserve` verifies its own artifact
+  // through its descriptor, not through `readFileSync`, so neither preserve is
+  // disturbed.
+  const s = stubCollaborators([[SECRET_SCAN_ID, 'scanAndRedact', noopScanStub()]]);
+  let fired = 0;
+  const unRead = patchFs('readFileSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.resolve(p) === withheldAbs) {
+      fired += 1;
+      return Buffer.from('bytes that are not the shelf copy\n');
+    }
+    return orig.call(this, p, ...rest);
+  });
+  let res;
+  try { res = RUN(s.mod, f); } finally { unRead(); s.restore(); }
+
+  assert.ok(fired >= 1, 'the injected identity read fired');
+  assert.equal(res.secretDisposition.withheld, 1, 'the verdict is a refusal');
+  assert.equal(res.kept(f.rel), false, 'nothing was promoted');
+  assert.ok(
+    lsRedacted(f).includes(shelfName),
+    '[O1-C2-unproven-identity-is-kept-and-recorded] the shelf copy SURVIVES an unproven identity'
+  );
+  assert.ok(
+    res.preservedFor(f.rel).some((e) => e.artifact === shelfName && e.location === 'quarantine/redacted'),
+    '[O1-C2-unproven-identity-is-kept-and-recorded] and is named on the preservation record: '
+      + JSON.stringify(res.preservedFor(f.rel))
+  );
+  assert.deepEqual(
+    listSecretQuarantine(f.stateDir), [shelfName],
+    '[O1-C2-unproven-identity-is-kept-and-recorded] the withheld copy exists too — two copies whose '
+      + 'equivalence was never proven, which is why the gate kept both'
+  );
+});
+
+test('EP2 retention [OC-3]: identity UNPROVEN because the comparison READ THREW — the redacted/ copy is kept and recorded (Table O row O1, class C2)', () => {
+  const f = redactFixture();
+  const withheldAbs = path.resolve(path.join(f.stateDir, 'quarantine', '2026-07-02-fp.md'));
+  const shelfName = '2026-07-02-fp.md';
+
+  // Same shape as [OC-2], other entrance: the identity read THROWS, so the
+  // `catch` sets `identical = false` and the same keep-and-record branch runs.
+  const s = stubCollaborators([[SECRET_SCAN_ID, 'scanAndRedact', noopScanStub()]]);
+  let fired = 0;
+  const unRead = patchFs('readFileSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.resolve(p) === withheldAbs) {
+      fired += 1;
+      const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+    }
+    return orig.call(this, p, ...rest);
+  });
+  let res;
+  try { res = RUN(s.mod, f); } finally { unRead(); s.restore(); }
+
+  assert.ok(fired >= 1, 'the injected identity read fired');
+  assert.equal(res.secretDisposition.withheld, 1, 'the verdict is a refusal');
+  assert.equal(res.kept(f.rel), false, 'nothing was promoted');
+  assert.ok(
+    lsRedacted(f).includes(shelfName),
+    '[O1-C2-unproven-identity-is-kept-and-recorded] the shelf copy SURVIVES an unproven identity'
+  );
+  assert.ok(
+    res.preservedFor(f.rel).some((e) => e.artifact === shelfName && e.location === 'quarantine/redacted'),
+    '[O1-C2-unproven-identity-is-kept-and-recorded] and is named on the preservation record: '
+      + JSON.stringify(res.preservedFor(f.rel))
+  );
+  assert.deepEqual(
+    listSecretQuarantine(f.stateDir), [shelfName],
+    '[O1-C2-unproven-identity-is-kept-and-recorded] the withheld copy exists too — two copies whose '
+      + 'equivalence was never proven, which is why the gate kept both'
+  );
+});
+
+test('EP2 retention [OC-4]: a C1 duplicate DECAYS into a sole survivor — the announced twin is deleted, and a later prune destroys the last copy (Table O row O1, class C1; row O2)', () => {
+  const f = redactFixture();
+  const name = '2026-07-02-fp.md';
+  const shelfAbs = path.resolve(path.join(redactedDir(f), name));
+  const withheldAbs = path.resolve(path.join(f.stateDir, 'quarantine', name));
+
+  // ── Class C1: the buffers ARE equal, so the gate deletes its shelf copy —
+  //    and that best-effort delete FAILS. Both copies survive, and the shelf
+  //    copy is not on the preservation record, because the `else` never ran.
+  const s = stubCollaborators([[SECRET_SCAN_ID, 'scanAndRedact', noopScanStub()]]);
+  let fired = 0;
+  const unRm = patchFs('rmSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.resolve(p) === shelfAbs) {
+      fired += 1;
+      const e = new Error('EBUSY: injected'); e.code = 'EBUSY'; throw e;
+    }
+    return orig.call(this, p, ...rest);
+  });
+  let res;
+  try { res = RUN(s.mod, f); } finally { unRm(); s.restore(); }
+
+  assert.ok(fired >= 1, 'the injected cleanup failure fired');
+  assert.equal(res.secretDisposition.withheld, 1, 'the verdict is a refusal');
+  assert.ok(fs.existsSync(shelfAbs), 'the proven-duplicate shelf copy survived its failed cleanup');
+  assert.deepEqual(listSecretQuarantine(f.stateDir), [name], 'and its byte-identical twin is on the withheld shelf');
+  const Rbytes = fs.readFileSync(shelfAbs);
+  assert.equal(
+    res.preservedFor(f.rel).some((e) => e.location === 'quarantine/redacted'), false,
+    '[O1-C1-is-a-duplicate-at-creation-time-only] a C1 copy is NOT on the preservation record, so nothing names it'
+  );
+
+  const walkFor = (want) => {
+    const rootAbs = path.resolve(f.stateDir);
+    let visited = 0;
+    let matches = 0;
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (!path.resolve(full).startsWith(rootAbs + path.sep)) continue;
+        if (e.isDirectory()) { walk(full); continue; }
+        if (!e.isFile()) continue;
+        visited += 1;
+        if (Buffer.compare(fs.readFileSync(full), want) === 0) matches += 1;
+      }
+    };
+    walk(rootAbs);
+    return { visited, matches };
+  };
+  const both = walkFor(Rbytes);
+  assert.ok(both.visited > 0, 'the walk visits a non-empty set of files');
+  assert.equal(both.matches, 2, 'two copies of those bytes exist while the twin is still there');
+
+  // ── THE DECAY. The owner does exactly what the product tells them to: they
+  //    rotate the credential, delete the announced withheld copy, and clean the
+  //    note (`docs/runbooks/secret-incident.md:40-48`). The equivalence the gate
+  //    proved was a CREATION-TIME fact; it is now false, and the shelf copy is
+  //    the sole survivor — which no record says and no prune will check.
+  fs.rmSync(withheldAbs, { force: true });
+  fs.rmSync(f.abs, { force: true });
+  const alone = walkFor(Rbytes);
+  assert.ok(alone.visited > 0, 'the walk still visits a non-empty set of files');
+  assert.equal(
+    alone.matches, 1,
+    '[O1-C1-is-a-duplicate-at-creation-time-only] deleting the announced twin leaves the shelf copy the SOLE survivor'
+  );
+
+  // Age it oldest and fill the shelf to the cap, so the next completed
+  // redaction takes the directory to 51 and prunes exactly this file.
+  seedRedacted(f, CAP - 1, Date.now() + 3600 * 1000);
+  const old = (Date.now() - 3600 * 1000) / 1000;
+  fs.utimesSync(shelfAbs, old, old);
+  assert.equal(lsRedacted(f).length, CAP, 'at the cap, so nothing has been pruned yet (Table N row N1)');
+
+  writeVault(f.vault, '04-Atomic/other-secret.md', OTHER_NOTE);
+  const run2 = RUN(require('../../src/core/dream/validate'), f, { date: '2026-07-03', publish: true });
+  assert.equal(run2.secretRedactions, 1, 'the later run completed exactly one redaction, so the prune fires');
+
+  const after = walkFor(Rbytes);
+  assert.equal(lsRedacted(f).length, CAP, 'the prune returned the shelf to the cap');
+  assert.equal(
+    lsRedacted(f).includes(name), false,
+    '[O2-C1-decayed-copy-is-destroyed] the decayed C1 copy was evicted'
+  );
+  assert.ok(after.visited > 0, 'the post-prune walk visits a non-empty set of files');
+  assert.equal(
+    after.matches, 0,
+    '[O2-C1-decayed-copy-is-destroyed] and its bytes exist nowhere under the core: the prune, which '
+      + `performs no identity check at all, destroyed the last copy (walked ${after.visited} files)`
+  );
+});
+
 // ─── WP-validator-decided-bytes: refuse a malformed block AT THE DECISIONS ────
 //
 // ADR-0022 Decision 4: a malformed frontmatter block excludes the note
