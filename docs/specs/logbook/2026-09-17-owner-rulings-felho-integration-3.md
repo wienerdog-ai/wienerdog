@@ -470,3 +470,38 @@ Verbatim: *"0025 and 0043 are signed"*. The owner edited the two Status lines
 himself in the working tree — ADR-0025 Amendment 6
 (`WP-broker-e2e-terminal-cleanup`) and ADR-0043 (safe-cut stream redaction)
 now read `owner-signed 2026-09-18`; the session committed his edits unchanged.
+
+## 2026-09-19 — owner ruling, morning
+
+Verbatim, in reply to the session's report that nine `Ready` specs were held
+for his go: *"Go ahead with the ready specs"*.
+
+Reading: implement the nine `Ready` work packages in the order the report
+recommended — `WP-transcript-parsers-harden-text-values` →
+`WP-ledger-retry-parse-threw-on-upgrade`; `WP-secret-sink-redact-before-truncate`
+∥ `WP-secret-stream-safe-cut-redactor` → `WP-secret-sink-chunk-fix`;
+`WP-quarantine-only-copy-shelf` → `WP-scheduler-replay-manifest-independent` →
+`WP-adr-0019-quarantine-uninstall-gate` → `WP-uninstall-shelf-deletion-guards` —
+each through both PR gates on the same tip, merged under the session's merge
+authorization, then filed Done.
+
+### Items dispatched under the standing process, 2026-09-19
+
+Every owner item inside those nine specs is taken as the architect's recorded
+recommendation, under the standing process (recommendation + overrule cost
+recorded in each spec; the owner reverses by dated amendment). Nothing here
+records the owner approving, accepting, ratifying or signing any of them. The
+behaviour-shaping ones, named so they are not missed:
+`WP-scheduler-replay-manifest-independent` item 1 — **unload-and-remove** (not
+unload-only); item 2 — the ADR-0041 amendment lands "owner signature pending";
+item 3 — the retryable-refusal alternative is NOT taken.
+`WP-adr-0019-quarantine-uninstall-gate` item 1 — **amend** ADR-0019 (not
+supersede), "owner signature pending"; item 2 — **refuse-and-report**, no copy
+written, `--yes` does not proceed; item 3 — no `--discard-quarantine` flag.
+`WP-uninstall-shelf-deletion-guards` item 4 — do NOT refuse on any symlink under
+`<core>`. `WP-transcript-parsers-harden-text-values` items 1–2 — metadata
+hardening deferred to a further successor; release ordering as specified.
+`WP-ledger-retry-parse-threw-on-upgrade` item 1 — a short docs-only ADR-0023
+amendment for the `quarantined → deferred` transition, "owner signature pending".
+The three WD-SINK items and `WP-quarantine-only-copy-shelf` items 1–3 — as
+recorded in their specs.
