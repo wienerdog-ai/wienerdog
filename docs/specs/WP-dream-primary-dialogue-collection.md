@@ -22,12 +22,15 @@ epic: dream-primary-dialogue
 > `docs/runbooks/codex-review.md`. Dispositions and raws are in
 > `docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md`.
 >
-> **This package is dispatched only after BOTH `WP-dream-primary-dialogue-projection`
-> and `WP-dream-report-run-skips` have landed**, and its cites into
-> `src/core/dream/scratch.js`, `src/core/dream/promote.js`, `src/cli/dream.js`
-> and `tests/unit/dream-collect.test.js` **must be re-derived at dispatch** —
-> `WP-dream-report-run-skips` edits all four. The projection package has no such
-> constraint and may be dispatched as soon as it is `Ready`.
+> **2026-09-18 — BOTH PREREQUISITES HAVE LANDED AND THE CITES ARE RE-DERIVED.**
+> `WP-dream-report-run-skips` merged as PR #264 and
+> `WP-dream-primary-dialogue-projection` as PR #266 (merge `b46a3843`, now
+> `docs/specs/done/`). Every cite into `src/core/dream/scratch.js`,
+> `src/core/dream/promote.js`, `src/cli/dream.js` and
+> `tests/unit/dream-collect.test.js` was re-derived **by construct** at
+> `b46a3843` — the before/after table is
+> `docs/specs/logbook/2026-09-18-dream-primary-dialogue-collection-repin.md`.
+> No row's facts moved, so this stays `Ready`. **This package is now dispatchable.**
 
 ## Context (read this, nothing else)
 
@@ -46,7 +49,8 @@ promotes them.
 
 **What this package does.** Its predecessor,
 `WP-dream-primary-dialogue-projection`, added a parser entry point
-`parsePrimaryWithOutcome` that no caller uses. This package switches the
+`parsePrimaryWithOutcome` (shipped in PR #266) that no caller uses yet. This
+package switches the
 collector onto it, so the scratch files the consolidation agent reads contain
 **primary dialogue** — the person's requests and corrections plus the
 concluding assistant reply of each exchange — instead of the current mixture of
@@ -90,17 +94,13 @@ amendment text is in this spec, below, to be appended byte-for-byte.
 
 ## Current state
 
-**Base commit: `c94e0e66664e482a16e7ff820a9ba87d20a5dae7`** (upstream `main` at
-closure). Every cite below was first derived against `05f1f55d` and
-**re-verified at `c94e0e66`**: none of `src/core/dream/scratch.js`,
-`src/core/dream/ledger.js`, `src/cli/dream.js`, `src/core/dream/validate.js`,
-`src/core/dream/promote.js`, `skills/wienerdog-dream/SKILL.md` or
-`docs/adr/0020-skill-revision-lifecycle.md` changed between the two. The one
-deliverable that did is `tests/unit/dream-collect.test.js`, which gained 49
-lines of probe block in PR `#261`; no cite in this spec points into it by line.
-Every file:line below was re-derived against that commit by locating the
-construct, reading the whole enclosing function and checking both ends of each
-range.
+**Base commit: `b46a384398a6ff3fa44a463ceb7773b3fd986179`** (upstream `main`
+after PR #264 and PR #266). **Every cite below was re-derived by construct at
+that commit on 2026-09-18**, both ends checked, with the before/after table in
+`docs/specs/logbook/2026-09-18-dream-primary-dialogue-collection-repin.md`.
+Nothing in this package's contract changed: the five exclusion arms, the byte
+measurement and the write are the same constructs at new line numbers, and the
+sibling entry point ships exactly the shape Table C consumes.
 
 **The dispatcher must re-derive every `src/cli/dream.js` and
 `src/core/dream/scratch.js` cite at dispatch.** Both files are edited by
@@ -111,33 +111,34 @@ draft's fork baseline. Run
 first and re-read anything that moved. Read the tail of `tests/unit/dream-collect.test.js` before editing it — it is a
 deliverable of this package and PR `#261` appended a probe block to it.
 
-- `src/core/dream/scratch.js:46-157` is `collectExtracts(paths, ledger,
+- `src/core/dream/scratch.js:46-173` is `collectExtracts(paths, ledger,
   maxInputBytes, {preprocessTimeoutMs = 60_000, now})`. It discovers, filters
-  to `selectState(...) === 'select'` (`:54`), splits off files over the pre-read
-  ceiling (`:57-60`), sorts newest-mtime-first (`:61`), prunes the ledger's
+  to `selectState(...) === 'select'` (`:56-64`, now one loop that also counts
+  files skipped for an existing quarantine), splits off files over the pre-read
+  ceiling (`:67-70`), sorts newest-mtime-first (`:71`), prunes the ledger's
   oversized memos to those whose `fingerprint` **and** `appVersion` still match
-  (`:66-74`), then recreates the scratch dir (`:76-78`) and runs one admission
-  loop (`:88-140`) with **five** exclusion arms:
-  `deferred` (capacity: `remaining === 0` at `:91-94`, or
-  `extractBytes > remaining` at `:124-127`), `deadlineDeferred` (`:95-98`),
-  `oversized` (memo hit `:102-105`, or fresh measurement `:119-123`),
-  `readDeferred` (`parse.runExhausted`, `:114-117`) and `newlyQuarantined`
-  (non-`ok` parse outcome, `:110-113`).
-- The two lines this package changes are `scratch.js:118`
+  (`:76-84`), then recreates the scratch dir (`:87-88`) and runs one admission
+  loop (`:98-150`) with **five** exclusion arms:
+  `deferred` (capacity: `remaining === 0` at `:101-104`, or
+  `extractBytes > remaining` at `:134-137`), `deadlineDeferred` (`:105-108`),
+  `oversized` (memo hit `:112-115`, or fresh measurement `:129-133`),
+  `readDeferred` (`parse.runExhausted`, `:124-127`) and `newlyQuarantined`
+  (non-`ok` parse outcome, `:120-123`).
+- The two lines this package changes are `scratch.js:128`
   (`const extractBytes = Buffer.byteLength(JSON.stringify(extract));`) and
-  `:129` (`writeFilePrivate(scratchFile, JSON.stringify(extract, null, 2));`
-  — 0600, **no trailing newline**). `:128` builds the filename as
+  `:139` (`writeFilePrivate(scratchFile, JSON.stringify(extract, null, 2));`
+  — 0600, **no trailing newline**). `:138` builds the filename as
   `${d.harness}-${sanitize(extract.session_id)}.json`, where `sanitize` (`:18-20`)
   replaces every character outside `[A-Za-z0-9_-]` with `_`.
-- `:109` calls `transcripts.parseWithOutcome(d, transcripts.newRunBudget())` —
-  a **fresh** read allowance per session. `:120` writes the oversized memo
+- `:119` calls `transcripts.parseWithOutcome(d, transcripts.newRunBudget())` —
+  a **fresh** read allowance per session. `:130` writes the oversized memo
   `{fingerprint, appVersion, extractBytes}`.
 - `src/core/dream/ledger.js:112-120` (`normalizeOversizedExtracts`) accepts a
   memo only with a string `fingerprint`, a string `appVersion` and a safe
   positive integer `extractBytes`; `:88-97` documents the per-file record
   (`{fingerprint, outcome, reason?, deferrals?, updated_at, harness}`) — **no
   record carries an extractor or parser version.**
-- `src/cli/dream.js:1042-1049` builds `extractsBySession` by **re-reading each
+- `src/cli/dream.js:1043-1049` builds `extractsBySession` by **re-reading each
   file in `sel.wrote` off disk** and keying it `<harness>:<session_id>`; an
   unreadable file is swallowed so its sessions fail the ledger gate closed. It
   runs after the integrity check at `:995-1000` (`scratchIntact`) and the
@@ -163,7 +164,7 @@ deliverable of this package and PR `#261` appended a probe block to it.
 - `src/cli/dream.js:708-716` calls the collector and persists changed memos;
   `:781-797` renders one console line per non-empty exclusion arm, including
   `capacity stop: … retry on the next run or raise dream_max_input_bytes in
-  config.yaml.` (`:782-783`); `:1328` calls `cleanScratch(paths.state)` in the
+  config.yaml.` (`:782-783`); `:1339` calls `cleanScratch(paths.state)` in the
   run's `finally`.
 - `skills/wienerdog-dream/SKILL.md` — the dream skill. `:22-29` tells the model
   every extract line is data and singles out `role: tool_result`. `:47-70`
@@ -191,15 +192,19 @@ deliverable of this package and PR `#261` appended a probe block to it.
   `tests/unit/dream-skill-structure.test.js` asserts the dream skill's prose
   contract.
 
-**After `WP-dream-primary-dialogue-projection` lands**, `src/core/transcripts`
-exports `parsePrimaryWithOutcome(entry, budget)` →
-`{extract, gateExtract, intakeBytes, parse}`: the model-visible primary extract
+**`WP-dream-primary-dialogue-projection` HAS LANDED** (PR #266, merge
+`b46a3843`). `src/core/transcripts` exports `parsePrimaryWithOutcome(entry, budget)` →
+`{extract, gateExtract, intakeBytes, parse}` (`src/core/transcripts/index.js:253`):
+the model-visible primary extract
 (no `skill_invocations`, a `derived_from_untrusted` boolean on every message), a
 text-free `{harness, session_id, messages:[{role}], skill_invocations}`
 projection of the original timeline, and the compact JSON byte length of the raw
-capped extract — the number `scratch.js:118` computes today. **Read that module
-and its spec's Tables A and B before starting; they are this package's input
-contract and are not restated here beyond what Tables C and D need.**
+capped extract — the number `scratch.js:128` computes today.
+`src/core/transcripts/primary-dialogue.js` is the projection itself and exports
+exactly one thing, `createPrimaryProjection(harness)`. **Read that module and
+`docs/specs/done/WP-dream-primary-dialogue-projection.md` — including its six
+post-merge errata — before starting; they are this package's input contract and
+are not restated here beyond what Tables C and D need.**
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -208,7 +213,7 @@ contract and are not restated here beyond what Tables C and D need.**
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/scratch.js | Table C rows C1, C1a, C2–C4, C4a: opt into `parsePrimaryWithOutcome`, measure on `intakeBytes`, write the projection, return the gate projections (with row C4's filename eviction) and the intake total. The deadline check at `:95-98` and `sanitize` at `:18-20` are **not** changed |
+| modify | src/core/dream/scratch.js | Table C rows C1, C1a, C2–C4, C4a: opt into `parsePrimaryWithOutcome`, measure on `intakeBytes`, write the projection, return the gate projections (with row C4's filename eviction) and the intake total. The deadline check at `:105-108` and `sanitize` at `:18-20` are **not** changed |
 | modify | src/cli/dream.js | Table D row D1 (feed `extractsBySession` from the collector) and Table C row C5 (the two dry-run byte lines) |
 | modify | skills/wienerdog-dream/SKILL.md | Table D rows D2–D4 and D6: extract shape, provenance rule, learning discovery, and D3's correction of the "RAISES" sentence at `:324-331` |
 | modify | src/core/runtime-skill-digests.json | regenerate the dream skill's digest only — no other entry changes |
@@ -229,7 +234,7 @@ sees, and what code keeps to itself). Everything here mirrors them.
 /** Unchanged signature; two added return fields (Table C rows C4, C5).
  *  @returns {{entries, scratchDir, processed, newlyQuarantined, deferred,
  *             droppedForSize, dropped, truncated, wrote, deadlineDeferred,
- *             readDeferred, oversized, oversizedExtracts,
+ *             readDeferred, oversized, oversizedExtracts, skippedQuarantined, skippedQuarantined,
  *             gateExtracts: Map<string, {harness, session_id, messages:[{role:string}], skill_invocations?:Array}>,
  *             intakeBytesTotal: number}} */
 function collectExtracts(paths, ledger, maxInputBytes, options)
@@ -296,11 +301,11 @@ amendment, the acceptance criteria and the verification greps.
 
 | ID | Contract | Rule |
 |----|----------|------|
-| C1 | **What `dream_max_input_bytes` measures, and exactly what that guarantees — CANONICAL.** | X is measured against `parsePrimaryWithOutcome(...).intakeBytes`, which is byte-identical to the `Buffer.byteLength(JSON.stringify(extract))` that `scratch.js:118` computes today from `parseWithOutcome`. **The guarantee is BYTE-POLICY EQUIVALENCE, not admitted-set identity.** For every session the admission loop **visits**, every byte-based decision is the one the base commit would make on the same input: the capacity stop (`remaining === 0` at `scratch.js:91-94` and `extractBytes > remaining` at `:124-127`), the individually-oversized skip and the memo it writes (`:102-105`, `:119-123`), and the newest-first order. Projection cannot change any of them, because it changes neither the measured number nor the order. **What it can change is which sessions the loop visits.** The soft preprocessing deadline at `:95-98` compares `now() - startedAt` against `preprocessTimeoutMs`, and `startedAt` is taken at `:50` before discovery, so the elapsed clock spans discovery, ledger pruning, scratch recreation, and every prior session's parse, measurement and write. Projection changes those costs in both directions: classifying two policies in one pass costs more, serializing a smaller extract to disk costs less. **So when the deadline is the binding constraint, the admitted set can differ from the base commit's in either direction.** The design review executed the real collector with mocked timing and measured one session admitted under the baseline against four under projection at identical intake bytes and the same limit. See row C1a for when the deadline binds, and owner item 3 for the F1 consequence. There is still no backfill in the byte dimension: no session is admitted because projection freed X. |
+| C1 | **What `dream_max_input_bytes` measures, and exactly what that guarantees — CANONICAL.** | X is measured against `parsePrimaryWithOutcome(...).intakeBytes`, which is byte-identical to the `Buffer.byteLength(JSON.stringify(extract))` that `scratch.js:128` computes today from `parseWithOutcome`. **The guarantee is BYTE-POLICY EQUIVALENCE, not admitted-set identity.** For every session the admission loop **visits**, every byte-based decision is the one the base commit would make on the same input: the capacity stop (`remaining === 0` at `scratch.js:101-104` and `extractBytes > remaining` at `:134-137`), the individually-oversized skip and the memo it writes (`:112-115`, `:129-133`), and the newest-first order. Projection cannot change any of them, because it changes neither the measured number nor the order. **What it can change is which sessions the loop visits.** The soft preprocessing deadline at `:105-108` compares `now() - startedAt` against `preprocessTimeoutMs`, and `startedAt` is taken at `:50` before discovery, so the elapsed clock spans discovery, ledger pruning, scratch recreation, and every prior session's parse, measurement and write. Projection changes those costs in both directions: classifying two policies in one pass costs more, serializing a smaller extract to disk costs less. **So when the deadline is the binding constraint, the admitted set can differ from the base commit's in either direction.** The design review executed the real collector with mocked timing and measured one session admitted under the baseline against four under projection at identical intake bytes and the same limit. See row C1a for when the deadline binds, and owner item 3 for the F1 consequence. There is still no backfill in the byte dimension: no session is admitted because projection freed X. |
 | C1a | The exact condition under which the admitted sets are equal | Admitted-set equality holds **only when BOTH the baseline run and the projected run avoid deadline deferral** — that is, when `deadlineDeferred` is empty in both. It is **not** enough that one of them finished in time: the round-2 review executed a counterexample in which the projected run admitted all five sessions in 50 ms while the baseline, under the same 60 ms deadline, admitted one. Whenever either run defers on the deadline, the admitted sets may differ **in either direction**, and the direction is not predictable from this document, because it is the sign of (added projection classification cost − saved write-serialization cost) on that machine. The deadline is not binding, and the sets are therefore equal, when both runs finish visiting the candidate list or fill X inside `dream_preprocess_timeout_seconds` (default 60) — the ordinary nightly shape of a handful to a few dozen new sessions. It **is** binding on a large backlog, where preprocessing runs out of time before X fills: the shape the 2026-09-16 assessment measured, with 10,338 files deferred in one night. **That is the uncomfortable part and it is stated rather than buried: the installs where finding F1 matters most are exactly the installs where this package's admitted set can move.** AC7's measurement must report the regime of **both** runs, not one. |
-| C2 | What is written | The file written at `scratch.js:129` is `JSON.stringify(<the primary extract>, null, 2)` — the projection, never the raw extract — at the existing 0600 with no trailing newline, under the existing filename rule `${harness}-${sanitize(session_id)}.json`. An extract whose projection retains **zero** messages is still written, with its identity and an empty `messages` array: the consolidation agent may legitimately decide a session holds nothing worth remembering, and that is a different state from the session being absent. `sel.entries` and `sel.wrote` keep their existing meanings and membership. |
+| C2 | What is written | The file written at `scratch.js:139` is `JSON.stringify(<the primary extract>, null, 2)` — the projection, never the raw extract — at the existing 0600 with no trailing newline, under the existing filename rule `${harness}-${sanitize(session_id)}.json`. An extract whose projection retains **zero** messages is still written, with its identity and an empty `messages` array: the consolidation agent may legitimately decide a session holds nothing worth remembering, and that is a different state from the session being absent. `sel.entries` and `sel.wrote` keep their existing meanings and membership. |
 | C3 | The oversized memo is unchanged | Because C1 keeps the measured quantity byte-identical, `oversizedExtracts` memos keep their exact current meaning and remain valid across this change. This survives row C1a: a memo records a **byte** measurement, and byte-policy equivalence holds whether or not the deadline binds. **No `extractFormat` field, no format discriminator, and no new invalidation rule is added**; `ledger.js` is not a deliverable of this package. The memo's three existing release conditions are untouched (the source file's fingerprint changes, `package.json.version` changes, or X rises to or past the measured size). Nothing resets processed outcomes, migration baselines, quarantine records or secret-revert counters. |
-| C4 | `gateExtracts`, and the **filename eviction** that keeps it equal to the disk rebuild | The collector returns the text-free gate projection of every session it wrote, as a `Map` keyed `<harness>:<session_id>` and populated in write order. **A later write to a scratch filename an earlier entry already wrote EVICTS that earlier entry**: before setting a key, delete any key whose recorded filename equals the one about to be written. The map therefore holds exactly one session per distinct filename — the last one written — which is bit-for-bit what `src/cli/dream.js:1042-1049` produces today by re-reading the surviving file. Row C4a says why this is not theoretical. It lives in memory for the run only: it is never written to any file, never placed under the scratch directory or any other directory a model can read, and never handed to a model. It carries no message text (its shape is the predecessor package's Table B row B2). Nothing else about privacy or cleanup changes — the run's `finally` still calls `cleanScratch`, and no durable evidence archive, selection checkpoint or transcript-content log is introduced. |
+| C4 | `gateExtracts`, and the **filename eviction** that keeps it equal to the disk rebuild | The collector returns the text-free gate projection of every session it wrote, as a `Map` keyed `<harness>:<session_id>` and populated in write order. **A later write to a scratch filename an earlier entry already wrote EVICTS that earlier entry**: before setting a key, delete any key whose recorded filename equals the one about to be written. The map therefore holds exactly one session per distinct filename — the last one written — which is bit-for-bit what `src/cli/dream.js:1043-1049` produces today by re-reading the surviving file. Row C4a says why this is not theoretical. It lives in memory for the run only: it is never written to any file, never placed under the scratch directory or any other directory a model can read, and never handed to a model. It carries no message text (its shape is the predecessor package's Table B row B2). Nothing else about privacy or cleanup changes — the run's `finally` still calls `cleanScratch`, and no durable evidence archive, selection checkpoint or transcript-content log is introduced. |
 | C4a | Why row C4 evicts: two session ids can share one scratch filename | `sanitize` (`scratch.js:18-20`) replaces every character outside `[A-Za-z0-9_-]` with `_`, so the session ids `s_1` and `s.1` both produce `claude-s_1.json` — executed and confirmed. Today both sessions are parsed, both are appended to `entries`, both to `processed`, and **the same path is appended to `wrote` twice**, so the second `writeFilePrivate` overwrites the first and one session's dialogue is gone. The gate map, being rebuilt by re-reading `wrote`, then contains **only the surviving session**, and a learning counting the overwritten one is refused as "not among this run's processed extracts". A session-keyed in-memory map without row C4's eviction would contain **both**, so that learning would be accepted although the model never saw a byte of its dialogue — measured by the round-2 review as an authorization difference, not a theory. Row C4 exists to reproduce the refusal. **Nothing else about this case changes**: both sessions stay in `entries`, `wrote` and `processed`, both are still marked processed on a clean run, and `hashScratch` still hashes the duplicate path twice. That the overwritten session's dialogue is silently lost and never retried is a **pre-existing defect of the base commit**, recorded under Discovered issues and deliberately not fixed here. |
 | C5 | The dry-run preview names both numbers | After this package the bytes given to the model and the bytes X bounds are different quantities, so `printPlan` must not print one label over the other. `src/cli/dream.js:154` is replaced by exactly these two lines, in this order, each at the same two-space indent the surrounding preview lines use: `session text given to the memory pass: ${totalBytes} bytes`, then `transcript text measured against the ${cfg.maxInputBytes}-byte limit: ${sel.intakeBytesTotal} bytes`. `totalBytes` keeps its existing derivation (the summed on-disk sizes of `sel.wrote`, `:141-147`); `intakeBytesTotal` is the sum of the `intakeBytes` of the admitted sessions. Everything else `printPlan` prints is unchanged, and `--dry-run` still performs no model call and writes nothing. |
 
@@ -308,7 +313,7 @@ amendment, the acceptance criteria and the verification greps.
 
 | ID | Contract | Rule |
 |----|----------|------|
-| D1 | The gate reads the original timeline | `src/cli/dream.js:1042-1049`'s re-read of `sel.wrote` is replaced by `sel.gateExtracts`: the map handed to `promote` is the collector's, not one rebuilt from the scratch files. A session absent from the map fails the ledger gate closed, exactly as an unreadable extract does today, and `validate.js` is **not** a deliverable — its code, its verdicts and its fail-closed behavior on malformed geometry are unchanged. The integrity check at `:995-1000` and the stray-file sweep at `:1003-1009` stay where they are and keep their current effect. This is strictly stronger than today: the gate's evidence now never reaches a directory the model can write to, so nothing the model does during the run can reach it. |
+| D1 | The gate reads the original timeline | `src/cli/dream.js:1043-1049`'s re-read of `sel.wrote` is replaced by `sel.gateExtracts`: the map handed to `promote` is the collector's, not one rebuilt from the scratch files. A session absent from the map fails the ledger gate closed, exactly as an unreadable extract does today, and `validate.js` is **not** a deliverable — its code, its verdicts and its fail-closed behavior on malformed geometry are unchanged. The integrity check at `:995-1000` and the stray-file sweep at `:1003-1009` stay where they are and keep their current effect. This is strictly stronger than today: the gate's evidence now never reaches a directory the model can write to, so nothing the model does during the run can reach it. |
 | D2 | The model sees dialogue and a provenance flag | The dream skill's documented extract shape (`SKILL.md:47-70`) becomes the projection's: messages carry `role` (`user` or `assistant` only), `text`, `ts` and `derived_from_untrusted`; there is no `tool_result` role and no `skill_invocations` array. The Phase 2 provenance rule (`:101-105`) becomes: set a candidate's `derived_from_untrusted` to `true` if **any** supporting message carries `derived_from_untrusted: true`; set it `false` only when every supporting message carries `derived_from_untrusted: false`; **never infer `false` from a message's role**. Phase 1 (`:72-81`) tracks each supporting message's flag rather than its role. The quoted-data warning (`:22-29`) keeps its force and stops singling out `tool_result`: an assistant message may restate material that came from outside the conversation, and `derived_from_untrusted: true` is exactly what marks it. The same substitution is made at the three further sites Current state names — `:93`'s explicit-user-signal clause, `:185-188`'s raise-only rule for an existing note, and `:291-297`'s per-entry ledger rule. **Checkable consequence: the string `tool_result` occurs zero times in the file afterwards.** That is deliberate and it is the whole point of the row — the role no longer exists in anything the model reads, so any surviving sentence about it is a rule the model cannot apply, and a count of zero is the only cheap way to prove none was left behind. |
 | D3 | Learning discovery is dialogue-only | The skill identifies a possible skill usage from retained dialogue alone, for both harnesses (`SKILL.md:212-222`, `:317-322`). It no longer reads a `skill_invocations` array, no longer reads `errored`, and **must not infer that an invocation succeeded or failed from the absence of evidence** — an outcome it cannot see is an outcome it does not report. The code-owned checks are unchanged and are now fed evidence the model never sees: a Claude session counted in a ledger entry is still independently verified to have invoked that skill, `derived_from_untrusted` is still derived from the invocation window, and a Codex session still never authorizes a skill-body revision. Nothing here can create an invocation, lower the gate's verdict, or turn Codex evidence into qualifying Claude evidence. **One correction rides along, because this row rewrites the section that states it:** `SKILL.md:324-331` tells the model the orchestrator "RAISES your flag to `true`". It does not. `src/core/dream/validate.js:646-648` returns a refusal reason, and `src/core/dream/promote.js:1386-1394` calls that gate and `:1397-1400` records the refusal, leaving the candidate bytes unchanged — an understated flag **loses the whole ledger write**, it is not silently corrected. The rewritten section says that, because a model told its mislabel will be fixed for it has no reason to get it right. |
 | D4 | The shipped digest is regenerated | `src/core/runtime-skill-digests.json` is regenerated so the dream skill's entry matches its new body, and **no other entry in that file changes**. `tests/unit/dream-skill-structure.test.js` is updated to assert rows D2–D3's prose contract rather than the superseded sentences. |
@@ -342,11 +347,11 @@ a newly found mirror is registered here on the spot.
       clause and D3; the ADR `Status:` grep and the owner-phrase prohibition
       grep mirror D5; `npm run red-proofs` mirrors AC1 and AC4; **the `rg` over
       `scratch.js`'s deadline check mirrors C1a**.
-- [ ] **Current-state description** — walked: `scratch.js:118`/`:129` back C1
-      and C2; **`scratch.js:50` and `:95-98` back C1a's elapsed-clock argument**;
-      `scratch.js:66-74`/`:102-105`/`:120` and `ledger.js:112-120` back
+- [ ] **Current-state description** — walked: `scratch.js:128`/`:139` back C1
+      and C2; **`scratch.js:50` and `:105-108` back C1a's elapsed-clock argument**;
+      `scratch.js:76-84`/`:112-115`/`:130` and `ledger.js:112-120` back
       C3; `dream.js:136-159` and `tests/integration/dream.test.js:587` back C5;
-      `dream.js:1042-1049` and `validate.js:510-527`/`:631-649` back D1;
+      `dream.js:1043-1049` and `validate.js:510-527`/`:631-649` back D1;
       **`validate.js:646-648` with `promote.js:1386-1394` and `:1397-1400` back
       D3's refusal correction and AC4; `validate.js:191-216` backs D6's Tier-3
       clause; and `scratch.js:18-20`'s `sanitize` backs C4a**;
@@ -829,12 +834,15 @@ a numbered design-review round and carries its round in the logbook entry
    preserved before adjudication. (b) The owner items travel with this package
    as **recommendations adopted under standing authorization**; any the owner
    reverses by dated amendment is applied by a committed revision, never by a
-   dispatch message. (c) `WP-dream-primary-dialogue-projection` is `Done`, and
-   so is `WP-dream-report-run-skips` — **this package is dispatched after both**.
-   (d) **Every cite is pinned to base `c94e0e66`, and the cites into
+   dispatch message. (c) **Both prerequisites are satisfied:**
+   `WP-dream-primary-dialogue-projection` is `Done` (PR #266) and
+   `WP-dream-report-run-skips` has merged (PR #264).
+   (d) **Every cite is pinned to base `b46a3843` and was re-derived by
+   construct on 2026-09-18.** If anything lands in
    `src/core/dream/scratch.js`, `src/core/dream/promote.js`, `src/cli/dream.js`
-   and `tests/unit/dream-collect.test.js` MUST be re-derived at dispatch**,
-   construct by construct, because `WP-dream-report-run-skips` edits all four.
+   or `tests/unit/dream-collect.test.js` after that day, re-derive those cites
+   again, construct by construct — that file set is the one sibling packages
+   keep moving.
    (e) Branch `wp/dream-primary-dialogue-collection`.
 1. All verification steps pass locally; output pasted into the PR body. AC7's
    measurement is recorded in a dated `docs/specs/logbook/` entry and linked

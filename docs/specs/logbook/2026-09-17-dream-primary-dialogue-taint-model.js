@@ -2,11 +2,23 @@
 // HOW TO RUN: node docs/specs/logbook/2026-09-17-dream-primary-dialogue-taint-model.js
 // Exits 0 when every case in …-taint-model-cases.json matches under reading V2.
 //
-// A REFERENCE MODEL, NOT THE CONTRACT. Table A of
-// docs/specs/WP-dream-primary-dialogue-projection.md is the contract; this is an
-// executable transcription of its row A5e, preserved so a later reader can
-// reproduce the round-4 comparison instead of trusting a summary of it. Where
-// this file and Table A disagree, Table A wins and this file is the bug.
+// A REFERENCE MODEL, NOT THE CONTRACT, AND NO LONGER THE BEST ONE.
+// src/core/transcripts/primary-dialogue.js shipped in PR #266 and is now the
+// more complete reference: it is the contract executed, gated and proven. This
+// file is kept for the SPEC'S HISTORY — it is what the design rounds were
+// argued against — and Table A of
+// docs/specs/done/WP-dream-primary-dialogue-projection.md remains the contract.
+// Where this file and Table A disagree, Table A wins and this file is the bug.
+//
+// CORRECTED 2026-09-18 after implementation, in five places where it disagreed
+// with Table A and was wrong every time: (1) a Codex `message` payload whose
+// `content` is not an array taints and supplies nothing; (2) a rollout with no
+// `session_meta` at all supplies nothing; (3) `isSidechain: true` declines an
+// ASSISTANT record as well as a user one; (4) the first-header latch is set on
+// ENCOUNTERING the first `session_meta`, before its schema check, so a damaged
+// first header leaves the rollout ineligible for the whole file; (5) a block
+// whose `text` is not a string is declined without taint and must never be
+// coerced or thrown on. Each is a DIV-* case in the case file.
 //
 // Inert by construction: no dependency, no network, no file write, no process
 // spawn. It reads one JSON file beside it and prints. Its name matches none of
@@ -48,7 +60,10 @@ const nonEmptyStr = (v) => typeof v === 'string' && v.length > 0;
  */
 function run(events, harness, opts) {
   let taint = false;              // monotonic: nothing below ever lowers it
-  let codexAccepts = null;        // row A4, decided by the first session_meta
+  // Row A4. Starts FALSE, not null: a rollout with no readable first header
+  // supplies nothing (corrected 2026-09-18, divergence 2).
+  let codexAccepts = false;
+  let codexHeaderSeen = false;    // latched on ENCOUNTERING (divergence 4)
   const out = [];
 
   for (const ev of events) {
@@ -58,6 +73,16 @@ function run(events, harness, opts) {
     let rec;
     try { rec = JSON.parse(ev.line); } catch { taint = true; continue; } // G3
     if (!isObj(rec)) { taint = true; continue; }
+
+    // ROW A4'S LATCH, BEFORE STEP 2 ON PURPOSE (corrected 2026-09-18,
+    // divergence 4): encountering the first `session_meta` decides
+    // eligibility even when its payload cannot be read, so a damaged true
+    // header cannot let a LATER header — possibly copied history — decide.
+    if (harness === 'codex' && !codexHeaderSeen && isObj(rec) && rec.type === 'session_meta') {
+      codexHeaderSeen = true;
+      const pl = rec.payload;
+      codexAccepts = isObj(pl) && (pl.thread_source === undefined || pl.thread_source === 'user');
+    }
 
     // STEP 2 - both schema checks: the record's own (row A5c) and every
     // content block's (row A5c-blocks). Either failure taints AND suppresses
@@ -84,7 +109,11 @@ function run(events, harness, opts) {
       } else if (rec.type === 'response_item') {
         if (!isObj(rec.payload)) classified = false;
         else if (!nonEmptyStr(rec.payload.type) || !CODEX_DECIDED_PAYLOAD_TYPES.has(rec.payload.type)) classified = false;
-        else if (rec.payload.type === 'message' && Array.isArray(rec.payload.content)) blocks = rec.payload.content;
+        else if (rec.payload.type === 'message') {
+          // a `message` payload OWES an array (corrected 2026-09-18, divergence 1)
+          if (!Array.isArray(rec.payload.content)) classified = false;
+          else blocks = rec.payload.content;
+        }
       }
       // every other top-level Codex type is declined whole and owes nothing
     }
@@ -105,27 +134,23 @@ function run(events, harness, opts) {
     }
 
     // STEP 4 - does A2 / A3 / A4 accept it as primary dialogue?
-    if (harness === 'codex' && rec.type === 'session_meta') {
-      if (codexAccepts === null) {
-        const ts = rec.payload.thread_source;
-        codexAccepts = ts === undefined || ts === 'user';
-      }
-      continue;
-    }
-    if (harness === 'codex' && codexAccepts === false) continue;
+    if (harness === 'codex' && rec.type === 'session_meta') continue; // a header supplies no dialogue
+    if (harness === 'codex' && !codexAccepts) continue;
 
     let emit = null;
     if (harness === 'claude') {
-      if (rec.type === 'user' && rec.isMeta !== true && rec.isSidechain !== true
+      // isSidechain declines BOTH roles (corrected 2026-09-18, divergence 3)
+      if (rec.isSidechain === true) { /* a subagent's turns are a copy */ }
+      else if (rec.type === 'user' && rec.isMeta !== true
           && isObj(rec.message) && rec.message.role === 'user') {
         const c = rec.message.content;
         if (typeof c === 'string') emit = { role: 'user', text: c };
         else if (Array.isArray(c)) {
-          const t = c.filter((b) => b.type === 'text').map((b) => b.text).join('\n\n');
+          const t = c.filter((b) => b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n\n');
           if (t !== '') emit = { role: 'user', text: t };
         }
       } else if (rec.type === 'assistant' && isObj(rec.message) && rec.message.stop_reason === 'end_turn') {
-        const t = (rec.message.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n\n');
+        const t = (rec.message.content || []).filter((b) => b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n\n');
         if (t !== '') emit = { role: 'assistant', text: t };
       }
     } else if (rec.type === 'response_item' && rec.payload.type === 'message') {
@@ -135,13 +160,13 @@ function run(events, harness, opts) {
         const kinds = isObj(meta) ? meta.content_item_kinds : undefined;
         if (Array.isArray(p.content) && Array.isArray(kinds) && kinds.length === p.content.length) {
           const t = p.content
-            .filter((b, i) => b.type === 'input_text' && kinds[i] === 'user.text')
+            .filter((b, i) => b.type === 'input_text' && kinds[i] === 'user.text' && typeof b.text === 'string')
             .map((b) => b.text).join('\n');
           if (t !== '') emit = { role: 'user', text: t };
         }
         // misaligned or absent kinds: A3 DECLINES at step 4. No taint.
       } else if (p.role === 'assistant' && p.phase === 'final_answer' && Array.isArray(p.content)) {
-        const t = p.content.filter((b) => b.type === 'output_text').map((b) => b.text).join('\n');
+        const t = p.content.filter((b) => b.type === 'output_text' && typeof b.text === 'string').map((b) => b.text).join('\n');
         if (t !== '') emit = { role: 'assistant', text: t };
       }
     }

@@ -1,7 +1,7 @@
 ---
 id: WP-dream-primary-dialogue-projection
 title: Project each transcript to its primary dialogue, deterministically
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-dream-filtered-input-budget]
@@ -10,6 +10,98 @@ epic: dream-primary-dialogue
 ---
 
 # WP-dream-primary-dialogue-projection: Project each transcript to its primary dialogue, deterministically
+
+> **Errata, 2026-09-18 (post-merge) — six stale or silent spec-prose facts.
+> None is a defect in what shipped.**
+>
+> Implemented in PR #266 (merge `b46a3843`, 2026-09-18), tip `559cff8e`. It took
+> **three PR-gate rounds**. Round 1: the independent gate (Codex plugin,
+> `gpt-6-astra`) reproduced that a malformed **first** `session_meta` left the
+> header latch unset, so a **later** header decided eligibility — fixed by
+> latching on **encountering** the first header, before its schema check (four
+> fixtures and a RED id). Round 2: it reproduced that a Claude `text` block
+> whose `text` is not a string made `Array#join` **throw**, aborting a parse the
+> default policy completes — fixed by declining the block, argued from A2 and
+> A5c-blocks (six fixtures and a RED id). Round 3: both gates clean. Final
+> numbers on `559cff8e`: `npm test` 2878 tests / 2866 pass / **0 fail**; the
+> **UNFILTERED** `npm run red-proofs` → `RUN: PROVEN`, **151 PROVEN**, all ten
+> `pdp-*` ids; the first law proven by the reviewer over **512** comparisons;
+> CI seven checks pass.
+>
+> **Erratum 1 — row A2's assistant clause omits `isSidechain`, which row A4
+> states for the whole record.** *What is wrong:* A2 gates the `user` clause on
+> "no `isMeta: true` and no `isSidechain: true`" but names neither on the
+> `assistant` clause. *What is true:* A4 says "a **Claude record** carrying
+> `isSidechain: true` supplies no primary dialogue", and the code follows A4 —
+> `primary-dialogue.js:180` declines on `isSidechain` before branching on the
+> record type, so a sidechain **assistant** record is declined too. *Found:* the
+> architect, filing. *Routing:* corrected in place below and recorded here.
+> **Class: an under-specified cell the shipped code reads correctly through its
+> sibling row.**
+>
+> **Erratum 2 — row A4 is silent on a rollout with no `session_meta` at all.**
+> *What is wrong:* A4 names `thread_source` values and an absent key, but never
+> the case where no header exists. *What is true:* the shipped reading is
+> **fail-closed — such a rollout supplies no primary dialogue**
+> (`primary-dialogue.js:164`, `codexAccepts` starts `false`). This is a
+> **stated narrowing of the base parser**, which happily returns messages from a
+> headerless file, and it is **unexercised locally**: 50 of 50 sampled rollouts
+> carry a header. *Found:* the architect, filing. *Routing:* corrected in place
+> below and recorded here. **Class: a silent case the implementation settled the
+> safe way; the narrowing is the part worth knowing.**
+>
+> **Erratum 3 — row A4 is silent on records PRECEDING the first header.**
+> *What is wrong:* A4 says eligibility is decided by the first header, without
+> saying what happens to a `response_item` that arrives before one. *What is
+> true:* the shipped reading is **ineligible** — eligibility starts closed and
+> only a first header can open it. *Found:* the architect, filing. *Routing:*
+> corrected in place below and recorded here. **Class: same as Erratum 2.**
+>
+> **Erratum 4 — AC3b's G4 clause is unsatisfiable end to end.** *What is wrong:*
+> it asks that "every retained assistant message after the loss" carry `true`
+> for a budget exhausted mid-file. *What is true:* `streamLines` **returns
+> immediately** on exhaustion (`stream.js:129-138`), so no record can follow the
+> loss and no such message exists. The taint is real but must be asserted **on
+> the projection object** — what shipped asserts `projection.tainted()` — not on
+> a later message. *Found:* the architect, filing. *Routing:* corrected in place
+> below and recorded here. **Class: an acceptance criterion written against a
+> shape the reader cannot produce.**
+>
+> **Erratum 5 — the string-type obligation on a block's `text` VALUE exists in
+> no canonical cell.** *What is wrong:* A5c-blocks governs a block's `type` and
+> says a decided-type block A2/A3 decline never taints, but nothing said what a
+> decided-type block with an unusable **value** does. The round-2 gate finding
+> lived exactly there. *What is true:* such a block is **declined at step 4,
+> without taint**, and neither harness's join may coerce it or throw on it —
+> `{}` would invent `"[object Object]"` and a null `toString` throws. Row A2's
+> empty-join drop applies to **user** records as well as assistant ones.
+> *Found:* the independent PR gate, round 2. *Routing:* one clause added to
+> A5c-blocks and mirrored into AC3c below. **Class: a real contract hole, caught
+> by the gate, now written down.**
+>
+> **Erratum 6 — the B4 cite `scratch.js:118` is stale.** *What is wrong:* four
+> sites cite `src/core/dream/scratch.js:118` for the admission measurement.
+> *What is true:* PR #264 moved it to **`:128`**; the expression
+> `Buffer.byteLength(JSON.stringify(extract))` is unchanged. (The write is now
+> `:139` and the `sanitize` call `:138` — the security checklist's cite is
+> corrected with them.) *Found:* the architect, filing. *Routing:* corrected in
+> place below and recorded here. **Class: a line number moved by a sibling
+> merge; no expression changed.**
+>
+> **Recorded, not errata:** (i) The two Codex text-join guards
+> (`primary-dialogue.js:226` and `:233`) have **no RED id of their own**. They
+> are exercised directly and removing either reddens the suite, but no declared
+> mutation pins them, so a future refactor could drop one and stay green on the
+> proofs lane alone. (ii) The base parser's own crash on a poisoned `toString`
+> is **pre-existing and untouched**: this package's projection never throws, but
+> `parseWithOutcome`'s default path is out of its boundary and was not fixed.
+> (iii) `docs/specs/logbook/2026-09-17-dream-primary-dialogue-taint-model.js` —
+> the reference model these design rounds were argued against — was **wrong in
+> five places** the implementation found, corrected on 2026-09-18 and re-run at
+> 0 mismatches over 42 cases; `src/core/transcripts/primary-dialogue.js` is now
+> the more complete reference.
+
+<!-- errata above; the spec as it shipped follows -->
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -152,7 +244,7 @@ re-derivation of the cites below is expected at dispatch; confirm that with
   a user message is trusted because of its role, whatever preceded it. Row
   A5(a) preserves exactly that; row A5(b) is what this package adds on top, for
   assistant messages, which today's rule does not distinguish at all.
-- `src/core/dream/scratch.js:118` measures admission as
+- `src/core/dream/scratch.js:128` measures admission as (**corrected post-merge, see Erratum 6**)
   `Buffer.byteLength(JSON.stringify(extract))` of the extract
   `transcripts.parseWithOutcome` returned, and `:129` writes
   `JSON.stringify(extract, null, 2)` (0600, no trailing newline). **This
@@ -363,14 +455,14 @@ grammar cannot be closed.
 | ID | Contract | Rule |
 |----|----------|------|
 | A1 | Scope of retention | Within the existing bounded read, redaction and caps (row A6), retain genuine user requests and corrections plus the concluding assistant reply of each exchange. The unit is the exchange, not the session: a user request that never received a concluding reply is retained on its own. Original order and timestamps are preserved. Nothing is summarized, merged, reordered or rewritten; no text that was not in the source appears in the result. |
-| A2 | Claude acceptance | From a record whose top-level `type` is exactly `"user"`, which has no `isMeta: true` and no `isSidechain: true` (row A4), and whose `message.role` is exactly `"user"`: accept the whole of `message.content` when it is a string; when it is an array, accept the `text` value of each block whose `type` is exactly `"text"`, joined with `"\n\n"` in source order, as one user message. From a record whose top-level `type` is exactly `"assistant"` and whose `message.stop_reason` is exactly `"end_turn"`: accept the `text` value of each block whose `type` is exactly `"text"`, joined with `"\n\n"`, as one assistant message, dropping the message if that join is empty. Nothing else — no other `type`, no other `stop_reason` (including an absent one), no `tool_result`, `tool_use`, `thinking` or `image` block — supplies primary dialogue. |
+| A2 | Claude acceptance | From a record whose top-level `type` is exactly `"user"`, which has no `isMeta: true` and no `isSidechain: true` (row A4), and whose `message.role` is exactly `"user"`: accept the whole of `message.content` when it is a string; when it is an array, accept the `text` value of each block whose `type` is exactly `"text"`, joined with `"\n\n"` in source order, as one user message. From a record whose top-level `type` is exactly `"assistant"`, which has no `isSidechain: true` (row A4 — **corrected post-merge, see Erratum 1**), and whose `message.stop_reason` is exactly `"end_turn"`: accept the `text` value of each block whose `type` is exactly `"text"`, joined with `"\n\n"`, as one assistant message, dropping the message if that join is empty. Nothing else — no other `type`, no other `stop_reason` (including an absent one), no `tool_result`, `tool_use`, `thinking` or `image` block — supplies primary dialogue. |
 | A3 | Codex acceptance | Use the **first** `session_meta` record for `session_id`, `started` and `cwd`, exactly as `codex.js:176-182` does today. From a record whose top-level `type` is exactly `"response_item"` and whose `payload.type` is exactly `"message"`: when `payload.role` is exactly `"user"`, accept the `text` of each `payload.content[i]` whose `type` is exactly `"input_text"` **and** whose parallel metadata entry `payload.internal_chat_message_metadata_passthrough.content_item_kinds[i]` is exactly the string `"user.text"`, joined with `"\n"` in source order, as one user message; the metadata must be a plain object and `content_item_kinds` an array of exactly the same length as `payload.content`, or the record supplies nothing. **The kind, not the block type, is what decides**: the harness's injected `agents_md.instructions`, `environments.environment_context`, `plugins.recommendations` and `goal.internal_context` material rides `input_text` blocks too (145 measured occurrences), so a rule keyed on the block type alone would readmit exactly the boilerplate this package exists to remove. When `payload.role` is exactly `"assistant"` **and** `payload.phase` is exactly `"final_answer"`, accept the `text` of each `payload.content[i]` whose `type` is exactly `"output_text"`, joined with `"\n"`, as one assistant message. Nothing else supplies primary dialogue: not `role: "developer"` or any other role, not `phase: "commentary"` or an absent phase, not any other `payload.type` (`reasoning`, `custom_tool_call`, `custom_tool_call_output`, `function_call`, `function_call_output`, `agent_message`), not any other top-level `type` (`event_msg`, `token_usage_record`, `turn_context`, `world_state`, `compacted`, `inter_agent_communication_metadata`). Codex messages keep `ts: null`, as today. |
-| A4 | Copied context | A **Claude** record carrying `isSidechain: true` supplies no primary dialogue: a subagent's turns are a copy of instructions its parent already issued, and counting them would invent a second human. No `true` value exists anywhere in the local 236-file corpus, so this rule is written from the field's presence rather than an observed positive and must be exercised by a constructed fixture. A **Codex** rollout supplies primary dialogue only when its first `session_meta` record's `payload.thread_source` is exactly the string `"user"`, **or** when that key is absent from the payload — those two states, and no others. `"subagent"` (32 of 50 sampled files) is the agent's own rollout, whose user-role records are the parent's instructions to it; `"guardian_review"` (5 of 50) is a second fork mechanism; any other or malformed value is unrecognized and yields nothing. The absent case is accepted because the field is present in 50/50 sampled rollouts and co-occurs with `multi_agent_version`, so its absence indicates a harness build with no subagent concept — **that inference is not itself measured**, and this list is one of the lists `docs/runbooks/codex-pin-bump.md` requires re-verifying at every Codex pin bump. Beyond these two exclusions this package does not deduplicate, reads no ordinal or lineage field, and makes no claim that independent recurrence is solved: an ordinary resumed or forked session retains today's duplication limitation. |
+| A4 | Copied context | A **Claude** record carrying `isSidechain: true` supplies no primary dialogue: a subagent's turns are a copy of instructions its parent already issued, and counting them would invent a second human. No `true` value exists anywhere in the local 236-file corpus, so this rule is written from the field's presence rather than an observed positive and must be exercised by a constructed fixture. A **Codex** rollout supplies primary dialogue only when its first `session_meta` record's `payload.thread_source` is exactly the string `"user"`, **or** when that key is absent from the payload — those two states, and no others. `"subagent"` (32 of 50 sampled files) is the agent's own rollout, whose user-role records are the parent's instructions to it; `"guardian_review"` (5 of 50) is a second fork mechanism; any other or malformed value is unrecognized and yields nothing. The absent case is accepted because the field is present in 50/50 sampled rollouts and co-occurs with `multi_agent_version`, so its absence indicates a harness build with no subagent concept — **that inference is not itself measured**, and this list is one of the lists `docs/runbooks/codex-pin-bump.md` requires re-verifying at every Codex pin bump. **Two cases this cell did not name, both settled fail-closed by what shipped (corrected post-merge, see Errata 2 and 3):** a rollout carrying **no `session_meta` at all** supplies no primary dialogue, and any record **preceding** the first header is ineligible — eligibility belongs to the first header and starts closed. Beyond these exclusions this package does not deduplicate, reads no ordinal or lineage field, and makes no claim that independent recurrence is solved: an ordinary resumed or forked session retains today's duplication limitation. |
 | A5 | **Provenance — CANONICAL.** | Each retained message carries a code-derived boolean `derived_from_untrusted`, computed over the **original record stream**, before projection and before the caps of row A6. Nothing but this code writes the field. Two different rules apply, and conflating them is the error this row exists to prevent. **(a) A user message accepted under A2 or A3 is `false`, always — regardless of anything earlier in the session, including tool output and context gaps.** That is exactly today's rule (`skills/wienerdog-dream/SKILL.md:101-105`: `true` when any supporting message has role `tool_result`, `false` when every supporting message has role `user` or `assistant`), and this package does not change it. The person is the trust root: someone who repeats external text into the conversation has chosen to say it. The residual this leaves is real and is priced in owner item 3. **(b) An assistant message** is governed by a monotonic taint state over the same stream. The state starts `false` and is set `true` **permanently** by either a record the raw policy classifies as tool output (a Claude `tool_result` block; any Codex payload in `TOOL_OUTPUT_TYPES`) or a **context gap** as row A5a defines it. An assistant message is `false` only while the state is `false`, and `true` from the first such event through the end of the session. A new user request, a dropped exchange, a cap, or any later boundary **never** lowers the state. |
 | A5b | What `false` does and does not claim | `derived_from_untrusted: false` claims exactly one thing: **the harness attributed this record to the user role** (or, for an assistant message, that no tool output and no gap preceded it). It is **not** a claim that a human authored the words. It cannot be: across 7 headless and 53 interactive local transcripts the first `user` record carries an identical top-level field set, so a `claude -p` routine prompt — Wienerdog's own code-authored text — is indistinguishable from a person's (see Implementation notes). Nor does `false` claim the content is true, that it was independently verified, or that it is safe to obey. Every surface that states this definition states it in these terms; no surface may say `false` means "no earlier tool output or gap" without restricting that clause to assistant messages. |
 | A5a | Stream-level context gaps | A **context gap** is a point at which code could not determine what a record was. Four of them come from the reader itself, derived by reading `src/core/transcripts/stream.js`, `claude.js` and `codex.js` end to end: **(G1)** an over-long line the reader replaced with `OVERSIZED_RECORD_MARKER` (`stream.js:113-118`); **(G2)** a line rejected by the `maxJsonDepth(line) > Limits.MAX_JSON_DEPTH` guard before `JSON.parse` (`claude.js:119`, `codex.js:168`); **(G3)** a line whose `JSON.parse` threw (`claude.js:121-125`, `codex.js:170-174`); **(G4)** a read cut short by the exhausted budget (`stream.js:129-138`, surfaced as `runExhausted`), which loses the file’s tail. G2 and G3 are **silent today** — outcome stays `ok`, `oversizedRecords` stays `0`, `truncated` stays `false` (measured). **(G5)** a `streamLines` outcome other than `ok` (`over-ceiling`, `read-error`, `too-many-lines`) is total rather than partial: the parser returns an empty extract with no message to carry a value. The fifth source of gaps is a record that parsed but whose schema could not be read — row A5c. |
 | A5c | **Schema discriminators, BY ENCLOSING RECORD TYPE — CANONICAL.** | A discriminator is only ever required where the enclosing record’s own schema has one. A record is **unclassifiable** — and therefore a gap that taints — only when the check its own schema owes cannot be made. **Every recognised top-level type and what it owes:** *Codex* — the top-level `type` must be a non-empty string, else unclassifiable. `session_meta` owes **no `payload.type` at all**: `codex.js:176-182` consumes `payload.id`, `payload.timestamp` and `payload.cwd`, and row A4 consumes `payload.thread_source`, so it is well-formed when `payload` is a plain object and unclassifiable when `payload` is absent or is not one. (Row A4’s "`thread_source` absent" acceptance requires that well-formed payload; a `session_meta` whose payload cannot be read supplies no dialogue rather than defaulting to accepted.) `response_item` owes a `payload` that is a plain object **and** a `payload.type` that is a non-empty string in the decided list — `message`, the five `TOOL_OUTPUT_TYPES` (`custom_tool_call_output`, `function_call_output`, `local_shell_call`, `web_search_call`, `tool_search_output`), and the observed non-tool item types `reasoning`, `custom_tool_call`, `function_call`, `agent_message`; anything else there is unclassifiable. Every **other** Codex top-level type — `event_msg`, `token_usage_record`, `turn_context`, `world_state`, `compacted`, `inter_agent_communication_metadata`, and any future one — is declined whole at the record level, is never looked inside, and owes **no** sub-discriminator. *Claude* — the top-level `type` must be a non-empty string, else unclassifiable. `user` and `assistant` owe a `message` that is a plain object; a `user` record additionally owes a `message.content` that is a string or an array, and an `assistant` record a `message.content` that is an array — anything else is unclassifiable, because code cannot then tell whether the envelope carried blocks. Every other top-level type owes nothing at the record level and is declined whole, subject to row A5d. **Declining a record whose schema WAS readable is never a gap.** |
-| A5c-blocks | **Content-block discriminators — every block, in every envelope — CANONICAL.** | Validating the *container* is not validating its *contents*, and round 4 measured the gap: a paired tool-result block with its `type` deleted, or set to `7`, is silently lost by the real parser (`outcome: ‘ok’`, `oversizedRecords: 0`, `truncated: false`) and an executable transcription of row A5e emitted the following conclusion `false`. So: **for every record the observer can parse, in EVERY envelope — accepted or declined — each element of an array-valued content must be a plain object whose `type` is a non-empty string AND one of the decided block types below.** Any element that is not makes the record unclassifiable: it **taints permanently, and the record supplies no dialogue at all** — step 2 of row A5e stops there rather than falling through to emission. *Decided Claude block types:* `text`, `tool_result`, `tool_use`, `thinking`, `image` — every one observed locally, in `message.content`. *Decided Codex block types:* `input_text`, `output_text`, `input_image`, in a `message` payload’s `content`. **A block whose type is decided but which A2/A3 decline never taints** — `image`, `thinking` and `input_image` are the controls, and row A5d already settles `tool_use`. **A content value that is not an array taints only where its own record schema owed one** (row A5c: a Claude `user` record owes a string or an array, an `assistant` record owes an array, a Codex `message` payload owes an array); in a **declined** envelope a non-array content carries no blocks to hide anything in and does **not** taint. **Codex `content_item_kinds` that is present but misaligned with `payload.content` is caught at a different step**: the blocks themselves are valid, so step 2 passes and **A3 declines the record at step 4 — no taint**, because a Codex `message` payload is never tool output. |
+| A5c-blocks | **Content-block discriminators — every block, in every envelope — CANONICAL.** | Validating the *container* is not validating its *contents*, and round 4 measured the gap: a paired tool-result block with its `type` deleted, or set to `7`, is silently lost by the real parser (`outcome: ‘ok’`, `oversizedRecords: 0`, `truncated: false`) and an executable transcription of row A5e emitted the following conclusion `false`. So: **for every record the observer can parse, in EVERY envelope — accepted or declined — each element of an array-valued content must be a plain object whose `type` is a non-empty string AND one of the decided block types below.** Any element that is not makes the record unclassifiable: it **taints permanently, and the record supplies no dialogue at all** — step 2 of row A5e stops there rather than falling through to emission. *Decided Claude block types:* `text`, `tool_result`, `tool_use`, `thinking`, `image` — every one observed locally, in `message.content`. *Decided Codex block types:* `input_text`, `output_text`, `input_image`, in a `message` payload’s `content`. **A decided-type block whose VALUE is unusable is DECLINED at step 4, without taint (corrected post-merge, see Erratum 5):** a `text`, `input_text` or `output_text` block whose `text` is not a string is no text value, so A2/A3 accept nothing from it — and neither harness’s join may coerce it or throw on it. Row A2’s empty-join drop then applies to **user** records as well as assistant ones. **A block whose type is decided but which A2/A3 decline never taints** — `image`, `thinking` and `input_image` are the controls, and row A5d already settles `tool_use`. **A content value that is not an array taints only where its own record schema owed one** (row A5c: a Claude `user` record owes a string or an array, an `assistant` record owes an array, a Codex `message` payload owes an array); in a **declined** envelope a non-array content carries no blocks to hide anything in and does **not** taint. **Codex `content_item_kinds` that is present but misaligned with `payload.content` is caught at a different step**: the blocks themselves are valid, so step 2 passes and **A3 declines the record at step 4 — no taint**, because a Codex `message` payload is never tool output. |
 | A5c-why | Why an unfamiliar Claude top-level type is not, by itself, a gap | Row A5c declines an unrecognised Claude top-level type whole instead of tainting on it, and that is the judgment call of this package. **Claude does not signal tool output by top-level type** — tool results arrive as a `tool_result` block, which row A5d catches wherever the block appears — so an unfamiliar envelope with no tool content is not evidence that anything was lost. Tainting on it would also be a cliff: the local corpus carries seventeen top-level types and the auxiliary ones are constant (`attachment` alone appeared 3,992 times in 16,218 records), so the first type a future Claude Code release introduces would appear early in nearly every session and taint every assistant message after it — silently ending Tier-3 learning from assistant text across the whole install. **The principle, stated once because round 4 made it general:** taint on an unrecognised value exactly where the harness signals tool output — the Codex `payload.type` of a `response_item` (row A5c) and the content-block `type` of either harness (row A5c-blocks) — and decline without tainting everywhere else, which is the top-level record type of both harnesses. **That buys two more cliffs deliberately**: a new Codex item type, and a new content block type such as a future `redacted_thinking` or a `web_search_tool_result`, each taints every session containing it until its decided list is updated. The block-level one is worth it because that is precisely where a renamed or case-shifted tool result would hide — measured as ADV-1 and ADV-2 of the round-4 model run, which a presence-and-shape check alone let through. **No counter or diagnostic tells a maintainer either cliff is firing, and this package adds none** — the owner’s scope record excludes new reporting infrastructure. What is visible is the taint itself in the scratch extracts; a per-run unclassified-record count is routed to `WP-dream-report-run-skips` as a candidate, not built here. Owner item 4 puts the choice on the record. |
 | A5d | **A recognised tool-result block outranks envelope exclusion — CANONICAL.** | Inside the observer, and **never** in the default parser output, every record that parsed is inspected for tool content before its envelope is declined. **Claude:** if `message.content` is an array, any block whose `type` is exactly `"tool_result"` sets the taint state, whatever the enclosing record’s top-level `type` is and whatever `isMeta` says. This was measured: a `tool_result` block placed under an `attachment` record, under an unfamiliar top-level type, under an `assistant` record and under an `isMeta: true` user record each vanished from the real parser with `outcome: ‘ok’` and `truncated: false`, leaving the following assistant conclusion untainted. **The scan is bounded to that one array** — `message.content` at depth one — and is not a recursive search of attacker-controlled JSON; a `tool_result` hidden anywhere else is a named residual, not a covered case. **A `tool_use` block does NOT taint**, and that is a decision rather than an omission: a request to run a tool carries no external content, only its result does, and every route by which a result reaches the transcript is already covered — an accepted envelope (row A5), a declined envelope (this row), or a loss (row A5a). Tainting on `tool_use` would also fire on ordinary progress replies, which carry 1,901 `tool_use` blocks in 3,789 sampled assistant records, and would taint nearly every session. **Codex needs no equivalent scan and does not get one:** its tool output has a top-level home, so it is caught by row A5c’s `response_item` rule, and an unrecognised `payload.type` there already taints — a stronger protection than Claude has, because Codex signals tool output by type and Claude by block. The residual is a tool payload nested inside a declined Codex envelope such as `event_msg`, whose internal shape this package did not inspect and does not guess about; it is routed to the list `docs/runbooks/codex-pin-bump.md` re-verifies. |
 | A5e | **The ordered decision procedure — code from THIS.** | For each line of the transcript, in order, do exactly this. The taint state starts `false` and is **monotonic**: any step that sets it leaves it set for the rest of the session, and no later step lowers it. **1.** The line did not reach the parser intact (G1–G4 of row A5a) → **taint**; there is no record to examine; next line. **2.** The record parsed. Are **both** schema checks satisfied — the one its own record type owes (row A5c) **and** a decided-type discriminator on every element of any array-valued content, in this envelope whether the envelope is accepted or declined (row A5c-blocks)? If either fails → **taint**, and **this record supplies no dialogue**: go to the next line without reaching steps 3–5. **3.** Does the record contain a recognised tool-result block or payload (row A5d for a Claude `message.content` block; row A5c’s `TOOL_OUTPUT_TYPES` for a Codex `response_item`)? If yes → **taint**, and continue to step 4: **one record can both taint and supply dialogue**, which the worked example’s third record does — its `tool_result` block taints while its `text` block is accepted. Because this step runs before step 5 emits, a message emitted from a record that itself carries tool content is judged against the already-set state, so an assistant reply sharing a record with a `tool_result` block is `true`. **4.** Does A2 or A3 accept the record as primary dialogue? If no → it is classified-and-declined; **no taint**; next line. **5.** It is accepted. A **user** message is emitted with `derived_from_untrusted: false` — always, by role, whatever the state is (row A5(a)). An **assistant** message is emitted with `derived_from_untrusted` equal to the current taint state (row A5(b)). **6.** At end of file, a `streamLines` outcome other than `ok` (G5) means the extract is empty and carries no flags at all. Row A6’s caps and redaction then apply to whatever was emitted, and they never change a flag. |
@@ -383,7 +475,7 @@ grammar cannot be closed.
 | B1 | One bounded read | The three values come from **one** call to `streamLines` per transcript, debiting the caller-owned `budget` exactly once, so intake I/O accounting is unchanged. `parse` carries the existing `{outcome, oversizedRecords, runExhausted}` fields with their existing meanings. The raw capped extract used to derive `gateExtract` and `intakeBytes` is **not returned**: no caller can write tool text it never received. |
 | B2 | `gateExtract` | `{harness, session_id, messages, skill_invocations}`. `messages` has **exactly the same length and positions** as the raw capped extract's, and each element is an object whose only key is `role`, carrying the raw message's role verbatim. `skill_invocations` is the raw capped extract's array verbatim — same `skill`, `index`, `resultIndex`, `errored`, already rebased by the existing `rebaseInvocations` path — or absent for Codex, exactly as today. No `text` key occurs anywhere in the value. This is the input `src/core/dream/validate.js:510-527` needs and the only input it needs; producing it from the raw timeline rather than the projection is what keeps the gate's verdicts identical. |
 | B3 | No invocation metadata in the extract | `extract` carries **no** `skill_invocations` key, on either harness. Invocation names, indices and error states are tool-record detail and belong to `gateExtract` alone. A consumer that wants to know whether a skill ran asks the gate, not the model. |
-| B4 | `intakeBytes` | `Buffer.byteLength(JSON.stringify(<the raw capped extract>))` — byte-identical to what `src/core/dream/scratch.js:118` computes today from `parseWithOutcome(...).extract`. It is the number the collector's capacity bound will be measured against, which is what gives the successor package **byte-policy equivalence**: every byte-based admission decision is the one the base commit would make. **It does not make the admitted session set identical.** The collector also stops on a soft wall-clock preprocessing deadline, which projection changes the cost of, so a deadline-deferring run can admit a different set in either direction; the successor's rows C1 and C1a own that statement and this package neither makes nor weakens it. This package only returns the number. |
+| B4 | `intakeBytes` | `Buffer.byteLength(JSON.stringify(<the raw capped extract>))` — byte-identical to what `src/core/dream/scratch.js:128` computes today (**corrected post-merge, see Erratum 6**) from `parseWithOutcome(...).extract`. It is the number the collector's capacity bound will be measured against, which is what gives the successor package **byte-policy equivalence**: every byte-based admission decision is the one the base commit would make. **It does not make the admitted session set identical.** The collector also stops on a soft wall-clock preprocessing deadline, which projection changes the cost of, so a deadline-deferring run can admit a different set in either direction; the successor's rows C1 and C1a own that statement and this package neither makes nor weakens it. This package only returns the number. |
 
 ### Mirrored Surface Checklist
 
@@ -414,7 +506,7 @@ a newly found mirror is registered here on the spot.
       backs A2's array-`text` clause; `codex.js:61`/`:110-125` backs A3's
       developer and phase clauses; `codex.js:176-182` backs A3's first-header
       clause and A4's Codex clause; `validate.js:510-527` backs B2;
-      `scratch.js:118` backs B4; **the four context-losing-return cites
+      `scratch.js:128` backs B4; **the four context-losing-return cites
       (`stream.js:113-118`, `:129-138`; `claude.js:119`, `:121-125`;
       `codex.js:168`, `:170-174`) back row A5a, **the silent-discriminator
       cites (`claude.js:127`, `codex.js:184`, `:110-125`'s `mapCodexItem`
@@ -588,7 +680,7 @@ a newly found mirror is registered here on the spot.
 
 - [ ] No untrusted identifier from a transcript flows into a filesystem path or
       a shell command in this package: `session_id` is not used to build a path
-      here (`src/core/dream/scratch.js:128` sanitizes it, and that line is
+      here (`src/core/dream/scratch.js:138` sanitizes it, and that line is
       outside this boundary), and the two paths that do appear in the result are
       the code-supplied `source_path` and `cwd`, bounded unchanged by the
       existing `boundExtractPath` (row A6).
@@ -646,7 +738,7 @@ a newly found mirror is registered here on the spot.
       `parse.outcome` is `"ok"`, `parse.oversizedRecords` is `0` and the raw
       extract's `truncated` is `false`, so the fixture proves the observer sees
       what those three fields do not; **(G3)** a line that is not valid JSON;
-      **(G4)** a budget exhausted mid-file. Its RED proof reddens on removing
+      **(G4)** a budget exhausted mid-file — **whose taint is asserted on the projection object, not on a later message (corrected post-merge, see Erratum 4)**. Its RED proof reddens on removing
       the depth-limit notification.
 - [ ] **AC3c — an unclassifiable record, payload or block taints (Table A row
       A5c).** Every fixture here is valid JSON that passes `JSON.parse`, and
@@ -686,7 +778,11 @@ a newly found mirror is registered here on the spot.
       would taint every Codex session from its own header. **Three more
       non-tainting controls, one per decided-but-declined block type:** a
       `thinking` block, an `image` block beside a `text` block, and a Codex
-      `input_image` each leave the following assistant message `false`; and a
+      `input_image` each leave the following assistant message `false`; a `text`
+      block whose `text` is `{}`, a number, or an object with a null `toString`
+      is **declined without taint and never throws** (row A5c-blocks,
+      **corrected post-merge, see Erratum 5**), and a user record whose only
+      `text` block is unusable supplies no message at all; and a
       Codex `message` whose `content_item_kinds` is present but **misaligned**
       with `payload.content` leaves it `false` too — row A5c-blocks routes that
       to A3's decline at step 4, not to a taint. Its RED proof reddens
@@ -813,7 +909,7 @@ a numbered design-review round and carries its round in the logbook entry
 
 1. **Does `dream_max_input_bytes` bound transcript INTAKE or model-visible
    OUTPUT?** *Recommendation:* intake — row B4 measures the capacity bound
-   against the raw capped extract, exactly as `scratch.js:118` does today, so
+   against the raw capped extract, exactly as `scratch.js:128` does today, so
    every **byte-based** admission decision stays the base commit's. That is
    byte-policy equivalence, and it is the whole of the claim: the admitted
    session set is equal to the base commit's only when **both** the baseline run
