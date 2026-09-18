@@ -55,8 +55,10 @@ or re-injecting the secret while you clean up.
      **There is no banner for this one:** it is announced in that night's dream
      report (`reports/dreams/<date>.md`, under "Redacted in place (secret
      scan)"), so that is where to look. The folder keeps roughly the 50 most
-     recent copies and then deletes the oldest, so review a redaction within
-     about two months rather than leaving it indefinitely — right after a run
+     recent copies and then deletes the oldest, and for most files in there
+     that is the only copy of the original, which cannot be recovered once it
+     is deleted, so review a redaction within about two months rather than
+     leaving it indefinitely — right after a run
      that rewrote a great many notes it can briefly hold more, because a run
      never deletes its own copies. And `wienerdog uninstall` removes this
      folder along with everything else Wienerdog keeps, so copy out anything

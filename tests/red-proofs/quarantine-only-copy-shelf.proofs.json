@@ -1,0 +1,30 @@
+{
+  "suite": "tests/unit/dream-validate.test.js",
+  "proofs": [
+    {
+      "id": "prune-keeps-a-copy-of-what-it-evicts",
+      "wp": "WP-quarantine-only-copy-shelf",
+      "criterion": "1",
+      "why": "row O2 is that the prune DESTROYS the bytes for classes A and B, not merely that it unlinks a name from redacted/. A prune that copies the file aside before unlinking satisfies every shipped retention assertion — the shelf still returns to the cap, the evicted basename is still gone, and the rmSync deletion still happens, so the AC-14 tests and the Table N row N2 deletion-count spy all stay green — while the secret-bearing bytes remain on disk. [OC-1]'s whole-tree byte-absence walk is the only assertion in the repo that can see it, which is exactly why it exists",
+      "file": "src/core/dream/validate.js",
+      "find": "        fs.rmSync(path.join(dir, c.name), { force: true });",
+      "replace": "        { const aside = path.join(dir, '..', '.pruned'); fs.mkdirSync(aside, { recursive: true, mode: 0o700 }); fs.copyFileSync(path.join(dir, c.name), path.join(aside, c.name)); } /* RP_MUT_OC_PRUNE_KEEPS_A_COPY */\n        fs.rmSync(path.join(dir, c.name), { force: true });",
+      "marker": "RP_MUT_OC_PRUNE_KEEPS_A_COPY",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "EP2 retention [OC-1]: the prune destroys a SOLE-SURVIVING copy — a class-A original is evicted and its bytes then exist nowhere under the core (Table O rows O1, O2)"
+          ],
+          "signal": "O2-the-prune-destroys-a-sole-surviving-copy"
+        },
+        {
+          "test": [
+            "EP2 retention [OC-4]: a C1 duplicate DECAYS into a sole survivor — the announced twin is deleted, and a later prune destroys the last copy (Table O row O1, class C1; row O2)"
+          ],
+          "signal": "O2-C1-decayed-copy-is-destroyed"
+        }
+      ]
+    }
+  ]
+}

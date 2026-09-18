@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-only-copy-shelf
 title: Decide what the redacted shelf owes a copy that is the only one of a note's pre-scrub content
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: [WP-quarantine-banner-location]
