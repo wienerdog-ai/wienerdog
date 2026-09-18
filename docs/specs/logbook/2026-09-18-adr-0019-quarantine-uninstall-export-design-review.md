@@ -211,5 +211,24 @@ carry a pre-measurable anchor, four mutate code this package authors.
 **Declaration count after round 8:** twelve declarations over eleven criteria;
 eight carry a pre-measurable anchor, four mutate code this package authors.
 
+## Round 9 — Astra, 2026-09-18
+
+- **Reviewed tip:** `45fe40cf`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r9-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r9-astra-focus.txt`
+- **Committed before adjudication at:** `4bd3ea58`
+- **Verdict:** `needs-attention` — *"the replay guard still permits recursive
+  deletion of a shelf ancestor."*
+- **Held from round 8:** **X16**'s placement was **not** re-opened — the finding is
+  about its *coverage*, and it is the same family one level up.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R9-1** | **Protect shelf ancestors from recursive manifest replay.** Table X row **X16** (`:386`) guarded targets **at or below** a shelf but not a **recursive deletion of a shelf ANCESTOR**. With `<core>/app` a symlink to `<core>/state`, a forged `{kind:'vendored-tree', path:'<core>/state'}` satisfies `reverseVendoredTree`'s only ownership test — `sameResolvedDir(entry.path, appRoot)` (`manifest.js:588`) — **its target lies outside both shelf subtrees, so X16 permitted it**, and `fs.rmSync(entry.path, {recursive:true, force:true})` (`:593`) destroys a preserve completed after the empty-shelf gate. Astra probed the shipped `reverse()`: the entry validates and invokes the recursive `rmSync`, every resolution succeeding | A | HEAVY (high, conf. 0.98) | **ACCEPTED IN FULL.** **X16 is now SYMMETRIC**, and the rule is stated once: *no manifest-driven deletion may cover a shelf path **from below** or **from above**.* **From below** (round 8) — any mutating kind whose literal or resolved target is **at or under** a shelf root. **From above** (round 9) — any kind **whose reverser deletes recursively** whose target **contains** one, by the same three cases, with an unanswerable resolution preserving in both halves. **New canonical Table V enumerates the recursive deleters from the shipped code**, every arm read rather than assumed: `vendored-tree` (`:586`, recursive `rmSync` at `:593`, gated only by `sameResolvedDir`) and `copied-skill` (`:615`, `:645`, gated by a parent-equals-skills-root test and a `hashDir` match) — **and nothing else**; `file` is non-recursive, `dir` removes only a **virtually empty** directory, `symlink` unlinks one link, `managed-block`/`settings-entry` rewrite one file, `scheduler-entry` removes one file. `copied-skill` is included **although it is far harder to forge than `vendored-tree`**, because **the rule is over the deletion SHAPE, not over how hard an arm is to reach**. **`dir` is excluded deliberately and the reason is load-bearing, not tidiness:** `init` can record `{kind:'dir', path:'<state>'}`, and guarding it would emit a `skipped` line on an **ordinary** uninstall, breaking Table W row **W6** and acceptance criterion 7's byte-identity. **Table V is closed only while it is re-measured**, so a **new verification step** re-runs `grep -n 'recursive: true' src/core/manifest.js` and requires exactly the three known hits (`:593`, `:645`, and `:1148`, which is `disposeCoreMechanics`, governed by **X1**); a fourth hit means a kind was added and Table V is stale. **Acceptance criterion 18** gains the from-above arm as a **different entry shape**, asserting the recursive `fs.rmSync` is **not invoked** — counted through the seam, because a skip and a successful-but-empty delete both leave the file present — plus the same shape for `copied-skill` **and a `{kind:'dir'}` negative control** proving the exclusion holds. **Second RED proof `quse-reverse-guard-from-below-only`** (keep the from-below half, delete only the from-above half), anchored on `if (!sameResolvedDir(entry.path, appRoot)) {` (**1** at `5b77865f`): without it the new half is **invisible**, since `quse-reverse-shelf-guard-dropped` removes both at once and a suite fixturing only at-or-below targets stays green on a from-below-only implementation |
+
+**Declaration count after round 9:** thirteen declarations over eleven criteria —
+criterion 14 carries two and criterion 18 now carries two; nine have a
+pre-measurable anchor, four mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean or LIGHT-only return
 (`docs/runbooks/codex-review.md`, "Weighted closure").
