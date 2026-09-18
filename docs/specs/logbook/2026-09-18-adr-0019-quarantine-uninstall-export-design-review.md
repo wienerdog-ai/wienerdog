@@ -40,10 +40,45 @@ amendment it drafts carries *"owner signature pending"*.
 | Table B was described in the PR body as 4 anchored + 2 new-code | It is **5 anchored + 1 new-code**. The spec now states the split in Table B's own preamble; the PR body is corrected in the same push |
 | `WP-quarantine-only-copy-shelf`'s row **O8b** cites `docs/GLOSSARY.md:141-148`, which **contains** this package's `:146-147` target — the ranges overlap on paper | Table W row **W9** now annotates the overlap explicitly: no content collision (O8b adds a clause beside *"disposable"*, this package replaces the *"`wienerdog uninstall` removes it …"* clause), which is why the ordering is a `depends_on` rather than a convention, and why the implementer re-derives both line numbers after that package lands |
 
-### What round 1 did **not** re-open
+### What round 1 did **not** re-open (unchanged after round 2)
 
 Owner items 1, 2 and 3 were not challenged, and neither was the amend-vs-supersede
 recommendation, the refuse-and-report cell, the code-carve-out-vs-manifest-kind
 choice, or the composition rules of Table W row **W7**. All stand as written.
 
-**A further round is required**, on the rewritten Table X row **X1** above.
+## Round 2 — Astra, 2026-09-18
+
+- **Reviewed tip:** `f6f27d3e`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r2-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r2-astra-focus.txt`
+- **Committed before adjudication at:** `85041d69`
+- **Verdict:** `needs-attention` — *"the proposed sweep introduces a
+  symlink-related data-loss regression."*
+- **Held from round 1:** the `rmdirSync` bottom-up sweep (**X1** step 3) and the
+  **K2** shelf-root exclusion were **not** re-opened.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R2-1** | **The child-by-child sweep follows a symlinked `state` directory.** Table X row **X1** (`:341`) enumerated `paths.state` and recursively deleted every non-`quarantine` child **without first rejecting a symlink at `state`**. The shipped `isDir` (`manifest.js:175-181`) uses `statSync`, so it accepts a directory symlink: with `<core>/state` pointing at an external directory holding user files and no `quarantine/`, the gate passes and the sweep deletes **that target's** children. Mocked execution confirmed the deletion target moving from `state` to `state/personal-notes`. At `5b77865f` the single `rmSync(paths.state, {recursive:true})` removes only the link, so **this is a regression round 1's own fix introduced**, and the vault guard gives no cover when the configured vault is elsewhere | A | HEAVY (high, conf. 0.99) | **ACCEPTED IN FULL.** New canonical row **Table X row X10** states the rule once over every path this package classifies: **every classification is `fs.lstatSync`-based; `statSync`/`isDir` is never used to decide whether to enumerate or delete.** **X1 gains a step 0**: `lstat` `paths.state` first — a **symlink is `unlinkSync`'d and never descended**, no enumeration, nothing below it touched. **X1 step 3** gains the matching shelf clause: a shelf root `lstat` reports as anything but a directory is **preserved untouched, reported, never followed, never removed, never climbed past** — consistent with **K2**, which already counts that object as one of the user's entries. New **Table Y row Y9**; new **acceptance criterion 14** (external directory's files byte-unchanged after a full uninstall, link removed, core emptied — plus the shelf-root arms); new RED proof **`quse-symlinked-state-descended`**, anchored on `if (!isDir(dir)) continue;` (**1** at `5b77865f`), whose mutation reinstates `isDir` and restores this exact defect. The old criterion 14 (RED proofs) became **15**, and its two references were moved with it |
+
+**One narrowing of the recommendation, stated rather than silently taken.** The
+reviewer recommended *"preserve/report a symlink"* at `state`. **Never descend**
+is accepted in full. **Preserving the link itself is narrowed to unlinking it**,
+because unlinking a symlink destroys **no bytes**, it reproduces `5b77865f`
+exactly, and it is already the treatment `disposeCoreMechanics` gives a symlinked
+**core** at `manifest.js:1164-1165`; preserving it would leave `<core>` permanently
+non-empty for no safety gain. The shelf roots keep the reviewer's wording in full,
+because **K2** classifies a non-directory there as user content.
+
+**Also recorded:** `isDir` is **not** changed and **not** removed — it has four
+call sites at `5b77865f` (`:587`, `:616`, `:903`, `:1143`), all retained,
+including `:1143` for `logs`/`schedules`/`secrets`, which keep the existing
+`isDir` + recursive `rmSync` path and are out of scope. The general rule's
+Node-behaviour half (recursive `rmSync` `lstat`s and unlinks rather than
+descending) is stated as **the contrast this finding measured**, with a one-line
+implementer probe required rather than taken on trust — because the enumeration
+in X1 step 1 is ours, and a guarantee inside `rmSync` says nothing about a
+`readdirSync` we wrote.
+
+**A further round is required**, on **X1** as it now stands with step 0 and on
+**X10**.
