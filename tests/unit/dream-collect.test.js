@@ -1686,6 +1686,22 @@ function writeCraftedCodex(paths, name, fixture, when) {
   return file;
 }
 
+/** Make ONE candidate's preparation throw from inside the parse, keyed by
+ *  basename — the same seam [PT-2] installs, and the same TypeError the crafted
+ *  rollout raised before `WP-transcript-parsers-harden-text-values` made the
+ *  parsers decline a non-string `text` instead of coercing it. The throw must
+ *  come from the PARSE, not from after it: `pt-only-parse-is-caught` re-throws
+ *  only when `extract` is already bound, and declares that [PT-3] and only
+ *  [PT-3] reddens under it.
+ *  @param {import('node:test').TestContext} t @param {string} basename */
+function throwOnParseOf(t, basename) {
+  const real = transcripts.parsePrimaryWithOutcome;
+  t.mock.method(transcripts, 'parsePrimaryWithOutcome', (d, budget) => {
+    if (path.basename(d.path) === basename) throw new TypeError('Cannot convert object to primitive value');
+    return real(d, budget);
+  });
+}
+
 /** A healthy rollout whose `session_meta.id` is `id` — however long. */
 function writeCodexWithId(paths, name, id, when) {
   const dir = path.join(paths.codexDir, 'sessions', '2026', '01', '01');
@@ -1702,11 +1718,12 @@ function writeCodexWithId(paths, name, id, when) {
   return file;
 }
 
-test('dream-collect: [PT-1] a transcript whose preparation throws is set aside, and the run finishes over the healthy ones', () => {
+test('dream-collect: [PT-1] a transcript whose preparation throws is set aside, and the run finishes over the healthy ones', (t) => {
   const paths = tempPaths();
   writeClaude(paths, 'alpha', 1, 10, new Date('2026-01-05'));
   writeClaude(paths, 'beta', 1, 10, new Date('2026-01-04'));
   const crafted = writeCraftedCodex(paths, 'rollout-crafted.jsonl', 'codex-poisoned-text-block.jsonl', new Date('2026-01-06'));
+  throwOnParseOf(t, 'rollout-crafted.jsonl');
 
   let result = null;
   assert.doesNotThrow(() => {
@@ -1779,11 +1796,12 @@ test('dream-collect: [PT-3] the boundary extends PAST the parse call — a post-
   assertPartition(paths, result);
 });
 
-test('dream-collect: [PT-4] a set-aside candidate consumes nothing and records nothing derived from the throw', () => {
+test('dream-collect: [PT-4] a set-aside candidate consumes nothing and records nothing derived from the throw', (t) => {
   const paths = tempPaths();
   writeClaude(paths, 'earlier', 1, 10, new Date('2026-01-08'));
   const crafted = writeCraftedCodex(paths, 'rollout-crafted.jsonl', 'codex-poisoned-text-block.jsonl', new Date('2026-01-07'));
   writeClaude(paths, 'later', 1, 10, new Date('2026-01-06'));
+  throwOnParseOf(t, 'rollout-crafted.jsonl');
   const result = collectExtracts(paths, emptyLedger(), 400_000);
 
   // The same two healthy sessions, collected without the crafted file at all —
@@ -1826,9 +1844,10 @@ test('dream-collect: [PT-4] a set-aside candidate consumes nothing and records n
   }
 });
 
-test('dream-collect: [PT-6] a set-aside transcript is skipped while unchanged and reconsidered once it changes', () => {
+test('dream-collect: [PT-6] a set-aside transcript is skipped while unchanged and reconsidered once it changes', (t) => {
   const paths = tempPaths();
   writeCraftedCodex(paths, 'rollout-crafted.jsonl', 'codex-poisoned-text-block.jsonl', new Date('2026-01-05'));
+  throwOnParseOf(t, 'rollout-crafted.jsonl');
   let ledger = emptyLedger();
 
   const first = collectExtracts(paths, ledger, 400_000);

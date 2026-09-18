@@ -58,7 +58,7 @@ function flattenToolResultContent(content) {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content
-      .filter((block) => block && block.type === 'text')
+      .filter((block) => block && block.type === 'text' && typeof block.text === 'string')
       .map((block) => block.text)
       .join('\n');
   }
@@ -173,7 +173,7 @@ function parseClaudeTranscript(filePath, sizeBytes, budget, observer) {
       const content = obj.message && obj.message.content;
       if (Array.isArray(content)) {
         const text = content
-          .filter((block) => block && block.type === 'text')
+          .filter((block) => block && block.type === 'text' && typeof block.text === 'string')
           .map((block) => block.text)
           .join('\n\n');
         if (text !== '') {
