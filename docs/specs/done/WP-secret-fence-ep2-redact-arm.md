@@ -461,6 +461,13 @@ implementer implements what these tables say and does not invent a third path.**
 pinned by Table T row **RP-1**, and *not fixed here*. The decision is that this
 WP does not fix it, not that it is gone.
 
+**STRUCK 2026-09-18 — residual 11 is NO LONGER OPEN, and the sentence above is
+false against the current tree.** It is preserved because it was true when it
+was written and because the 2026-07-27 decision it qualifies is unchanged. The
+correction is stated once, in the **ERRATUM — 2026-09-18** paragraph under
+accepted residual **11** in the Accepted residuals section, and this mirror
+defers to it and restates none of it.
+
 ### The problem, retained because the decision only makes sense with it
 
 Every withhold ends in a destructive operation — `git checkout HEAD -- rel` on a
@@ -485,7 +492,7 @@ not rediscover it.
 
 | | option | what it does | what it costs |
 |---|--------|--------------|---------------|
-| **A — keep the fall-through** — **DECIDED 2026-07-27** | a failed redact arm falls through to B3 and withholds, exactly as the owner approved | the note is preserved and reverted; the run continues and commits every other note | **the inherited race remains on these paths**, disclosed as residual 11 |
+| **A — keep the fall-through** — **DECIDED 2026-07-27** | a failed redact arm falls through to B3 and withholds, exactly as the owner approved | the note is preserved and reverted; the run continues and commits every other note | **the inherited race remains on these paths**, disclosed as residual 11. **STRUCK 2026-09-18: that cost no longer exists — the race is gone from the tree and residual 11 is struck. The row's DECISION is unchanged and stays dated 2026-07-27; only this cost cell is corrected, and the correction is stated once, in the ERRATUM — 2026-09-18 paragraph under accepted residual 11, which this cell defers to and does not restate.** |
 | B — abort every redact-arm fall-through — **REJECTED** | B5 and B5a stop raising a withhold and raise a `WienerdogError` instead — the whole dream run ends, nothing is committed | zero data-loss risk on the new paths, and a large simplification: **K4, R0b, FI-10, FI-11, FI-17, FI-18, FI-19, RP-1, consequence 2's entire delete machinery, accepted residual 10b, and mutations M-31, M-45, M-49, M-50 and M-51 would all lose their subjects or collapse** | **it deletes a behaviour the owner's approval names verbatim**, and one note's scrub failure costs the whole run's commits |
 
 **Why it was the owner's call rather than the architect's.** The first
@@ -2467,7 +2474,7 @@ entirely on which:
 | **FI-17** | **R0b** — the cross-product, TRACKED target | Combine the two axes that FI-10 and FI-16 each cover singly. **(1)** patch `fs.readFileSync` so that on **K2** it first writes different bytes over the target and then delegates — the FI-16 mechanism, which takes the arm to **R7c**; **(2)** patch `fs.writeFileSync` to throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `redacted/` — the FI-10 mechanism, which fails B3's own preserve. The redact preserve still succeeds, so `redacted/` holds the **pre-save** bytes while the target holds the **post-save** ones. **Assert:** the gate **threw**; the tracked file is **byte-identical to the post-save bytes** — *not* restored to `HEAD`; `git diff --cached` still shows the uncleared entry; `fs.appendFileSync` was never called; **both** the `redacted/` copy and the on-disk file survive and **differ from each other**; **and the `WienerdogError` carries all four of Table Q row Q18's fields at their R0b-MISMATCH values** — the vault-relative path; **B3's** preserve named as the one that failed and the redact preserve **not** so named; the identity check recorded as **performed and mismatched**; and the surviving `redacted/` basename. *Round 8 added the first three: round 7 asserted the basename alone, which an error message reading `preserve failed <basename>` satisfies* | gate | **this is the destructive cell neither existing injection occupies**, and stating why is the point: **FI-10** is preserve-failure with **no** concurrent change (so the copy *is* of the bytes K3 saw and the revert proceeds, subject to residual 11), **FI-16** is concurrent change with a **successful** second preserve (so a copy of the current bytes gets written). Only the product leaves a copy that is *not* of the bytes on disk while the code path that would delete them runs. **A test that varies one axis passes against the losing implementation** |
 | **FI-18** | **R0b** — the cross-product, UNTRACKED target | the same two patches, on an **untracked** target. **Assert the same things, including all four of Q18's fields at their R0b-MISMATCH values, with the first two sharpened:** the file is **still on disk** (`fs.rmSync` never ran) and holds the post-save bytes | gate | **the untracked arm is the one that loses data irreversibly and it must be tested separately**, exactly as FI-12/13/14 are: a tracked file discarded by `git checkout HEAD --` loses only this run's modifications, while an untracked file removed by `fs.rmSync` is **gone**. Round 1 made that argument for R0 and round 5 makes it again for R0b, because the two rows share the abort and not the way in |
 | **FI-19** | **R0b** via K4's THROW, tracked and untracked | **Three patches, and the fall-through trigger is the part round 6 got wrong.** **(1) THE TRIGGER — FI-7's `spawnPinnedSync` wrapper**, failing the single `['-C', vaultDir, 'update-index', '--add', '--cacheinfo', …]` invocation. That is **row R7 → B5a → B3**, and it is the cleanest fall-through available here because **it leaves the target byte-unchanged** — the rename never runs — which is what keeps this row's own "byte-identical to what was on disk before the arm" assertion true. **(2)** patch `fs.writeFileSync` to throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `redacted/` — FI-10's mechanism, so **K3's preserve returns `null`** (its read succeeds; its *write* is what fails). **(3)** patch `fs.readFileSync` to throw `EACCES` on **K4** — the identity read that follows a `null` from K3 — and **identify K4 STRUCTURALLY, never by an ordinal**: throw on the **first** target Buffer read that happens **after the withheld preserve's write has failed**, which is K4 by construction on both arms. K3's own read must still succeed, so that its WRITE is what fails — that is patch (2)'s whole point — and the structural form gives that for free, because the flag it keys on is set by the failing write. *(Post-Done errata 2026-07-28, from PR #122's Decision 2 and Discovered issue 2. Round 8 wrote this let-through list as "K1, K2 and K3's read", and that list is arithmetically wrong for this row's OWN trigger: patch (1) is an **R7**, and on an R7 the arm returns before the pre-rename comparison ever runs, so **K2 does not execute**. The real sequence on this path is **K1, K3, K4** — three target reads, not four — so a patch that lets three through leaves nothing for the throw to land on and the row's outcome is unreachable again. Round 8's own worked counter-argument inherits the same error: against the true sequence, "lets two reads through and throws on the third" lands on **K4**, which is exactly what this row wants, not on K3. **The repair is not a corrected count.** Any ordinal is a claim about which reads run, and this row has now been wrong about that twice; the structural anchor above is immune to the count and to any future reordering, and it is strictly stronger than what round 8 asked for — it cannot fire before the withheld write has failed, whatever the sequence. Round 6's version of this row named no fall-through trigger at all, and FI-10 shipped with the same omission: one defect family, and **ADR-0036** — PROPOSED, unsigned, not in force — is where the general rule is now written, in its canonical Table A. **That rule does not forbid counted seams**: it forbids an ordinal where a structural anchor was available, which is this row's case exactly, and it permits a count armed at a named canonical row, which is what FI-2 and FI-11 use.)* **Assert, on both arms:** the gate **threw**; **no `git checkout` and no `fs.rmSync` ran** against the target; the index entry was **not** cleared; the file is byte-identical to what was on disk before the arm; **and the `WienerdogError` carries all four of Table Q row Q18's fields at their R0b-READ-ERROR values** — the vault-relative path; **B3's** preserve named as the one that failed; the identity check recorded as **attempted and NOT POSSIBLE**, which must be a **different** recorded value from FI-17/FI-18's *performed and mismatched* (a single wording covering both is exactly what **M-55** mutates to); and the surviving `redacted/` basename. *(Assert the absence of the destructive calls directly — the same `spawnPinnedSync` wrapper records invocations, plus a recording `fs.rmSync` — not merely the end state, because on a tracked file the end states of "checkout ran" and "checkout did not run" coincide when the working tree already matched `HEAD`.)* | gate | **ROUND 6 SHIPPED THIS ROW UNPRODUCIBLE, and the reason is worth keeping.** It reached the branch "with FI-17's second patch" alone — but that patch fails writes under `quarantine/` **outside** `redacted/`, and **K1's preserve writes its temp INSIDE `redacted/`** while **the scrub's temp is in the vault**. Neither is touched, so the arm completes at **R8** and K3/K4 never execute: the row asserted an outcome its own mechanism could not reach, and **M-50 had nothing to redden**. A fall-through trigger is therefore mandatory, and it must be one that **does not touch the target** — FI-16's does (it rewrites the file at K2), which would falsify the byte-identity assertion; FI-7's does not |
-| **RP-1** | **residual 11** — the pre-revert race, tracked and untracked | **A RESIDUAL-PINNING ROW, not a fault the design prevents**, and labelled so nobody reads it as a passing safety property. Patch the `spawnPinnedSync` wrapper (tracked) or `fs.rmSync` (untracked) to **write different bytes over the target immediately before delegating** — i.e. simulate a save landing *after* K3/K4 and *before* the destruction. **Assert the currently-specified outcome: the save is destroyed**, no durable artifact holds it, and — the part that matters — **no artifact claims otherwise**: the report line, the reason string and the banner all describe the *pre-save* copy, which is the only thing that was ever preserved. | gate | **it makes the residual visible and makes any future closure break loudly.** Residual 11 is an inherited race this WP does not own; a test that pins it is how the follow-on `WP-ep2-atomic-withhold-handoff` will know it changed something. **If this row ever starts failing, the race was closed — update residual 11 and this row together; do not "fix" the assertion.** |
+| **RP-1** | **residual 11** — the pre-revert race, tracked and untracked | **A RESIDUAL-PINNING ROW, not a fault the design prevents**, and labelled so nobody reads it as a passing safety property. Patch the `spawnPinnedSync` wrapper (tracked) or `fs.rmSync` (untracked) to **write different bytes over the target immediately before delegating** — i.e. simulate a save landing *after* K3/K4 and *before* the destruction. **Assert the currently-specified outcome: the save is destroyed**, no durable artifact holds it, and — the part that matters — **no artifact claims otherwise**: the report line, the reason string and the banner all describe the *pre-save* copy, which is the only thing that was ever preserved. | gate | **it makes the residual visible and makes any future closure break loudly.** Residual 11 is an inherited race this WP does not own; a test that pins it is how the follow-on `WP-ep2-atomic-withhold-handoff` will know it changed something. **If this row ever starts failing, the race was closed — update residual 11 and this row together; do not "fix" the assertion.** **STRUCK 2026-09-18: this row has no subject. Its two test bodies were RETIRED in place (`tests/unit/dream-validate.test.js:2138-2140 and :2143-2145`) with the EP2 enforcement half by `WP-dream-promote-in-workspace` row G7; only the section-header comment survives at `:2131`, with no assertion under it. The row neither passes nor fails, so the instruction above cannot be triggered — and the row's own warning about a tripwire outliving its seam is why that absence must be read as "no evidence", never as "closed". The correction is stated once, in the ERRATUM — 2026-09-18 paragraph under accepted residual 11, which this cell defers to and does not restate.** |
 | — | **R8** | no injection: an ordinary `redact`-severity fixture | gate | — |
 
 **Three reachability rules that follow, and that the tests must obey.**
@@ -3906,6 +3913,63 @@ restating a measurement it cannot reproduce.
     the architect's recommendation** — see "OWNER-DECIDED — the redact-arm
     fall-through is KEPT (option A)". This residual is therefore the decided
     disposition of that race in this WP, not an open question.
+
+    **ERRATUM — 2026-09-18. RESIDUAL 11 IS STRUCK: IT IS NO LONGER OPEN, AND
+    THIS DISCLOSURE IS NOW FALSE AGAINST THE TREE. This is the canonical
+    statement of the correction; every other surface below defers to it.**
+    *Everything above this paragraph is preserved unedited — it was true when it
+    was written, and the dated 2026-07-27 sentences are the record of what was
+    decided then, not a claim about today.* **What is true as of `main`
+    `c05a575b`, measured by reading the shipped source rather than inferred:**
+    (a) `quarantinePreserve` no longer reads the target — its signature at
+    `src/core/dream/validate.js:936` takes `content` as a `Buffer` parameter, and
+    both call sites (`:1439` withhold, `:1416` redact) pass `afterBytes`, which
+    `src/core/dream/delta.js:515` fills from a walk of the **dream workspace**,
+    never of the vault; (b) `grep -rn "git checkout HEAD" src/` returns nothing,
+    so the tracked destruction is gone; (c) no `fs.rmSync` in `validate.js` runs
+    against a vault target — the three survivors (`:676`, `:1196`, `:1500`) are
+    internal to the `state/quarantine/` shelves — so the untracked destruction is
+    gone; (d) promotion writes nothing for a withheld path. **There is no longer
+    a window between a check and a destruction, because there is no destruction.**
+    `WP-dream-promote-in-workspace` (row G7) took the EP2 enforcement half —
+    revert, re-stage, index-drop — out of this gate, and
+    `WP-dream-promote-module`'s Table Q is where the vault write now lives.
+    **Table T row RP-1's two test bodies were retired with it**, in place, at
+    `tests/unit/dream-validate.test.js:2138-2140` and `:2143-2145`; only RP-1's
+    section-header comment survives at `:2131-2136`, with no assertion under it
+    (`grep -n "RP-1"` over that file returns that one line and nothing else).
+    **So RP-1 cannot be
+    the evidence either way** — exactly the unsound inference the follow-on stub
+    corrected in its own round 8: a tripwire that disappears with its seam proves
+    nothing. **The named follow-on is therefore SUPERSEDED, not delivered:**
+    `docs/specs/WP-ep2-atomic-withhold-handoff.md` is `status: Superseded` as of
+    the same date, because rename-first capture has no subject in a gate that
+    neither reads nor destroys the vault path. **WHAT THIS ERRATUM DOES NOT SAY:
+    it does not say the dream has no remaining loss window.** A **different**
+    one survives on the publish step — `src/core/dream/vault-write.js:437-442`
+    compares, `:452` renames, and a save landing between them is lost — disclosed
+    as narrowed-not-closed at `vault-write.js:48-50`, `promote.js:1601` and
+    `promote.js:1757-1761`. That is a different arm, a different file and a different
+    victim (a concurrent *vault* edit, not an uncaptured save), and it is filed
+    as its own backlog package, `docs/specs/WP-vault-write-cas-window.md`. It is
+    **not** residual 11 renamed.
+
+    **Mirrors updated in this same pass, per ADR-0031's update-all-mirrors
+    obligation, each carrying a pointer to this paragraph and restating none of
+    it:** the "What it does NOT settle" sentence in *"OWNER-DECIDED — the
+    redact-arm fall-through is KEPT (option A)"*; the **cost** cell of option
+    **A** in the considered-and-rejected table under *"The rejected alternative"*;
+    and **Table T row RP-1**'s closing instruction. Checked by reading every
+    other hit of `residual 11` in this file rather than by assuming, and each is
+    deliberately left alone: the renumbering note at `:338` (a meta-statement
+    about id allocation, not about the race); **Table R row R1**'s condition and
+    **Table T row FI-17**'s contrast, which name the race as a qualifier on rows
+    whose own contracts are unchanged and which describe the design as this WP
+    shipped it; and the **Mirrored Surface Checklist**'s registration lines
+    (`:2925`, `:2929-2930`), which record which surface mirrors which id and are
+    a historical registration by their own closing sentence. **No acceptance
+    criterion, no verification command, no Deliverables cell and no Table B /
+    Table K / Table N row states residual 11**, so none of those moved.
 12. **`wienerdog uninstall` destroys every pre-scrub original, and this WP does
     not change that — it only stops the product concealing it.** `redacted/`
     lives under `state/`, which `disposeCoreMechanics` removes recursively

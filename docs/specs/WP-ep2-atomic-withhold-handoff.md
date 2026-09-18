@@ -1,7 +1,7 @@
 ---
 id: WP-ep2-atomic-withhold-handoff
 title: Capture the withheld note by taking its path, not by reading it — close the pre-revert race for every severity
-status: Draft
+status: Superseded
 model: opus
 size: M
 depends_on: [WP-secret-fence-ep2-redact-arm]
@@ -10,6 +10,109 @@ epic: secret-lifecycle
 ---
 
 # WP-ep2-atomic-withhold-handoff: stop the EP2 withhold destroying a save it never captured
+
+> **SUPERSEDED 2026-09-18 — do not implement, do not re-aim this file.** The
+> mechanism this stub mandates — *capture the withheld note by renaming its
+> vault path away, instead of reading it and then destroying it* — **has no
+> subject in the current tree.** The withhold arm no longer reads a vault file
+> and no longer destroys one, so there is nothing left for a rename-first
+> capture to protect. **The residue that DOES survive is on a different arm, in
+> a different file, and is filed as its own package:
+> `docs/specs/WP-vault-write-cas-window.md` (Draft, backlog).**
+>
+> **THE EVIDENCE, measured against `main` at `c05a575b` rather than inferred.**
+> Four constructs, each read in the shipped source:
+>
+> 1. **`quarantinePreserve` is handed its bytes; it does not read the target.**
+>    `src/core/dream/validate.js:936` —
+>    `function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld')`.
+>    `content` is a `Buffer` parameter. There is no read of the vault path
+>    inside it. The stub's whole premise — *"`quarantinePreserve` reads the
+>    working-tree file at `src/core/dream/validate.js:654`"* — is false against
+>    this tree.
+> 2. **Both call sites pass workspace bytes.** `validate.js:1439` (the withhold
+>    arm) and `validate.js:1416` (the redact arm) both pass `afterBytes`, taken
+>    from the gate's input record at `:1364`. That field is filled by
+>    `src/core/dream/delta.js:515` from a walk of the **dream workspace** root,
+>    not of the user's vault. The gate never touches the vault path it is
+>    judging, so there is no read→destroy window to close.
+> 3. **`git checkout HEAD --` does not exist in `src/`.** `grep -rn "git checkout
+>    HEAD" src/` returns nothing. The tracked half of the destruction the stub
+>    describes is gone from the product.
+> 4. **No `fs.rmSync` runs against a vault target.** The three surviving calls in
+>    `validate.js` — `:676`, `:1196`, `:1500` — are all internal to the
+>    `state/quarantine/` shelves (a failed-preserve unwind, a retention prune,
+>    and the identity-gated deletion of a redundant `redacted/` copy). The
+>    untracked half of the destruction is gone too. **Promotion writes nothing
+>    for a withheld path**, so the vault object is never mutated on this arm.
+>
+> **THE TESTS THAT PINNED THE RACE ARE RETIRED IN PLACE.**
+> `tests/unit/dream-validate.test.js` holds two retirement comments in the house
+> form — *"the retired checkout race over a vault file"* (`:2138-2140`) and
+> *"the retired untracked-file removal race in the vault"* (`:2143-2145`) — each
+> closing *"Under promotion this machinery has no subject."* Both were retired by
+> **`WP-dream-promote-in-workspace`, row G7**. RP-1's own section-header comment
+> survives at `:2131-2136` with **no assertion under it** — `grep -n "RP-1"` over
+> that file returns that one line and nothing else. So the tripwire this stub's
+> scope item 2 was written to re-aim no longer exists, and the stub's own
+> round-8 correction predicted exactly this failure mode: *"RP-1 can fail simply
+> because its seam no longer exists."* It did not fail — it was removed.
+>
+> **THE PACKAGES THAT MOVED IT.** `WP-dream-promote-in-workspace` (row G7)
+> extracted the four gates and took `validate.js`'s **EP2 enforcement half** —
+> the revert, re-stage and index-drop core, its refusal-reason suffixes and its
+> `reverted[]` accounting — with them, on the stated ground that under promotion
+> those reverts have no subject. `WP-dream-promote-module`'s Table Q is where the
+> preservation record and the vault write now live. Between them, the dream
+> stopped mutating the vault in order to un-do itself; it builds in a workspace
+> and publishes what passes.
+>
+> **WHAT SURVIVES, AND WHERE IT IS FILED.** The publish step keeps a
+> **compare-and-swap window** that is check-then-act: `src/core/dream/vault-write.js:437-442`
+> re-reads the target and compares it against `expect`, and `:452` renames over
+> it. A save landing between those two is still lost. This is **narrowed, not
+> closed**, and it is disclosed in three places — `vault-write.js:48-50` (limit B,
+> "CHECK-TO-PUBLISH WINDOW"), `promote.js:1601`, `promote.js:1757-1761` (row R4).
+> **It is a different defect from this stub's:** different arm (redact/publish,
+> not withhold), different file, and it destroys a concurrent *vault* edit
+> rather than an uncaptured save. Re-aiming this stub onto it would keep the
+> file name and change every claim in it, which is why the residue is a **new**
+> package rather than a rewrite of this one:
+> **`docs/specs/WP-vault-write-cas-window.md`**.
+>
+> **WHAT THIS DOES NOT CLAIM.** It does not claim the CAS window is closed — it
+> is open, filed, and undecided. It does not claim the 2026-07-27 ruling
+> transcribed below was wrong: it was taken against a tree in which the four
+> constructs above existed, and it is preserved verbatim as the record of what
+> was decided then.
+>
+> Narrative: `docs/specs/logbook/2026-09-18-ep2-atomic-withhold-handoff-superseded.md`.
+>
+> ## Dispatch precondition — owner items
+>
+> 1. **Supersede this package rather than re-aim it?** *Recommendation
+>    adopted:* supersede. The mandated mechanism — rename-first capture in
+>    place of a read-then-destroy — **has no subject in the current tree**:
+>    constructs 1–4 above show the read is gone, the destruction is gone, and
+>    the pinning tests are retired. A package whose every executable claim is
+>    false against `main` cannot be matured; it can only be replaced. *Cost of
+>    overruling:* re-aiming this stub onto the CAS window is **the new stub**,
+>    `WP-vault-write-cas-window`, and it is **one design round away** — the
+>    window is measured, its three disclosure sites are named, and two candidate
+>    closures are written down. Overruling costs the file name and the 07-27
+>    provenance, not the work.
+> 2. **Which closure does the CAS window take?** *Recommendation:* **none
+>    yet — deliberately undecided.** The new stub records the two candidates
+>    (hold a descriptor across compare→rename; publish by `linkat`/`O_EXCL`) and
+>    takes no position, because choosing between them is a design round this
+>    pass did not run and did not commission. *Cost of overruling:* naming a
+>    closure here would bind the successor's design to an unmeasured choice, in
+>    a primitive whose portability limits (`vault-write.js:40-57`) are already
+>    owner-carried.
+>
+> Everything below this line is the superseded stub, preserved unedited.
+
+---
 
 **This is a DRAFT STUB.** It records a decided mandate and its scope so the
 follow-on is not lost; it is **not implementable as written** and carries no
