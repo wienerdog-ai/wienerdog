@@ -1157,9 +1157,11 @@ function scrubAddedLines(addedLineNumbers, captured) {
 }
 
 /**
- * Keep `state/quarantine/redacted/` bounded. Runs ONCE per gate run, after the
- * loop over changed paths, and only when at least one redaction completed — a
- * run that failed never runs a delete path over the recovery directory.
+ * Keep `state/quarantine/redacted/` bounded. Called ONCE per gate run, through
+ * the `pruneRedacted` closure `makeGates()` returns, and only when at least one
+ * redaction completed — a run that failed never runs a delete path over the
+ * recovery directory. The timing is the pipeline's: `src/cli/dream.js` invokes
+ * that closure exactly once, after `promote()` returns.
  *
  * Never deletes a copy THIS run created: `(mtimeMs, name)` ordering falls back
  * to the basename on a tie or a skewed clock, which sorts by note name within a
