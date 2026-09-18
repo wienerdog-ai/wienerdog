@@ -1654,3 +1654,240 @@ test('dream-collect: [PDC-AC2] an oversized memo written by the base commit is h
   assert.deepEqual(proj.oversizedExtracts, base.oversizedExtracts);
   assert.deepEqual(Object.keys(proj.oversizedExtracts[key]).sort(), ['appVersion', 'extractBytes', 'fingerprint']);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WP-dream-collect-parse-throw-quarantine — Table B (the per-candidate fault
+// boundary) and Table A rows A1, A5, A6.
+//
+// Transcript content is fully attacker-influenceable, and the parsers join
+// content blocks with `Array.prototype.join`, which coerces: a block whose
+// `text` is an object with a poisoned `toString` throws. Before this package
+// that throw escaped the collector, ended the whole dream run, and — because
+// the file was never set aside — ended it again every night after. The loop now
+// carries a per-candidate fault boundary: one candidate's preparation either
+// completes or that candidate is set aside as `parse-threw`.
+//
+// Every test whose expected outcome is a SUCCESSFUL collection wraps the call
+// in `assert.doesNotThrow`: the ADR-0042 runner accepts only `ERR_ASSERTION`,
+// so a mutation that makes the collector THROW is unprovable unless the
+// assertion is the thing that fails.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PT_FIXTURES = path.resolve(__dirname, '../fixtures/dream/transcripts');
+
+/** Plant one of this package's crafted rollouts; set its mtime.
+ *  @returns {string} its absolute path. */
+function writeCraftedCodex(paths, name, fixture, when) {
+  const dir = path.join(paths.codexDir, 'sessions', '2026', '01', '01');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, fs.readFileSync(path.join(PT_FIXTURES, fixture)));
+  fs.utimesSync(file, when, when);
+  return file;
+}
+
+/** A healthy rollout whose `session_meta.id` is `id` — however long. */
+function writeCodexWithId(paths, name, id, when) {
+  const dir = path.join(paths.codexDir, 'sessions', '2026', '01', '01');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name);
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ type: 'session_meta', payload: { id, timestamp: '2026-01-01T09:00:00.000Z', cwd: '/p' } }) +
+      '\n' +
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'hi' }] } }) +
+      '\n'
+  );
+  fs.utimesSync(file, when, when);
+  return file;
+}
+
+test('dream-collect: [PT-1] a transcript whose preparation throws is set aside, and the run finishes over the healthy ones', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'alpha', 1, 10, new Date('2026-01-05'));
+  writeClaude(paths, 'beta', 1, 10, new Date('2026-01-04'));
+  const crafted = writeCraftedCodex(paths, 'rollout-crafted.jsonl', 'codex-poisoned-text-block.jsonl', new Date('2026-01-06'));
+
+  let result = null;
+  assert.doesNotThrow(() => {
+    result = collectExtracts(paths, emptyLedger(), 400_000);
+  }, '[PT-1] one crafted transcript must not end the whole dream run');
+
+  assert.deepEqual(
+    result.entries.map((e) => e.session_id).sort(),
+    ['alpha', 'beta'],
+    '[PT-1] every healthy session in the same corpus is still admitted'
+  );
+  const q = result.newlyQuarantined.filter((x) => x.path === crafted);
+  assert.equal(q.length, 1, '[PT-1] the crafted file is NAMED — set aside exactly once, not silently dropped');
+  assert.equal(q[0].reason, 'parse-threw', '[PT-1] the set-aside reason is the code-owned literal');
+  assertPartition(paths, result);
+});
+
+test('dream-collect: [PT-2] the boundary is not parser-specific — an injected throw sets aside exactly that candidate', (t) => {
+  const paths = tempPaths();
+  writeOverCeiling(paths, 'ceiling', new Date('2026-01-07'));
+  writeClaude(paths, 'newest', 1, 10, new Date('2026-01-06'));
+  writeClaude(paths, 'boom', 1, 10, new Date('2026-01-05'));
+  writeClaude(paths, 'oldest', 1, 10, new Date('2026-01-04'));
+  const real = transcripts.parsePrimaryWithOutcome;
+  t.mock.method(transcripts, 'parsePrimaryWithOutcome', (d, budget) => {
+    if (path.basename(d.path) === 'boom.jsonl') throw new TypeError('Cannot convert object to primitive value');
+    return real(d, budget);
+  });
+
+  let result = null;
+  assert.doesNotThrow(() => {
+    result = collectExtracts(paths, emptyLedger(), 400_000);
+  }, '[PT-2] a throw from any step inside the boundary is contained, whatever raised it');
+
+  assert.deepEqual(
+    result.entries.map((e) => e.session_id),
+    ['newest', 'oldest'],
+    '[PT-2] the loop continued to the next candidate rather than stopping'
+  );
+  const byName = Object.fromEntries(result.newlyQuarantined.map((x) => [path.basename(x.path), x.reason]));
+  assert.deepEqual(
+    byName,
+    { 'boom.jsonl': 'parse-threw', 'ceiling.jsonl': 'over-ceiling' },
+    '[PT-2] the injected candidate is parse-threw and every other arm keeps its own classification'
+  );
+  assertPartition(paths, result);
+});
+
+test('dream-collect: [PT-3] the boundary extends PAST the parse call — a post-parse failure is caught too', () => {
+  const paths = tempPaths();
+  // This rollout PARSES cleanly; its non-string `session_meta.id` throws later,
+  // at `sanitize(extract.session_id)` during the filename derivation. Newest
+  // mtime, so it is visited BEFORE the healthy session.
+  const crafted = writeCraftedCodex(paths, 'rollout-post-parse.jsonl', 'codex-poisoned-session-id.jsonl', new Date('2026-01-09'));
+  writeClaude(paths, 'behind', 1, 10, new Date('2026-01-02'));
+
+  let result = null;
+  assert.doesNotThrow(() => {
+    result = collectExtracts(paths, emptyLedger(), 400_000);
+  }, '[PT-3] a transcript that parses and THEN throws must not end the run — a boundary around the parse call alone is not enough');
+
+  const q = result.newlyQuarantined.filter((x) => x.path === crafted);
+  assert.equal(q.length, 1, '[PT-3] the post-parse failure is set aside, not merely survived');
+  assert.equal(q[0].reason, 'parse-threw', '[PT-3] a post-parse failure carries the same code-owned reason');
+  assert.deepEqual(
+    result.entries.map((e) => e.session_id),
+    ['behind'],
+    '[PT-3] the healthy session visited AFTER the crafted one is still admitted'
+  );
+  assertPartition(paths, result);
+});
+
+test('dream-collect: [PT-4] a set-aside candidate consumes nothing and records nothing derived from the throw', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'earlier', 1, 10, new Date('2026-01-08'));
+  const crafted = writeCraftedCodex(paths, 'rollout-crafted.jsonl', 'codex-poisoned-text-block.jsonl', new Date('2026-01-07'));
+  writeClaude(paths, 'later', 1, 10, new Date('2026-01-06'));
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+
+  // The same two healthy sessions, collected without the crafted file at all —
+  // the baseline every "consumes nothing" claim below is measured against.
+  const clean = tempPaths();
+  writeClaude(clean, 'earlier', 1, 10, new Date('2026-01-08'));
+  writeClaude(clean, 'later', 1, 10, new Date('2026-01-06'));
+  const baseline = collectExtracts(clean, emptyLedger(), 400_000);
+
+  const [q] = result.newlyQuarantined.filter((x) => x.path === crafted);
+  assert.ok(q, '[PT-4] the crafted file was set aside');
+  assert.deepEqual(
+    Object.keys(q).sort(),
+    ['dev', 'harness', 'ino', 'mtimeMs', 'path', 'reason', 'size'],
+    '[PT-4] the record is the discovery record plus the reason — no field carries anything about the throw'
+  );
+  for (const leak of ['TypeError', 'primitive', 'convert', 'stack', '.js:']) {
+    assert.ok(!JSON.stringify(q).includes(leak), `[PT-4] "${leak}" reached the durable record — the caught value must stay unbound`);
+  }
+
+  // Consumes nothing: capacity, intake bytes, scratch, and the run's gate map.
+  assert.deepEqual(result.entries.map((e) => e.session_id), ['earlier', 'later'], '[PT-4] a later candidate that fits still fits');
+  assert.equal(result.deferred.length, 0, '[PT-4] nothing was deferred for capacity');
+  assert.equal(result.intakeBytesTotal, baseline.intakeBytesTotal, '[PT-4] intakeBytesTotal is unchanged by the set-aside candidate');
+  assert.equal(result.wrote.length, 2, '[PT-4] no scratch file was written for it');
+  assert.equal(fs.readdirSync(result.scratchDir).length, 2, '[PT-4] the scratch directory holds nothing for it');
+  assert.equal(
+    result.gateExtracts.size,
+    result.entries.length,
+    '[PT-4] the run gate map holds exactly the admitted sessions — the set-aside candidate added no entry'
+  );
+  assert.ok(result.gateExtracts.has('claude:earlier'), '[PT-4] the entry an EARLIER session put in the gate map was not evicted by it');
+  assert.ok(
+    ![...result.gateExtracts.keys()].some((k) => k.includes('crafted')),
+    '[PT-4] the set-aside candidate is absent from the gate map'
+  );
+  // Nothing about the throw reached the scratch directory either.
+  for (const f of fs.readdirSync(result.scratchDir)) {
+    assert.ok(!/TypeError|primitive/.test(fs.readFileSync(path.join(result.scratchDir, f), 'utf8')), `[PT-4] ${f} carries the caught value`);
+  }
+});
+
+test('dream-collect: [PT-6] a set-aside transcript is skipped while unchanged and reconsidered once it changes', () => {
+  const paths = tempPaths();
+  writeCraftedCodex(paths, 'rollout-crafted.jsonl', 'codex-poisoned-text-block.jsonl', new Date('2026-01-05'));
+  let ledger = emptyLedger();
+
+  const first = collectExtracts(paths, ledger, 400_000);
+  assert.equal(first.newlyQuarantined.length, 1, '[PT-6] the first run sets the crafted file aside');
+  for (const q of first.newlyQuarantined) ledger = ledgerLib.recordQuarantined(ledger, q, q.reason);
+
+  const second = collectExtracts(paths, ledger, 400_000);
+  assert.deepEqual(
+    sixCounts(second),
+    { newlyQuarantined: 0, stillQuarantined: 1, oversized: 0, capacityDeferred: 0, deadlineDeferred: 0, readDeferred: 0 },
+    '[PT-6] an UNCHANGED set-aside file is skipped, not re-parsed and not re-announced'
+  );
+
+  // Rewriting the file moves its fingerprint, so it is a candidate again: the
+  // cost is bounded, and a future harness-format fix heals itself.
+  const rewritten = path.join(paths.codexDir, 'sessions', '2026', '01', '01', 'rollout-crafted.jsonl');
+  fs.appendFileSync(
+    rewritten,
+    JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a later turn' }] } }) + '\n'
+  );
+  fs.utimesSync(rewritten, new Date('2026-01-06'), new Date('2026-01-06'));
+  const third = collectExtracts(paths, ledger, 400_000);
+  assert.equal(third.newlyQuarantined.length, 1, '[PT-6] a CHANGED file is reconsidered, never permanently excluded');
+  assert.equal(third.skippedQuarantined, 0, '[PT-6] a changed file is no longer counted as a quarantine skip');
+});
+
+test('dream-collect: [PT-7] a write failure is environmental and still ends the run', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'healthy', 1, 10, new Date('2026-01-05'));
+  const realRename = fs.renameSync;
+  t.mock.method(fs, 'renameSync', (from, to, ...rest) => {
+    if (String(to).includes('dream-scratch')) {
+      const e = new Error('ENOSPC: no space left on device');
+      e.code = 'ENOSPC';
+      throw e;
+    }
+    return realRename(from, to, ...rest);
+  });
+
+  // Catching this would set aside every remaining transcript for a machine-wide
+  // condition, and each would then be skipped until it happened to change.
+  assert.throws(
+    () => collectExtracts(paths, emptyLedger(), 400_000),
+    /ENOSPC/,
+    '[PT-7] a writeFilePrivate failure propagates out of collectExtracts'
+  );
+});
+
+test('dream-collect: [PT-8] a 4,000-character session id is admitted, with a bounded scratch filename', () => {
+  const paths = tempPaths();
+  writeCodexWithId(paths, 'rollout-long.jsonl', 'A'.repeat(4000), new Date('2026-01-05'));
+
+  let result = null;
+  assert.doesNotThrow(() => {
+    result = collectExtracts(paths, emptyLedger(), 400_000);
+  }, '[PT-8] a long session id must not reach writeFilePrivate as an ENAMETOOLONG and end the run');
+
+  assert.equal(result.entries.length, 1, '[PT-8] the session is admitted normally');
+  const name = path.basename(result.entries[0].scratchFile);
+  assert.equal(name, `codex-${'A'.repeat(128)}.json`, '[PT-8] sanitize returns at most 128 characters');
+  assert.ok(Buffer.byteLength(name) <= 139, `[PT-8] the scratch filename is bounded, got ${Buffer.byteLength(name)} bytes`);
+});

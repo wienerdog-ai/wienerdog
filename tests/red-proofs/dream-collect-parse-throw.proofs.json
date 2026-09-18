@@ -1,0 +1,121 @@
+{
+  "suite": "tests/unit/dream-collect.test.js",
+  "proofs": [
+    {
+      "id": "pt-boundary-drops-instead-of-quarantining",
+      "wp": "WP-dream-collect-parse-throw-quarantine",
+      "criterion": "1, 2, 3, 4, 6",
+      "why": "the guarantee is not merely that the run survives a crafted transcript — it is that the crafted transcript is NAMED, so the ledger can set it aside and skip it until it changes. Under this mutation the boundary still contains the throw and the run still completes over every healthy session, so any assertion that only checked survival stays green while the crafted file is silently dropped and re-parsed, and re-thrown over, every night forever. The assertions observe the RECORD",
+      "file": "src/core/dream/scratch.js",
+      "find": "newlyQuarantined.push({ ...d, reason: 'parse-threw' });",
+      "replace": "/* RP_MUT_PT_DROP */",
+      "marker": "RP_MUT_PT_DROP",
+      "occurrences": 1,
+      "testNamePattern": "\\[PT-",
+      "expectRed": [
+        {
+          "test": [
+            "dream-collect: [PT-1] a transcript whose preparation throws is set aside, and the run finishes over the healthy ones"
+          ],
+          "signal": "[PT-1]"
+        },
+        {
+          "test": [
+            "dream-collect: [PT-2] the boundary is not parser-specific — an injected throw sets aside exactly that candidate"
+          ],
+          "signal": "[PT-2]"
+        },
+        {
+          "test": [
+            "dream-collect: [PT-3] the boundary extends PAST the parse call — a post-parse failure is caught too"
+          ],
+          "signal": "[PT-3]"
+        },
+        {
+          "test": [
+            "dream-collect: [PT-4] a set-aside candidate consumes nothing and records nothing derived from the throw"
+          ],
+          "signal": "[PT-4]"
+        },
+        {
+          "test": [
+            "dream-collect: [PT-6] a set-aside transcript is skipped while unchanged and reconsidered once it changes"
+          ],
+          "signal": "[PT-6]"
+        }
+      ]
+    },
+    {
+      "id": "pt-reason-literal-pinned",
+      "wp": "WP-dream-collect-parse-throw-quarantine",
+      "criterion": "1, 2, 3",
+      "why": "the reason is the taxonomy, and every downstream surface reads it: the banner's decay class, the heading in reports/warnings.md and the console line all key off this literal. An assertion that only checked that SOME quarantine happened would accept a record filed under a sibling reason, which would then decay and render under the wrong heading. The assertions pin the literal itself",
+      "file": "src/core/dream/scratch.js",
+      "find": "reason: 'parse-threw'",
+      "replace": "reason: 'read-error' /* RP_MUT_PT_REASON */",
+      "marker": "RP_MUT_PT_REASON",
+      "occurrences": 1,
+      "testNamePattern": "\\[PT-",
+      "expectRed": [
+        {
+          "test": [
+            "dream-collect: [PT-1] a transcript whose preparation throws is set aside, and the run finishes over the healthy ones"
+          ],
+          "signal": "[PT-1]"
+        },
+        {
+          "test": [
+            "dream-collect: [PT-2] the boundary is not parser-specific — an injected throw sets aside exactly that candidate"
+          ],
+          "signal": "[PT-2]"
+        },
+        {
+          "test": [
+            "dream-collect: [PT-3] the boundary extends PAST the parse call — a post-parse failure is caught too"
+          ],
+          "signal": "[PT-3]"
+        }
+      ]
+    },
+    {
+      "id": "pt-only-parse-is-caught",
+      "wp": "WP-dream-collect-parse-throw-quarantine",
+      "criterion": "3",
+      "why": "THE BOUNDARY'S EXTENT (Table B row B9). The mutation IS the plausible wrong implementation — catch the parse call and nothing after it — expressed as a re-throw that fires only once the parse has returned, since `extract` is one of the four names that call destructures. A boundary wrapping the parse alone satisfies criteria 1, 2 and 8 and still aborts every nightly run on the documented non-string session_id, whose parse RETURNS and whose throw is at the filename derivation. Criteria 1 and 2 stay green here and only criterion 3 reddens, which is exactly what makes criterion 3 an observation rather than a restatement",
+      "file": "src/core/dream/scratch.js",
+      "find": "      newlyQuarantined.push({ ...d, reason: 'parse-threw' });",
+      "replace": "      if (extract !== undefined) throw new Error('RP_MUT_PT_EXTENT');\n      newlyQuarantined.push({ ...d, reason: 'parse-threw' });",
+      "marker": "RP_MUT_PT_EXTENT",
+      "occurrences": 1,
+      "testNamePattern": "\\[PT-",
+      "expectRed": [
+        {
+          "test": [
+            "dream-collect: [PT-3] the boundary extends PAST the parse call — a post-parse failure is caught too"
+          ],
+          "signal": "[PT-3]"
+        }
+      ]
+    },
+    {
+      "id": "pt-sanitize-unbounded",
+      "wp": "WP-dream-collect-parse-throw-quarantine",
+      "criterion": "8",
+      "why": "the width bound is what makes the boundary's split safe: with it, every derived scratch path is admissible by construction, so ENAMETOOLONG is unreachable from file content and every REMAINING writeFilePrivate failure really is environmental and really must end the run. Without it a 4,000-character session_meta.id aborts the run in writeFilePrivate — outside the boundary, uncatchable by design — which is the fourth measured whole-run abort this package closes",
+      "file": "src/core/dream/scratch.js",
+      "find": ".slice(0, SCRATCH_ID_MAX_CHARS)",
+      "replace": "/* RP_MUT_PT_WIDTH */",
+      "marker": "RP_MUT_PT_WIDTH",
+      "occurrences": 1,
+      "testNamePattern": "\\[PT-",
+      "expectRed": [
+        {
+          "test": [
+            "dream-collect: [PT-8] a 4,000-character session id is admitted, with a bounded scratch filename"
+          ],
+          "signal": "[PT-8]"
+        }
+      ]
+    }
+  ]
+}

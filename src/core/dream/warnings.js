@@ -113,6 +113,7 @@ const GROUPS = [
   },
   { reason: 'too-many-lines', heading: 'The session file has too many lines to read' },
   { reason: 'read-error', heading: 'The session file could not be read' },
+  { reason: 'parse-threw', heading: 'Something in the session file stopped Wienerdog from reading it' },
   {
     reason: SECRET_REVERT_EXHAUSTED_REASON,
     heading:

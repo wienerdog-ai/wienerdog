@@ -1,7 +1,7 @@
 ---
 id: WP-dream-collect-parse-throw-quarantine
 title: Set aside a transcript whose preparation throws, instead of aborting the whole dream run
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: [WP-dream-primary-dialogue-collection]

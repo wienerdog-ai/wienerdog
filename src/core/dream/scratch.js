@@ -14,9 +14,19 @@ function scratchDirOf(stateDir) {
   return path.join(stateDir, 'dream-scratch');
 }
 
-/** Make a session_id safe to use as a filename. @param {string} id @returns {string} */
+/** The width bound on a sanitized session_id (WP-dream-collect-parse-throw-quarantine,
+ *  Table B row B6). The derived name `<harness>-<id>.json` is then at most 139
+ *  bytes, far inside every supported filesystem's 255-byte limit, so a long
+ *  session_id can no longer reach `writeFilePrivate` as an ENAMETOOLONG — which
+ *  is what makes every REMAINING write failure environmental. 128 is generous
+ *  against both harnesses' real ids (UUIDs, 36 characters). */
+const SCRATCH_ID_MAX_CHARS = 128;
+
+/** Make a session_id safe to use as a filename. The slice is applied AFTER the
+ *  replace, so a long id cannot be truncated into something the character
+ *  allowlist never saw. @param {string} id @returns {string} */
 function sanitize(id) {
-  return String(id).replace(/[^A-Za-z0-9_-]/g, '_');
+  return String(id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, SCRATCH_ID_MAX_CHARS);
 }
 
 /** A deferral names the discovery basename, never unread transcript content.
@@ -53,7 +63,10 @@ function deferRemaining(candidates, start, target) {
  * @param {number} maxInputBytes
  * @param {{preprocessTimeoutMs?:number, now?:()=>number}} [options]
  * @returns {{entries:Array<object>, scratchDir:string, processed:Array<object>,
- *            newlyQuarantined:Array<object>, skippedQuarantined:number,
+ *            newlyQuarantined:Array<{harness:'claude'|'codex', path:string, mtimeMs:number,
+ *                                    size:number, dev:number, ino:number,
+ *                                    reason:'over-ceiling'|'too-many-lines'|'read-error'|'parse-threw'}>,
+ *            skippedQuarantined:number,
  *            deferred:Array<object>, droppedForSize:number, dropped:Array<object>,
  *            truncated:Array<object>, wrote:Array<string>,
  *            deadlineDeferred:Array<object>, readDeferred:Array<object>,
@@ -146,36 +159,72 @@ function collectExtracts(paths, ledger, maxInputBytes, {
     // Each session has its own finite emergency read-work allowance. A complete
     // session already started is measured/admitted even if the clock expires.
     delete oversizedExtracts[key];
-    const { extract, gateExtract, intakeBytes, parse } =
-      transcripts.parsePrimaryWithOutcome(d, transcripts.newRunBudget());
-    if (parse.outcome !== 'ok') {
-      newlyQuarantined.push({ ...d, reason: parse.outcome });
+    /** @type {any} */ let extract;
+    /** @type {any} */ let gateExtract;
+    /** @type {any} */ let parse;
+    let intakeBytes = 0;
+    // The measured size of the candidate this iteration ADMITS. It is a separate
+    // name from the `const extractBytes` the measurement below binds because
+    // that declaration is what `WP-dream-primary-dialogue-collection`'s declared
+    // RED mutation targets by exact substring: re-spelling it would leave that
+    // package's row C1 proof unapplicable, which is a silent loss of the
+    // guarantee that X is measured against the intake and not the projection.
+    let admittedBytes = 0;
+    let scratchFile = '';
+    let payload = '';
+    // THE PER-CANDIDATE FAULT BOUNDARY (WP-dream-collect-parse-throw-quarantine,
+    // Table B). Inside it are exactly the CONTENT-DERIVED steps of this
+    // iteration's preparation, in their existing order; `writeFilePrivate` and
+    // everything after it — the gate-map writes, the pushes and the two
+    // accumulators — stay OUTSIDE, because a write failure is environmental (a
+    // full disk, a revoked permission) and must keep ending the run loudly.
+    // Transcript content is fully attacker-influenceable and is not our grammar:
+    // the guarantee is stated as our own good — one candidate's preparation
+    // either completes or that candidate is set aside — rather than as a list of
+    // the expressions that can throw, which could never be closed (row B7).
+    try {
+      ({ extract, gateExtract, intakeBytes, parse } =
+        transcripts.parsePrimaryWithOutcome(d, transcripts.newRunBudget()));
+      if (parse.outcome !== 'ok') {
+        newlyQuarantined.push({ ...d, reason: parse.outcome });
+        continue;
+      }
+      if (parse.runExhausted) {
+        readDeferred.push(deferralOf(d)); // discard partial content, then try older inputs
+        continue;
+      }
+      // Row C1: X is measured against the TRANSCRIPT INTAKE, never against the
+      // projection. `intakeBytes` is the compact JSON length of the raw capped
+      // extract — the exact number this line computed before this package — so
+      // the capacity stop, the individually-oversized skip and the memo it writes
+      // all keep the verdicts they had.
+      const extractBytes = intakeBytes;
+      if (extractBytes > maxInputBytes) {
+        oversizedExtracts[key] = { fingerprint: ledgerLib.fingerprint(d), appVersion, extractBytes };
+        oversized.push({ ...d, extractBytes, cached: false });
+        continue;
+      }
+      if (extractBytes > remaining) {
+        deferRemaining(underCeiling, i, deferred);
+        break;
+      }
+      admittedBytes = extractBytes;
+      scratchFile = path.join(scratchDir, `${d.harness}-${sanitize(extract.session_id)}.json`);
+      // Row C2: the PROJECTION is what reaches disk — an extract whose projection
+      // retained no messages is still written, with its identity and an empty
+      // `messages` array.
+      payload = JSON.stringify(extract, null, 2);
+    } catch {
+      // The caught value is DISCARDED UNBOUND: no message, name, stack or code
+      // derived from attacker-influenceable bytes reaches the ledger, the
+      // console, reports/warnings.md, the dream report or the scratch directory
+      // (Table A row A5). The reason is a code-owned literal, written here and
+      // nowhere else (row A1). A set-aside candidate consumes nothing: no
+      // scratch file, no capacity, no gate-map entry (row B3).
+      newlyQuarantined.push({ ...d, reason: 'parse-threw' });
       continue;
     }
-    if (parse.runExhausted) {
-      readDeferred.push(deferralOf(d)); // discard partial content, then try older inputs
-      continue;
-    }
-    // Row C1: X is measured against the TRANSCRIPT INTAKE, never against the
-    // projection. `intakeBytes` is the compact JSON length of the raw capped
-    // extract — the exact number this line computed before this package — so
-    // the capacity stop, the individually-oversized skip and the memo it writes
-    // all keep the verdicts they had.
-    const extractBytes = intakeBytes;
-    if (extractBytes > maxInputBytes) {
-      oversizedExtracts[key] = { fingerprint: ledgerLib.fingerprint(d), appVersion, extractBytes };
-      oversized.push({ ...d, extractBytes, cached: false });
-      continue;
-    }
-    if (extractBytes > remaining) {
-      deferRemaining(underCeiling, i, deferred);
-      break;
-    }
-    const scratchFile = path.join(scratchDir, `${d.harness}-${sanitize(extract.session_id)}.json`);
-    // Row C2: the PROJECTION is what reaches disk — an extract whose projection
-    // retained no messages is still written, with its identity and an empty
-    // `messages` array.
-    writeFilePrivate(scratchFile, JSON.stringify(extract, null, 2)); // 0600, no trailing newline
+    writeFilePrivate(scratchFile, payload); // 0600, no trailing newline
     const gateKey = `${d.harness}:${extract.session_id}`;
     const evicted = gateKeyByFile.get(scratchFile);
     if (evicted !== undefined) gateExtracts.delete(evicted); // row C4's eviction
@@ -191,7 +240,7 @@ function collectExtracts(paths, ledger, maxInputBytes, {
     wrote.push(scratchFile);
     processed.push(d);
     intakeBytesTotal += intakeBytes;
-    remaining -= extractBytes;
+    remaining -= admittedBytes;
   }
 
   return {
