@@ -561,6 +561,12 @@ intra-cell drift of this gate and **the first one caught by process rather than 
 round.** Two registered mirrors (X10's step-0b clause, the security bullet) and
 criterion 14's fixture requirement were updated in the same pass.
 
+**One more stale mirror caught by the same sweep.** The Definition-of-done's
+round-18 *history* paragraph still stated clause (b) in its superseded
+swept-directory form. History paragraphs are not rewritten here — they record what a
+round did — so it now carries an explicit forward pointer saying round 19 superseded
+that formulation and that **Table X row X19 is the current rule**.
+
 **Declaration count after round 19:** twenty-four declarations over thirteen
 criteria; thirteen have a pre-measurable anchor, eleven mutate code this package
 authors.

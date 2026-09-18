@@ -1829,8 +1829,11 @@ claim is carried by criteria 1, 2 and 7 and by the Out-of-scope list.
    resolved target lies **inside any directory this uninstall sweeps** — the set is
    enumerated in the row — and only an alias **outside every swept directory** with
    no existing chain is unlinked, which is safe **by construction** because nothing
-   this command sweeps lives there. A blanket "never unlink an absent-shelf alias"
-   was refused because it re-opens round 16's contradiction and criterion 14.
+   this command sweeps lives there — **that formulation was SUPERSEDED one round
+   later: round 19 replaced the swept-directory enumeration with overlap against
+   `withinAllowedRoot`'s roots, and Table X row X19 is the current rule.** A blanket
+   "never unlink an absent-shelf alias" was refused because it re-opens round 16's
+   contradiction and criterion 14.
    **LIGHT:** **X17 (1a)**'s concluding sentence still carried round 16's withdrawn
    *"class (ii) only"* clause, contradicting the round-17 rule **in the same cell** —
    the intra-cell drift `docs/runbooks/spec-authoring.md` names; replaced, with
