@@ -12,6 +12,7 @@ Raw reviewer output committed **before** adjudication, as the runbook requires.
 | 1 | Astra (design) | `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-r1-astra-raw.json`, `…-r1-astra-focus.txt` | `ee17ae94` |
 | 2 | Astra (design) | `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-r2-astra-raw.json`, `…-r2-astra-focus.txt` | `051a2147` |
 | 3 | Astra (design) | `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-r3-astra-raw.json`, `…-r3-astra-focus.txt` | `ae230700` |
+| 4 | Astra (design) | `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-r4-astra-raw.json`, `…-r4-astra-focus.txt` | `6bd00d7c` |
 
 Round zero reproduced probes `OC-P1`–`OC-P4` bit-for-bit and re-derived every
 citation. Round 1 verdict: `needs-attention`, three findings. **All three
@@ -79,3 +80,27 @@ performs no identity check, so at prune time nothing it deletes is provably a
 spare**; and candidate (a) is nonetheless right, because that is the bargain an
 owner-approved count cap on such a shelf already is. The package's whole job is to
 make that legible and pin the premise.
+
+## Round 4
+
+Nothing about the product: the round-3 fix held. One finding, **LIGHT**
+(verification machinery), and it falls **inside** the frozen surface, so it is
+fixed within it exactly as the convergence note provides.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---------|------|--------|-------------|
+| R4-A | `[OC-4]`'s whole-tree absence walk also reddens under the prescribed copy-then-delete mutation, so `expectRed` cannot name `[OC-1]` alone | C | **LIGHT** | **ACCEPTED, and re-measured rather than taken on report.** The mutation was hand-applied to a throwaway copy at `c05a575b` and both absence assertions exercised through their probe equivalents — `OC-P6` for `[OC-1]`, and a new `OC-P8` modelling `[OC-4]`'s C1 leftover (shelf file placed directly, aged oldest, 49 newer dummies, a redacting run to 51, then the prune). **Baseline: walk visits 50 files, 0 matches — absence holds, `[OC-4]` passes. Mutated: walk visits 51 files, 1 match in `.pruned/` — `[OC-4]` reddens.** Since `scripts/red-proofs.js:1668-1670` throws on an undeclared `testCodeFailure`, `[OC-4]` is now a second `expectRed` entry with its own **one-element** identity path (`:693-694`, `:1599-1602`) and its own signal, `O2-C1-decayed-copy-is-destroyed`, which the spec now requires to sit in the message of the assertion that actually reddens. `[OC-2]` and `[OC-3]` do **not** redden — neither seeds to the cap, so neither prunes and the mutated line never executes. Acceptance criterion 6 changes from "exactly one entry / `[OC-1]` as the sole red" to "exactly two entries / exactly `[OC-1]` and `[OC-4]`". Mirrored into Table O row **O8**'s O8c clause and the Mirrored Surface Checklist. **Stated in the spec and repeated here: the four tests do not exist yet, so this is a measurement of their ASSERTIONS, not of them — the implementer re-measures with a bare `npm run red-proofs` once all four exist and pastes the observed red set into the PR** |
+
+## Gate closed
+
+**The design gate is CLOSED at round 4, 2026-09-18.** Rounds 1–3 landed HEAVY
+product findings, round 4 one LIGHT verification-machinery finding; **all four
+accepted in full, none dispositioned away.** Every round's raw output was
+committed before adjudication (`ee17ae94`, `051a2147`, `ae230700`, `6bd00d7c`).
+`status:` is flipped to `Ready` in the same commit as this record.
+
+**A closed design gate is a review gate, not owner approval.** Owner items 1, 2
+and 3 remain open in the standing form — recommendation plus cost of overruling,
+reversible by dated amendment — and **nothing in this repo records the owner
+approving, accepting or ratifying any of them.** The frozen surface stands: four
+tests, one RED declaration, two documentation clauses, **no `src/` change**.
