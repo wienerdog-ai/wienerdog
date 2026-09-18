@@ -11,6 +11,7 @@ Raw reviewer output committed **before** adjudication, as the runbook requires.
 |-------|----------|-----|--------|
 | 1 | Astra (design) | `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-r1-astra-raw.json`, `…-r1-astra-focus.txt` | `ee17ae94` |
 | 2 | Astra (design) | `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-r2-astra-raw.json`, `…-r2-astra-focus.txt` | `051a2147` |
+| 3 | Astra (design) | `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-r3-astra-raw.json`, `…-r3-astra-focus.txt` | `ae230700` |
 
 Round zero reproduced probes `OC-P1`–`OC-P4` bit-for-bit and re-derived every
 citation. Round 1 verdict: `needs-attention`, three findings. **All three
@@ -48,3 +49,33 @@ One finding, `needs-attention`. **Accepted in full.**
 **Scope note.** `size: S` is retained: three tests in one already-listed file, one
 RED declaration, two doc clauses, and still **no `src/` change**. If round 3 adds
 a fourth class or a production path, the package should be split rather than grown.
+
+## Round 3
+
+The C1/C2 split, `[OC-2]`/`[OC-3]` and the dependents held. One finding,
+`needs-attention`. **Accepted in full.**
+
+| # | Finding | Band | Weight | Disposition |
+|---|---------|------|--------|-------------|
+| R3-A | A C1 duplicate can become the only copy before pruning: C1 proves equivalence at CREATION, but row O2 called its deletion in a later run unconditionally lossless. The owner can delete the announced withheld twin meanwhile — the incident runbook instructs it — leaving the unrecorded `redacted/` copy the sole survivor. Reproduced: cleanup failed, twin removed, a later prune destroyed the remaining original | B | HEAVY *(only insofar as it changes a user-facing doc clause)* | **ACCEPTED.** C1 is restated as **"duplicate AT CREATION TIME ONLY"**, with the two surfaces that invite the owner to falsify it cited inline (`src/core/dream/promote.js:600-603` *"delete that copy"*; `docs/runbooks/secret-incident.md:40-48`), and noted as the same state `WP-quarantine-disposal-durability`'s owner item **O10** already accepted for its row M6, reached by a different route. Row **O2** now leads with the general form rather than a per-class patch: **at prune time NO class is provably lossless, because `pruneRedactedOriginals` performs no identity check at all** — `readdirSync`, a date regex, `statSync`, `rmSync`; it never opens a file, never compares bytes, never consults a record, and every identity fact this package has is creation-time. Row **O8** and **owner item 1** re-worded: the lossless case is not a class but a *condition* the prune never checks. **The doc clauses needed no rewording, and that was verified rather than assumed:** round 1's "**may be** the only copy" hedge is true under A, B, C1 and C2, and row O8 now records that as the reason both clauses survived every correction. Regression `[OC-4]` added — fall-through with equal buffers so `identical === true`, `rmSync` forced to throw for the `redacted/` path, both copies asserted present and the shelf copy asserted **absent from the preservation record**, twin then deleted as the runbook instructs, then the prune fires and a non-vacuous whole-tree walk finds the bytes nowhere. **It asserts the loss; it does not prevent it.** No `src/` change |
+
+## Convergence — the surface is frozen
+
+Three rounds; every dependent row re-derived twice. **The deliverable surface is
+now frozen at: four tests in `tests/unit/dream-validate.test.js`, one RED
+declaration, two documentation clauses, and no `src/` change.** Any further
+finding is either fixed **within** that surface or accepted as a **named
+residual** in this file — it does not grow the package. If a finding cannot be
+accommodated either way, the right move is a **successor package**, not a fifth
+revision: `size: S` has been retained through three rounds precisely because the
+boundary never moved off tests and docs, and the two live successors are already
+named (owner item 2's `WP-ep2-prune-overlap-guard`, and owner item 3's
+reconciliation pass if it is ever overruled).
+
+**What the three rounds actually converged on**, recorded because it is the
+package's result and not merely its history: the shelf holds four classes; the
+prune is the only path in `src/` that can destroy a sole-surviving copy; **it
+performs no identity check, so at prune time nothing it deletes is provably a
+spare**; and candidate (a) is nonetheless right, because that is the bargain an
+owner-approved count cap on such a shelf already is. The package's whole job is to
+make that legible and pin the premise.
