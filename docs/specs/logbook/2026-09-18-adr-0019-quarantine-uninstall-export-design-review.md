@@ -408,6 +408,49 @@ revision of the deletion contracts.**
 **Declaration count after round 14:** eighteen declarations over eleven criteria;
 ten have a pre-measurable anchor, eight mutate code this package authors.
 
+## Round 15 — Astra, 2026-09-18
+
+- **Reviewed tip:** `89b2d919`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r15-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r15-astra-focus.txt`
+- **Committed before adjudication at:** `69f49bb4`
+- **Verdict:** `needs-attention` — *"the expanded protection set breaks supported
+  symlinked-core uninstalls and strands credentials."*
+- **`R-alias-outside-closure` HELD:** round 14's residual bounded the family as
+  intended — **nothing was reported inside it**. The finding is the opposite
+  failure, and that is the round's significance.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R15-1** | **Distinguish chain-link protection from shelf-subtree protection.** For the supported layout `<core>` → `/data/wienerdog`, **X17 (1a)**'s single-class closure put `/data/wienerdog` into the protected set, after which **X18** preserved **every** deletion target beneath it — `app`, `logs`, **`secrets`** — **even with both shelves absent**. A read-only model of the prescribed checks confirmed it, and the shipped symlinked-core tests require those contents removed. Meanwhile `uninstall.js:424` still deletes the manifest **unconditionally** after the sweep, so credentials and installed files are **stranded with no usable retry**. **Requires no concurrent mutation** and falls **inside** the declared chain-closure scope — i.e. it is a defect in the rule, not an instance of the residual | A | HEAVY (high, conf. 0.99) | **ACCEPTED IN FULL, as a two-class definition in X17 (1a).** **Class (i) — SHELF SUBTREES:** the two shelf roots' resolved targets, protecting **the node and every descendant**; X16/X18 apply containment **both ways**. **Class (ii) — CHAIN NODES:** every link **location** and intermediate target, protecting **the node and its ANCESTORS** but **not their unrelated descendants**; the check is *"the deletion target must not EQUAL or CONTAIN the node"*, with no containment the other way. Under the split `/data/wienerdog/secrets` is a **descendant** of a class (ii) node and is removed exactly as today, while a recursive delete of `/data/wienerdog` **itself** is still refused. **Verified against rounds 11–14's measured cases in the row itself**, because a rule that regresses one of them is not a fix: round 11's `cache` is a class (i) resolved target; round 12's `<core>/logs` is a class (ii) node the mechanics target **equals**; round 13's intermediate `skills/…` link is a class (ii) location `reverse()` targets **exactly**; round 14's `<state>/cache` **contains** a class (ii) location. **Acceptance criterion 2** gains the symlinked-core arms — absent **and** empty shelves, asserting `app`, `logs` and **`secrets`** are gone and the manifest removed **only** after that clean sweep. New RED proof **`quse-chain-node-over-protects`**: **every other declaration in this package proves something SURVIVES; this one proves something is still REMOVED** — the direction a protection package stops testing once it starts preserving |
+
+### The second half of round 15's question, answered rather than confirmed
+
+The round asked whether `uninstall.js:424`'s unconditional manifest delete after a
+**preserving** sweep is already governed by **W2**/**W3**'s refusal. **It is not.**
+W3's refusal is the **pre-plan gate**, and by `:424` it has already passed — so the
+manifest delete is reached on every path where the live `disposeCoreMechanics`
+preserved something **after** the gate: **X3**'s concurrent-dream window, an
+UNANSWERABLE shelf level (**K4**), **X19**'s retained `<state>` alias, and
+**X18**/**X20**'s preserved chain components. New **Table W row W10**: when the live
+sweep returns a **non-empty `preservedQuarantine`**, the run **stops before `:424`**,
+leaving the manifest and `config.yaml` in place and ending in the shape
+`uninstall.js:428-432` already ships — *"uninstall partially completed; left
+config.yaml and `<core>` in place so a retry stays safe"*. **Same lesson as X13, one
+step later: preserving the user's text must never cost them the ability to finish.**
+New acceptance criterion **19** measures the boundary from both sides, with RED proof
+**`quse-manifest-deleted-after-preserve`** anchored on
+`fs.rmSync(paths.manifest, { force: true });` (**1** at `5b77865f`).
+
+**What round 15 says about the bound.** The residual held: no finding landed inside
+it. What landed was the **mirror-image** failure — over-protection stranding a
+credential — which is why **X21**'s in-scope statement now has a counterweight in
+the security checklist: *a protection that strands a credential has failed in the
+other direction.*
+
+**Declaration count after round 15:** twenty declarations over thirteen criteria;
+eleven have a pre-measurable anchor, nine mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean return, a LIGHT-only
 return, **or a finding that falls inside `R-alias-outside-closure`**
 (`docs/runbooks/codex-review.md`, "Weighted closure").
