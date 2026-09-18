@@ -1,7 +1,7 @@
 ---
 id: WP-ep2-prune-once-per-run-test
 title: Give Table N row N2 its missing detector at the pipeline's one prune invocation
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-ep2-n2-rehome]
@@ -464,6 +464,17 @@ echo "ok V-5: the dependency landed"
   declared: it spans two files and a RED proof mutates one.
 
 ## Definition of done
+
+**Dispatch precondition — the design gate is CLOSED.** Closed **2026-09-18 at
+round 2**: round 1 (Astra, medium, adversarial) returned one band-B finding, fixed
+on the same branch; round 2 (Astra) returned **approve, no findings**, having
+executed the real prune helper against mocked entries to confirm the revised
+counts and the zero-redaction guard. Raws: `6b9e515d` (round 1) and `5ced42cd`
+(round 2), under `docs/specs/logbook/`; dispositions in
+`docs/specs/logbook/2026-09-18-ep2-successors-design-review.md`. **This is a
+REVIEW GATE, not owner approval**, and it grants nothing the owner has not been
+asked for: this package's own dispatch also waits on `WP-ep2-n2-rehome` landing, and
+on **owner item O-1** in that spec, which remains OPEN.
 
 1. All verification steps pass locally; output pasted into the PR body, including
    the **unfiltered** `npm run red-proofs` summary line.

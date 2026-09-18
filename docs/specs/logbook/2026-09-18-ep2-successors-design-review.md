@@ -30,6 +30,32 @@ Everything else Astra checked was verified exact: Table M's sixteen rows and the
 verdict tally, the eight-occurrence routed-slug count across seven lines, and every
 locus at both ends.
 
+## Round 2 — Astra, confirming
+
+- **Raw:** `docs/specs/logbook/2026-09-18-ep2-successors-design-r2-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-ep2-successors-design-r2-astra-focus.txt`
+- **Committed at:** `5ced42cd`
+- **Reviewed tip:** `02ad7838`
+- **Verdict:** `approve`, **no findings**
+
+| # | finding | band | weight | disposition |
+|---|---------|------|--------|-------------|
+| — | none | — | — | **R1-1 confirmed closed by execution**: Astra ran the real prune helper against mocked directory entries and reproduced the revised counts (control 2, (a) 4, (b) 5, (c) 3) and the zero-redaction guard. Its own scope note is recorded rather than smoothed over — *"Full pipeline tests were not run"* — which is exactly why P-10's numbers stay the hand-measured whole-suite runs below and P-11 keeps the unfiltered `npm run red-proofs` as the implementer's evidence |
+
+## Gate closed
+
+**The design gate is CLOSED at round 2, 2026-09-18** — round 1 LIGHT by the
+runbook's classification but load-bearing (it was the package's whole contract),
+so a confirming round was run; round 2 approved with no findings. Both specs move
+to `status: Ready`.
+
+**This is a review gate and nothing more.** It is not owner approval and grants
+nothing the owner has not been asked for. **Owner item O-1** — whether
+`WP-ep2-n2-rehome` may change the routed-WP slug inside ADR-0036 row A3, which is
+`Accepted, OWNER-SIGNED 2026-07-28` — **remains OPEN**, in the standing form under
+that spec's "Dispatch precondition — owner items", with its recommendation and its
+overrule cost. It must be answered before that package is dispatched.
+
 ### The three regression schedules, re-measured by hand at `08de2bc3`
 
 Each mutation applied to a worktree carrying the candidate test, the **whole** suite

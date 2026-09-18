@@ -1,7 +1,7 @@
 ---
 id: WP-ep2-n2-rehome
 title: Re-home Table N row N2 and every registered mirror onto the real prune call site
-status: Draft
+status: Ready
 model: opus
 size: S
 depends_on: []
@@ -521,6 +521,18 @@ npm run lint
 - **Do not move M-48's census limb off `gap`** (AC-5). No detector lands here.
 
 ## Definition of done
+
+**Dispatch precondition — the design gate is CLOSED.** Closed **2026-09-18 at
+round 2**: round 1 (Astra, medium, adversarial) returned one band-B finding, fixed
+on the same branch; round 2 (Astra) returned **approve, no findings**, having
+executed the real prune helper against mocked entries to confirm the revised
+counts and the zero-redaction guard. Raws: `6b9e515d` (round 1) and `5ced42cd`
+(round 2), under `docs/specs/logbook/`; dispositions in
+`docs/specs/logbook/2026-09-18-ep2-successors-design-review.md`. **This is a
+REVIEW GATE, not owner approval**, and it grants nothing the owner has not been
+asked for — **owner item O-1 remains OPEN**, in the standing form under "Dispatch
+precondition — owner items", and must be answered before this work package is
+dispatched.
 
 1. All verification steps pass locally; output pasted into the PR body, including
    the V-7 and V-8 runs.
