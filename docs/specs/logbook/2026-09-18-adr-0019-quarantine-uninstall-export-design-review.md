@@ -503,6 +503,39 @@ the hypothetical/existing definition**, which is now confined to a single row
 **Declaration count after round 17:** twenty-two declarations over thirteen
 criteria; twelve have a pre-measurable anchor, ten mutate code this package authors.
 
+## Round 18 — Astra, 2026-09-18
+
+- **Reviewed tip:** `a6874cfa`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r18-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r18-astra-focus.txt`
+- **Committed before adjudication at:** `b80dbb46`
+- **Verdict:** `needs-attention` — *"alias removal can make a retry destroy a
+  completed quarantine copy, and X17 still contains contradictory protection
+  rules."*
+- **Residuals:** nothing inside them for the fourth consecutive round.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R18-1** | **Absent-shelf alias removal loses protection across retries.** With a **pre-existing** `<state>` → `<core>/logs` alias and initially **absent** shelves, **X19** permitted the unlink. A concurrent dream completes `logs/quarantine/note` **after the absence decision and before that unlink**: the first sweep preserves `logs` from its **cached** protected set and **W10** correctly retains the manifest — but **on the retry `<state>` is gone**, the inventory misses the copy, the recomputed anchors no longer protect `logs`, and its recursive deletion destroys the original. Reproduced in an in-memory model. **No concurrent alias creation or redirection is required, so `R-alias-outside-closure` does not cover it**, and X17's own explanation covered only copies arriving *after* the unlink, missing this **before-unlink** window | A | HEAVY (high, conf. 0.97) | **ACCEPTED IN FULL, with the precise rule rather than the blanket one.** **X19 gains clause (b):** a `<state>` alias is **retained** when **either** an existing shelf's chain passes through it **(a)** **or its resolved target lies INSIDE any directory this uninstall sweeps (b)**. **The swept set is enumerated in the row** — `<core>/logs`, `<core>/schedules`, `<core>/secrets`, every child of `<state>` that **X1** step 2 removes, every **Table V** replay target, and **`<core>` itself**, the last included whole and deliberately conservatively because `reverse()` can delete a manifest-recorded path anywhere beneath it. **The blanket alternative — "never unlink an absent-shelf alias" — was refused and the refusal is recorded**: it re-opens round 16's contradiction and acceptance criterion 14 with it. **Why (b) is sufficient, as a by-construction argument rather than a timing one:** an alias whose target is outside every swept directory, with no existing chain, is unlinked as at `5b77865f`, and **nothing this uninstall will ever sweep lives there**, so a copy arriving late through that name is unreachable by any deletion this command performs, on this run or a retry. **Acceptance criterion 9** gains the before-the-unlink arm — **the only arm in this package that spans a full RETRY** — and **criterion 14**'s fixture must now place its target **outside every swept directory**, because that, not the shelf's absence, is what licenses its unlink. New RED proof **`quse-alias-into-swept-dir-unlinked`**: **under it the FIRST run still passes** and the loss appears only on the second command, so the declaration is what forces the fixture to re-run the whole uninstall |
+| **R18-2** | **Remove the contradictory hypothetical-anchor classification.** **X17 (1a)** requires hypothetical shelf roots to keep full class (i) subtree protection, but its **concluding operative sentence in the same cell** still read *"treating a hypothetical anchor as class (ii) only"* — round 16's withdrawn clause. Following it restores the round-17 data-loss case **documented in that same row**, so the canonical contract pointed at both the repaired and the vulnerable predicate | C | LIGHT | **ACCEPTED IN FULL, and it is mine to own: I introduced it at round 17** by rewriting the cell around its ending and leaving the ending in place. That is exactly the failure `docs/runbooks/spec-authoring.md` names — *"the new sentence goes in, the old one stays, and no mirror checklist can see inside one cell"* — and the remedy it prescribes is the intra-cell **re-read**, which I did not perform. The clause is replaced with the class (i) rule, **existence is now stated to matter to Table X row X19 alone**, the cell carries a short note recording that it drifted, and **acceptance criterion 18(b) was re-verified against the single definition**. A whole-file re-scan for `class (ii) only` returns zero |
+
+**Two further X19 mirrors found by my own post-edit sweep and updated in the same
+commit.** **X10**'s step-0b clause and the Security checklist's symlink bullet both
+still said the alias is unlinked *"when its target overlaps no protected shelf"* —
+true before clause (b), wrong after it. Both now state the two-part test. A whole-file
+re-scan for that phrasing returns zero.
+
+**Process note worth keeping.** Round 18's LIGHT finding is the second intra-cell
+drift in this gate (the first was **K7**'s title at round 7). Both were introduced by
+*my own* revision of a cell, not by a reviewer's miss, and both were invisible to the
+Mirrored Surface Checklist by construction. **The counter-measure is the re-read of
+the whole cell after every rewrite**, and after round 18 that re-read is performed on
+every cell this package touches in a round, not only on the clause being changed.
+
+**Declaration count after round 18:** twenty-three declarations over thirteen
+criteria; twelve have a pre-measurable anchor, eleven mutate code this package
+authors.
+
 **One confirming round remains.** The gate closes on a clean return, a LIGHT-only
 return, **or a finding that falls inside `R-alias-outside-closure`,
 `R-post-ledger-preserve` or `R-post-uninstall-preserve`**
