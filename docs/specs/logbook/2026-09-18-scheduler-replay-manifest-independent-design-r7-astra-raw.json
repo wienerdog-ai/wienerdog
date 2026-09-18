@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b577-f76e-7503-818f-96bafe4582cc",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r7",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: act-time resolution failures can still leave live jobs behind while uninstall deletes their core.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Stop deletion when the pre-unload re-check cannot resolve a schedule\",\n      \"body\": \"D6 drops a discovered path when its act-time lstat or resolution fails, then continues reversal. Consider an unrecorded plist discovered and disclosed successfully whose D5a re-check encounters EIO: no unload is attempted, but the manifest loop and disposeCoreMechanics still remove the core. If the error clears before D5b, its independent re-check also permits deleting the plist without any unload attempt. Thus 'failing can only ever preserve' is false for the complete uninstall. This recreates R-stripped-manifest-orphan; it is distinct from the deferred R-failed-unload because no spawn occurs.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 309,\n      \"line_end\": 309,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require non-absence resolution/lstat failures in D5a to stop uninstall before the manifest deletion loop and core sweep. Restrict D5b to candidates that passed D5a. Add a regression where discovery and disclosure succeed, the live D5a check throws EIO, and subsequent filesystem calls succeed; assert that the core, manifest and schedule file survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Update D6, D15 and their acceptance tests to preserve recovery state when the pre-unload check fails.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch: act-time resolution failures can still leave live jobs behind while uninstall deletes their core.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Stop deletion when the pre-unload re-check cannot resolve a schedule",
+        "body": "D6 drops a discovered path when its act-time lstat or resolution fails, then continues reversal. Consider an unrecorded plist discovered and disclosed successfully whose D5a re-check encounters EIO: no unload is attempted, but the manifest loop and disposeCoreMechanics still remove the core. If the error clears before D5b, its independent re-check also permits deleting the plist without any unload attempt. Thus 'failing can only ever preserve' is false for the complete uninstall. This recreates R-stripped-manifest-orphan; it is distinct from the deferred R-failed-unload because no spawn occurs.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 309,
+        "line_end": 309,
+        "confidence": 0.99,
+        "recommendation": "Require non-absence resolution/lstat failures in D5a to stop uninstall before the manifest deletion loop and core sweep. Restrict D5b to candidates that passed D5a. Add a regression where discovery and disclosure succeed, the live D5a check throws EIO, and subsequent filesystem calls succeed; assert that the core, manifest and schedule file survive."
+      }
+    ],
+    "next_steps": [
+      "Update D6, D15 and their acceptance tests to preserve recovery state when the pre-unload check fails."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: act-time resolution failures can still leave live jobs behind while uninstall deletes their core.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Stop deletion when the pre-unload re-check cannot resolve a schedule\",\n      \"body\": \"D6 drops a discovered path when its act-time lstat or resolution fails, then continues reversal. Consider an unrecorded plist discovered and disclosed successfully whose D5a re-check encounters EIO: no unload is attempted, but the manifest loop and disposeCoreMechanics still remove the core. If the error clears before D5b, its independent re-check also permits deleting the plist without any unload attempt. Thus 'failing can only ever preserve' is false for the complete uninstall. This recreates R-stripped-manifest-orphan; it is distinct from the deferred R-failed-unload because no spawn occurs.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 309,\n      \"line_end\": 309,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require non-absence resolution/lstat failures in D5a to stop uninstall before the manifest deletion loop and core sweep. Restrict D5b to candidates that passed D5a. Add a regression where discovery and disclosure succeed, the live D5a check throws EIO, and subsequent filesystem calls succeed; assert that the core, manifest and schedule file survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Update D6, D15 and their acceptance tests to preserve recovery state when the pre-unload check fails.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
