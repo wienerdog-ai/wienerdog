@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-replay-manifest-independent
 title: Derive uninstall's scheduler reversal from the schedule files on disk, not from the manifest alone
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-scheduler-mutation-home-authority]
@@ -179,7 +179,7 @@ Everything below was read at `c05a575b`.
 | modify | src/scheduler/generators.js | add and export **one** recognizer, `recognizeScheduleBasename` — Table R rows R1/R2. Do **not** refactor `deriveUnloadArgv` / `deriveProbeArgv` / `deriveIdentityArgv`; their regexes stay byte-unchanged (Out of scope) |
 | modify | src/core/manifest.js | add and export `discoverSchedulesOnDisk` (Table D rows D1, **D9**, **D11**, **D12**, **D14**, **D15**; it reads no manifest entry to decide an unload — **D10**); add the **two-phase** widened pass to `reverse()` — unload before the entry loop, removal after (Table D row **D5**) — and its `discoveredSchedules` option + return field (Table D rows D4/D6); the disposition of Table R row **R4**. `withinSchedulerRoot`, `withinAllowedRoot`, `validateEntry`, `disposeCoreMechanics` **and `contains`** stay byte-unchanged (Table D row **D15** adds a second resolution beside `contains`, never inside it) |
 | modify | src/cli/uninstall.js | discover once before the plan, **abort on an unreadable root** (Table D row **D9**), and disclose the block (Table D rows D2/D3, including D11's `keep` lines and D12's vault lines); pass the same snapshot to both `reverse()` calls (Table D rows D4/D7). `requireDeletionClearance`, the byte-compare and the `vaultPath` read at `:309` stay byte-unchanged |
-| modify | tests/unit/manifest.test.js | the recognition rule, the discovery set, the widened pass, the act-time re-check, the unreadable-root and coverage rows (Table D rows **D9**–**D12**), and the security rows of Table S |
+| modify | tests/unit/manifest.test.js | the recognition rule, the discovery set, the widened pass, phase D5b's removal re-check (**D6**), the unreadable-root and coverage rows (Table D rows **D9**–**D12**), and the security rows of Table S |
 | modify | tests/unit/uninstall.test.js | disclosure-before-consent for the disk-derived set (Table D rows D2/D3/D7), the D9 abort and its `--dry-run` non-abort, and the `--dry-run` surface |
 | modify | tests/unit/scheduler-generators.test.js | `recognizeScheduleBasename` over Table R rows R1–R3, and its agreement with the three existing derive functions on a shared corpus |
 | modify | tests/integration/uninstall-core-e2e.test.js | **Round 4, and it must land even though the code fix makes it redundant.** `tempEnv()` (`:18-42`) spreads `...process.env` (`:27`) and then overrides `HOME` (`:28`), so a developer's real `XDG_CONFIG_HOME` is **inherited** and `systemdUserDir` resolves outside the sandbox. The literal edit: add `XDG_CONFIG_HOME: path.join(root, '.config'),` to that object literal, beside the existing `CLAUDE_CONFIG_DIR` / `CODEX_HOME` overrides, with a comment naming Table D row **D14**. Add the regression of acceptance criteria 15 and 16 here |
@@ -276,7 +276,7 @@ once from its `scheduler-entry` — which D3 and D13 cover.
 
 **Activation trigger (ADR-0031's 2-of-7 test) — four of seven fire**, so the
 discipline is on: (i) `reverse()`'s option and return **shape** change; (iv) the
-precedence between the disclosed snapshot and the act-time re-check is new
+precedence between the disclosed snapshot and phase D5b's removal re-check is new
 behavior; (v) an **authority boundary** is crossed — the disk supplies the
 evidence, `reverse()` owns the lifecycle, and `uninstall` owns consent; (vii) the
 same recognition and disposition facts appear in the Deliverables notes, the
@@ -333,7 +333,7 @@ Every fact about *what we accept* and *what happens to it* is decided here.
 | **S9** | Another reverser destroying the evidence the unload needs — the **ordering** failure | Closed by Table D row **D5**'s two phases: every discovered unload is attempted **before** the manifest entry loop can delete its file. The win32 case is the live one — `<core>/schedules` is inside `withinAllowedRoot`'s root set (`manifest.js:742`), so a `file` record there really is deletable — and a hand-edited manifest could otherwise convert "covered by a record that unloads" into "deleted by a record that does not" |
 | **S10** | A symlink alias, or any record whose own evidence disappears mid-replay, used as fake coverage | Closed by the same removal of the predicate (**D10**). Round 2 raised the alias that derives `null`; round 3 raised the alias that derives the *right* argv and is then stranded when a later `file` record deletes the symlink, so its reverser fails realpath containment and spawns nothing. Neither reaches a suppression decision any more, because there is none to reach |
 | **S11** | Discovery running against a scheduler root **outside** the home this run is reversing | Closed by Table D row **D14**: a discovery root must be `contains`-inside `paths.home` or `paths.core`. This is the incident class ADR-0041 was written for, one level down — a sandbox that redirects `HOME` and forgets that `XDG_CONFIG_HOME` is not a file it moved. **ADR-0041's authority predicate does not cover it:** that guard gates the mutation chokepoint, and the damage here is an `fs.rmSync` no spawn guard sees. Measured on this tree: `tests/integration/uninstall-core-e2e.test.js` `tempEnv()` spreads `...process.env` (`:27`) and overrides only `HOME` (`:28`), while granting `WIENERDOG_ALLOW_REAL_SCHEDULER=1` (`:39`) — so clearance is granted and `WIENERDOG_LOADER_NOOP` (`:33`) suppresses spawns but not deletions. Under R4's `unload-and-remove` and without D14, `npm test` would delete a developer's real `~/.config/systemd/user/wienerdog-*.timer`. **Both fixes ship:** D14 in the root derivation, and the test's own `XDG_CONFIG_HOME` override |
-| **S12** | **Any** path this package resolves — in discovery **or** at act time — made **unresolvable** rather than unreadable | Closed by Table D row **D15**, stated once over roots, candidates and the vault path. `contains`'s fail-closed boolean (`manifest.js:1103-1104`) is safe for its other callers, where an unresolvable side means *preserve*; inside discovery it means *exclude*, which is the opposite direction. The gate measured it twice — an injected `EACCES` at root canonicalization (round 5) and an `EIO` at candidate canonicalization with roots and `lstat` both succeeding (round 6) — which is why the rule is uniform rather than per site. **Round 7 extended it past discovery:** an act-time `EIO` used to drop one path and let the uninstall proceed, removing the core around a job nothing had unloaded — measured as R-stripped-manifest-orphan recreated, with **no spawn**, so it is not `R-failed-unload` |
+| **S12** | **Any** path this package resolves — in discovery, or at act time for a **removal** — made **unresolvable** rather than unreadable | Closed by Table D row **D15**, stated once over roots, candidates and the vault path. `contains`'s fail-closed boolean (`manifest.js:1103-1104`) is safe for its other callers, where an unresolvable side means *preserve*; inside discovery it means *exclude*, which is the opposite direction. The gate measured it twice — an injected `EACCES` at root canonicalization (round 5) and an `EIO` at candidate canonicalization with roots and `lstat` both succeeding (round 6) — which is why the rule is uniform rather than per site. **Round 7 extended it past discovery:** an act-time `EIO` used to drop one path and let the uninstall proceed, removing the core around a job nothing had unloaded — measured as R-stripped-manifest-orphan recreated, with **no spawn**, so it is not `R-failed-unload` |
 | **S13** | A schedule **file** removed to make its **registration** invisible | Closed by Table D row **D6**: the unload phase never consults the filesystem, so deleting the file between disclosure and the act changes nothing about what is unloaded. The registration was never in the file — the win32 XML is an import source (`schedule.js:416`), a booted launchd job outlives its plist, and a systemd timer's enablement is a `timers.target.wants/` symlink plus manager state. Measured by the gate at round 9 on the win32 path. Reachable by accident (a cleanup script, a sync) as easily as on purpose, which is why it is closed rather than named |
 
 ### Table B — the declared RED proofs (ADR-0042)
@@ -353,7 +353,7 @@ by this package carries no pre-measurable anchor and says so.
 | `srm-widened-set-never-passed` | 1 | `src/cli/uninstall.js` | pass `[]` instead of the discovered snapshot to the **live** `reverse()` call | adjacent to `requireDeletionClearance(paths, opts);` — **1** | the criterion observes the orphan actually being unloaded, not merely that discovery returned something |
 | `srm-not-disclosed` | 3 | `src/cli/uninstall.js` | pass `[]` to the **plan** `reverse()` call while the live call keeps the snapshot | `const plan = manifestLib.reverse(paths, manifest, { dryRun: true });` — **1** | the criterion observes disclosure, not just deletion — this is the exact shape that would delete undisclosed |
 | `srm-recognition-widened` | 2 | `src/core/manifest.js` | replace the R2 recognizer call in the discovery gate with `withinSchedulerRoot` alone | `function withinSchedulerRoot(` — **1** | the criterion's corpus contains a basename that passes `withinSchedulerRoot` and fails R2 (Table R row R3), so the strict rule is what is being tested |
-| `srm-act-time-recheck-dropped` | 3 | `src/core/manifest.js` | remove the D6 re-check so the passed list is acted on unconditionally | `const schedulerOpts = {` — **1** | the criterion observes the narrowing direction, not just the happy path |
+| `srm-act-time-recheck-dropped` | 3 | `src/core/manifest.js` | remove phase **D5b**'s removal re-check, so every disclosed item is **removed** unconditionally | `const schedulerOpts = {` — **1** | the criterion observes the removal set's narrowing direction, not just the happy path. **Scoped to removal since round 9:** the unload is unconditional by contract (**D6**), so a mutation that made *it* unconditional would change nothing and prove nothing |
 | `srm-disposition-flipped` | 4 | `src/core/manifest.js` | apply the opposite arm of Table R row R4 at the D5 site | *new — authored by this package* | criterion 4 observes the disposition itself rather than the unload; it is the proof that keeps R4 a measurable cell under either ruling |
 | `srm-unreadable-root-read-as-empty` | 9 | `src/core/manifest.js` | make the D9 enumeration `catch` return no `unreadable` entry, restoring the round-1 defect exactly | `const schedulerOpts = {` — **1** | *Round 1, finding 1.* Criterion 9 asserts an **abort**, and an abort assertion goes green whenever the run fails for any reason — or red-free whenever the mechanism never ran. Without this declaration nothing distinguishes "aborted because a root was unreadable" from "the fixture never made a root unreadable" |
 | `srm-vault-exclusion-removed` | 11 | `src/core/manifest.js` | drop the D12 vault test from the candidate gate | `contains(dir, vaultPath)` in `disposeCoreMechanics` — **1** (the adjacent, unchanged use of the same predicate) | *Round 1, finding 3.* Criterion 11 asserts a user file **survives**, which is the most vacuity-prone shape in the repo's measured catalogue: a file also survives when discovery never found it, when the fixture's vault path was wrong, and when the widened pass never ran at all |
@@ -361,7 +361,7 @@ by this package carries no pre-measurable anchor and says so.
 | `srm-unload-moved-after-loop` | 12 | `src/core/manifest.js` | move phase **D5a** back to after the manifest entry loop, restoring the single-pass shape | `for (const entry of [...manifest.entries].reverse()) {` — **1** | *Round 2, finding 1.* Criterion 12 asserts an unload **happened** for a file another reverser deletes during the loop. Without the declaration a suite that only ever fixtures files **no** manifest entry touches stays green under the mutation, because the ordering is unobservable unless the corpus contains the overlapping win32 case |
 | `srm-record-suppresses-unload` | 13 | `src/core/manifest.js` | re-introduce a coverage exclusion into discovery: skip any candidate named by a validated manifest entry | `const removedSet = new Set([paths.manifest]);` — **1** (the adjacent, unchanged pre-loop region phase D5a is inserted before) | *Round 3, the convergence move.* Criterion 13 asserts that a candidate **covered** by a record — including the round-3 shape, a same-basename in-root symlink `scheduler-entry` whose own file a later `file` record deletes — is still unloaded. Under the mutation it is silently excluded and nothing unloads it, which is what three review rounds each measured. **This declaration replaces `srm-alias-counts-as-coverage`**, which pinned the old five-condition predicate that no longer exists |
 | `srm-external-root-discovered` | 15 | `src/core/manifest.js` | remove Table D row **D14**'s containment filter, so discovery enumerates every root `reverse()` computes | `gen.systemdUserDir(paths.home, process.env), // $XDG_CONFIG_HOME||~/.config + /systemd/user` — **1** (the unchanged root the filter is applied to) | *Round 4.* Criterion 15 asserts that files under an external XDG root **survive**. A survival assertion goes green whenever the fixture's external root was never populated, never reached, or silently mis-pathed — and the thing it guards against is `npm test` deleting a developer's real timer, which is the one failure nobody gets to discover twice |
-| `srm-resolution-failure-read-as-external` | 17 | `src/core/manifest.js` | collapse Table D row **D15**'s three outcomes to two at **any** of its resolution sites — root, candidate, vault path, or D6's act-time re-check — i.e. treat a resolution error as *not contained*, which is what `contains`'s bare boolean already does | *new — authored by this package*, so no pre-measurable anchor exists; the mutation site is D15's classification, like `srm-disposition-flipped`'s | *Round 5.* Criterion 17 asserts an **abort with zero files removed** when a root cannot be canonicalized. Under the mutation the root is dropped silently and the run completes 'successfully' having unloaded nothing — green for any suite whose corpus never makes a root unresolvable, which is what the gate measured by injecting `EACCES` |
+| `srm-resolution-failure-read-as-external` | 17 | `src/core/manifest.js` | collapse Table D row **D15**'s three outcomes to two at **any** of its resolution sites — root, candidate, vault path, or **D5b**'s removal re-check — i.e. treat a resolution error as *not contained*, which is what `contains`'s bare boolean already does | *new — authored by this package*, so no pre-measurable anchor exists; the mutation site is D15's classification, like `srm-disposition-flipped`'s | *Round 5.* Criterion 17 asserts an **abort with zero files removed** when a root cannot be canonicalized. Under the mutation the root is dropped silently and the run completes 'successfully' having unloaded nothing — green for any suite whose corpus never makes a root unresolvable, which is what the gate measured by injecting `EACCES` |
 
 **Why round 1's finding 2 carries no declaration of its own.** Its criterion (10) asserts a
 **positive** effect — the unload argv for the uncovered file reaching the
@@ -666,9 +666,11 @@ Nothing in this package runs a scheduler client, on any platform, in any test.
 - [ ] **3.** Consent integrity (Table D rows D2/D3/D6/D7): the widened block
       appears in the pre-confirm plan **and** in `--dry-run`; a recognized file
       created **after** the plan is printed is **not** acted on; a disclosed file
-      that stops qualifying before the act is dropped with a `preserving …`
-      notice. The acted-on set (`reverse()`'s returned `discoveredSchedules`) is
-      always a subset of the disclosed set, never a superset.
+      that stops qualifying before the act is **still unloaded** and is dropped
+      **from the removal** with a notice (**D6** — the re-check is removal-only).
+      The **unload** set (`reverse()`'s returned `discoveredSchedules`) **equals**
+      the disclosed set; the **removal** set is a subset of it. Neither is ever a
+      superset.
 - [ ] **4.** The disposition of Table R row **R4** is observable and exclusive:
       under `unload-and-remove` the file is gone after the run; under
       `unload-only` the file is still present after the run. Exactly one arm is
@@ -686,8 +688,11 @@ Nothing in this package runs a scheduler client, on any platform, in any test.
       found" (`:285-288`), which is today's behavior and is unchanged by this
       package. What this package must show instead: `discoverSchedulesOnDisk`
       run twice against an unchanged tree returns the identical array, and the
-      widened pass run twice over the same list performs zero actions the second
-      time (every path has been disposed of or dropped by Table D row D6).
+      widened pass run twice over the same list performs **zero repeated
+      deletions** — every path was disposed of or skipped the first time. It
+      **does** re-attempt each unload, because phase D5a is unconditional
+      (**D6**); repeated unload attempts are the contract, not a defect, and
+      Table D row **D13** is why they cost nothing.
 - [ ] **8.** ADR-0041 carries the amendment of owner item 2 verbatim, its residual
       row is marked closed in place, and its `Status:` / `OWNER-SIGNED` header
       lines are byte-unchanged.
@@ -758,11 +763,15 @@ Nothing in this package runs a scheduler client, on any platform, in any test.
       throws `EIO` also aborts with zero files removed — the resolution rule is
       asserted at more than one site, which is the whole point of stating it once.
       An unresolvable **vault** path (D12) aborts on the same rule. **Fifth
-      outcome, round 7:** with discovery and disclosure both succeeding, an
-      `EIO` from the **act-time** re-check in phase D5a — and every later
-      filesystem call succeeding — leaves the **core, the manifest and the
-      schedule file all on disk**, with no chokepoint call. `ENOENT` at act time
-      does **not** abort: that item is dropped as absent and the run continues.
+      outcome, rounds 7 and 9 as the contract now stands:** the act-time site is
+      phase **D5b** and it governs **removal only**. With discovery and
+      disclosure both succeeding, an `EIO` from D5b's re-check leaves that
+      **file on disk with a notice** — and, for a launchd plist, Table R row
+      **R9**'s plain-language warning — while its **unload has already been
+      attempted** in phase D5a, which performs no filesystem check at all
+      (**D6**). It does **not** abort: the run completes, because a skip there
+      forgoes a deletion, never an unload. `ENOENT` at D5b is the same skip with
+      nothing to notice.
 - [ ] **18.** *(Round 9 — Table D rows **D6**/**D5**, Table S row S13.)* When a
       disclosed candidate is **deleted after discovery and before phase D5a** —
       the confirmation-prompt window — its unregister argv **still reaches the
@@ -847,9 +856,19 @@ the Out-of-scope list and by criterion 2's agreement test.
    dispositioned — they are defined in `docs/runbooks/codex-review.md`
    and not restated here. `In-Review` marks the START of review: this
    list is complete only when review is.
-6. **DISPATCH PRECONDITION.** (a) The design gate must be CLOSED on this spec
-   before dispatch (`docs/runbooks/codex-review.md`, "Weighted closure"); this
-   spec is `Draft` until it is. **Round 1 (Astra) returned `needs-attention`
+6. **DISPATCH PRECONDITION.** (a) **The design gate is CLOSED — 2026-09-18, at
+   round 10** (`docs/runbooks/codex-review.md`, "Weighted closure"). Rounds 1–9
+   each carried band-A HEAVY findings; **round 10 returned LIGHT only** —
+   machinery, not product: acceptance criteria stale against the round-9
+   contract, fixed in the same pass with no external round needed. Each round's
+   raw and focus were committed **before adjudication**: `4b800517` (r1),
+   `244d0cfc` (r2), `dcf46033` (r3), `b78ccba7` (r4), `868f578e` (r5),
+   `07d2df2a` (r6), `c3f9557a` (r7), `a6734862` (r8), `9a32963b` (r9),
+   `befb29b5` (r10); the dispositions table is
+   `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-review.md`.
+   **This is a review gate, not owner approval:** nothing in this repository
+   records the owner approving, accepting, ratifying or signing this package, and
+   the ADR-0041 amendment it drafts carries **"owner signature pending"**. **Round 1 (Astra) returned `needs-attention`
    with three band-A HEAVY findings, all accepted and applied** — raw and focus
    committed before adjudication at `4b800517`, dispositions in
    `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-review.md`.
@@ -874,6 +893,6 @@ the Out-of-scope list and by criterion 2's agreement test.
    named residuals. The gate is therefore **open**, and at least one further
    round is required. **A review gate is not owner approval:** nothing
    in this repository records the owner approving, accepting, ratifying or
-   signing this package. (b) Owner items 1, 2 and 3 travel with this package as
+   signing this package. (b) **Owner items 1, 2 and 3 remain OPEN**, travelling with this package as
    recommendations in the standing form; the owner reverses either by dated
    amendment, applied by a committed revision.

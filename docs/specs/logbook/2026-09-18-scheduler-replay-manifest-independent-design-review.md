@@ -447,7 +447,54 @@ What gets unloaded is fixed at disclosure and cannot be changed by any file
 state, race, permission or error afterwards. A finding that proposes conditioning
 an unload on something observable on disk is answered by pointing here.
 
-## Round 10
+## Round 10 (Astra) — and the gate closes
 
-Pending. Per the coordinator's standing instruction, a clean or LIGHT-only round
-closes the gate.
+- **Reviewed tip:** `a48d7682` (round-9 filesystem-free unload phase applied).
+- **Raw + focus committed BEFORE adjudication:** `befb29b5`.
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r10-astra-raw.json`
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r10-astra-focus.txt`
+- **Nothing about the product.** The filesystem-free unload phase held. The one
+  finding is **machinery**: acceptance criteria left stale by round 9's contract
+  change.
+
+### Disposition
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| 14 | **Mandatory criteria contradicted the revised unload contract.** AC 17's act-time arm still required a D5a filesystem check, zero unload calls on `EIO` and dropping absent candidates — which D5/D6 now forbid and AC 18 explicitly contradicts. AC 7 required zero actions on a replayed list, although D5a must re-attempt those unloads. AC 3 and Table B's act-time mutations still described removal-and-unload re-checks. **No implementation could satisfy all of them, and following the stale ones would reintroduce the skipped-unload defect round 9 fixed** | C | LIGHT | **ACCEPTED and fixed in the same pass.** AC 17's fifth outcome now asserts a D5b **removal** skip with its notice (plus R9's warning for a plist) while the unload has already been attempted, and does **not** abort. AC 3 states the two halves — unload set **equals** the disclosed set, removal set is a **subset**. AC 7's invariant becomes **no repeated deletion**, with repeated unload attempts named as the contract and D13 as why they cost nothing. `srm-act-time-recheck-dropped` is re-scoped to D5b's removal re-check, with a note that mutating the unload would prove nothing now that it is unconditional; `srm-resolution-failure-read-as-external` names D5b instead of D6. Swept the Deliverables notes, the activation-trigger prose and Table S row S12 for the same drift |
+
+**Per `docs/runbooks/codex-review.md` this closes the loop without another
+external round:** the finding is band C / LIGHT and touches no product contract.
+
+### Gate closure
+
+**CLOSED 2026-09-18 at round 10.** Rounds 1–9 each carried band-A HEAVY
+findings; round 10 returned LIGHT only. Every round's raw and focus were
+committed **before adjudication**: `4b800517` (r1), `244d0cfc` (r2), `dcf46033`
+(r3), `b78ccba7` (r4), `868f578e` (r5), `07d2df2a` (r6), `c3f9557a` (r7),
+`a6734862` (r8), `9a32963b` (r9), `befb29b5` (r10).
+
+`docs/specs/WP-scheduler-replay-manifest-independent.md` is flipped to
+`status: Ready` in the same commit.
+
+**This is a review gate, not owner approval.** Nothing in this repository records
+the owner approving, accepting, ratifying or signing this package. **Owner items
+1, 2 and 3 remain open** in the standing recommendation form — the
+unload-and-remove disposition, the ADR-0041 amendment, and the retryable-refusal
+alternative — and the amendment this package drafts carries **"owner signature
+pending"**.
+
+### What ten rounds produced, in one line each
+
+- **r1** D9 (unreadable ≠ empty), D10/D11 (coverage ≠ deletion permission), D12
+  (vault exclusion).
+- **r2** D5's two phases — unload before the entry loop; D10(e), later deleted.
+- **r3** the convergence move: **no coverage predicate at all**; D13's double
+  unload; shape frozen.
+- **r4** D14 — discovery roots bounded to this run's home; the XDG escape.
+- **r5** D15 — three-valued root classification.
+- **r6** D15 generalized to every path discovery resolves; semantics frozen.
+- **r7** D6 — the rule holds at act time; the last carve-out removed.
+- **r8** R9 — the named-residual branch exercised; the amendment narrowed.
+- **r9** the unload phase is **filesystem-free**; one abort site left.
+- **r10** the criteria caught up; gate closed.
