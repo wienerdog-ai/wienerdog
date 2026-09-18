@@ -1,0 +1,63 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b544-e04e-7a71-b025-3688b03b3b73",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r1",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch as written: discovery can still silently miss live jobs, and the widened deletion bypasses an existing vault protection.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Do not treat an unreadable scheduler root as empty\",\n      \"body\": \"D1 converts permission and I/O failures into an empty discovery result. With scheduler authority present, uninstall skips the live probe, then removes the core and manifest despite never inspecting the directory containing an unrecorded live job. This preserves the exact no-unload-attempt orphan the package claims to close; it is distinct from the explicitly deferred failed-unload residual.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 271,\n      \"line_end\": 271,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Distinguish absent roots from failed enumeration. Propagate discovery failures and abort before reversal or core disposal; add an unreadable-root regression test.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"A record of another kind must not suppress scheduler unloading\",\n      \"body\": \"D1 excludes paths named by any validated entry, but validateEntry checks shape rather than scheduler coverage. For example, a valid {kind:'file', path:'.../Library/LaunchAgents/ai.wienerdog.dream.plist'} suppresses discovery, while the existing file reverser rejects that path outside its allowed roots and never unloads it. Uninstall then disposes of the core. A hand-edited manifest therefore still produces the supposedly closed orphan.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 271,\n      \"line_end\": 276,\n      \"confidence\": 1,\n      \"recommendation\": \"Separate unload coverage from file-deletion permission. Only scheduler records that perform the equivalent unload should suppress unload discovery; other entry kinds may narrow deletion. Test a recognized schedule named only by a valid non-scheduler entry.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve the nested-vault exclusion in the widened deletion\",\n      \"body\": \"The unload-and-remove contract has no vault exclusion. Existing disposeCoreMechanics explicitly protects legacy or hand-edited installs whose vault is inside a mechanics directory. If that vault is <core>/schedules, a newly authored, unrecorded wienerdog-notes.xml satisfies every D1 gate and is deleted by the widened pass before the protected sweep runs. Previously that user file survived.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 261,\n      \"line_end\": 261,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Carry the accepted vault path into discovery and reversal, exclude candidates within its resolved subtree, and test an unrecorded recognized basename inside a vault located at <core>/schedules.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the canonical contracts and acceptance tests for these three cases before closing the design gate.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch as written: discovery can still silently miss live jobs, and the widened deletion bypasses an existing vault protection.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Do not treat an unreadable scheduler root as empty",
+        "body": "D1 converts permission and I/O failures into an empty discovery result. With scheduler authority present, uninstall skips the live probe, then removes the core and manifest despite never inspecting the directory containing an unrecorded live job. This preserves the exact no-unload-attempt orphan the package claims to close; it is distinct from the explicitly deferred failed-unload residual.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 271,
+        "line_end": 271,
+        "confidence": 0.99,
+        "recommendation": "Distinguish absent roots from failed enumeration. Propagate discovery failures and abort before reversal or core disposal; add an unreadable-root regression test."
+      },
+      {
+        "severity": "high",
+        "title": "A record of another kind must not suppress scheduler unloading",
+        "body": "D1 excludes paths named by any validated entry, but validateEntry checks shape rather than scheduler coverage. For example, a valid {kind:'file', path:'.../Library/LaunchAgents/ai.wienerdog.dream.plist'} suppresses discovery, while the existing file reverser rejects that path outside its allowed roots and never unloads it. Uninstall then disposes of the core. A hand-edited manifest therefore still produces the supposedly closed orphan.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 271,
+        "line_end": 276,
+        "confidence": 1,
+        "recommendation": "Separate unload coverage from file-deletion permission. Only scheduler records that perform the equivalent unload should suppress unload discovery; other entry kinds may narrow deletion. Test a recognized schedule named only by a valid non-scheduler entry."
+      },
+      {
+        "severity": "high",
+        "title": "Preserve the nested-vault exclusion in the widened deletion",
+        "body": "The unload-and-remove contract has no vault exclusion. Existing disposeCoreMechanics explicitly protects legacy or hand-edited installs whose vault is inside a mechanics directory. If that vault is <core>/schedules, a newly authored, unrecorded wienerdog-notes.xml satisfies every D1 gate and is deleted by the widened pass before the protected sweep runs. Previously that user file survived.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 261,
+        "line_end": 261,
+        "confidence": 0.97,
+        "recommendation": "Carry the accepted vault path into discovery and reversal, exclude candidates within its resolved subtree, and test an unrecorded recognized basename inside a vault located at <core>/schedules."
+      }
+    ],
+    "next_steps": [
+      "Revise the canonical contracts and acceptance tests for these three cases before closing the design gate."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch as written: discovery can still silently miss live jobs, and the widened deletion bypasses an existing vault protection.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Do not treat an unreadable scheduler root as empty\",\n      \"body\": \"D1 converts permission and I/O failures into an empty discovery result. With scheduler authority present, uninstall skips the live probe, then removes the core and manifest despite never inspecting the directory containing an unrecorded live job. This preserves the exact no-unload-attempt orphan the package claims to close; it is distinct from the explicitly deferred failed-unload residual.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 271,\n      \"line_end\": 271,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Distinguish absent roots from failed enumeration. Propagate discovery failures and abort before reversal or core disposal; add an unreadable-root regression test.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"A record of another kind must not suppress scheduler unloading\",\n      \"body\": \"D1 excludes paths named by any validated entry, but validateEntry checks shape rather than scheduler coverage. For example, a valid {kind:'file', path:'.../Library/LaunchAgents/ai.wienerdog.dream.plist'} suppresses discovery, while the existing file reverser rejects that path outside its allowed roots and never unloads it. Uninstall then disposes of the core. A hand-edited manifest therefore still produces the supposedly closed orphan.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 271,\n      \"line_end\": 276,\n      \"confidence\": 1,\n      \"recommendation\": \"Separate unload coverage from file-deletion permission. Only scheduler records that perform the equivalent unload should suppress unload discovery; other entry kinds may narrow deletion. Test a recognized schedule named only by a valid non-scheduler entry.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve the nested-vault exclusion in the widened deletion\",\n      \"body\": \"The unload-and-remove contract has no vault exclusion. Existing disposeCoreMechanics explicitly protects legacy or hand-edited installs whose vault is inside a mechanics directory. If that vault is <core>/schedules, a newly authored, unrecorded wienerdog-notes.xml satisfies every D1 gate and is deleted by the widened pass before the protected sweep runs. Previously that user file survived.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 261,\n      \"line_end\": 261,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Carry the accepted vault path into discovery and reversal, exclude candidates within its resolved subtree, and test an unrecorded recognized basename inside a vault located at <core>/schedules.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the canonical contracts and acceptance tests for these three cases before closing the design gate.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
