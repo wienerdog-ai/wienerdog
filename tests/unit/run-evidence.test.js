@@ -160,8 +160,10 @@ test(
   'sink-probe: run-evidence — a labelled secret straddling the argv cap is redacted in run-evidence.jsonl',
   () => {
     const paths = tempPaths();
-    // Cut before scan (Table S row S2): 'F' padding + PROBE, sized so
-    // sanitizeArgv's own slice(0, 2000) keeps exactly PROBE_HEAD.
+    // Scan before cut (Table S row S2): 'F' padding + PROBE, sized so the
+    // credential straddles the cap. sanitizeArgv now scans the whole element
+    // before capping, so redactOnly sees PROBE and the cap keeps 'F' x 1976
+    // followed by [REDACTED:anthropic-key] — exactly CAP characters.
     const straddling = 'F'.repeat(CAP - PROBE_HEAD.length) + PROBE;
     recordRunEvidence(paths, sampleRecord({ argv: [straddling] }));
 
@@ -186,10 +188,12 @@ test(
   'sink-probe: run-evidence — a labelled secret straddling the scalar-field cap is redacted in run-evidence.jsonl',
   () => {
     const paths = tempPaths();
-    // Cut before scan (Table S row S3): 'F' padding + PROBE, sized so
-    // sanitizeRecord's own scrub slice(0, 2000) keeps exactly PROBE_HEAD. A
-    // SEPARATE truncate-then-redact from S2's sanitizeArgv — fixing S2 alone
-    // leaves this open, which is why it has its own defect id.
+    // Scan before cut (Table S row S3): 'F' padding + PROBE, sized so the
+    // credential straddles the cap. sanitizeRecord's scrub now scans the
+    // whole field before capping, so redactOnly sees PROBE and the cap keeps
+    // 'F' x 1976 followed by [REDACTED:anthropic-key] — exactly CAP
+    // characters. A SEPARATE call site from S2's sanitizeArgv — fixing S2
+    // alone left this one open, which is why it carries its own regression id.
     const straddling = 'F'.repeat(CAP - PROBE_HEAD.length) + PROBE;
     recordRunEvidence(paths, sampleRecord({ job: straddling }));
 

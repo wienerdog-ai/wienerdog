@@ -438,8 +438,10 @@ test(
   'sink-probe: alerts — a labelled secret straddling MAX_FIELD_CHARS is redacted in alerts.jsonl',
   () => {
     const { paths } = setup();
-    // Cut before scan (Table S row S1): 'F' padding + PROBE, sized so the
-    // sink's own slice(0, MAX_FIELD_CHARS) keeps exactly PROBE_HEAD.
+    // Scan before cut (Table S row S1): 'F' padding + PROBE, sized so the
+    // credential straddles the cap. The sink now scans the whole value before
+    // capping, so redactOnly sees PROBE and the cap keeps 'F' x 1976 followed
+    // by [REDACTED:anthropic-key] — exactly MAX_FIELD_CHARS characters.
     const straddling = 'F'.repeat(MAX_FIELD_CHARS - PROBE_HEAD.length) + PROBE;
     appendAlert(paths, rec('dream', '2026-07-04T01:00:00.000Z', straddling));
 
