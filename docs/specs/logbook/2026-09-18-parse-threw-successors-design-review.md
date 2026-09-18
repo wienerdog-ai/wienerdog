@@ -163,7 +163,43 @@ Implementation-notes bullet, the Security checklist and the Mirrored Surface
 Checklist all updated; and `WP-transcript-parsers-harden-text-values`' Table E
 rows E1/E4 now say the companion converts rather than deletes.
 
-## Round 3
+## Round 3 — CLOSED
 
-A fresh Astra round follows this fix, because finding 7 is HEAVY. Not yet run at
-the time of writing.
+Reviewed tip `a9ba8e20`. Raw and focus committed **before adjudication** at
+`0cf82f96`:
+
+- `docs/specs/logbook/2026-09-18-parse-threw-successors-design-r3-astra-raw.json`
+- `docs/specs/logbook/2026-09-18-parse-threw-successors-design-r3-astra-focus.txt`
+
+**Verdict `approve`, no findings.** Astra confirmed in memory: the single
+expected parse-output change across the 17 fixtures; below-baseline retry
+selection under the converted `deferred` record; the preserved secret-deferral
+budget; and re-quarantine of a transcript that still fails.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---------|------|--------|-------------|
+| — | none | — | — | **Gate CLOSED at round 3** (rounds 1 and 2 HEAVY, round 3 approve), per `docs/runbooks/codex-review.md`, "Weighted closure". |
+
+## Gate closure
+
+All three specs moved `Draft` → **`Ready`** on 2026-09-18 by the architect, and
+each carries the closure in its own Definition of done, dispatch precondition
+(a), citing the three pre-adjudication raws `8e2c0cef` / `d8bc9a57` /
+`0cf82f96` and this file.
+
+**This is a review gate, not owner approval.** Nothing in this repository
+records the owner approving, accepting, ratifying or signing any of the three
+packages. The owner items stay open in the standing recommendation form and are
+reversible by dated amendment, applied by a committed revision rather than by a
+dispatch message:
+
+| Spec | Owner items still open |
+|------|------------------------|
+| `WP-doctor-recognizes-parse-threw` | none |
+| `WP-transcript-parsers-harden-text-values` | **1** — metadata hardening as a further successor; **2** — must reach the same release as the companion, in that order |
+| `WP-ledger-retry-parse-threw-on-upgrade` | **1** — whether the ledger-level gate and the `quarantined → deferred` transition need an ADR-0023 amendment |
+
+Dispatch order is a property of the specs, not of this gate:
+`WP-transcript-parsers-harden-text-values` must merge before
+`WP-ledger-retry-parse-threw-on-upgrade`, and
+`WP-doctor-recognizes-parse-threw` is independent of both.

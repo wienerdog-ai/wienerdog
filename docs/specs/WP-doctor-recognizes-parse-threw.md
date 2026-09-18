@@ -1,7 +1,7 @@
 ---
 id: WP-doctor-recognizes-parse-threw
 title: Teach `wienerdog doctor` to name the parse-threw skip instead of calling it unrecognized
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-dream-collect-parse-throw-quarantine]
@@ -517,9 +517,15 @@ finished change, where it must print `DOCTOR PARSE-THREW ROW OK`.
 
 ## Definition of done
 
-0. **DISPATCH PRECONDITION.** (a) The design gate has run and is closed
-   (`docs/runbooks/codex-review.md`, "Weighted closure"); the round and its
-   dispositions are recorded in `docs/specs/logbook/`. (b) There are **no owner
+0. **DISPATCH PRECONDITION.** (a) **The design gate is CLOSED at round 3**
+   (`docs/runbooks/codex-review.md`, "Weighted closure"): rounds 1 and 2 carried
+   HEAVY findings and round 3 returned **approve with no findings**. Each
+   round's raw and focus were committed **before adjudication** — `8e2c0cef`
+   (round 1), `d8bc9a57` (round 2), `0cf82f96` (round 3) — and the dispositions
+   table is
+   `docs/specs/logbook/2026-09-18-parse-threw-successors-design-review.md`.
+   **This is a review gate, not owner approval:** nothing in this repository
+   records the owner approving, accepting, ratifying or signing this package. Round 1's findings on this package were LIGHT (citation and count corrections); rounds 2 and 3 re-opened nothing in it. (b) There are **no owner
    items** in this package: every judgment it contains is settled by a table
    above, and the one question that could have been an owner item — the message
    wording — is decided by Table A row A4 as a mirror of a literal already on

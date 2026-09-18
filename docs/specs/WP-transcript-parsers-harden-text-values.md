@@ -1,7 +1,7 @@
 ---
 id: WP-transcript-parsers-harden-text-values
 title: Make the default transcript parsers decline a non-string text value instead of throwing or inventing dialogue
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-dream-collect-parse-throw-quarantine]
@@ -765,10 +765,16 @@ console.log('FOUR SITES DECLINE OK');"
 
 ## Definition of done
 
-0. **DISPATCH PRECONDITION.** (a) The design gate has run and is closed
-   (`docs/runbooks/codex-review.md`, "Weighted closure"); the round and its
-   dispositions are recorded in `docs/specs/logbook/`. (b) **Owner items: one,
-   below.** (c) Every cite is pinned to base `08de2bc3` and was derived by
+0. **DISPATCH PRECONDITION.** (a) **The design gate is CLOSED at round 3**
+   (`docs/runbooks/codex-review.md`, "Weighted closure"): rounds 1 and 2 carried
+   HEAVY findings and round 3 returned **approve with no findings**. Each
+   round's raw and focus were committed **before adjudication** — `8e2c0cef`
+   (round 1), `d8bc9a57` (round 2), `0cf82f96` (round 3) — and the dispositions
+   table is
+   `docs/specs/logbook/2026-09-18-parse-threw-successors-design-review.md`.
+   **This is a review gate, not owner approval:** nothing in this repository
+   records the owner approving, accepting, ratifying or signing this package. The owner items below stay open in the standing recommendation form. (b) **Owner items: TWO, below** — the metadata successor (item 1) and the
+   release-ordering constraint that round 1 added (item 2). (c) Every cite is pinned to base `08de2bc3` and was derived by
    construct, and every behavioral claim under "Current state" was executed on
    that tip. Re-run the Current-state reading before writing code; if anything
    has landed in `src/core/transcripts/` or `tests/unit/dream-collect.test.js`

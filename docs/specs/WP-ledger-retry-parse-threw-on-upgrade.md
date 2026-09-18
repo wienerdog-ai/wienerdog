@@ -1,7 +1,7 @@
 ---
 id: WP-ledger-retry-parse-threw-on-upgrade
 title: Give the hardened parser one bounded second look at transcripts quarantined parse-threw before it existed
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-transcript-parsers-harden-text-values]
@@ -433,9 +433,15 @@ such acceptance.**
 
 ## Definition of done
 
-0. **DISPATCH PRECONDITION.** (a) The design gate has run and is closed
-   (`docs/runbooks/codex-review.md`, "Weighted closure"); the round and its
-   dispositions are recorded in `docs/specs/logbook/`. (b) Owner item 1 travels
+0. **DISPATCH PRECONDITION.** (a) **The design gate is CLOSED at round 3**
+   (`docs/runbooks/codex-review.md`, "Weighted closure"): rounds 1 and 2 carried
+   HEAVY findings and round 3 returned **approve with no findings**. Each
+   round's raw and focus were committed **before adjudication** — `8e2c0cef`
+   (round 1), `d8bc9a57` (round 2), `0cf82f96` (round 3) — and the dispositions
+   table is
+   `docs/specs/logbook/2026-09-18-parse-threw-successors-design-review.md`.
+   **This is a review gate, not owner approval:** nothing in this repository
+   records the owner approving, accepting, ratifying or signing this package. Owner item 1 below stays open in the standing recommendation form. (b) Owner item 1 travels
    with this package as a recommendation; the owner reverses it by dated
    amendment, applied by a committed revision. (c) **Dispatch order:**
    `WP-transcript-parsers-harden-text-values` must be **merged** first — before
