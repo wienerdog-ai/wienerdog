@@ -89,6 +89,88 @@ the red-proofs criterion renumbered to 14 to stay last), the Mirrored Surface
 Checklist, the Security checklist, the Implementation note on gate-derived rows,
 and the Definition of done's dispatch precondition.
 
-## Round 3
+## Round 3 (Astra)
+
+- **Reviewed tip:** `8e9d4dde` (round-2 findings applied).
+- **Raw + focus committed BEFORE adjudication:** `dcf46033`.
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r3-astra-raw.json`
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r3-astra-focus.txt`
+- **Verdict:** `needs-attention` — *"D10 still permits false coverage that leaves
+  a live job without any unload attempt."*
+- **D5's two phases and D10(e) held.** The finding is a *third* hole in the same
+  predicate, again executed against mocked I/O, again a combination neither
+  earlier round's condition excludes.
+
+### Disposition
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| 6 | **Coverage does not survive earlier reversers.** On win32, an unrecorded `schedules/wienerdog-dream.xml` covered by a `scheduler-entry` for an in-root, **same-basename symlink** resolving to it passes **all five** D10 conditions — including round 2's (e), since the basenames match and the argv is equivalent — so the XML is excluded from discovery. A later deletable `{kind:'file'}` record for the XML then deletes it during replay; the covering entry's reverser subsequently fails realpath containment and spawns nothing. Mocked execution confirmed every condition passed, the file was removed, and `schedulerSpawn` received **zero** calls; the core is then disposed around a live task. D5a cannot help, because discovery had excluded the candidate | A | HEAVY | **ACCEPTED, and the design is changed rather than the predicate.** See the convergence note below |
+
+### Convergence note — the surface is now frozen
+
+Three rounds, three holes, all in one place: **D10's coverage predicate deciding
+to suppress an unload.** Round 1 added conditions (a)–(d), round 2 added (e), and
+round 3 found a combination satisfying all five. `docs/runbooks/codex-review.md`'s
+rule is that the loop converges by **freezing surface, not by patience**, and the
+common shape of all three is diagnostic: a suppression rule has to predict what
+the *rest of the replay* will do to its own evidence, which has no closed form.
+
+**A sixth condition was therefore not added. The predicate was deleted.**
+
+- **D10** now reads: coverage never suppresses an unload; discovery does not read
+  the manifest at all. Phase **D5a unloads every candidate D1 yields**, recorded
+  or not, before any manifest reverser runs.
+- **D11** is the manifest's only remaining influence: a validated entry naming a
+  discovered path sets `remove: false`. That direction is safe in a way
+  suppression never was — it can only make uninstall delete *less*, so a forged,
+  stale or evidence-losing record cannot leave a job running.
+- **Names follow the design:** `discoverUnrecordedSchedules` →
+  `discoverSchedulesOnDisk`; `reverse()`'s `unrecordedSchedules` option and
+  return field → `discoveredSchedules`.
+
+**The surface is frozen here.** D5a unloads everything recognized, contained,
+non-vault and regular-file. Further findings are either fixed **within** that
+shape — the candidate gate, the phase order, the removal narrowing — or accepted
+as **named residuals** in this spec. Re-opening the question of whether some
+manifest state may suppress an unload is out of bounds without a new owner
+ruling.
+
+### The cost this buys, and why it is tolerated
+
+A normal install's every job is now unloaded **twice** — once by D5a, once by its
+own `scheduler-entry` reverser. Recorded as **Table D row D13**, with the
+per-platform expectation and, more importantly, the reason it cannot fail the
+run: `reverseSchedulerEntry` wraps its spawn in `try/catch` and **discards the
+result** (`manifest.js:532-536`), under a comment that already anticipates it —
+*"Best-effort: the entry may already be unloaded. Ignore non-zero/errors"*
+(`:529`). No exit code reaches a decision, so `R-failed-unload` has no abort path
+for a second attempt to trip. Second-attempt expectations: **launchd** `bootout`
+of an already-booted-out label → non-zero; **systemd** `disable --now` of an
+already-disabled unit → 0 (non-zero only if the unit file is gone); **schtasks**
+`/delete /tn … /f` of a missing task → non-zero. Two stated costs: one extra
+`schedulerSpawn` per recorded scheduler entry, and one extra ADR-0041 refusal
+line per entry on an unauthorized run.
+
+**The inverse suppression was weighed and not taken** — having D5a record what it
+unloaded so the recorded entry's reverser skips its own attempt. It would save a
+spawn whose result is already discarded, at the price of re-introducing a
+suppression channel into the exact mechanism three rounds just removed one from.
+
+### Surfaces updated in the same commit
+
+Table D (D1 loses its coverage clause; D3 gains the duplicate-`would run:`
+disclosure; D5a's scope widened; D7's consent argument re-derived; D10 and D11
+rewritten; **D13** added), Table S (S7 and S10 rewritten to cite the removal of
+the predicate), Table B (`srm-alias-counts-as-coverage` **dropped** — it pinned a
+predicate that no longer exists — and `srm-record-suppresses-unload` added,
+anchored on `const removedSet = new Set([paths.manifest]);`, measured unique at
+`c05a575b`), the Exact contracts (both signatures renamed, the worked example
+re-derived), the Deliverables notes, acceptance criteria 13 (rewritten) and 14
+(new, the double-unload behaviour) with the red-proofs criterion renumbered to
+15, the Mirrored Surface Checklist, the Security checklist, the gate-derived-rows
+implementation note, and the Definition of done's dispatch precondition.
+
+## Round 4
 
 Pending — a fresh Astra round runs against the revised spec.
