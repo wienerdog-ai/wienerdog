@@ -194,3 +194,67 @@ survived two errata precisely because nothing checked it.
 
 **Not asserted:** nothing here records the owner approving, accepting, ratifying or
 signing erratum 3, the spec, or ADR-0025 Amendment 6.
+
+## PR gate, fidelity round 2 (2026-09-18) — the canonical-extraction pass (erratum 4)
+
+Erratum 3 merged as #291. Fidelity round 2 **approved the tree** and found three more
+mirrors of the **same two families** errata 1 and 2 had missed. The reviewer asked for an
+extraction pass rather than a fourth erratum of the same kind; agreed, and landed as
+**erratum 4** — docs-only, **no literal block (E1–E6) and no Amendment 6 text touched**,
+so nothing is re-applied and it merges independently of PR #284.
+
+| # | Finding | Family | Disposition |
+|---|---------|--------|-------------|
+| FR2-1 | AC-2b said "a `drafts.create` whose **body** lacks `POISONED_NOTE_MARKER`" — **falsifiable**: a marker appearing only in the `Subject:` header makes the committed predicate return `true` | (a) L2 scope | **FIXED** on Table A's wording, with the falsifiability spelled out in the criterion so it is not "simplified" back |
+| FR2-2 | Security checklist said "Both Table B paths are **literal constants** joined to a `mkdtemp` root" — post-erratum-1 there are **eight computed** names | (b) fixture count/derivation | **FIXED**: eight code-derived names, `YYYY-MM-DD.md` from the run's own clock, with an explicit enumeration of what may not contribute a path segment and a note that the anchoring requirement applies if that ever changes |
+| FR2-3 | Table B's preamble said "producing `skipped: []` and **both files** mounted" | (b) | **FIXED**: all seven B1 daily notes and the one B2 dream report, eight files, see V-7 |
+
+### The extraction pass itself
+
+Every cell restating either family was read whole (grep could not find them — each used
+different words) and corrected in the same commit:
+
+- **(a) L2 scope** — AC-2b; the `POISONED_NOTE_MARKER` security bullet ("a fake draft
+  **body**"); the marker-introduction paragraph under Table A ("its presence in a draft
+  **body**"); **Table D's preamble**, which now states that its rows describe how each
+  STUB is built and defers to Table A for scope; and rows **D3/D4**, reworded to "decoded
+  message … not in the body and not in any header".
+- **(b) fixture count / derivation** — the Security checklist's path-safety bullet; Table
+  B's preamble; the untrusted-content security bullet ("B1's body" → "the same in all
+  seven"); and **Table A's own leftmost `weekly-review` cell**, which still read "the
+  poisoned **daily note**" singular inside the canonical table.
+
+### What the checklist now registers, and the two banned vocabularies
+
+Previously it said "Acceptance criteria" and "Code blocks" generically and did **not**
+list the Security checklist or Table B's preamble at all. It now names individually: each
+AC (AC-1, AC-1b, AC-2, AC-2b, AC-3, AC-4); each Security-checklist bullet; Table B's
+preamble; Table D's preamble and row descriptions; Table A's own input-channel cell; and
+the marker-introduction paragraph. Two vocabularies are written down as **banned**,
+because naming the defect is what makes the next instance visible: L2 never tests a
+**"body"**, and the fixture is never **singular** and never "both files"/"two paths".
+
+Descriptive prose **inside** E1–E6 is deliberately left alone where it is not a contract
+restatement, so a vocabulary fix never forces a re-application of shipped code.
+
+### Verification
+
+| Check | Result |
+|-------|--------|
+| E1–E6 blocks vs `origin/main` | **IDENTICAL** (all six) |
+| ADR-0025 Amendment 6 block vs `origin/main` | **IDENTICAL** |
+| Residual sweep for the banned vocabularies | only quotations inside errata text and the banned-list itself |
+| `npm run lint` | passed |
+
+**Tooling caveat recorded next to V-4**, hit by the reviewer: under `ugrep`,
+`${missing.length}` parses as an **interval quantifier** and the pattern does not match;
+`/usr/bin/grep` matches. The check is correct; the tool was the variable.
+
+**The general lesson:** a mirror registry that names *categories* does not survive contact
+with drift — the drift lands in one cell of the category and the checkbox still reads as
+satisfied. Mirrors must be registered **individually**, and the vocabularies that make a
+cell falsifiable must be written down as banned, because the next instance will use
+different words and no grep will find it.
+
+**Not asserted:** nothing here records the owner approving, accepting, ratifying or
+signing erratum 4, the spec, or ADR-0025 Amendment 6.
