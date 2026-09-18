@@ -1,6 +1,6 @@
 # Instruction-file inventory
 
-**Current as of 2026-09-04. This document is a dated inventory, never a complete
+**Current as of 2026-09-18. This document is a dated inventory, never a complete
 list** — an enumeration of instruction filenames cannot close, because no
 structural marker distinguishes one. A tool whose instruction file is
 undocumented, or whose filename the user configured, is not covered here and is
@@ -32,15 +32,15 @@ be unreachable.
 
 | Disposition | Basename | Stored spelling | Convention it is | Citation | Fetched |
 |---|---|---|---|---|---|
-| DENY | `CLAUDE.md` | `claude.md` | Claude Code project instructions, `./CLAUDE.md` | https://code.claude.com/docs/en/memory | 2026-09-04 |
-| DENY | `CLAUDE.local.md` | `claude.local.md` | Claude Code local instructions, `./CLAUDE.local.md`; documented, not deprecated | https://code.claude.com/docs/en/memory | 2026-09-04 |
-| DENY | `AGENTS.md` | `agents.md` | the AGENTS.md open format, repository root; read by Codex CLI, Warp, Zed, opencode, Copilot, Cursor, Cline, Roo Code, Junie, Kiro, Goose and OpenHands | https://agents.md/ · https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://opencode.ai/docs/rules/ | 2026-09-04 |
-| DENY | `AGENTS.override.md` | `agents.override.md` | Codex CLI's per-directory override, checked ahead of `AGENTS.md` in each directory from the project root down | https://learn.chatgpt.com/docs/agent-configuration/agents-md | 2026-09-04 |
-| DENY | `AGENT.md` | `agent.md` | Zed's project-instruction list, position 6; Roo Code's workspace-root fallback when `AGENTS.md` is absent | https://zed.dev/docs/ai/instructions · https://roocodeinc.github.io/Roo-Code/features/custom-instructions/ | 2026-09-04 |
-| DENY | `GEMINI.md` | `gemini.md` | Gemini CLI's default context file, searched from the working directory up to the project root; Zed's list, position 9 | https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md | 2026-09-04 |
-| DENY | `QWEN.md` | `qwen.md` | Qwen Code's default context file, project root | https://github.com/QwenLM/qwen-code/blob/main/docs/users/features/memory.md | 2026-09-04 |
-| DENY | `WARP.md` | `warp.md` | Warp project rules; still fully supported and takes priority over `AGENTS.md` in the same directory | https://docs.warp.dev/knowledge-and-collaboration/rules | 2026-09-04 |
-| DENY | `replit.md` | `replit.md` | Replit Agent's project context file, which must sit at the project root | https://docs.replit.com/features/project-setup/replit-dot-md | 2026-09-04 |
+| DENY | `CLAUDE.md` | `claude.md` | Claude Code project instructions, `./CLAUDE.md` | https://code.claude.com/docs/en/memory | 2026-09-18 |
+| DENY | `CLAUDE.local.md` | `claude.local.md` | Claude Code local instructions, `./CLAUDE.local.md`; documented, not deprecated | https://code.claude.com/docs/en/memory | 2026-09-18 |
+| DENY | `AGENTS.md` | `agents.md` | the AGENTS.md open format, repository root; read by Codex CLI, Warp, Zed, opencode, Copilot, Cursor, Cline, Roo Code, Junie, Kiro, Goose and OpenHands | https://agents.md/ · https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://opencode.ai/docs/rules/ | 2026-09-18 |
+| DENY | `AGENTS.override.md` | `agents.override.md` | Codex CLI's per-directory override, checked ahead of `AGENTS.md` in each directory from the project root down | https://learn.chatgpt.com/docs/agent-configuration/agents-md | 2026-09-18 |
+| DENY | `AGENT.md` | `agent.md` | Zed's project-instruction list, position 6; Roo Code's workspace-root fallback when `AGENTS.md` is absent | https://zed.dev/docs/ai/instructions · https://roocodeinc.github.io/Roo-Code/features/custom-instructions/ | 2026-09-18 |
+| DENY | `GEMINI.md` | `gemini.md` | Gemini CLI's default context file, searched from the working directory up to the project root; Zed's list, position 9 | https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md | 2026-09-18 |
+| DENY | `QWEN.md` | `qwen.md` | Qwen Code's default context file, project root | https://github.com/QwenLM/qwen-code/blob/main/docs/users/features/memory.md | 2026-09-18 |
+| DENY | `WARP.md` | `warp.md` | Warp project rules; still fully supported and takes priority over `AGENTS.md` in the same directory | https://docs.warp.dev/knowledge-and-collaboration/rules | 2026-09-18 |
+| DENY | `replit.md` | `replit.md` | Replit Agent's project context file, which must sit at the project root | https://docs.replit.com/features/project-setup/replit-dot-md | 2026-09-18 |
 
 ## Table B — accepted omissions and handoffs
 
@@ -76,7 +76,7 @@ An `OMIT` row is assigned to nobody and is a stated non-denial.
 | HANDOFF | `.claude/CLAUDE.md`, `.claude/rules/` | Claude Code | dot-prefixed — **and already refused independently** by `promote.js`'s `DENIED_SEGMENTS` member `.claude` | all paths — the `.claude` member of `DENIED_SEGMENTS` | https://code.claude.com/docs/en/memory |
 | HANDOFF | `.codex/AGENTS.md`, `.codex/AGENTS.override.md` | Codex CLI | dot-prefixed — **and already refused independently** by `promote.js`'s `DENIED_SEGMENTS` member `.codex` | all paths — the `.codex` member of `DENIED_SEGMENTS` | https://learn.chatgpt.com/docs/agent-configuration/agents-md |
 | HANDOFF | `.rules` | Zed | dot-prefixed leading-dot filename; also fails the `.md`-only extension rule | the `.md`-only extension rule | https://zed.dev/docs/ai/instructions |
-| HANDOFF | `.goosehints` | Goose | dot-prefixed leading-dot filename; also fails the `.md`-only extension rule. **Its disposition does not rest on a citation:** the vendor page is a client-rendered SPA that returned HTTP 404 to a plain fetch on 2026-09-04, and the two structural reasons hold regardless | the `.md`-only extension rule | — (no live citation; see reason) |
+| HANDOFF | `.goosehints` | Goose | dot-prefixed leading-dot filename; also fails the `.md`-only extension rule. **Re-verified 2026-09-18:** Goose's documentation moved to goose-docs.ai under the Agentic AI Foundation; the page that returned HTTP 404 to a plain fetch on 2026-09-04 (a client-rendered SPA at block.github.io/goose) is superseded and the new page is fetchable and confirms `.goosehints` as a fallback read after `AGENTS.md` | the `.md`-only extension rule | https://goose-docs.ai/docs/guides/context-engineering/using-goosehints/ |
 | HANDOFF | `.aider.conf.yml` | Aider | dot-prefixed; also fails the `.md`-only extension rule | the `.md`-only extension rule | https://aider.chat/docs/config/aider_conf.html |
 | OMIT | `copilot-instructions.md` (bare) | GitHub Copilot | **not a documented discovery path.** GitHub documents the file only under `.github/`; a bare tier-local one is an ordinary note, and denying it would deny legitimate notes | none — an ordinary note, deliberately admitted | https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions |
 | OMIT | `rules.md` (bare) | Cursor | merely the basename of a path inside `.cursor/`; not a convention on its own | none — an ordinary note, deliberately admitted | https://cursor.com/docs/rules |
