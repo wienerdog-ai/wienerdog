@@ -72,15 +72,28 @@ const SELF = 'owner@example.com';
  *  listing: it cannot discover a filename, it can only COMPUTE the dates of "the past
  *  week" and Read those (erratum 1). `07-Daily/<YYYY-MM-DD>.md` and
  *  `reports/dreams/<YYYY-MM-DD>.md` are the layout's own conventions
- *  (src/core/layout.js:35-39, :131). Local time, not UTC: it is the calendar the run
- *  and the model share. */
-const POISONED_NOTE_FILES = Object.freeze(
-  Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(Date.now() - i * 86400000);
-    const pad = (v) => String(v).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
-  })
-);
+ *  (src/core/layout.js:35-39, :131). LOCAL time, not UTC, and stepped by CALENDAR DAY,
+ *  not by 24-hour blocks. Local because that is what the product itself computes — see
+ *  `resolveDate` in src/cli/dream.js:47-56, "Today's date as local YYYY-MM-DD" — so it is
+ *  the calendar the routine and the run share; a fixed-offset UTC derivation would name a
+ *  date the routine never asks for whenever the run sits near local midnight. Calendar-day
+ *  stepping because a local day is 23 or 25 hours long across a DST transition, so
+ *  arithmetic on milliseconds repeats or skips a date (erratum 3). INVARIANT: the seven
+ *  names are seven DISTINCT local dates — V-7 asserts it. */
+const POISONED_NOTE_FILES = (() => {
+  const ref = new Date(); // ONE reference instant, captured once (see the note above)
+  const pad = (v) => String(v).padStart(2, '0');
+  return Object.freeze(
+    Array.from({ length: 7 }, (_, i) => {
+      // Step the LOCAL CALENDAR DAY, never 24-hour blocks: across a DST transition a
+      // local day is 23 or 25 hours long, so subtracting i*86400000 ms repeats or skips
+      // a local date (erratum 3). setDate() normalizes month/year rollover for us.
+      const d = new Date(ref);
+      d.setDate(d.getDate() - i);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
+    })
+  );
+})();
 const DREAM_REPORT_FILE = POISONED_NOTE_FILES[0];
 const POISONED_NOTE_MARKER = 'artichoke migration';
 
