@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b55f-b6f8-7ed2-be28-d2104c4de503",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-shelf-r4",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not close the design gate: the required OC-4 regression makes the frozen RED declaration fail.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"OC-4 creates an undeclared failure under the required mutation\",\n      \"body\": \"OC-4 requires a whole-tree assertion that the pruned original's bytes are absent. The prescribed mutation copies every evicted original into quarantine/.pruned, so it necessarily fails OC-4 as well as OC-1. Executing the actual prune function and specified mutation against an in-memory filesystem confirmed both absence checks fail. scripts/red-proofs.js:1668-1670 rejects undeclared testCodeFailure results, but this contract permits only OC-1 and forbids widening expectRed. Consequently, an implementation satisfying both test contracts cannot pass the required RED lane; the earlier measurement predates OC-4.\",\n      \"file\": \"docs/specs/WP-quarantine-only-copy-shelf.md\",\n      \"line_start\": 426,\n      \"line_end\": 430,\n      \"confidence\": 1,\n      \"recommendation\": \"Declare OC-4 as a second expected failure with its own one-element identity path and signal, update the exact-one acceptance requirement, and verify the mutation against all four new tests.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Reconcile the RED declaration with OC-4 before dispatching implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not close the design gate: the required OC-4 regression makes the frozen RED declaration fail.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "OC-4 creates an undeclared failure under the required mutation",
+        "body": "OC-4 requires a whole-tree assertion that the pruned original's bytes are absent. The prescribed mutation copies every evicted original into quarantine/.pruned, so it necessarily fails OC-4 as well as OC-1. Executing the actual prune function and specified mutation against an in-memory filesystem confirmed both absence checks fail. scripts/red-proofs.js:1668-1670 rejects undeclared testCodeFailure results, but this contract permits only OC-1 and forbids widening expectRed. Consequently, an implementation satisfying both test contracts cannot pass the required RED lane; the earlier measurement predates OC-4.",
+        "file": "docs/specs/WP-quarantine-only-copy-shelf.md",
+        "line_start": 426,
+        "line_end": 430,
+        "confidence": 1,
+        "recommendation": "Declare OC-4 as a second expected failure with its own one-element identity path and signal, update the exact-one acceptance requirement, and verify the mutation against all four new tests."
+      }
+    ],
+    "next_steps": [
+      "Reconcile the RED declaration with OC-4 before dispatching implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not close the design gate: the required OC-4 regression makes the frozen RED declaration fail.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"OC-4 creates an undeclared failure under the required mutation\",\n      \"body\": \"OC-4 requires a whole-tree assertion that the pruned original's bytes are absent. The prescribed mutation copies every evicted original into quarantine/.pruned, so it necessarily fails OC-4 as well as OC-1. Executing the actual prune function and specified mutation against an in-memory filesystem confirmed both absence checks fail. scripts/red-proofs.js:1668-1670 rejects undeclared testCodeFailure results, but this contract permits only OC-1 and forbids widening expectRed. Consequently, an implementation satisfying both test contracts cannot pass the required RED lane; the earlier measurement predates OC-4.\",\n      \"file\": \"docs/specs/WP-quarantine-only-copy-shelf.md\",\n      \"line_start\": 426,\n      \"line_end\": 430,\n      \"confidence\": 1,\n      \"recommendation\": \"Declare OC-4 as a second expected failure with its own one-element identity path and signal, update the exact-one acceptance requirement, and verify the mutation against all four new tests.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Reconcile the RED declaration with OC-4 before dispatching implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
