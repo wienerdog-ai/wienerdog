@@ -196,6 +196,32 @@ before and after the change. **Exactly one entry differs**, and it is
 `codex-poisoned-text-block.jsonl`: it goes from throwing a `TypeError` to
 returning the extract pinned in Table B row B3. The other sixteen are identical.
 
+### What the hardening does NOT reach: transcripts already quarantined
+
+`selectState` (`src/core/dream/ledger.js:235-263`) answers `'skip-quarantined'`
+for **any** quarantined record whose `fingerprint` still matches the file — the
+reason is consulted only by the sticky `secret-revert-exhausted` arm above it —
+and `collectExtracts` applies that answer **before** the parse call. So a
+`parse-threw` record written by a build without this package keeps its file out
+of every later run, and the hardened parser never sees it.
+
+**That population is live.** Tag `v0.14.0` is `1f546baa` (2026-09-18 14:14
++0200); it has the parse-throw merge `900dd6d4` as an ancestor,
+`git grep -c parse-threw v0.14.0 -- src/core/dream/scratch.js` is 2, and the npm
+registry gives `0.14.0` a publish time of 2026-09-18T12:26:43Z. A published
+build therefore emits `parse-threw` with the unhardened parsers today.
+
+**And no user action clears it.** `recordQuarantined` (`:326-334`) writes
+`{fingerprint, outcome, reason, updated_at, harness}` — no version; `appVersion`
+exists in this file only on `oversizedExtracts` memo entries (`:103`,
+`:118-125`). `readLedger` (`:139-157`) hard-pins `version: 1` and never reads
+`obj.version`; `writeLedger` (`:160-177`) serializes exactly
+`{version, baseline_mtime, files, oversizedExtracts?}`, dropping any other
+top-level key. Nothing in `src/` ships an un-quarantine, forget or retry
+affordance — `ledger.js:483-487` records that as a standing decision — and a
+completed transcript's fingerprint does not change on its own. **Table E decides
+what follows from this; no code in this package changes on account of it.**
+
 ## Deliverables (permission boundary — touch ONLY these)
 
 <!-- Always allowed without listing: this spec file itself (the status flip),
@@ -344,6 +370,23 @@ call in `assert.doesNotThrow`, which was measured on this tree's Node to report
 searches the failing diagnostic for it — so each declared assertion must carry
 its tag inside its own **message string**, not only in the test name.
 
+**Table E — transcripts quarantined `parse-threw` BEFORE this package exists.**
+The single place that question is decided. Raised by the design gate, round 1
+(Astra, medium, band A — the product question): the hardening fixes the parser
+but does not, on its own, give the hardened parser a second look at the sessions
+the defect already cost. Every fact below was read off the code at base
+`08de2bc3`, and the two release facts off `git` and the npm registry.
+
+| Row | Fact / rule | Value |
+|-----|-------------|-------|
+| E1 | The mechanism, exactly | `selectState` (`src/core/dream/ledger.js:235-263`) returns `'skip-quarantined'` for any record whose `outcome` is `'quarantined'` and whose `fingerprint` still equals `fingerprint(disc)`, **for every reason** — the reason is consulted only for the sticky `secret-revert-exhausted` arm above it. `collectExtracts` applies that decision **before** the parse call. So a `parse-threw` record written by an unhardened build keeps its file out of the run after the upgrade, and **the hardened parser never sees it**, until and unless the file's `size:mtimeMs:dev:ino` changes. |
+| E2 | Why the user cannot clear it | A completed session transcript is never rewritten by either harness, so the fingerprint does not change on its own. `reports/warnings.md`'s header says *"Do not edit it"* about the report, and its **only** remediation line rides the secret-exhausted group (`src/core/dream/warnings.js:92-95`); the four intake reasons carry none. The digest banner says *"a skipped file is retried automatically if it changes"* (`ledger.js:480`) — true, and useless here. **Nothing in `src/` ships an un-quarantine, forget or retry affordance**, which `ledger.js:483-487` records as a deliberate standing decision (*"Names NO command: nothing ships a way to un-skip these sessions yet"*). So the honest answer to "what can a user do" is: **nothing**. |
+| E3 | The population is live, not hypothetical | **`v0.14.0` carries the `parse-threw` reason with the unhardened parsers, and it is published.** Tag `v0.14.0` is `1f546baa` (2026-09-18 14:14 +0200), it has `900dd6d4` — the parse-throw merge — as an ancestor, `git grep -c parse-threw v0.14.0 -- src/core/dream/scratch.js` is 2, and the npm registry gives `0.14.0` a publish time of 2026-09-18T12:26:43Z. Any install of 0.14.0 that meets a poisoned transcript accumulates a record this package would strand. This row is why the residual is **not** acceptable as a bare named residual. |
+| E4 | The decision: **(b), bounded recovery — and NOT in this package** | A bounded recovery is required. It does **not** belong here, and the reason is structural rather than a preference: see row E5 for what it costs in `ledger.js`, which is a different kind of change from four filter predicates and cannot be carried by this package's central claim (Table B — "the default parse output is byte-identical"). It is specced as the companion `WP-ledger-retry-parse-threw-on-upgrade`, drafted alongside this package, which `depends_on` it. **Release ordering is the binding constraint, and it is owner item 2.** |
+| E5 | Why a one-shot gate needs new ledger-level state — measured, not assumed | The quarantine record carries **no version**: `recordQuarantined` (`:326-334`) writes exactly `{fingerprint, outcome, reason, updated_at, harness}`. `appVersion` exists in this file, but only on `oversizedExtracts` memo entries (`:103`, `:118-125`) — a different map with a different lifecycle. And the schema version is **not readable state**: `readLedger` (`:139-157`) hard-pins `version: 1` on output and never reads `obj.version`, while `writeLedger` (`:160-177`) serializes exactly `{version:1, baseline_mtime, files, oversizedExtracts?}` — so **any new top-level field is silently dropped on the next write** unless `writeLedger` changes too. An ungated sweep is not an option either: after this package a `parse-threw` can still arise outside the four hardened joins (the metadata path — Out of scope), and re-reading, re-parsing and re-throwing on such a file every night is exactly the repeated cost ADR-0023's quarantine exists to stop. So a bounded retry costs edits to `readLedger`, `writeLedger`, the `Ledger` typedef and a migration — the companion's subject, not this one's. |
+| E6 | Which decision wins where it meets the Done spec | `WP-dream-collect-parse-throw-quarantine`'s Table A row **A2** says the quarantine **record** gains no field, no counter and no stickiness. The companion **keeps that**: it changes no record shape and no `selectState` arm. Its row **A12**, however, says the reason introduces *"no record field, no counter and no new state"* and concludes that no ADR-0023 amendment is needed — and ledger-level one-shot state **is** new state. So on that narrower point **the companion wins and row A12's premise no longer holds for the family**, which is why the companion, not this package, is where ADR-0023's amendment question is answered. This package changes neither record nor lifecycle and needs no amendment (Table A row A8). |
+| E7 | What this package still owes | One thing, and it is criterion 9: **say the residual out loud where the next reader will meet it**, rather than leaving the gap for a later reviewer to rediscover. No code in this package changes on account of Table E. |
+
 ### Mirrored Surface Checklist
 
 Every surface below defers to its canonical table. A review finding updates the
@@ -355,11 +398,15 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       A rows A1, A2; `claude.js` → rows A3, A4; `transcripts.test.js` → criteria
       1–3 and Table B; `dream-collect.test.js` → Table C; the snapshot → Table B
       rows B1–B3; the new proofs file → Table D; the existing proofs file →
-      Table C row C4
+      Table C row C4. **No Deliverables row mirrors Table E, and that is Table E
+      row E4's decision rather than an omission:** `src/core/dream/ledger.js`
+      and `tests/unit/ledger.test.js` are deliberately outside this boundary and
+      named in Out of scope
 - [ ] Acceptance criteria that assert its facts — criterion 1 asserts Table A
-      rows A0 and A5 and Table B row B3; criterion 2 asserts Table A rows
+      row A5 and Table B rows B2 and B3; criterion 2 asserts Table A rows
       A0–A5 at all four sites; criterion 3 asserts Table B in full; criterion 4
       asserts Table A row A6; criterion 5 asserts Table C rows C1, C2 and C6;
+      criterion 9 asserts Table E;
       criterion 6 asserts Table D and Table C row C4; criterion 7 asserts Table
       A row A7
 - [ ] Verification commands / greps — the four-site `node -e` gate asserts Table
@@ -374,8 +421,11 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       emptiness rules (row A5), the two `primary-dialogue.proofs.json`
       declarations and the `occurrences` trap (row A7 and Table D), the measured
       three-test breakage and the `[PT-3]` correction (Table C rows C1 and C3),
-      `[PT-2]`'s seam (Table C row C2), and the 17-fixture before/after capture
-      (Table B) — all pinned to base `08de2bc3`
+      `[PT-2]`'s seam (Table C row C2), the 17-fixture before/after capture
+      (Table B), and **"What the hardening does NOT reach"** — `selectState`'s
+      reason-blind skip, the `v0.14.0` release facts and the absence of any
+      un-quarantine affordance (Table E rows E1, E2, E3, E5) — all pinned to
+      base `08de2bc3`
 - [ ] Operative prose steps that apply it — **walked, in document order**:
       - Context's "the rule this package adopts is already in the tree" paragraph
         → Table A rows A0 and A6
@@ -393,7 +443,10 @@ new mirror found in review is added here on the spot (register-new-mirrors):
         and A7; its "generate the snapshot first" bullet → Table B row B4; its
         "no new committed fixtures" bullet → Table B row B1
       - Out of scope's metadata entry → Table A row A7 and Table C row C3(a);
-        its filed-spec entry → Table C
+        its filed-spec entry → Table C; its **already-quarantined entry** →
+        Table E rows E4 and E5
+      - Current state's release facts and acceptance criterion 9 → Table E rows
+        E3 and E7; owner item 2 → Table E rows E4 and E6
 
 ## Implementation notes & constraints
 
@@ -475,9 +528,9 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       `parse()` and `parseWithOutcome()` over
       `tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl`
       complete — observed through `assert.doesNotThrow` — and return exactly
-      Table B row B3's pinned value, `source_path` excepted (Table B row B2).
-      In particular the assistant message survives with `text: ''` (Table A row
-      A5).
+      **Table B row B3's** pinned value, `source_path` excepted (Table B row
+      B2). In particular the assistant message survives with `text: ''` (Table A
+      row A5).
 - [ ] 2. **All four sites decline a non-string `text`, and none invents
       dialogue.** For each of the four sites named in Table A rows A1–A4,
       separately: a record whose text-bearing block carries a `text` that is an
@@ -519,6 +572,15 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       file under `src/` other than `codex.js` and `claude.js` (Table A row A7).
 - [ ] 8. N/A — this WP ships no command and writes nothing outside the repo; it
       changes two pure parsing functions' block acceptance.
+- [ ] 9. **The stranded-quarantine residual is carried, not dropped** (Table E
+      row E7). The companion spec
+      `docs/specs/WP-ledger-retry-parse-threw-on-upgrade.md` exists and names
+      `WP-transcript-parsers-harden-text-values` in its `depends_on`; and the PR
+      body states, in one sentence, that transcripts quarantined `parse-threw`
+      by a pre-hardening build are **not** recovered by this package and that
+      the companion must reach the same release (owner item 2). This criterion
+      requires **no code change** — it exists so the gap cannot be closed
+      silently by a green test run.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -631,9 +693,9 @@ const mk=(harness,lines)=>{
 const check=(site,entry,keep)=>{
   let ex=null;
   try{ex=T.parse(entry);}catch(e){bad.push(site+': the parse THREW on a non-string text value: '+e.message);return;}
-  const texts=(ex.messages||[]).map((m)=>m.text).join(' ');
-  for(const c of COERCED) if(texts.includes(c)) bad.push(site+': invented dialogue — the coerced form '+JSON.stringify(c)+' reached a message text');
-  if(!texts.includes(keep)) bad.push(site+': the sibling STRING block was lost too — the decline is not block-scoped: '+JSON.stringify(texts).slice(0,300));
+  const texts=(ex.messages||[]).map((m)=>String(m.text));
+  for(const c of COERCED) if(texts.some((t)=>t.includes(c))) bad.push(site+': invented dialogue — the coerced form '+JSON.stringify(c)+' reached a message text');
+  if(!texts.some((t)=>t.includes(keep))) bad.push(site+': the sibling STRING block was lost too — the decline is not block-scoped: '+JSON.stringify(texts).slice(0,300));
 };
 for(const p of POISON){
   // Site 1 - codex message content blocks.
@@ -687,6 +749,13 @@ console.log('FOUR SITES DECLINE OK');"
   Record the correction to its prediction — that **three** of its tests break and
   `[PT-3]` does not — as a dated entry under `docs/specs/logbook/`, which needs
   no Deliverables listing.
+- **Recovering transcripts already quarantined `parse-threw`** — the bounded
+  one-time retry is **`WP-ledger-retry-parse-threw-on-upgrade`**, drafted
+  alongside this package and depending on it (Table E rows E4, E5). Do not add
+  `src/core/dream/ledger.js` or `tests/unit/ledger.test.js` to this package's
+  Deliverables, do not sweep, delete or rewrite any ledger record here, and do
+  not change `selectState`. Owner item 2 carries the release-ordering
+  constraint, which is the part a later reader must not lose.
 - **Deleting or moving `tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl`**
   (Table C row C5).
 
@@ -750,3 +819,31 @@ successor?**
   records as the only way to build that case. Table C row C3(b)'s isolation
   argument would then have to be redone for `pt-only-parse-is-caught`'s whole
   `expectRed` set.
+
+**2. May this package ship in a release that does not also carry
+`WP-ledger-retry-parse-threw-on-upgrade`?**
+
+- *Recommendation:* **no — the two must reach the same release, in that order.**
+  This is the design gate's round-1 finding (Astra, medium, band A), decided in
+  Table E. The reason it is a release question rather than a merge question is
+  row E3: **`v0.14.0` is already published** (npm, 2026-09-18T12:26:43Z; tag
+  `1f546baa`, which has the parse-throw merge `900dd6d4` as an ancestor), so a
+  build that emits `parse-threw` with unhardened parsers is **in users' hands
+  today**. Every such quarantine is permanent for its file: `selectState` skips
+  an unchanged quarantined file before the parse (row E1), nothing in `src/`
+  ships an un-quarantine affordance, and a completed transcript's fingerprint
+  never changes on its own (row E2). Shipping the hardening alone would fix the
+  defect for future transcripts while making the already-lost ones
+  *permanently* lost, with no user action available — and it would do so in a
+  release whose notes would truthfully say the parser bug was fixed.
+- *Overrule cost:* ship this package alone. The cost is not a regression — it is
+  that every session already quarantined `parse-threw` on 0.14.0 stays excluded
+  for the life of the install, invisibly, and the later companion has to
+  recover a population that has grown in the meantime. Nothing else in this
+  package changes; no acceptance criterion moves except criterion 9's second
+  clause, which is the sentence recording the choice.
+- *If the owner overrules:* the sentence required by criterion 9 becomes the
+  release note, not a promise of a companion — say plainly, in the user-facing
+  notes, that sessions skipped under this condition before the upgrade are not
+  re-read, because Table E row E2's honest answer to "what can I do" is
+  **nothing**.

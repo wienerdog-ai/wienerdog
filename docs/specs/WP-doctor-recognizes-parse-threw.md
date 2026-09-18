@@ -131,7 +131,10 @@ suite's existing helpers.
 
 **`tests/red-proofs/quarantine-banner-location-doctor.proofs.json`** — an
 existing ADR-0042 declaration file whose `suite` is `tests/unit/doctor.test.js`.
-Its one proof, `doctor-shelf-claim-restored`, mutates `src/cli/doctor.js` with
+It carries **two** declarations, and exactly one of them mutates the file this
+package edits: `pointer-derivation-doctor` mutates `src/core/dream/ledger.js`,
+which is not in the Deliverables, while
+`doctor-shelf-claim-restored` mutates `src/cli/doctor.js` with
 the exact-substring `find`
 `` "too many times in a row. ${PRESERVED_COPIES_POINTER}`," `` at
 `occurrences: 1` — which is the tail of the secret-exhausted message at `:559`.
@@ -156,7 +159,7 @@ as acceptance criterion 5.
 |--------|------|-------|
 | modify | src/cli/doctor.js | Table A in full — rows A1–A6 only. `quarantineReport` only; no other function in the file changes |
 | modify | tests/unit/doctor.test.js | Whatever the acceptance criteria require in this file. Criteria 1–4 all observe this surface; criterion 2 is an assertion about the **existing** test at `:794`, whose seeded ledger and whose row-order and count assertions both move |
-| create | tests/red-proofs/doctor-recognizes-parse-threw.proofs.json | Table B — `suite` is `tests/unit/doctor.test.js`. A second declaration file for the same suite is normal here: `tests/unit/dream-pipeline.test.js` already carries four |
+| create | tests/red-proofs/doctor-recognizes-parse-threw.proofs.json | Table B — `suite` is `tests/unit/doctor.test.js`. A second declaration file for the same suite is normal here: `tests/unit/dream-pipeline.test.js` already carries five |
 
 ### Exact contracts
 
@@ -257,7 +260,8 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       A rows A1–A6; `doctor.test.js` → the acceptance criteria; the proofs file
       → Table B
 - [ ] Acceptance criteria that assert its facts — criterion 1 asserts Table A
-      rows A2, A4 and A5; criterion 2 asserts Table A rows A5 and A6 through the
+      rows A2 and A4 (row **A5**, the row's position, is criterion 2's, not
+      criterion 1's); criterion 2 asserts Table A rows A5 and A6 through the
       existing whole-render test; criterion 3 asserts Table A row A3; criterion
       4 asserts Table A row A8; criterion 5 asserts Table A row A7; criterion 6
       asserts Table B
