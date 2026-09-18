@@ -101,11 +101,16 @@ it.
     listener.**
 - **`src/cli/dream.js`, the watchdog path** — `runBrainWithWatchdog` spans
   `:376-541`. It calls `spawnBrain` at `:402`, races `done` against a timeout at
-  `:462`, and the timeout branch reaps and **rejects** at `:456-457`. A second
-  throw path is the hand-up pidfile failure at `:414-445`. Both unwind through
-  the `finally` at `:479-540` (which awaits the reap and computes the verdict)
-  and then out of the function; `:958`'s `logStream.end()` runs after that. **On
-  the timeout path the pipes may never emit `'end'` before the log closes**,
+  `:462`, and the timeout branch reaps and **rejects** at `:456-457`; that
+  rejection unwinds through the reap `finally` at `:481-539` (which awaits the
+  reap and computes the verdict). **A second throw path does NOT**: the hand-up
+  pidfile block at `:410-447` reaps and throws at `:434` and `:442`, and its
+  `try` is not the watchdog's — the watchdog `try` does not open until `:461`, so
+  those two throws unwind straight past the reap `finally`. That asymmetry is the
+  round-2 design finding and it is why Table W's shutdown wrap is an **outer**
+  `try`/`finally` rather than a statement inside the existing one. On both paths
+  `:958`'s `logStream.end()` runs after the function returns or throws. **The
+  pipes may never emit `'end'` before the log closes**,
   because the reap can legitimately return `{ reaped: false }` (`:508-509`,
   verdict `:529-539`) and a surviving group member still holds the inherited
   stdio. That is why Table W's shutdown rows exist.
@@ -126,6 +131,12 @@ it.
   only in-flight reader of the log directory is `rotateLogs(logDir)`
   (`run-job.js:1138`), after the run. `log_hint` in an alert record is a
   code-owned string naming the path; nothing opens it.
+- `tests/integration/dream.test.js:1554-1610` already drives the
+  pidfile-failure path through `runBrainWithWatchdog` with a `writeFilePrivate`
+  seam that throws and asserts the
+  `could not record the brain's process id` refusal (`:1574`, `:1596`). AC2b
+  reuses that harness; `tests/integration/reap-escape.test.js:1007` is the live
+  R10-1 variant and is **not** touched.
 - Probes and their controls, all measured at `08de2bc3`:
   `tests/unit/dream-brain.test.js` — P7 `:554`, P8 `:561`, P10 `:583`, P11
   `:590`, with the shared fixture block at `:500-521` and the harness
@@ -159,15 +170,17 @@ it.
 |--------|------|-------|
 | modify | src/core/dream/brain.js | sites W1 and W2 per Table W, plus the shutdown step of Table W's `Shutdown` rows (which adds `shutdown` to `spawnBrain`'s return) and the comment correction of Table V row V1 |
 | modify | src/cli/run-job.js | sites W3 and W4 per Table W, plus the shutdown step and the comment correction of Table V row V2 |
-| modify | src/cli/dream.js | TWO edits only, per Table W's `Shutdown, dream.js` row: capture `shutdown` from the `spawnBrain` call at `:402`, and call it first in the existing `finally` at `:479`. Nothing else — not the `logStream` creation at `:922`, not the missing `'error'` listener, not the unawaited `.end()` at `:958` |
+| modify | src/cli/dream.js | ONE construct only, per Table W's `Shutdown, dream.js` row and the literal block under "Exact contracts": add `shutdown` to the `spawnBrain` destructure and wrap the whole post-spawn body of `runBrainWithWatchdog` in an outer `try { … } finally { shutdown(); }`. The enclosed lines move by two spaces of indentation and **nothing else in the file changes** — not the existing reap `finally`, not the `logStream` creation at `:922`, not the missing `'error'` listener, not the unawaited `.end()` at `:958` |
+| modify | tests/integration/dream.test.js | append the AC2b regression only, reusing the file's existing pidfile-failure harness (`:1554-1610`); edit no existing test |
 | modify | tests/unit/dream-brain.test.js | convert probes P8 and P11 per Table X; add `LEAK_MSG`; delete `DEFECT_MSG` once unused; add the AC5 ordering test |
 | modify | tests/unit/scheduler-runjob.test.js | convert probes P13 and P15 per Table X; add `LEAK_MSG`; delete `DEFECT_MSG` once unused |
 | create | tests/red-proofs/secret-sink-chunk-fix-dream-brain.proofs.json | Table Y rows Y1 and Y2 only; `suite` is `tests/unit/dream-brain.test.js` |
 | create | tests/red-proofs/secret-sink-chunk-fix-scheduler-runjob.proofs.json | Table Y rows Y3 and Y4 only; `suite` is `tests/unit/scheduler-runjob.test.js` |
 | modify | docs/specs/done/WP-secret-sink-wiring-probes.md | insert the one dated block of Table Z, byte-exact, at Table Z's anchor. Zero deletions, zero edits to any existing line, including Table P and Table S |
 
-Add nothing else to those files. Do not edit any other existing test. Eight
-paths, and `src/cli/dream.js` is bounded to the two edits its Notes cell names.
+Add nothing else to those files. Do not edit any other existing test. Nine
+paths, and `src/cli/dream.js` is bounded to the one construct its Notes cell
+names plus the reindentation that construct forces.
 
 Per `docs/specs/_TEMPLATE.md` lines 33-35 and `scripts/boundary-check.js`, this
 spec file, `package-lock.json`, `memory/lessons/inbox.md` and anything under
@@ -199,7 +212,7 @@ unchanged.
 sufficient on its own.** This is ADR-0043 decision 7 and it is the round-1 design
 finding (HEAVY 2). The dream watchdog can reject **while the child survives and
 still holds the pipe**: `runBrainWithWatchdog` rejects at
-`src/cli/dream.js:457`, its rejection unwinds past the `finally` at `:479-540`,
+`src/cli/dream.js:457`, its rejection unwinds through the reap `finally` at `:481-539`,
 and `src/cli/dream.js:958` then calls `logStream.end()` — all before the pipe
 ever emits `'end'`. With `'end'`-only flushing, a partial line buffered **before**
 the timeout would be lost, and the later `'end'` would write into an ended stream
@@ -217,13 +230,35 @@ so `'end'`-only flushing would be a regression, not a residual. Hence:
   `child.on('exit', …)` handler before the resolved object is constructed
   (`stderrTail`, `stdoutHead` and `stdoutTotalLen` must be complete at
   `:561-565`); `shutdown()` after either is a no-op by idempotence.
-- **dream.js** — `runBrainWithWatchdog` captures `shutdown` from its `spawnBrain`
-  call (`:402`) and calls it **first** in its existing `finally` (`:479`), so it
-  runs on **every** settle path — clean exit, non-zero exit, spawn error, the
-  pidfile-failure throw at `:414-445`, and the watchdog rejection — and always
-  before `:958`'s `logStream.end()`. Nothing else in `dream.js` changes: the
-  `logStream` creation at `:922`, the absence of an `'error'` listener, and the
-  unawaited `.end()` at `:958` all stay exactly as they are.
+- **dream.js** — `runBrainWithWatchdog` wraps its whole post-spawn body in a new
+  outer `try`/`finally` whose only statement is `shutdown()`. It must enclose
+  **every** post-spawn path: clean exit, non-zero exit, spawn error, the watchdog
+  rejection at `:457`, **and the pidfile-failure throws at `:434` and `:442`** —
+  which the existing reap `finally` at `:481-539` does **not** reach, because its
+  `try` does not open until `:461`. The three edits, literally:
+
+  ```js
+  // 1. the destructure at :396 gains one name
+  const { child, done, shutdown } = spawnBrain({
+
+  // 2. immediately after the `});` that closes that call (:403), open the wrap
+  try {
+
+  // 3. immediately after the `}` that closes the existing reap `finally` (:539),
+  //    and before the blank line preceding `return { sawUnknownCommand, reap };`
+  } finally {
+    // ADR-0043 decision 7: flush every buffered region and latch the tee closed
+    // before the CALLER ends the log (dream.js:958, unawaited, no 'error'
+    // listener). This finally must enclose the pidfile write and its failure
+    // reaping too — those throw before the watchdog try opens.
+    shutdown();
+  }
+  ```
+
+  Lines `:405` through `:539` gain two spaces of indentation and change in no
+  other way. Nothing else in `dream.js` changes: the `logStream` creation at
+  `:922`, the absence of an `'error'` listener and the unawaited `.end()` at
+  `:958` all stay exactly as they are.
 - **run-job.js** — the same latch, reached from the outer `finally`: flush and
   latch immediately **before** the `:1120` failure-message write, so the log's
   byte order is unchanged (teed output first, the failure line last) and a
@@ -292,7 +327,7 @@ Additional rows that are contract, not sites:
 | Fact / rule | Value |
 |-------------|-------|
 | Shutdown, brain | `spawnBrain` returns `{ child, done, shutdown }`. Redactors are flushed on each stream's `'end'` event and again inside `child.on('exit', …)` before the resolved object at `src/core/dream/brain.js:558-566` is constructed. `shutdown()` is synchronous and idempotent: flush every redactor through its `emit`, then latch closed |
-| Shutdown, dream.js | `runBrainWithWatchdog` captures `shutdown` at the `spawnBrain` call (`src/cli/dream.js:402`) and calls it **first** in its existing `finally` (`:479`), so it runs on every settle path — including the watchdog rejection at `:457` and the pidfile-failure throw at `:414-445` — and always before `:958`'s `logStream.end()`. These two edits are the whole of this WP's change to `dream.js` |
+| Shutdown, dream.js | `runBrainWithWatchdog` captures `shutdown` at the `spawnBrain` call (`src/cli/dream.js:396-403`) and wraps its **whole post-spawn body** — `:405` through the close of the existing reap `finally` at `:539` — in a new outer `try { … } finally { shutdown(); }`, published literally under "Exact contracts". **The existing reap `finally` at `:481-539` is not the right home and putting `shutdown()` there is a defect**: the pidfile block at `:410-447` handles and throws at `:434` and `:442` **before** that `try` opens at `:461`, so a failed hand-up write with unsuccessful reaping never reaches it (round 2, measured: `shutdownCalls = 0`). The outer `finally` encloses the pidfile write, its failure reaping, the watchdog construction and the race, and it runs **after** the inner reap `finally` (inner before outer), so the reap verdict is computed first and the flush lands last — always before `:958`'s `logStream.end()`. `sawUnknownCommand` (`:388`) and `reap` (`:390`) are declared before the spawn, so the `return` at `:541` stays outside the wrap and no scope changes |
 | Shutdown, run-job | the same latch, reached from the outer `finally`: flush and latch immediately **before** the `:1120` failure-message write, and therefore before `endStream` at `:1125` |
 | After the latch | every `emit` is a no-op: no write, no accounting, no touch of `logStream`. This is what makes a surviving child's later `'data'`/`'end'` safe on the dream path, whose `logStream` has no `'error'` listener |
 | Per-stream order | **is a contract.** Within one stream, every byte reaches the log in input order, exactly once, and every byte passes through `redactOnly` as part of a region |
@@ -459,13 +494,15 @@ review finding updates the table and all its mirrors **in the same commit**
 
 - [ ] **Deliverables-table cells** — the `brain.js` and `run-job.js` rows' site
       lists (W1, W2 / W3, W4) and comment-correction pointers (V1 / V2); the
-      `src/cli/dream.js` row's two bounded edits (Table W's `Shutdown, dream.js`
-      row); the two test rows' probe lists (X1, X2 / X3, X4); the two declaration
-      rows' row assignments (Table Y); the `done/` row's anchor and zero-deletion
-      rule (Table Z).
+      `src/cli/dream.js` row's one bounded wrap (Table W's `Shutdown, dream.js`
+      row and the "Exact contracts" literal block); the
+      `tests/integration/dream.test.js` row (AC2b only); the two unit-test rows'
+      probe lists (X1, X2 / X3, X4); the two declaration rows' row assignments
+      (Table Y); the `done/` row's anchor and zero-deletion rule (Table Z).
 - [ ] **Acceptance criteria** — AC1 (no `redactOnly` chunk call survives), AC2
-      (one redactor per stream, both flushes, the idempotent latch) and AC2a (the
-      shutdown regression for both sinks), AC3 (the four converted names and
+      (one redactor per stream, both flushes, the idempotent latch), AC2a (the
+      shutdown regression for both sinks) and AC2b (the caller-level pidfile
+      regression), AC3 (the four converted names and
       assertions), AC4 (the declarations), AC5 (per-stream order and the
       accumulators), AC6 (the comment corrections), AC7 (the errata block, zero
       deletions), AC10 (the bounded `src/cli/dream.js` diff).
@@ -481,8 +518,9 @@ review finding updates the table and all its mirrors **in the same commit**
       numbers, the other-tests list, and the `tests/red-proofs/` count.
 - [ ] **Operative prose steps** — the Context paragraph on the 2026-07-17 record;
       the whole of "Exact contracts" (one redactor per stream, one emit step, the
-      shutdown step and why a pipe `'end'` is not sufficient, what `emit` must
-      never do, the `LEAK_MSG` literal); Table X's vacuity paragraph; Table V's compensating-controls note; "Accepted
+      shutdown step, why a pipe `'end'` is not sufficient, **the dream.js wrap
+      literal and why the existing reap `finally` is the wrong home**, what
+      `emit` must never do, the `LEAK_MSG` literal); Table X's vacuity paragraph; Table V's compensating-controls note; "Accepted
       residuals"; "Discovered issues / routed"; the "Out of scope" list.
 - [ ] **Frontmatter** — `adrs` (must list ADR-0043 and, while Table Y is
       non-empty, ADR-0042) and `depends_on` (both dependencies are load-bearing:
@@ -504,8 +542,10 @@ review finding updates the table and all its mirrors **in the same commit**
   the run-job one.** The asymmetry is pre-existing, it is recorded under
   "Discovered issues / routed", and closing it is a different package's job. The
   shutdown latch is what keeps this WP from widening it.
-- **`src/cli/dream.js` is two edits, and the diff is a gate (AC10).** Resist
-  every adjacent tidy there: it is the file sibling packages land in most often.
+- **`src/cli/dream.js` is one wrap, and the whitespace-ignoring diff is a gate
+  (AC10).** Resist every adjacent tidy there: it is the file sibling packages
+  land in most often. The reindentation of `:405-539` is the only bulk change,
+  and it must be indentation alone.
 - **Do not touch `src/core/secret-scan.js`.** If the transform's contract does
   not fit a site, that is a spec bug — say so in the PR rather than widening
   either module.
@@ -563,7 +603,9 @@ Neither is fixed here and neither widens this WP.
 - [ ] Every redactor is flushed before the value it feeds is read **and before
       the log is closed** (Table W's shutdown rows), so no buffered child output
       is stranded or written after close on any settle path — clean exit,
-      non-zero exit, spawn error, pidfile-failure throw or watchdog timeout.
+      non-zero exit, spawn error, pidfile-failure throw or watchdog timeout. The
+      pidfile-failure path is the one that was missed in round 2; AC2b is its
+      executable check, and the `finally` it needs is the OUTER one.
 - [ ] After `shutdown()` latches, no handler writes to `logStream` again, on
       either sink. A child that outlives the run and still holds the pipe cannot
       write into a closing or closed stream through the tee.
@@ -612,6 +654,18 @@ Neither is fixed here and neither widens this WP.
       `spawnBrain` directly, it is driven by calling the returned `shutdown()`
       while the pipe is still open. **Without this criterion the fix is a
       regression**: today that partial line is written the moment it arrives.
+- [ ] **AC2b** — **The caller-level pidfile regression**, in
+      `tests/integration/dream.test.js`, reusing that file's existing
+      pidfile-failure harness: a `writeFilePrivate` seam that throws, a
+      `reapGroup` seam that reports `{ reaped: false }` on both attempts, and a
+      brain that wrote a partial line with no trailing newline before the failure.
+      After `runBrainWithWatchdog` throws and the caller has ended the log:
+      (a) the partial line **is** in the dream log, redacted; (b) no `'error'` is
+      emitted on that `logStream` and the process does not exit abnormally;
+      (c) anything the surviving child writes afterwards adds nothing to the log.
+      **AC2a cannot cover this**: it drives `spawnBrain` directly and never runs
+      the caller path where the miss lives. Round 2 measured the prescribed
+      wiring's predecessor at `shutdownCalls = 0` on exactly this path.
 - [ ] **AC3** — Each of Table X's four rows exists under its `New test name` with
       its `New assertion` verbatim; none of the four `Old test name` strings
       survives anywhere in the repo except this spec and the predecessor's
@@ -637,10 +691,12 @@ Neither is fixed here and neither widens this WP.
       `tests/unit/scheduler-runjob.test.js:772`, `:796` and `:2059`, and
       `tests/integration/dream.test.js:1328` pass **without being edited**.
 - [ ] **AC9** — `npm run lint` passes.
-- [ ] **AC10** — No file outside the eight in Deliverables is modified,
+- [ ] **AC10** — No file outside the nine in Deliverables is modified,
       **except** this spec file (status flip), `package-lock.json`,
-      `memory/lessons/inbox.md` and `docs/specs/logbook/`. `src/cli/dream.js`'s
-      diff is exactly the two edits of Table W's `Shutdown, dream.js` row.
+      `memory/lessons/inbox.md` and `docs/specs/logbook/`. **Ignoring whitespace**
+      (`git diff -w`), `src/cli/dream.js`'s diff is exactly the three edits of
+      the literal block under "Exact contracts" and nothing else; with
+      whitespace it additionally reindents `:405-539` by two spaces.
 - [ ] **AC11** — Idempotency: `N/A — this WP rewires four in-process stream
       handlers. It ships no command and writes nothing outside the repo.`
 
@@ -672,18 +728,24 @@ need "$(grep -c 'createStreamRedactor()' src/cli/run-job.js      || true)" 2 "tw
 need "$(grep -c "on('end'" src/core/dream/brain.js || true)" 2 "two 'end' flushes in brain.js"
 need "$(grep -c "on('end'" src/cli/run-job.js      || true)" 2 "two 'end' flushes in run-job.js"
 
-# AC2/AC2a — the shutdown step exists in all three files and dream.js is bounded
-# to its two edits.
+# AC2/AC2a/AC2b — the shutdown step exists in all three source files and
+# dream.js is bounded to the three edits of the "Exact contracts" literal block.
 need "$(grep -c 'shutdown' src/core/dream/brain.js || true)" 1 "brain.js returns shutdown (one definition site)"
 need "$(grep -c 'shutdown()' src/cli/dream.js      || true)" 1 "dream.js calls shutdown() exactly once"
-# AC10 — dream.js is bounded to Table W's two edits. Both hunks must touch only
-# the spawnBrain destructure and the existing finally, so the churn is small and
-# the whole diff is pasted into the PR for the reviewer to read.
-DREAM_ADD="$(git diff --numstat main... -- src/cli/dream.js | awk '{print $1+0}')"
-DREAM_DEL="$(git diff --numstat main... -- src/cli/dream.js | awk '{print $2+0}')"
-[ "${DREAM_ADD:-0}" -le 6 ] && [ "${DREAM_DEL:-0}" -le 4 ] || {
-  echo "GATE FAIL: src/cli/dream.js churn +${DREAM_ADD}/-${DREAM_DEL} exceeds the two Table W edits"; exit 1; }
-echo "ok: src/cli/dream.js churn +${DREAM_ADD}/-${DREAM_DEL}"
+need "$(grep -cF 'const { child, done, shutdown } = spawnBrain({' src/cli/dream.js || true)" 1 "dream.js destructures shutdown"
+# AC10 — dream.js is bounded to the three edits of the "Exact contracts" literal
+# block. The wrap reindents :405-539, so a raw line count would measure the
+# indentation, not the change: gate on `git diff -w`, which ignores lines that
+# differ only in whitespace.
+DREAM_ADD="$(git diff -w --numstat main... -- src/cli/dream.js | awk '{print $1+0}')"
+DREAM_DEL="$(git diff -w --numstat main... -- src/cli/dream.js | awk '{print $2+0}')"
+[ "${DREAM_ADD:-0}" -le 12 ] && [ "${DREAM_DEL:-0}" -le 2 ] || {
+  echo "GATE FAIL: src/cli/dream.js non-whitespace churn +${DREAM_ADD}/-${DREAM_DEL} exceeds the three edits"; exit 1; }
+echo "ok: src/cli/dream.js non-whitespace churn +${DREAM_ADD}/-${DREAM_DEL}"
+# The wrap must open AFTER the spawn and close AFTER the existing reap finally.
+need "$(git diff -w main... -- src/cli/dream.js | grep -cE '^\+\s*try \{$' || true)" 1 "exactly one try { added"
+need "$(git diff -w main... -- src/cli/dream.js | grep -cE '^\+\s*\} finally \{$' || true)" 1 "exactly one } finally { added"
+need "$(git diff -w main... -- src/cli/dream.js | grep -cE '^-' || true)" 1 "exactly one line replaced (the destructure)"
 git diff main... -- src/cli/dream.js   # paste this whole hunk into the PR
 
 # AC6 — neither Table V sentence survives.
@@ -771,7 +833,7 @@ process.exit(bad ? 1 : 0);
 JS
 
 # AC10 — permission boundary.
-need "$(git diff --name-only main... | grep -cvE '^(src/core/dream/brain\.js|src/cli/(run-job|dream)\.js|tests/unit/(dream-brain|scheduler-runjob)\.test\.js|tests/red-proofs/secret-sink-chunk-fix-(dream-brain|scheduler-runjob)\.proofs\.json|docs/specs/done/WP-secret-sink-wiring-probes\.md|docs/specs/WP-secret-sink-chunk-fix\.md|docs/specs/logbook/.+\.md|package-lock\.json|memory/lessons/inbox\.md)$' || true)" 0 \
+need "$(git diff --name-only main... | grep -cvE '^(src/core/dream/brain\.js|src/cli/(run-job|dream)\.js|tests/unit/(dream-brain|scheduler-runjob)\.test\.js|tests/integration/dream\.test\.js|tests/red-proofs/secret-sink-chunk-fix-(dream-brain|scheduler-runjob)\.proofs\.json|docs/specs/done/WP-secret-sink-wiring-probes\.md|docs/specs/WP-secret-sink-chunk-fix\.md|docs/specs/logbook/.+\.md|package-lock\.json|memory/lessons/inbox\.md)$' || true)" 0 \
      "files outside the permission boundary"
 
 npm run red-proofs    # AC4 — the bare unfiltered run; must exit 0
@@ -796,8 +858,13 @@ was restored.
   `WP-secret-sink-redact-before-truncate` owns them.
 - Changing `src/cli/run-job.js:1120` (site S9) or probe P16.
 - Adding an `'error'` listener to the dream `logStream`, awaiting
-  `logStream.end()`, or making any edit to `src/cli/dream.js` beyond the two
-  named in Table W's `Shutdown, dream.js` row.
+  `logStream.end()`, or making any edit to `src/cli/dream.js` beyond the three
+  in the "Exact contracts" literal block and the reindentation they force.
+- Moving, reordering or altering the existing reap `finally` at
+  `src/cli/dream.js:481-539`, or putting `shutdown()` inside it. It does not
+  enclose the pidfile-failure throws, which is the round-2 finding.
+- Editing any existing test in `tests/integration/dream.test.js`, or touching
+  `tests/integration/reap-escape.test.js`.
 - Fixing the multi-byte-split defect under "Discovered issues / routed".
 - Changing the four probe fixtures' boundary mechanism, their feeds, or the
   `safeOf` invariant.
@@ -846,8 +913,9 @@ ADR-0043's own standing-authorization status; it is not restated here.
    without `WP-secret-sink-redact-before-truncate`.
    (d) **THE DISPATCHER RE-DERIVES EVERY CITATION.** They are pinned to `main` at
    **`08de2bc3`** plus the two dependencies. `src/core/dream/brain.js`,
-   `src/cli/run-job.js`, `tests/unit/dream-brain.test.js` and
-   `tests/unit/scheduler-runjob.test.js` are files sibling packages land in, so
+   `src/cli/run-job.js`, `src/cli/dream.js`, `tests/unit/dream-brain.test.js`,
+   `tests/unit/scheduler-runjob.test.js` and `tests/integration/dream.test.js`
+   are files sibling packages land in, so
    Table W's `W<n> CURRENT` blocks and Table V's `V<n> REMOVE` blocks must be re-confirmed
    by grepping for the construct, not by the number. Re-derive into a committed
    revision of this spec, never into a dispatch message.
