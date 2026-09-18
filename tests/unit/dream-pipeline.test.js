@@ -2970,3 +2970,101 @@ test('dream-pipeline: [PDC-AC4] a session that did not invoke the skill is still
   assert.match(r.report, /EVIL\.json` — brain wrote into the read-only scratch dir_ deleted/,
     '[PDC-AC4] the stray-file sweep no longer records the brain write');
 });
+
+// ── WP-ep2-prune-once-per-run-test: Table N row N2 ──────────────────────────
+//
+// N2 is the trigger: the retention prune over `<state>/quarantine/redacted/`
+// runs ONCE PER RUN, and only when the run completed at least one redaction.
+// N3 (the exclusion of this run's own copies) is covered elsewhere
+// (`tests/unit/dream-validate.test.js`); this test is N2-only.
+
+test('dream-pipeline: the retention prune runs EXACTLY ONCE per run, and only after a completed redaction (Table N row N2)', async (t) => {
+  const SIGNAL = 'N2-prune-must-run-exactly-once-per-run';
+  const BLOB_A = 'xY9kQ2mZ7pL4vB8nR3sT6wA1';
+  const BLOB_B = 'mK3jH8qW2xC9vN5bT7yG1sA4';
+
+  /** Seed `count` regular files this run did not create into
+   * `<state>/quarantine/redacted/`, date-prefixed so N3's own filter admits
+   * them as candidates. Mode 0600 inside a 0700 directory, matching the shape
+   * `quarantinePreserve` itself writes. */
+  function seedRedacted(ctx, count) {
+    const dir = path.join(ctx.state, 'quarantine', 'redacted');
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.chmodSync(dir, 0o700);
+    const names = [];
+    for (let i = 0; i < count; i += 1) {
+      const name = `2026-01-01-n2seed-${String(i).padStart(2, '0')}`;
+      fs.writeFileSync(path.join(dir, name), 'seed', { mode: 0o600 });
+      names.push(name);
+    }
+    return { dir, names };
+  }
+
+  /** The seam (Table P row P-6): `fs.rmSync` calls targeting `dir` whose
+   * basename is one of this fixture's own seeded names are RECORDED and
+   * NEUTRALIZED (counted, never performed) — every other target, including
+   * `quarantinePreserve`'s own `.tmp-*` cleanup and its two new dated copies,
+   * delegates to the real `fs.rmSync`. An un-scoped interception swallows that
+   * cleanup too and the run throws `quarantinePreserve: "…" still exists after
+   * its removal was attempted` (measured). */
+  function interceptSeededDeletes(dir, seededNames) {
+    const seeded = new Set(seededNames);
+    const real = fs.rmSync;
+    const attempts = [];
+    t.mock.method(fs, 'rmSync', (target, ...args) => {
+      const p = String(target);
+      if (path.dirname(p) === dir && seeded.has(path.basename(p))) {
+        attempts.push(path.basename(p));
+        return undefined;
+      }
+      return real(target, ...args);
+    });
+    return attempts;
+  }
+
+  // Leg one (P-4): two completed redactions against a directory 50 seeded
+  // files deep — 2 over the cap once this run's own 2 copies land. A prune
+  // that fires once per run attempts exactly 2 deletions here; every schedule
+  // in P-8 attempts a different count.
+  const ctx1 = setup();
+  const seed1 = seedRedacted(ctx1, 50);
+  const attempts1 = interceptSeededDeletes(seed1.dir, seed1.names);
+  const r1 = await runDream(ctx1, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: brainWrites(ctx1, {
+        '03-Resources/entropy-one.md': `---\ntype: note\nderived_from_untrusted: false\n---\n\nref ${BLOB_A} in prose\n`,
+        '03-Resources/entropy-two.md': `---\ntype: note\nderived_from_untrusted: false\n---\n\nref ${BLOB_B} in prose\n`,
+      }),
+    },
+  });
+  assert.equal(r1.thrown, null, `${SIGNAL}: leg one (two redactions) threw — ${r1.thrown && r1.thrown.message}`);
+  assert.equal(
+    attempts1.length, 2,
+    `${SIGNAL}: two completed redactions over a directory 2-over-cap must attempt exactly 2 deletions, got ${attempts1.length}`
+  );
+
+  // `t.mock.restoreAll()` between legs, so leg two's interception counts only
+  // leg two — and re-captures the REAL `fs.rmSync`, not leg one's mock.
+  t.mock.restoreAll();
+
+  // Leg two (P-5): zero completed redactions, directory already 1 over the
+  // cap. This is the precondition half — without it, a mutation that makes
+  // the prune unconditional would still pass leg one.
+  const ctx2 = setup();
+  const seed2 = seedRedacted(ctx2, 51);
+  const attempts2 = interceptSeededDeletes(seed2.dir, seed2.names);
+  const r2 = await runDream(ctx2, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: brainWrites(ctx2, {
+        '03-Resources/clean.md': '---\ntype: note\nderived_from_untrusted: false\n---\n\nclean\n',
+      }),
+    },
+  });
+  assert.equal(r2.thrown, null, `${SIGNAL}: leg two (zero redactions) threw — ${r2.thrown && r2.thrown.message}`);
+  assert.equal(
+    attempts2.length, 0,
+    `${SIGNAL}: zero completed redactions must attempt zero deletions even 1 over the cap, got ${attempts2.length}`
+  );
+});

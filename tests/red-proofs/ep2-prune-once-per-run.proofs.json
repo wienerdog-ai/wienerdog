@@ -1,0 +1,41 @@
+{
+  "suite": "tests/unit/dream-pipeline.test.js",
+  "proofs": [
+    {
+      "id": "ep2-prune-runs-once-per-run",
+      "wp": "WP-ep2-prune-once-per-run-test",
+      "criterion": "2",
+      "why": "duplicating the pipeline's one `gates.pruneRedacted();` call makes the retention prune run TWICE in a single run instead of once, which is exactly what Table N row N2's trigger forbids and what this test's cardinality assertion (P-4) is written to catch.",
+      "file": "src/cli/dream.js",
+      "find": "      gates.pruneRedacted();",
+      "replace": "      gates.pruneRedacted();\n      gates.pruneRedacted(); /* RP_MUT_EP2_PRUNE_TWICE */",
+      "marker": "RP_MUT_EP2_PRUNE_TWICE",
+      "occurrences": 1,
+      "testNamePattern": "retention prune runs EXACTLY ONCE",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: the retention prune runs EXACTLY ONCE per run, and only after a completed redaction (Table N row N2)"],
+          "signal": "N2-prune-must-run-exactly-once-per-run"
+        }
+      ]
+    },
+    {
+      "id": "ep2-prune-not-once-per-redaction",
+      "wp": "WP-ep2-prune-once-per-run-test",
+      "criterion": "2",
+      "why": "calling the prune once per completed redaction, right after the counter that guards it increments, is the modern spelling of the once-per-redaction regression Table N row N2 forbids — the prune must fire once per RUN, not once per redaction, and this test's cardinality assertion (P-4) is written to catch it.",
+      "file": "src/core/dream/validate.js",
+      "find": "          completedRedactions += 1; // increments LAST, only after a verified scrub",
+      "replace": "          completedRedactions += 1; // increments LAST, only after a verified scrub\n          pruneRedactedOriginals(stateDir, redactedCreated); /* RP_MUT_EP2_PRUNE_PER_REDACTION */",
+      "marker": "RP_MUT_EP2_PRUNE_PER_REDACTION",
+      "occurrences": 1,
+      "testNamePattern": "retention prune runs EXACTLY ONCE",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: the retention prune runs EXACTLY ONCE per run, and only after a completed redaction (Table N row N2)"],
+          "signal": "N2-prune-must-run-exactly-once-per-run"
+        }
+      ]
+    }
+  ]
+}
