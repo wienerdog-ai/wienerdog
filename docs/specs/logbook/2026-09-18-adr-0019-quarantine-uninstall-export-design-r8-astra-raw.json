@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b5e1-dc99-76f2-9d27-9f65fcc50a48",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r8",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Not ready to implement: manifest replay can bypass the proposed quarantine protection.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect quarantine paths during manifest replay too\",\n      \"body\": \"Y6 promises immunity to forged manifest entries, but the spec requires reverse() to remain unchanged. Its file handler accepts {kind:'file', path:'<state>/quarantine/<name>'} without a hash and deletes that target because it is inside the allowed core. If the shelf is empty at the gate and a concurrent dream preserves that filename before replay, reverse() destroys the new copy before the protected disposer runs. The manifest can remain unchanged throughout, so the byte-comparison guard does not help. An in-memory probe of the actual reverse() confirmed this entry passes validation and invokes rmSync.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 406,\n      \"line_end\": 406,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Permit and require a quarantine guard in reverse() before mutating dispatch, covering shelf paths and resolved aliases. Add an interleaving test with a pre-existing forged entry, an empty initial inventory, and a preserve completed before replay; assert the original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Extend the preservation contract and acceptance tests to cover manifest replay before dispatch.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Not ready to implement: manifest replay can bypass the proposed quarantine protection.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Protect quarantine paths during manifest replay too",
+        "body": "Y6 promises immunity to forged manifest entries, but the spec requires reverse() to remain unchanged. Its file handler accepts {kind:'file', path:'<state>/quarantine/<name>'} without a hash and deletes that target because it is inside the allowed core. If the shelf is empty at the gate and a concurrent dream preserves that filename before replay, reverse() destroys the new copy before the protected disposer runs. The manifest can remain unchanged throughout, so the byte-comparison guard does not help. An in-memory probe of the actual reverse() confirmed this entry passes validation and invokes rmSync.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 406,
+        "line_end": 406,
+        "confidence": 0.98,
+        "recommendation": "Permit and require a quarantine guard in reverse() before mutating dispatch, covering shelf paths and resolved aliases. Add an interleaving test with a pre-existing forged entry, an empty initial inventory, and a preserve completed before replay; assert the original bytes survive."
+      }
+    ],
+    "next_steps": [
+      "Extend the preservation contract and acceptance tests to cover manifest replay before dispatch."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Not ready to implement: manifest replay can bypass the proposed quarantine protection.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect quarantine paths during manifest replay too\",\n      \"body\": \"Y6 promises immunity to forged manifest entries, but the spec requires reverse() to remain unchanged. Its file handler accepts {kind:'file', path:'<state>/quarantine/<name>'} without a hash and deletes that target because it is inside the allowed core. If the shelf is empty at the gate and a concurrent dream preserves that filename before replay, reverse() destroys the new copy before the protected disposer runs. The manifest can remain unchanged throughout, so the byte-comparison guard does not help. An in-memory probe of the actual reverse() confirmed this entry passes validation and invokes rmSync.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 406,\n      \"line_end\": 406,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Permit and require a quarantine guard in reverse() before mutating dispatch, covering shelf paths and resolved aliases. Add an interleaving test with a pre-existing forged entry, an empty initial inventory, and a preserve completed before replay; assert the original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Extend the preservation contract and acceptance tests to cover manifest replay before dispatch.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
