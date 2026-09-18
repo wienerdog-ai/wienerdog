@@ -571,6 +571,37 @@ that formulation and that **Table X row X19 is the current rule**.
 criteria; thirteen have a pre-measurable anchor, eleven mutate code this package
 authors.
 
+## Round 20 — Astra, 2026-09-18
+
+- **Reviewed tip:** `46e25779`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r20-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r20-astra-focus.txt`
+- **Committed before adjudication at:** `8be6ce17`
+- **Verdict:** `needs-attention` — *"the specified recovery gate can delete the retry
+  ledger after the new replay guard leaves installed components behind."*
+- **Held from round 19:** **X19 (b)** was not re-opened, and nothing landed inside
+  the residuals — sixth consecutive round.
+- **Notable:** the first finding since round 10 in **a different family**. Rounds
+  11–19 were all about *what gets deleted*; this one is about *whether the user can
+  finish afterwards*.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R20-1** | **Include replay-guard failures in the manifest-retention decision.** **X16**/**X17** require `reverse()` to **skip** an entry when a shelf resolution is unanswerable, recording it **only in `skipped`**, while **W10** checked only the disposer's preservation and a fresh inventory. A **transient `EIO`** during live replay therefore skips `app` and hook entries; if subsequent reads succeed and find the shelves **empty**, the disposer reports no preservation and **W10 permits deleting the manifest**. The installed components remain and the retry refuses with *"no install manifest found"*. **This follows the prescribed contracts with no alias change and no late-arriving file, so the named residuals do not cover it** | A | HEAVY (high, conf. 0.98) | **ACCEPTED IN FULL, shaped on the rule this package already uses for the disposer** — Table K row **K4** and `WP-scheduler-replay-manifest-independent`'s Table D row **D9**. New **Table X row X22**, with **two deliberately different rules because the failures are different**. **(1) SET-LEVEL — abort.** If the protected set cannot be constructed at **`reverse()`'s guard initialisation** (any **X17** outcome-4 failure while walking the chains), the **live replay ABORTS before any mutation**, in the **same shape and message as the disposer's unreadable case** — a `WienerdogError` naming the directory and its `code`, saying nothing was removed — leaving the manifest and `config.yaml` **untouched**, with **`--dry-run` reporting instead of aborting**, exactly as **K4**/**W5** already specify. **(2) PER-ENTRY — preserve, report, and PROPAGATE.** One entry whose own path fails to resolve stays **preserved and reported**, but now also reaches **W10** through a new **`shelfGuarded: string[]`** return field, so **W10 consults THREE inputs**: every sweep's `preservedQuarantine`, a fresh `quarantineInventory` read, and `shelfGuarded`. **The asymmetry is recorded rather than left implicit:** aborting on the per-entry case too would make a damaged tree **un-uninstallable**, which is precisely the failure owner item 4 is declined for; preserving one entry and keeping the ledger loses nothing and leaves the user able to re-run. **X16's scope note was corrected in the same pass** — it had promised "no return-shape change", which this field breaks; `skipped`'s contents and rendering are unchanged and `shelfGuarded` is empty on an ordinary install, so **W6** holds. Acceptance criterion **19** gains both arms, with the replay-guard arm requiring the failure to be **confined to the replay window**. New RED proof **`quse-shelf-guard-skip-not-propagated`**: **every other W10 fixture in this package makes the disposer preserve something**, so all of them stay green under it — only a confined-failure fixture can see it |
+
+**The whole-cell re-read caught two more, again before the reviewer.** Running round
+18's process note on the two cells this round rewrote found **W10**'s tail still
+saying the ledger is held *"while either call, or a fresh read, shows anything
+preserved"* — two inputs, not three, **inside the cell that had just gained the
+third** — and a dangling sentence fragment left by the security-checklist insertion.
+Both fixed before the commit. That is the fourth and fifth intra-cell drift of this
+gate and **the third and fourth caught by process rather than by a round**; the
+discipline is now clearly earning more than it costs.
+
+**Declaration count after round 20:** twenty-five declarations over thirteen
+criteria; fourteen have a pre-measurable anchor, eleven mutate code this package
+authors.
+
 **One confirming round remains.** The gate closes on a clean return, a LIGHT-only
 return, **or a finding that falls inside `R-alias-outside-closure`,
 `R-post-ledger-preserve` or `R-post-uninstall-preserve`**
