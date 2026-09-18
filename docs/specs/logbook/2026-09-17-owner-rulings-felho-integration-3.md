@@ -463,3 +463,10 @@ keeps routing readers to a spec banner-marked `SUPERSEDED-PENDING — DO NOT
 DISPATCH` while the document it cites routes elsewhere. Nothing here records
 the owner approving, accepting, ratifying or signing the change; the owner
 reverses it by dated amendment.
+
+## 2026-09-18 — owner ruling, evening
+
+Verbatim: *"0025 and 0043 are signed"*. The owner edited the two Status lines
+himself in the working tree — ADR-0025 Amendment 6
+(`WP-broker-e2e-terminal-cleanup`) and ADR-0043 (safe-cut stream redaction)
+now read `owner-signed 2026-09-18`; the session committed his edits unchanged.

@@ -1,6 +1,6 @@
 # ADR-0043: EP3's durable-log transform cuts the stream only where no detector rule can match across, not at every chunk boundary
 
-Status: **ACCEPTED under standing authorization 2026-09-18 — owner signature pending.**
+Status: **ACCEPTED under standing authorization 2026-09-18 — owner-signed 2026-09-18.**
 Date: 2026-09-18
 
 > Recorded under the standing process in
