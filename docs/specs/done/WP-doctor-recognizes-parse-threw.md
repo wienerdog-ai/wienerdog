@@ -1,7 +1,7 @@
 ---
 id: WP-doctor-recognizes-parse-threw
 title: Teach `wienerdog doctor` to name the parse-threw skip instead of calling it unrecognized
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-dream-collect-parse-throw-quarantine]
@@ -10,6 +10,65 @@ epic: transcript-fault-boundary
 ---
 
 # WP-doctor-recognizes-parse-threw: Teach `wienerdog doctor` to name the parse-threw skip instead of calling it unrecognized
+
+> **Errata, 2026-09-18 (post-merge) — NONE. The fidelity gate recorded
+> *"No drift; no errata for the done-flip."***
+>
+> **Landed in PR #288** (merge `cc1d63be`, 2026-09-18 13:59:48 UTC), tip
+> `1e0d4c9e`. **Both PR gates are clean on that tip, in ONE round:** wd-reviewer
+> returned APPROVE with executed evidence, and the independent gate (Codex
+> plugin `review` on `gpt-6-astra`) returned *"The change correctly counts and
+> renders parse-threw quarantines while preserving the catch-all and preventing
+> false all-clear output."*; CI seven checks pass.
+>
+> **Numbers on `1e0d4c9e`.** The fidelity gate, in its own detached worktree:
+> `npm test` 2906 tests / 2894 pass / **0 fail** / 12 skipped; `npm run lint`
+> clean; `boundary-check` exit 0. The implementer's **UNFILTERED**
+> `npm run red-proofs` on that tip: **104 declared proof(s), 104 selected**,
+> `RUN: PROVEN`, **104 PROVEN**, and **zero** `FAILED`, `VACUOUS`,
+> `UNCONTROLLED`, `FILTERED` or `ERROR` — read from the implementer's own
+> unfiltered log, not inferred.
+>
+> **What the gate executed, so the "no errata" verdict is legible.** Both
+> `grep` gates and the three-state render gate reproduce the PR body
+> byte-for-byte — state (a) by reverting `src/cli/doctor.js` to base, (b) by
+> dropping `parseThrew` from `total`, (c) on the tip. The six-line *"being
+> skipped"* block rendered through `bin/wienerdog.js doctor` is byte-exact to
+> this spec's Exact-contracts block **including order**; row **A5** sits after
+> `read-error` and before `secret-exhausted`; row **A8**'s catch-all still counts
+> 3; the all-zero healthy line is covered by four pre-existing tests;
+> `tests/golden/` is untouched and no golden renders this surface (measured).
+> The RED mutation `dpt-arm-removed-falls-to-unrecognized` was hand-applied —
+> `--test-name-pattern='\[PT-1\]'` selects exactly one test and reddens
+> `ERR_ASSERTION` with the signal in the diagnostic — and every declaration in
+> both `doctor` proofs files still matches its `occurrences`. The four touched
+> files are byte-identical between this spec's pin `08de2bc3` and the merge-base
+> `4b5d2655`.
+>
+> **Reviewer notes, non-errata — three non-blocking observations the gate
+> recorded for a future pass.** None falsifies a spec sentence and none is a
+> defect in what shipped; they are recorded here rather than dropped, per the
+> standing rule that a gate finding is fixed or dispositioned, never silently
+> lost.
+>
+> 1. **`tests/unit/doctor.test.js:794`'s test title no longer observes one of
+>    the things it claims.** The title ends *"…, zero-member groups omitted, and
+>    no name ever leaks"*, but after this package the fixture that test drives
+>    has no zero-member group left to omit. The assertion it does make is
+>    correct; the title over-states its own reach. A future pass either restores
+>    a zero-member group to the fixture or drops that clause from the title.
+> 2. **`[PT-2]`'s anchor in `tests/unit/doctor.test.js` also pins `[ok]`.** The
+>    anchor chosen for the parse-threw-only-ledger case incidentally constrains
+>    the neighbouring `[ok]` text, so an unrelated change to the `[ok]` line can
+>    redden a test whose subject is the parse-threw arm. Narrowing the anchor is
+>    a test-side edit with no contract consequence.
+> 3. **Five intended test-side spellings of the Table A row A4 literal.** A4
+>    pins the message literal to **one site in `src/`**, which is what the `grep`
+>    gate asserts and what shipped. The literal is additionally spelled five
+>    times on the **test** side, deliberately — each an independent pin — but no
+>    surface says so, so a reader counting occurrences repo-wide finds six and
+>    cannot tell which count A4 governs. A future pass states the test-side
+>    multiplicity beside A4.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.

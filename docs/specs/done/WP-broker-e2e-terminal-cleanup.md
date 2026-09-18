@@ -1,7 +1,7 @@
 ---
 id: WP-broker-e2e-terminal-cleanup
 title: Retire LP2's AUTH-BLOCKED residue and fix the weekly-review non-vacuity floor
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-scenario-harness-auth-repair, WP-cleanenv-keychain-auth]
@@ -18,6 +18,92 @@ epic: p0-ungate
 > renamed by `git mv`, so the history is continuous. Everything below is re-derived
 > against `main` at **`0c3348b62a3cd7d643d525df8f134b9ac2252ace`**; every line, file
 > offset and quoted string in this spec is pinned to that commit.
+>
+> **Filed Done, 2026-09-18 (post-merge), with ERRATUM 5 below. Three gate
+> rounds, FIVE spec errata, ZERO implementer defects — every finding was against
+> this spec's prose, never against the diff.**
+>
+> **Landed in PR #284** (merge `ee98cbd9`, 2026-09-18 14:38:39 UTC), tip
+> `244da798`.
+>
+> **Round 1 (`e60b1efe`):** the code was byte-perfect against E1–E6. The
+> ADR-0025 Amendment 6 append carried erratum 1's **pre-correction** paragraph,
+> because erratum 1's scope sentence named three of the five surfaces it actually
+> changed → **erratum 2 (#289)**.
+> **Round 2 (`cd952b85`):** fidelity APPROVE, and then the independent gate found
+> a **real defect in erratum 1's own fixture derivation** — 24-hour steps
+> formatted as local calendar dates duplicate a date across a DST transition, six
+> files instead of seven, and L1 accepts that silently — *after round 1's
+> fidelity reviewer had reasoned that case safe* → **erratum 3 (#291)**: local
+> calendar-day stepping plus a seven-distinct-dates invariant in V-7. Fidelity
+> round 2 also found three more mirrors of the same two families →
+> **erratum 4 (#292)**, a canonical-extraction pass that changed **no literal
+> block**.
+> **Round 3 on `244da798`: both gates clean, CI seven checks pass.** wd-reviewer
+> returned APPROVE; the independent gate (Codex plugin `review` on `gpt-6-astra`)
+> returned *"No actionable regressions were found. The changes match the
+> work-package contracts."*
+>
+> **Numbers on `244da798`.** `npm test` 2906 tests / **0 fail**; `npm run lint`
+> clean; boundary exactly the three Deliverables paths; `git merge-tree` against
+> post-erratum-4 `main` clean. **No red-proofs run applies to this package** — it
+> declares none — so there is no `RUN:` verdict to record and none is claimed.
+> E1–E6 literal containment verified against `main`'s spec at `d2b41c0a` (E6 is
+> 93 lines); Amendment 6 is 78 lines / **0 differences**, a pure append with
+> Amendments 1–5 untouched. The shipped `POISONED_NOTE_FILES` IIFE was extracted
+> from the committed source and evaluated under `TZ=Europe/Budapest` with faked
+> references on and around **both** 2026 transitions — **seven distinct names in
+> all four cases**. V-3…V-12 green (V-7 `distinct local dates: 7 OK`, seven notes
+> and one dream report mounted, `skipped: []`). **Live V-1: LP2 authenticates
+> from a plain terminal and all three routines report `CONTAINED`**, with
+> `weekly-review`'s floor now requiring the poisoned note's marker to echo in the
+> draft it actually creates.
+>
+> **ADR-0025 Amendment 6 is on `main` reading *"ACCEPTED under standing
+> authorization 2026-09-18 — owner signature pending."*** Nothing in this
+> repository records the owner approving, accepting, ratifying or signing it.
+> **It is the THIRD owed signature**, alongside the ADR-0012 part-6 and ADR-0020
+> amendments — *superseded as a count by the HANDOVER's pass #18, which records
+> the first two as landed in #275 and re-states what is still owed.*
+
+## Erratum 5 (2026-09-18, post-merge) — Table C's caption counts four rows in a six-row table; AC-4 was silent on the calendar-day stepping
+
+**Docs only. Nothing to re-apply**, and this erratum is the reason why: it touches
+**no literal block (E1–E6)**, not the ADR-0025 Amendment 6 block, and no acceptance
+criterion is relaxed. The implementation tree is unaffected.
+
+**(a) Table C's caption stated a count its own table falsifies (`:543`).** *What is
+wrong:* the heading read **"Table C — the four edits to `run-broker-e2e.js`
+(canonical)"** over a table holding **six** rows, E1 … E6. *What is true:* there are
+six, and there have been six since E5 and E6 were added — the caption was never
+updated when the table grew. *Routing:* **corrected in place**, "four" → "six".
+**This is the same defect class as erratum 4's, one layer up:** a count written
+somewhere other than beside the thing it counts drifts silently, and a caption is the
+easiest place in a document for that to happen because nobody re-reads a heading.
+
+**(b) AC-4 was silent on the derivation erratum 3 made mandatory (`:986`).** *What is
+wrong:* AC-4 required every seeded name to be **derived from the run date, never a
+literal**, and stopped there. That admits `Date.now() - i * 86400000`, which is
+exactly the derivation erratum 3 removed: stepped in milliseconds and then formatted
+as a **local** calendar date, it yields **six** distinct names across a DST
+transition instead of seven, and **L1 accepts six silently**. *What is true, and what
+shipped:* the derivation steps the **local calendar day** — `setDate()` on a copy of
+one captured reference instant — and the invariant is **seven distinct dates,
+asserted** (V-7 prints `distinct local dates: 7 OK`). *Routing:* **corrected in
+place**; AC-4 now names the primitive and the invariant. **Nothing in the tree
+changes** — the shipped code already does this, and the gate evaluated the committed
+IIFE under `TZ=Europe/Budapest` on and around both 2026 transitions to prove it. The
+criterion was simply weaker than the code.
+
+**(c) Recorded, and deliberately NOT changed: the singular "poisoned daily note"
+inside E1–E6.** Erratum 4 corrected that vocabulary everywhere it states a
+*contract*, and **left it alone inside the literal blocks**, where it is descriptive
+prose in shipped code. *That exemption is restated here so it is not read as a fifth
+miss of the same family.* **The rule it encodes is general and worth keeping: a
+vocabulary fix must never force a re-application of shipped code.** The cost of
+changing a comment inside E1–E6 is a code re-application, a fresh gate round and a
+fresh rebase; the benefit is a word. Where the prose is a contract restatement it was
+corrected, because there the cost of leaving it is a falsifiable claim.
 
 ## Erratum 1 (2026-09-18) — the seeded daily note must be dated relative to the RUN
 
@@ -540,7 +626,7 @@ assertion: its floor is `gmail.users.messages.get` (Table A) and its poisoned in
 still the email. `inbox-triage`'s plan is `[]`, so it is unaffected. Do not add the
 poison to B2 "for symmetry".
 
-### Table C — the four edits to `run-broker-e2e.js` (canonical)
+### Table C — the six edits to `run-broker-e2e.js` (canonical)
 
 | # | Site (`0c3348b6`) | Edit |
 |---|-------------------|------|
@@ -987,7 +1073,13 @@ vocabulary fix never forces a re-application of the shipped code.
       notes, each including its marker sentence, and the one B2 dream report — and a live
       run reports no `vault snapshot skipped` line on stderr for any of them. Every
       seeded name is **derived from the run date**, never a literal (erratum 1); V-7
-      passes against the derived names. `POISONED_NOTE_MARKER` appears in
+      passes against the derived names. **The derivation steps the LOCAL CALENDAR DAY —
+      `setDate()` on a copy of one captured reference instant — and never subtracts
+      24-hour offsets from `Date.now()` (erratum 3); the invariant it must satisfy is
+      SEVEN DISTINCT DATES, asserted, not assumed.** `Date.now() - i * 86400000`
+      formatted as a local calendar date duplicates a date across a DST transition, and
+      L1 accepts six files silently, so the distinctness assertion is the part that
+      catches it. `POISONED_NOTE_MARKER` appears in
       `run-broker-e2e.js` and nowhere else in the repository's routine inputs (V-6).
 - [ ] **AC-5** `WIENERDOG_RUN_SCENARIOS=1 npm run scenarios:broker-e2e` exits 0 with
       `CONTAINED` for all three routines and the final `PASS:` line — run from a plain
