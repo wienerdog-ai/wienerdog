@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b619-d76f-7e61-a3d4-7e4839d99c1a",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r15",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not implement as written: the expanded protection set breaks supported symlinked-core uninstalls and strands credentials.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Distinguish chain-link protection from shelf-subtree protection\",\n      \"body\": \"For a supported layout such as `<core> -> /data/wienerdog`, X17(1a) puts `/data/wienerdog` into the protected set. X18 then preserves every deletion target beneath it, including `app`, `logs`, and `secrets`, even when both shelves are absent. A read-only model of the prescribed containment checks confirms this. Existing symlinked-core tests require those contents to be removed. Meanwhile, `uninstall.js:424` still deletes the manifest unconditionally after the sweep, leaving credentials and installed files behind without a usable uninstall retry. This requires no concurrent mutation and falls inside the declared chain-closure scope.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 387,\n      \"line_end\": 388,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Separate protected shelf subtrees from resolution-chain nodes. Protect chain nodes against removal of the node or its ancestors without protecting unrelated descendants. Add symlinked-core regressions with absent and empty shelves, asserting that ordinary mechanics and credentials are removed.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise X17/X18 containment semantics and verify the existing symlinked-core uninstall expectations remain satisfiable.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not implement as written: the expanded protection set breaks supported symlinked-core uninstalls and strands credentials.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Distinguish chain-link protection from shelf-subtree protection",
+        "body": "For a supported layout such as `<core> -> /data/wienerdog`, X17(1a) puts `/data/wienerdog` into the protected set. X18 then preserves every deletion target beneath it, including `app`, `logs`, and `secrets`, even when both shelves are absent. A read-only model of the prescribed containment checks confirms this. Existing symlinked-core tests require those contents to be removed. Meanwhile, `uninstall.js:424` still deletes the manifest unconditionally after the sweep, leaving credentials and installed files behind without a usable uninstall retry. This requires no concurrent mutation and falls inside the declared chain-closure scope.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 387,
+        "line_end": 388,
+        "confidence": 0.99,
+        "recommendation": "Separate protected shelf subtrees from resolution-chain nodes. Protect chain nodes against removal of the node or its ancestors without protecting unrelated descendants. Add symlinked-core regressions with absent and empty shelves, asserting that ordinary mechanics and credentials are removed."
+      }
+    ],
+    "next_steps": [
+      "Revise X17/X18 containment semantics and verify the existing symlinked-core uninstall expectations remain satisfiable."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not implement as written: the expanded protection set breaks supported symlinked-core uninstalls and strands credentials.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Distinguish chain-link protection from shelf-subtree protection\",\n      \"body\": \"For a supported layout such as `<core> -> /data/wienerdog`, X17(1a) puts `/data/wienerdog` into the protected set. X18 then preserves every deletion target beneath it, including `app`, `logs`, and `secrets`, even when both shelves are absent. A read-only model of the prescribed containment checks confirms this. Existing symlinked-core tests require those contents to be removed. Meanwhile, `uninstall.js:424` still deletes the manifest unconditionally after the sweep, leaving credentials and installed files behind without a usable uninstall retry. This requires no concurrent mutation and falls inside the declared chain-closure scope.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 387,\n      \"line_end\": 388,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Separate protected shelf subtrees from resolution-chain nodes. Protect chain nodes against removal of the node or its ancestors without protecting unrelated descendants. Add symlinked-core regressions with absent and empty shelves, asserting that ordinary mechanics and credentials are removed.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise X17/X18 containment semantics and verify the existing symlinked-core uninstall expectations remain satisfiable.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

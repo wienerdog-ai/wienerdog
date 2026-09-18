@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b5b5-3c20-7bd3-8aea-3d6ffc76d8bb",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r2",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the proposed sweep introduces a symlink-related data-loss regression.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"The child-by-child sweep follows a symlinked state directory\",\n      \"body\": \"X1 requires enumerating paths.state and recursively deleting every non-quarantine child without first rejecting a symlink at state. The existing isDir uses statSync, so it accepts directory symlinks. If state points to an external directory with no quarantine, the gate passes and the new sweep deletes that target's children, including unrelated user files. Previously, rmSync(state) removed only the symlink. Mocked execution confirmed the deletion target changes from state to state/personal-notes; the vault guard provides no protection when the configured vault lives elsewhere.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 341,\n      \"line_end\": 341,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require lstat classification of paths.state before enumeration and preserve/report a symlink without descending through it. Add a regression fixture with state linked to an external directory containing user files and assert that its contents remain unchanged.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend X1 and its acceptance criteria to cover symlinked state directories, then rerun design review.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: the proposed sweep introduces a symlink-related data-loss regression.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "The child-by-child sweep follows a symlinked state directory",
+        "body": "X1 requires enumerating paths.state and recursively deleting every non-quarantine child without first rejecting a symlink at state. The existing isDir uses statSync, so it accepts directory symlinks. If state points to an external directory with no quarantine, the gate passes and the new sweep deletes that target's children, including unrelated user files. Previously, rmSync(state) removed only the symlink. Mocked execution confirmed the deletion target changes from state to state/personal-notes; the vault guard provides no protection when the configured vault lives elsewhere.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 341,
+        "line_end": 341,
+        "confidence": 0.99,
+        "recommendation": "Require lstat classification of paths.state before enumeration and preserve/report a symlink without descending through it. Add a regression fixture with state linked to an external directory containing user files and assert that its contents remain unchanged."
+      }
+    ],
+    "next_steps": [
+      "Amend X1 and its acceptance criteria to cover symlinked state directories, then rerun design review."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the proposed sweep introduces a symlink-related data-loss regression.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"The child-by-child sweep follows a symlinked state directory\",\n      \"body\": \"X1 requires enumerating paths.state and recursively deleting every non-quarantine child without first rejecting a symlink at state. The existing isDir uses statSync, so it accepts directory symlinks. If state points to an external directory with no quarantine, the gate passes and the new sweep deletes that target's children, including unrelated user files. Previously, rmSync(state) removed only the symlink. Mocked execution confirmed the deletion target changes from state to state/personal-notes; the vault guard provides no protection when the configured vault lives elsewhere.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 341,\n      \"line_end\": 341,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require lstat classification of paths.state before enumeration and preserve/report a symlink without descending through it. Add a regression fixture with state linked to an external directory containing user files and assert that its contents remain unchanged.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend X1 and its acceptance criteria to cover symlinked state directories, then rerun design review.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

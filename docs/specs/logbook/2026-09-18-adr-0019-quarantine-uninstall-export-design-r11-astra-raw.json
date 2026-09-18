@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b5fa-cf64-78a2-97a6-8a80c0840882",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r11",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the prescribed sweep can delete quarantined originals through a sibling-directory alias.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect shelf targets before recursively deleting sibling directories\",\n      \"body\": \"With state/quarantine symlinked to state/cache, X1 step 2 recursively deletes cache before step 3 preserves the quarantine symlink. quarantinePreserve writes through this alias, so the deleted directory can contain the sole original. This is reachable through the exported direct sweep or when the link and preserve appear after the CLI gate—an interleaving X11 explicitly covers. An in-memory execution of the prescribed sequence deleted the original while reporting the surviving, now-dangling link as preserved. Top-down lstat validation does not protect data deleted through another pathname.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 373,\n      \"line_end\": 373,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Establish protected shelf targets before any recursive mechanics deletion and exclude targets or ancestors that overlap them. Fail toward preservation when alias resolution is uncertain. Add direct-sweep and post-gate tests with quarantine pointing into a recursively swept sibling, asserting original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend X1/X11 and their acceptance tests to cover shelf aliases into other deletion targets.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: the prescribed sweep can delete quarantined originals through a sibling-directory alias.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Protect shelf targets before recursively deleting sibling directories",
+        "body": "With state/quarantine symlinked to state/cache, X1 step 2 recursively deletes cache before step 3 preserves the quarantine symlink. quarantinePreserve writes through this alias, so the deleted directory can contain the sole original. This is reachable through the exported direct sweep or when the link and preserve appear after the CLI gate—an interleaving X11 explicitly covers. An in-memory execution of the prescribed sequence deleted the original while reporting the surviving, now-dangling link as preserved. Top-down lstat validation does not protect data deleted through another pathname.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 373,
+        "line_end": 373,
+        "confidence": 0.97,
+        "recommendation": "Establish protected shelf targets before any recursive mechanics deletion and exclude targets or ancestors that overlap them. Fail toward preservation when alias resolution is uncertain. Add direct-sweep and post-gate tests with quarantine pointing into a recursively swept sibling, asserting original bytes survive."
+      }
+    ],
+    "next_steps": [
+      "Amend X1/X11 and their acceptance tests to cover shelf aliases into other deletion targets."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the prescribed sweep can delete quarantined originals through a sibling-directory alias.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect shelf targets before recursively deleting sibling directories\",\n      \"body\": \"With state/quarantine symlinked to state/cache, X1 step 2 recursively deletes cache before step 3 preserves the quarantine symlink. quarantinePreserve writes through this alias, so the deleted directory can contain the sole original. This is reachable through the exported direct sweep or when the link and preserve appear after the CLI gate—an interleaving X11 explicitly covers. An in-memory execution of the prescribed sequence deleted the original while reporting the surviving, now-dangling link as preserved. Top-down lstat validation does not protect data deleted through another pathname.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 373,\n      \"line_end\": 373,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Establish protected shelf targets before any recursive mechanics deletion and exclude targets or ancestors that overlap them. Fail toward preservation when alias resolution is uncertain. Add direct-sweep and post-gate tests with quarantine pointing into a recursively swept sibling, asserting original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend X1/X11 and their acceptance tests to cover shelf aliases into other deletion targets.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

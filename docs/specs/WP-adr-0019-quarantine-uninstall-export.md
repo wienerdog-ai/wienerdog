@@ -1,129 +1,64 @@
 ---
 id: WP-adr-0019-quarantine-uninstall-export
-title: Offer the secret quarantine's contents before uninstall disposes them — ADR-0019 amendment plus an uninstall export/warn step
-status: Draft
+title: Superseded — split into the uninstall gate and the shelf deletion guards
+status: Superseded
 model: opus
 size: M
-depends_on: [WP-secret-fence-ep2-redact-arm]
-adrs: [ADR-0004, ADR-0019, ADR-0024, ADR-0034, ADR-0035]
+depends_on: [WP-secret-fence-ep2-redact-arm, WP-scheduler-replay-manifest-independent, WP-quarantine-only-copy-shelf]
+adrs: [ADR-0004, ADR-0019, ADR-0024, ADR-0031, ADR-0034, ADR-0035, ADR-0038, ADR-0041, ADR-0042]
 epic: secret-lifecycle
 ---
 
-# WP-adr-0019-quarantine-uninstall-export: stop uninstall silently destroying the only copy of the user's own text
+# WP-adr-0019-quarantine-uninstall-export: SUPERSEDED by two packages
 
-**This is a DRAFT STUB.** It records a decided mandate and its scope so that the
-follow-on is not lost; it is **not implementable as written** and carries no
-Deliverables table, no contract tables, no acceptance criteria and no
-verification steps yet. The architect writes those in a later pass. **Do not
-dispatch this WP.**
+**This spec was split on 2026-09-18, immediately after its design gate closed.**
+Do not implement it. Its work lives in:
 
-## Why this exists — the owner's ruling, not an architect's proposal
+- **`docs/specs/WP-adr-0019-quarantine-uninstall-gate.md`** — the **gate**:
+  `quarantineInventory`, the pre-plan refusal, the ADR-0019 amendment, the two
+  user-facing sentences. Tables **K** (with **K8**), **W1**–**W7**/**W9**,
+  **Y1**–**Y5**/**Y7**/**Y8**; owner items **1**, **2**, **3**.
+- **`docs/specs/WP-uninstall-shelf-deletion-guards.md`** — the **deletion side**:
+  the carve-out in `disposeCoreMechanics` and the shelf guard in `reverse()`.
+  Tables **X** and **V**, rows **W8**/**W10**/**W11** and **Y6**/**Y9**/**Y10**;
+  owner item **4**; the three named residuals. It `depends_on` the gate.
 
-Round 1 of the design gate on `WP-secret-fence-ep2-redact-arm` raised a conflict
-between that WP's recovery design and **ADR-0019** (`Status: Accepted`). The
-architect laid out three options and recommended one; the owner chose. Recorded
-in the established form:
+## Why it was split
 
-> **OWNER-DECIDED IN SESSION — 2026-07-27 (TRANSCRIBED, NOT OWNER-TYPED).**
-> Gyula Fehér answered in conversation; this record was written by the architect,
-> not by him. It records that the decision was taken — it is **not** his
-> signature and must never be treated as one, and **no gate keys on it**.
-> Verbatim: *"ADR-0019: C now + B as follow-on."*
+The design gate ran **22 rounds** on this one document (rounds 1–21 produced 17
+band-A/HEAVY findings and 4 LIGHT ones, every one accepted in full; round 22
+returned `approve` with no findings). Each round that closed a measured hole added
+a contract row, and by round 21 the file had reached **~1,950 lines, six canonical
+tables — Table X alone carrying 22 rows — 26 RED declarations and 13 acceptance
+criteria with roughly 45 arms.**
 
-**Option C landed in `WP-secret-fence-ep2-redact-arm`** (its Table Q rows Q4 and
-Q6, its dream-report line, and **its accepted residual on the `wienerdog
-uninstall` interaction** — cited by subject rather than by ordinal, because that
-ordinal has renumbered twice as residuals were inserted ahead of it): the product now *tells*
-the user that the recovery copies are disposable and that `wienerdog uninstall`
-removes them. **This WP is option B** — the part that changes what uninstall
-actually does, and the ADR that currently forbids the change.
+CLAUDE.md sizes a work package at **one implementer session and one PR**, and
+ADR-0005's One-Document Rule aims it at a mid-tier model reading that spec and
+nothing else. This document had stopped being either. `docs/runbooks/spec-authoring.md`
+names the shape in as many words — *"how a 300-line contract becomes an 800-line
+fortress"* — and it was past twice that.
 
-## The problem, stated once
+**The cut is where the risk changes, not where the line count halved.** The gate
+touches **no deleter**: it is safe on its own and strictly better than `main`, where
+the shelf is destroyed unconditionally and silently, and it is exactly what the
+owner's 2026-07-27 *"C now + B as follow-on"* named. The deletion side carries every
+rule a review round measured a hole for, and **cannot be subdivided further without
+shipping one of those holes knowingly** — rounds 11–21 each found a path that the
+previous round's partial rule left open.
 
-`WP-secret-fence-ep2-redact-arm` writes **the only pre-scrub copy of a user's own
-note** into `state/quarantine/redacted/`, and its dream report tells the user to
-restore from that copy if the redaction was wrong. The shipped withhold path has
-done the same thing for withheld notes in `state/quarantine/` since WP-123.
+**The split was deliberately made AFTER the gate closed, not during it.** Splitting
+mid-gate would have restarted both gates and orphaned 21 rounds of dispositions keyed
+to row ids in this file. Done afterwards it is a mechanical extraction: **every
+contract row keeps its original id** — `K`, `W`, `X`, `V`, `Y` letters and numbers
+unchanged, including the gap where **X14** never existed — so every disposition still
+resolves. Acceptance criteria are renumbered within each spec, and the closing section
+of the dispositions logbook maps the old numbers to the new.
 
-**ADR-0019 disposes both.** `disposeCoreMechanics` removes `paths.state` with
-`fs.rmSync(dir, { recursive: true, force: true })`, so a user who uninstalls
-before reviewing loses that text with no warning naming it. ADR-0019 also states
-an invariant this content sits on the wrong side of — reproduced verbatim from
-`docs/adr/0019-uninstall-disposes-core-mechanics.md`, lines 52–54:
+## Where the record lives
 
-```text
-The invariant this rests on — **nothing user-authored is ever written under the
-canonical core; the vault is always outside it** — is binding on all future
-code. No WP may write user knowledge under `~/.wienerdog`.
-```
-
-A pre-scrub copy of the user's own note **is** user-authored content, so the
-invariant is already crossed on `main` by the withhold path and is extended by
-the redact arm.
-
-**Deleting the bytes on uninstall is not obviously wrong** — it is the argument
-ADR-0019 itself makes for `secrets/`, and leaving raw credential material on disk
-after an uninstall would be its own finding. **What is wrong is deleting them
-without offering them first.**
-
-## Scope
-
-**Both quarantine trees together, and that is deliberate.** `state/quarantine/`
-and `state/quarantine/redacted/` have identical exposure; the first predates this
-epic. Splitting them would fix half a problem twice and leave the ADR amendment
-straddling two WPs.
-
-1. **An ADR-0019 amendment.** Either a carve-out from blind recursive disposal
-   for `state/quarantine/**`, or a "preserved kind" registration in the install
-   manifest — ADR-0019's own Consequences already name the second route ("or be
-   added to the manifest as a preserved kind"). The amendment must say what the
-   core-holds-only-mechanics invariant means once a directory under the core
-   knowingly holds user text. **Whether this is an amendment to ADR-0019 or a new
-   superseding ADR is the first thing the real spec decides.**
-2. **An uninstall export-or-warn step**, in `src/cli/uninstall.js` (and whatever
-   `src/core/manifest.js` needs): before disposal, if either tree is non-empty,
-   either copy its contents somewhere the user keeps or refuse-and-report, with
-   the count and the destination named.
-3. **`--dry-run` must disclose it plainly**, preserving ADR-0019's own
-   M1 dry-run-exactness guarantee.
-4. **The user-facing copy that option C wrote** — the runbook bullet, the
-   glossary's *disposable*, the dream-report line's "while it is there" — is
-   **re-derived** once this lands, because it will no longer be true as written.
-   That is a Table Q pass on the predecessor's surfaces, not a rewrite.
-
-## Out of scope
-
-- **The detector and the EP2 gate.** Both legs of the secret fence are done by
-  the time this runs; this WP changes neither.
-- **Retention.** `state/quarantine/redacted/`'s cap and `state/quarantine/`'s
-  unboundedness are the predecessor's Table B rows B12/B13 and stay as they are.
-  **Note the coupling the predecessor records**: its fall-through byte-identity
-  guard is sound only while `state/quarantine/` is never pruned, so a cap there
-  is not a local change.
-- **Anything that writes user content into the vault.** The vault is a git
-  repository that may be synced; keeping raw bytes out of it is the gate's whole
-  job. This was option A and the owner did not choose it.
-
-## Open questions for the real spec
-
-1. Export **where**? A user-chosen path, the home directory, or refuse-and-report
-   with no copy at all.
-2. Amend ADR-0019 or supersede it?
-3. Does `uninstall` ever proceed **without** the user acknowledging the export —
-   i.e. is this a prompt, and what does the unattended path do? **ADR-0035's
-   attended-execution boundary is likely to govern the answer.**
-4. Does the same treatment extend to `secrets/`? ADR-0019 disposes the Google
-   OAuth token on the same reasoning, and the answer there is probably "no,
-   because it is re-obtainable" — which is exactly the property quarantined user
-   text does not have, and saying so is worth one paragraph.
-
-## Definition of done
-
-**Not yet written.** This stub is complete when the architect replaces it with a
-full spec: a Deliverables table, the ADR decision, contract tables for the export
-behaviour, acceptance criteria, mutation rows and verification steps.
-
-**This spec stays `status: Draft`** and does not move to `Ready` until it is a
-real spec and has been through the double gate
-(`docs/runbooks/codex-review.md` plus wd-reviewer). Only the architect or the
-owner flips it.
+`docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-review.md`
+holds all 22 rounds, each raw and focus committed **before** adjudication, and the
+row-id-to-package map. **A review gate is not owner approval:** nothing in this
+repository records the owner approving, accepting, ratifying or signing this work, and
+the ADR-0019 amendment it drafts carries *"owner signature pending"*. Owner items 1–4
+remain open, in the standing form, on the two packages named above.

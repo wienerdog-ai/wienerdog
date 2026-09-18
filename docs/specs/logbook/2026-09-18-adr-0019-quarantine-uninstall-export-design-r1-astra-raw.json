@@ -1,0 +1,53 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b5a6-8b43-7501-8485-5f80387749a4",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r1",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch this spec yet: its deletion algorithm still permits loss of quarantined text, and its counting contract blocks uninstall after the shelves are emptied.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"The deleter's second inventory does not close the deletion race\",\n      \"body\": \"X1 still requires recursive removal of state after an ABSENT/EMPTY inventory. A concurrent dream can finish preserving a note after that inventory returns but before rmSync recursively traverses state, destroying the newly preserved original. Moving the check inside the deleter narrows this window without closing it. Criterion 9 only inserts the file before disposeCoreMechanics starts, so it cannot detect this failure.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 305,\n      \"line_end\": 307,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Never recursively delete state or quarantine based on an emptiness snapshot. Remove other state children separately and remove shelf directories and their ancestors only with non-recursive empty-directory operations; preserve and report ENOTEMPTY. Add an interleaving test that creates a completed quarantine copy after the deleter's inventory but before deletion, covering both sweeps.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Counting the redacted root itself makes an emptied shelf non-empty\",\n      \"body\": \"K2 counts every directory entry and explicitly includes entries 'at or under' quarantine/redacted. Consequently, after the user removes every quarantined file, the product-created redacted directory still contributes one entry and triggers refusal. This contradicts the promised EMPTY behavior when both shelf directories remain and the worked example, which excludes that directory from its total. An implementation following the canonical rule rejects an uninstall even after all files have been dealt with.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 294,\n      \"line_end\": 295,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Explicitly exclude the two actual shelf root directories from entry counts while retaining conservative counting for other directories and for symlinks occupying either root. Add a fixture containing only quarantine/redacted and require zero entries and successful uninstall.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the deletion and inventory contracts, update their mirrored acceptance criteria, and rerun the design review.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch this spec yet: its deletion algorithm still permits loss of quarantined text, and its counting contract blocks uninstall after the shelves are emptied.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "The deleter's second inventory does not close the deletion race",
+        "body": "X1 still requires recursive removal of state after an ABSENT/EMPTY inventory. A concurrent dream can finish preserving a note after that inventory returns but before rmSync recursively traverses state, destroying the newly preserved original. Moving the check inside the deleter narrows this window without closing it. Criterion 9 only inserts the file before disposeCoreMechanics starts, so it cannot detect this failure.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 305,
+        "line_end": 307,
+        "confidence": 0.99,
+        "recommendation": "Never recursively delete state or quarantine based on an emptiness snapshot. Remove other state children separately and remove shelf directories and their ancestors only with non-recursive empty-directory operations; preserve and report ENOTEMPTY. Add an interleaving test that creates a completed quarantine copy after the deleter's inventory but before deletion, covering both sweeps."
+      },
+      {
+        "severity": "medium",
+        "title": "Counting the redacted root itself makes an emptied shelf non-empty",
+        "body": "K2 counts every directory entry and explicitly includes entries 'at or under' quarantine/redacted. Consequently, after the user removes every quarantined file, the product-created redacted directory still contributes one entry and triggers refusal. This contradicts the promised EMPTY behavior when both shelf directories remain and the worked example, which excludes that directory from its total. An implementation following the canonical rule rejects an uninstall even after all files have been dealt with.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 294,
+        "line_end": 295,
+        "confidence": 0.99,
+        "recommendation": "Explicitly exclude the two actual shelf root directories from entry counts while retaining conservative counting for other directories and for symlinks occupying either root. Add a fixture containing only quarantine/redacted and require zero entries and successful uninstall."
+      }
+    ],
+    "next_steps": [
+      "Revise the deletion and inventory contracts, update their mirrored acceptance criteria, and rerun the design review."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch this spec yet: its deletion algorithm still permits loss of quarantined text, and its counting contract blocks uninstall after the shelves are emptied.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"The deleter's second inventory does not close the deletion race\",\n      \"body\": \"X1 still requires recursive removal of state after an ABSENT/EMPTY inventory. A concurrent dream can finish preserving a note after that inventory returns but before rmSync recursively traverses state, destroying the newly preserved original. Moving the check inside the deleter narrows this window without closing it. Criterion 9 only inserts the file before disposeCoreMechanics starts, so it cannot detect this failure.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 305,\n      \"line_end\": 307,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Never recursively delete state or quarantine based on an emptiness snapshot. Remove other state children separately and remove shelf directories and their ancestors only with non-recursive empty-directory operations; preserve and report ENOTEMPTY. Add an interleaving test that creates a completed quarantine copy after the deleter's inventory but before deletion, covering both sweeps.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Counting the redacted root itself makes an emptied shelf non-empty\",\n      \"body\": \"K2 counts every directory entry and explicitly includes entries 'at or under' quarantine/redacted. Consequently, after the user removes every quarantined file, the product-created redacted directory still contributes one entry and triggers refusal. This contradicts the promised EMPTY behavior when both shelf directories remain and the worked example, which excludes that directory from its total. An implementation following the canonical rule rejects an uninstall even after all files have been dealt with.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 294,\n      \"line_end\": 295,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Explicitly exclude the two actual shelf root directories from entry counts while retaining conservative counting for other directories and for symlinks occupying either root. Add a fixture containing only quarantine/redacted and require zero entries and successful uninstall.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the deletion and inventory contracts, update their mirrored acceptance criteria, and rerun the design review.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

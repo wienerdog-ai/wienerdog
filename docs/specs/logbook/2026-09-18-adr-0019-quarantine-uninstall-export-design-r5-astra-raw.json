@@ -1,0 +1,44 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b5cb-d3cd-7c72-8750-4ce9e4fbad61",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r5",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Revise before implementation: the blanket no-throw requirement breaks uninstall recovery after cleanup failures.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve error propagation for failed mechanics deletion\",\n      \"body\": \"Implementing “disposeCoreMechanics must never throw” literally would swallow failures such as EPERM while removing secrets/. The cited cosmetic-step guarantee applies only to removing the empty core; ordinary recursive deletion currently propagates errors. After the disposer returns, uninstall.js deletes the manifest and config, so swallowed failures can leave credentials behind while making retries refuse with “no install manifest found.” The existing mid-sweep recovery test explicitly relies on propagation. This also contradicts the spec’s requirement to leave non-quarantine disposal unchanged.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 709,\n      \"line_end\": 713,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Limit preserve-and-report handling to quarantine-specific failures and the existing empty-core cleanup. Keep ordinary mechanics-deletion failures propagating so the manifest and config survive for retry.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct the no-throw requirement and its mirrored contract language.\",\n    \"Require a regression test injecting EPERM into secrets/ deletion and asserting failure propagation, retained manifest/config, and successful retry after the error clears.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Revise before implementation: the blanket no-throw requirement breaks uninstall recovery after cleanup failures.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Preserve error propagation for failed mechanics deletion",
+        "body": "Implementing “disposeCoreMechanics must never throw” literally would swallow failures such as EPERM while removing secrets/. The cited cosmetic-step guarantee applies only to removing the empty core; ordinary recursive deletion currently propagates errors. After the disposer returns, uninstall.js deletes the manifest and config, so swallowed failures can leave credentials behind while making retries refuse with “no install manifest found.” The existing mid-sweep recovery test explicitly relies on propagation. This also contradicts the spec’s requirement to leave non-quarantine disposal unchanged.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 709,
+        "line_end": 713,
+        "confidence": 0.99,
+        "recommendation": "Limit preserve-and-report handling to quarantine-specific failures and the existing empty-core cleanup. Keep ordinary mechanics-deletion failures propagating so the manifest and config survive for retry."
+      }
+    ],
+    "next_steps": [
+      "Correct the no-throw requirement and its mirrored contract language.",
+      "Require a regression test injecting EPERM into secrets/ deletion and asserting failure propagation, retained manifest/config, and successful retry after the error clears."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Revise before implementation: the blanket no-throw requirement breaks uninstall recovery after cleanup failures.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve error propagation for failed mechanics deletion\",\n      \"body\": \"Implementing “disposeCoreMechanics must never throw” literally would swallow failures such as EPERM while removing secrets/. The cited cosmetic-step guarantee applies only to removing the empty core; ordinary recursive deletion currently propagates errors. After the disposer returns, uninstall.js deletes the manifest and config, so swallowed failures can leave credentials behind while making retries refuse with “no install manifest found.” The existing mid-sweep recovery test explicitly relies on propagation. This also contradicts the spec’s requirement to leave non-quarantine disposal unchanged.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 709,\n      \"line_end\": 713,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Limit preserve-and-report handling to quarantine-specific failures and the existing empty-core cleanup. Keep ordinary mechanics-deletion failures propagating so the manifest and config survive for retry.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct the no-throw requirement and its mirrored contract language.\",\n    \"Require a regression test injecting EPERM into secrets/ deletion and asserting failure propagation, retained manifest/config, and successful retry after the error clears.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

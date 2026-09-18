@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b5c3-550f-7831-8542-cc95cf974f09",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r4",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"The proposed sweep still permits deletion of quarantined originals on case-insensitive filesystems.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect case variants of the quarantine directory before recursive deletion\",\n      \"body\": \"X1 step 2 recursively deletes every child not named exactly `quarantine`. On a case-insensitive filesystem, an existing `Quarantine` directory is also the destination of quarantinePreserve's lowercase path, but enumeration retains its capitalized name. If that directory is empty at the gate and a dream completes a preserve before the sweep, step 2 recursively destroys the new original before the protected rmdir sequence runs. Case-insensitive path identity was verified on this workspace; an in-memory execution of the specified sequence reproduced the deletion. The top-down symlink checks do not cover this case.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 348,\n      \"line_end\": 348,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Exclude all ASCII case variants of `quarantine` from recursive removal, conservatively preserving ambiguous entries. Add a regression with an empty capitalized shelf at inventory time and a completed preserve between inventory and deletion; assert the original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise X1 and its mirrored contracts, and add the case-insensitive interleaving regression before dispatch.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "The proposed sweep still permits deletion of quarantined originals on case-insensitive filesystems.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Protect case variants of the quarantine directory before recursive deletion",
+        "body": "X1 step 2 recursively deletes every child not named exactly `quarantine`. On a case-insensitive filesystem, an existing `Quarantine` directory is also the destination of quarantinePreserve's lowercase path, but enumeration retains its capitalized name. If that directory is empty at the gate and a dream completes a preserve before the sweep, step 2 recursively destroys the new original before the protected rmdir sequence runs. Case-insensitive path identity was verified on this workspace; an in-memory execution of the specified sequence reproduced the deletion. The top-down symlink checks do not cover this case.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 348,
+        "line_end": 348,
+        "confidence": 0.98,
+        "recommendation": "Exclude all ASCII case variants of `quarantine` from recursive removal, conservatively preserving ambiguous entries. Add a regression with an empty capitalized shelf at inventory time and a completed preserve between inventory and deletion; assert the original bytes survive."
+      }
+    ],
+    "next_steps": [
+      "Revise X1 and its mirrored contracts, and add the case-insensitive interleaving regression before dispatch."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"The proposed sweep still permits deletion of quarantined originals on case-insensitive filesystems.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect case variants of the quarantine directory before recursive deletion\",\n      \"body\": \"X1 step 2 recursively deletes every child not named exactly `quarantine`. On a case-insensitive filesystem, an existing `Quarantine` directory is also the destination of quarantinePreserve's lowercase path, but enumeration retains its capitalized name. If that directory is empty at the gate and a dream completes a preserve before the sweep, step 2 recursively destroys the new original before the protected rmdir sequence runs. Case-insensitive path identity was verified on this workspace; an in-memory execution of the specified sequence reproduced the deletion. The top-down symlink checks do not cover this case.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 348,\n      \"line_end\": 348,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Exclude all ASCII case variants of `quarantine` from recursive removal, conservatively preserving ambiguous entries. Add a regression with an empty capitalized shelf at inventory time and a completed preserve between inventory and deletion; assert the original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise X1 and its mirrored contracts, and add the case-insensitive interleaving regression before dispatch.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b609-705c-7aa1-8084-2b1626c25512",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r13",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not close the design gate: manifest replay can still erase a shelf alias and expose the retained originals to recursive cleanup.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve ancestor aliases during symlink replay too\",\n      \"body\": \"Table V exempts `symlink` replay from the ancestor guard, leaving the same evidence-loss problem X19 fixes only inside the disposer. Consider `<state>` → `<claude>/skills/wienerdog-test` → `<core>/logs`, with an original in `logs/quarantine/`. A matching symlink manifest entry resolves above the protected shelf, so X16 permits it. An in-memory probe of the shipped `reverse()` confirmed that it unlinks this entry. The following disposer then encounters a dangling `<state>` alias; X17 reconstructs anchors beneath the lexical state path, and X18 no longer protects `logs` from recursive deletion. Thus the prescribed reverse→dispose sequence can destroy the original. This also applies when the alias is introduced after the gate, within the specification's existing interleaving model.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 426,\n      \"line_end\": 426,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Extend the pre-dispatch guard to preserve symlink entries whose removal would break resolution of a protected shelf, including intermediate aliases. Keep the ordinary `dir` exemption. Add a regression exercising reverse() followed by both disposer calls and a retry, asserting that the alias and original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Close the replay alias gap and rerun the design review before implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not close the design gate: manifest replay can still erase a shelf alias and expose the retained originals to recursive cleanup.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Preserve ancestor aliases during symlink replay too",
+        "body": "Table V exempts `symlink` replay from the ancestor guard, leaving the same evidence-loss problem X19 fixes only inside the disposer. Consider `<state>` → `<claude>/skills/wienerdog-test` → `<core>/logs`, with an original in `logs/quarantine/`. A matching symlink manifest entry resolves above the protected shelf, so X16 permits it. An in-memory probe of the shipped `reverse()` confirmed that it unlinks this entry. The following disposer then encounters a dangling `<state>` alias; X17 reconstructs anchors beneath the lexical state path, and X18 no longer protects `logs` from recursive deletion. Thus the prescribed reverse→dispose sequence can destroy the original. This also applies when the alias is introduced after the gate, within the specification's existing interleaving model.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 426,
+        "line_end": 426,
+        "confidence": 0.98,
+        "recommendation": "Extend the pre-dispatch guard to preserve symlink entries whose removal would break resolution of a protected shelf, including intermediate aliases. Keep the ordinary `dir` exemption. Add a regression exercising reverse() followed by both disposer calls and a retry, asserting that the alias and original bytes survive."
+      }
+    ],
+    "next_steps": [
+      "Close the replay alias gap and rerun the design review before implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not close the design gate: manifest replay can still erase a shelf alias and expose the retained originals to recursive cleanup.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve ancestor aliases during symlink replay too\",\n      \"body\": \"Table V exempts `symlink` replay from the ancestor guard, leaving the same evidence-loss problem X19 fixes only inside the disposer. Consider `<state>` → `<claude>/skills/wienerdog-test` → `<core>/logs`, with an original in `logs/quarantine/`. A matching symlink manifest entry resolves above the protected shelf, so X16 permits it. An in-memory probe of the shipped `reverse()` confirmed that it unlinks this entry. The following disposer then encounters a dangling `<state>` alias; X17 reconstructs anchors beneath the lexical state path, and X18 no longer protects `logs` from recursive deletion. Thus the prescribed reverse→dispose sequence can destroy the original. This also applies when the alias is introduced after the gate, within the specification's existing interleaving model.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 426,\n      \"line_end\": 426,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Extend the pre-dispatch guard to preserve symlink entries whose removal would break resolution of a protected shelf, including intermediate aliases. Keep the ordinary `dir` exemption. Add a regression exercising reverse() followed by both disposer calls and a retry, asserting that the alias and original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Close the replay alias gap and rerun the design review before implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

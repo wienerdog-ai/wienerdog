@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b5f2-dc8c-7fa0-918b-51c7e6212617",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r10",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the new manifest guard lacks a safe absent-shelf contract and can strand an ordinary installation.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Distinguish absent shelves from failed shelf resolution\",\n      \"body\": \"X16 requires skipping entries whenever shelf resolution fails, without exempting ENOENT/ENOTDIR. Shelves are created lazily by quarantinePreserve, so absence is normal. Applying this failure rule skips unrelated manifest targets: an in-memory probe of the shipped reverse() with this guard changed an ordinary app-tree removal into a skip. uninstall.js subsequently deletes the manifest, leaving skipped components without a retry ledger. Omitting absent roots from the guard instead would leave shelves created during replay unprotected. The specification needs explicit absence semantics to satisfy both preservation and W6's ordinary-uninstall compatibility.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 386,\n      \"line_end\": 386,\n      \"confidence\": 0.94,\n      \"recommendation\": \"Always retain lexical shelf anchors, including absent shelves. Define resolved anchors through validated existing ancestors for missing suffixes, distinguish absence from genuine resolution errors, and test both ordinary uninstall with absent shelves and shelf creation after guard initialization.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend X16 and criterion 18 to cover absent roots without skipping unrelated cleanup or losing concurrent-creation protection.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: the new manifest guard lacks a safe absent-shelf contract and can strand an ordinary installation.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Distinguish absent shelves from failed shelf resolution",
+        "body": "X16 requires skipping entries whenever shelf resolution fails, without exempting ENOENT/ENOTDIR. Shelves are created lazily by quarantinePreserve, so absence is normal. Applying this failure rule skips unrelated manifest targets: an in-memory probe of the shipped reverse() with this guard changed an ordinary app-tree removal into a skip. uninstall.js subsequently deletes the manifest, leaving skipped components without a retry ledger. Omitting absent roots from the guard instead would leave shelves created during replay unprotected. The specification needs explicit absence semantics to satisfy both preservation and W6's ordinary-uninstall compatibility.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 386,
+        "line_end": 386,
+        "confidence": 0.94,
+        "recommendation": "Always retain lexical shelf anchors, including absent shelves. Define resolved anchors through validated existing ancestors for missing suffixes, distinguish absence from genuine resolution errors, and test both ordinary uninstall with absent shelves and shelf creation after guard initialization."
+      }
+    ],
+    "next_steps": [
+      "Amend X16 and criterion 18 to cover absent roots without skipping unrelated cleanup or losing concurrent-creation protection."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the new manifest guard lacks a safe absent-shelf contract and can strand an ordinary installation.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Distinguish absent shelves from failed shelf resolution\",\n      \"body\": \"X16 requires skipping entries whenever shelf resolution fails, without exempting ENOENT/ENOTDIR. Shelves are created lazily by quarantinePreserve, so absence is normal. Applying this failure rule skips unrelated manifest targets: an in-memory probe of the shipped reverse() with this guard changed an ordinary app-tree removal into a skip. uninstall.js subsequently deletes the manifest, leaving skipped components without a retry ledger. Omitting absent roots from the guard instead would leave shelves created during replay unprotected. The specification needs explicit absence semantics to satisfy both preservation and W6's ordinary-uninstall compatibility.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 386,\n      \"line_end\": 386,\n      \"confidence\": 0.94,\n      \"recommendation\": \"Always retain lexical shelf anchors, including absent shelves. Define resolved anchors through validated existing ancestors for missing suffixes, distinguish absence from genuine resolution errors, and test both ordinary uninstall with absent shelves and shelf creation after guard initialization.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend X16 and criterion 18 to cover absent roots without skipping unrelated cleanup or losing concurrent-creation protection.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

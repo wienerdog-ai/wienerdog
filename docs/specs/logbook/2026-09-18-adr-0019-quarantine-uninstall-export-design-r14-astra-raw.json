@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b611-382a-7e13-be22-3a1827ff2be2",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r14",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not close the design gate: recursive cleanup can still break a shelf’s resolution chain and destroy its originals on the second sweep.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect intermediate links from recursive ancestor deletion\",\n      \"body\": \"X18 checks deletion targets against shelf anchors, but not against intermediate links’ locations. Consider `<state>/quarantine` → `<state>/cache/link` → `<core>/logs/recovery`, holding an original. Step 2 permits recursive deletion of `cache`: it overlaps neither the lexical shelf nor its resolved target. That deletes the intermediate link. The first sweep preserves `logs` using its cached anchors; the second sweep reconstructs anchors through the now-dangling shelf, no longer protects `logs`, and deletes the original. An in-memory model of the prescribed checks reproduced this sequence. X20’s explicit symlink-entry guard does not cover recursive deletion of the link’s parent. This affects direct disposer calls and aliases introduced after the gate, both explicitly supported scenarios.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 388,\n      \"line_end\": 390,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Include every intermediate link’s location in the protected deletion surface. Require all recursive deleters to preserve directories containing those links. Add a regression with this two-hop alias across both disposer calls and a retry, asserting that the intermediate link and original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Extend the resolution-chain guard to recursive ancestor deletions and rerun the design review.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not close the design gate: recursive cleanup can still break a shelf’s resolution chain and destroy its originals on the second sweep.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Protect intermediate links from recursive ancestor deletion",
+        "body": "X18 checks deletion targets against shelf anchors, but not against intermediate links’ locations. Consider `<state>/quarantine` → `<state>/cache/link` → `<core>/logs/recovery`, holding an original. Step 2 permits recursive deletion of `cache`: it overlaps neither the lexical shelf nor its resolved target. That deletes the intermediate link. The first sweep preserves `logs` using its cached anchors; the second sweep reconstructs anchors through the now-dangling shelf, no longer protects `logs`, and deletes the original. An in-memory model of the prescribed checks reproduced this sequence. X20’s explicit symlink-entry guard does not cover recursive deletion of the link’s parent. This affects direct disposer calls and aliases introduced after the gate, both explicitly supported scenarios.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 388,
+        "line_end": 390,
+        "confidence": 0.98,
+        "recommendation": "Include every intermediate link’s location in the protected deletion surface. Require all recursive deleters to preserve directories containing those links. Add a regression with this two-hop alias across both disposer calls and a retry, asserting that the intermediate link and original bytes survive."
+      }
+    ],
+    "next_steps": [
+      "Extend the resolution-chain guard to recursive ancestor deletions and rerun the design review."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not close the design gate: recursive cleanup can still break a shelf’s resolution chain and destroy its originals on the second sweep.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Protect intermediate links from recursive ancestor deletion\",\n      \"body\": \"X18 checks deletion targets against shelf anchors, but not against intermediate links’ locations. Consider `<state>/quarantine` → `<state>/cache/link` → `<core>/logs/recovery`, holding an original. Step 2 permits recursive deletion of `cache`: it overlaps neither the lexical shelf nor its resolved target. That deletes the intermediate link. The first sweep preserves `logs` using its cached anchors; the second sweep reconstructs anchors through the now-dangling shelf, no longer protects `logs`, and deletes the original. An in-memory model of the prescribed checks reproduced this sequence. X20’s explicit symlink-entry guard does not cover recursive deletion of the link’s parent. This affects direct disposer calls and aliases introduced after the gate, both explicitly supported scenarios.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 388,\n      \"line_end\": 390,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Include every intermediate link’s location in the protected deletion surface. Require all recursive deleters to preserve directories containing those links. Add a regression with this two-hop alias across both disposer calls and a retry, asserting that the intermediate link and original bytes survive.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Extend the resolution-chain guard to recursive ancestor deletions and rerun the design review.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

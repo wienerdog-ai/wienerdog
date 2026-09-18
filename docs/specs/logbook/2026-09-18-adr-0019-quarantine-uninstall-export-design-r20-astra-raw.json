@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b646-b12c-76d2-a99d-6e29ab4f1941",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r20",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: the specified recovery gate can delete the retry ledger after the new replay guard leaves installed components behind.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Include replay-guard failures in the manifest-retention decision\",\n      \"body\": \"X16/X17 require reverse() to skip entries when shelf resolution is unanswerable, recording them only in skipped. W10 checks only disposer preservation and a fresh inventory. If shelf resolution encounters a transient EIO during live replay, app and hook entries are skipped; if subsequent reads succeed and find empty shelves, the disposer reports no preservation and W10 permits deleting the manifest. Installed components remain, but retry refuses with 'no install manifest found'. This follows the prescribed contracts without any alias changes or late-arriving files, so the named residuals do not cover it.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 407,\n      \"line_end\": 407,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Propagate shelf-guard failures from reverse() into W10, or abort live replay when the protected set is unanswerable. Add a full-uninstall test where resolution fails only during replay, subsequent inventory succeeds, the manifest survives, and retry completes.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the replay-to-uninstall recovery contract and its acceptance tests before implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch: the specified recovery gate can delete the retry ledger after the new replay guard leaves installed components behind.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Include replay-guard failures in the manifest-retention decision",
+        "body": "X16/X17 require reverse() to skip entries when shelf resolution is unanswerable, recording them only in skipped. W10 checks only disposer preservation and a fresh inventory. If shelf resolution encounters a transient EIO during live replay, app and hook entries are skipped; if subsequent reads succeed and find empty shelves, the disposer reports no preservation and W10 permits deleting the manifest. Installed components remain, but retry refuses with 'no install manifest found'. This follows the prescribed contracts without any alias changes or late-arriving files, so the named residuals do not cover it.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 407,
+        "line_end": 407,
+        "confidence": 0.98,
+        "recommendation": "Propagate shelf-guard failures from reverse() into W10, or abort live replay when the protected set is unanswerable. Add a full-uninstall test where resolution fails only during replay, subsequent inventory succeeds, the manifest survives, and retry completes."
+      }
+    ],
+    "next_steps": [
+      "Revise the replay-to-uninstall recovery contract and its acceptance tests before implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: the specified recovery gate can delete the retry ledger after the new replay guard leaves installed components behind.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Include replay-guard failures in the manifest-retention decision\",\n      \"body\": \"X16/X17 require reverse() to skip entries when shelf resolution is unanswerable, recording them only in skipped. W10 checks only disposer preservation and a fresh inventory. If shelf resolution encounters a transient EIO during live replay, app and hook entries are skipped; if subsequent reads succeed and find empty shelves, the disposer reports no preservation and W10 permits deleting the manifest. Installed components remain, but retry refuses with 'no install manifest found'. This follows the prescribed contracts without any alias changes or late-arriving files, so the named residuals do not cover it.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 407,\n      \"line_end\": 407,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Propagate shelf-guard failures from reverse() into W10, or abort live replay when the protected set is unanswerable. Add a full-uninstall test where resolution fails only during replay, subsequent inventory succeeds, the manifest survives, and retry completes.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the replay-to-uninstall recovery contract and its acceptance tests before implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

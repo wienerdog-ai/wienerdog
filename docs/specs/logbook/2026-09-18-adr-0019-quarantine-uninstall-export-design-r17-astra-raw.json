@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b62c-c6d7-7c31-8e05-85a0d680109a",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r17",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not implement as written: the latest hypothetical-anchor rule reopens a path to deleting newly quarantined originals.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Hypothetical shelf anchors must also protect future descendants\",\n      \"body\": \"X17 gives absent shelves only class (ii) protection, which excludes descendants, while X16 computes anchors once per reverse() call. With a stable <core> → /data/wienerdog symlink and initially absent shelves, a pre-existing hash-less file entry targeting /data/wienerdog/state/quarantine/2026-09-18-note.md bypasses the lexical anchors. If a dream creates that file after anchor computation but before replay, it also bypasses the hypothetical resolved anchors: the file neither equals nor contains them. A read-only mocked probe confirmed that this predicate permits the entry and the existing reverse() validates it and calls rmSync. This can destroy the sole original before the disposer runs. No alias is created or redirected after computation, so the concurrent-alias residual does not cover it.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 387,\n      \"line_end\": 387,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Keep descendant protection for hypothetical resolved shelf roots, and separately require an existing shelf for X19's alias-retention decision. Extend criterion 18(b) with a stable symlinked core, a manifest entry using the physical path, and a preserve completing after reverse() initializes its anchors.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct X17's hypothetical-anchor semantics and add the interleaving regression before closing the design gate.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not implement as written: the latest hypothetical-anchor rule reopens a path to deleting newly quarantined originals.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Hypothetical shelf anchors must also protect future descendants",
+        "body": "X17 gives absent shelves only class (ii) protection, which excludes descendants, while X16 computes anchors once per reverse() call. With a stable <core> → /data/wienerdog symlink and initially absent shelves, a pre-existing hash-less file entry targeting /data/wienerdog/state/quarantine/2026-09-18-note.md bypasses the lexical anchors. If a dream creates that file after anchor computation but before replay, it also bypasses the hypothetical resolved anchors: the file neither equals nor contains them. A read-only mocked probe confirmed that this predicate permits the entry and the existing reverse() validates it and calls rmSync. This can destroy the sole original before the disposer runs. No alias is created or redirected after computation, so the concurrent-alias residual does not cover it.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 387,
+        "line_end": 387,
+        "confidence": 0.98,
+        "recommendation": "Keep descendant protection for hypothetical resolved shelf roots, and separately require an existing shelf for X19's alias-retention decision. Extend criterion 18(b) with a stable symlinked core, a manifest entry using the physical path, and a preserve completing after reverse() initializes its anchors."
+      }
+    ],
+    "next_steps": [
+      "Correct X17's hypothetical-anchor semantics and add the interleaving regression before closing the design gate."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not implement as written: the latest hypothetical-anchor rule reopens a path to deleting newly quarantined originals.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Hypothetical shelf anchors must also protect future descendants\",\n      \"body\": \"X17 gives absent shelves only class (ii) protection, which excludes descendants, while X16 computes anchors once per reverse() call. With a stable <core> → /data/wienerdog symlink and initially absent shelves, a pre-existing hash-less file entry targeting /data/wienerdog/state/quarantine/2026-09-18-note.md bypasses the lexical anchors. If a dream creates that file after anchor computation but before replay, it also bypasses the hypothetical resolved anchors: the file neither equals nor contains them. A read-only mocked probe confirmed that this predicate permits the entry and the existing reverse() validates it and calls rmSync. This can destroy the sole original before the disposer runs. No alias is created or redirected after computation, so the concurrent-alias residual does not cover it.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 387,\n      \"line_end\": 387,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Keep descendant protection for hypothetical resolved shelf roots, and separately require an existing shelf for X19's alias-retention decision. Extend criterion 18(b) with a stable symlinked core, a manifest entry using the physical path, and a preserve completing after reverse() initializes its anchors.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct X17's hypothetical-anchor semantics and add the interleaving regression before closing the design gate.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
