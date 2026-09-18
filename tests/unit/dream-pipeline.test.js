@@ -2910,12 +2910,14 @@ test('dream-pipeline: [PDC-AC4a] an UNDERSTATED provenance flag REFUSES the whol
   // derived value is `true`; the declared `false` is lower, and the gate
   // REFUSES. It does not raise: the candidate bytes are not rewritten — the
   // ledger simply never reaches the vault.
-  assert.equal(r.ledgerInVault, null, 'the understated ledger is not promoted');
-  assert.match(r.report, /## Refused by policy \(promotion enforcement\)/);
-  assert.match(r.report, /asserted lower than derived/);
+  assert.equal(r.ledgerInVault, null, '[PDC-AC4a] the understated ledger is not promoted');
+  assert.match(r.report, /## Refused by policy \(promotion enforcement\)/, '[PDC-AC4a] the enforcement section is rendered');
+  assert.match(r.report, /asserted lower than derived/,
+    `[PDC-AC4a] the refusal did not name the derived-provenance reason; report was:\n${r.report}`);
   // …and the PRIMARY DIALOGUE the model read contains no tool record at all,
   // which is the whole point: the gate's evidence is not in scratch.
-  assert.ok(!r.report.includes('shell output from outside the conversation'));
+  assert.ok(!r.report.includes('shell output from outside the conversation'),
+    '[PDC-AC4a] tool text reached a model-visible surface');
 });
 
 test('dream-pipeline: [PDC-AC4b] the same entry declaring `true` is ACCEPTED', async () => {
@@ -2925,9 +2927,9 @@ test('dream-pipeline: [PDC-AC4b] the same entry declaring `true` is ACCEPTED', a
 
   const r = await runDreamWritingLedger(ctx, pdcLedger(`claude:${sid}`, 'true'));
   assert.equal(r.thrown, null, r.thrown && r.thrown.message);
-  assert.ok(r.ledgerInVault, 'the correctly-declared ledger is promoted');
-  assert.match(r.ledgerInVault, /- derived_from_untrusted: true/);
-  assert.doesNotMatch(r.report, /asserted lower than derived/);
+  assert.ok(r.ledgerInVault, `[PDC-AC4b] the correctly-declared ledger was not promoted; report was:\n${r.report}`);
+  assert.match(r.ledgerInVault, /- derived_from_untrusted: true/, '[PDC-AC4b] the promoted entry keeps its declared flag');
+  assert.doesNotMatch(r.report, /asserted lower than derived/, '[PDC-AC4b] a correct declaration must not be refused');
 });
 
 test('dream-pipeline: [PDC-AC4c] a CLEAN window with a correct `false` is accepted — the control that proves the wiring', async () => {
@@ -2942,13 +2944,13 @@ test('dream-pipeline: [PDC-AC4c] a CLEAN window with a correct `false` is accept
   // SCRATCH FILES. Those files are primary dialogue and carry no invocation
   // array, so the very first check — "did this session invoke the skill?" —
   // would fail, and a perfectly legitimate learning would be refused.
-  assert.ok(r.ledgerInVault, `the clean ledger is promoted; report was:\n${r.report}`);
+  assert.ok(r.ledgerInVault, `[PDC-AC4c] the clean ledger was not promoted; report was:\n${r.report}`);
   // `neutralise()` rewrites `'`, `:` and `/` in a reported reason, so these
   // patterns are written against the RENDERED form — a regex over the raw
   // reason string would never match and the negatives would be vacuous.
-  assert.doesNotMatch(r.report, /did not invoke skill/);
-  assert.doesNotMatch(r.report, /is not among this run_s processed extracts/);
-  assert.doesNotMatch(r.report, /LEARNINGS\.md` — learnings ledger/);
+  assert.doesNotMatch(r.report, /did not invoke skill/, '[PDC-AC4c] the gate lost the invocation evidence');
+  assert.doesNotMatch(r.report, /is not among this run_s processed extracts/, '[PDC-AC4c] the gate lost the session');
+  assert.doesNotMatch(r.report, /LEARNINGS\.md` — learnings ledger/, '[PDC-AC4c] the ledger was refused for some reason');
 });
 
 test('dream-pipeline: [PDC-AC4] a session that did not invoke the skill is still refused, and a brain write into scratch changes no verdict', async () => {
@@ -2960,10 +2962,11 @@ test('dream-pipeline: [PDC-AC4] a session that did not invoke the skill is still
 
   const r = await runDreamWritingLedger(ctx, pdcLedger('claude:never-ran', 'false'));
   assert.equal(r.thrown, null, r.thrown && r.thrown.message);
-  assert.equal(r.ledgerInVault, null);
-  assert.match(r.report, /is not among this run_s processed extracts/);
+  assert.equal(r.ledgerInVault, null, '[PDC-AC4] an uncounted session must not authorize a ledger');
+  assert.match(r.report, /is not among this run_s processed extracts/, '[PDC-AC4] the refusal reason');
   // The brain wrote a file into the read-only scratch dir on every run above;
   // the stray-file sweep still deletes and records it, and the ledger verdicts
   // are unchanged by it — the gate's evidence never lived there.
-  assert.match(r.report, /EVIL\.json` — brain wrote into the read-only scratch dir_ deleted/);
+  assert.match(r.report, /EVIL\.json` — brain wrote into the read-only scratch dir_ deleted/,
+    '[PDC-AC4] the stray-file sweep no longer records the brain write');
 });

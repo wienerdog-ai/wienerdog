@@ -1316,20 +1316,23 @@ test('dream-collect: [PDC-AC1] every byte decision is the base commit\'s, and a 
   // Neither run deferred on the deadline — the condition row C1a states, and it
   // is asserted for BOTH runs, because one finishing in time says nothing about
   // the other.
-  assert.deepEqual(base.deadlineDeferred, []);
-  assert.deepEqual(proj.deadlineDeferred, []);
-  assert.deepEqual(admissionArms(proj), admissionArms(base));
-  assert.equal(proj.skippedQuarantined, base.skippedQuarantined);
+  assert.deepEqual(base.deadlineDeferred, [], '[PDC-AC1] the baseline run deferred on the deadline, so row C1a applies and this fixture is not the byte-dimension case it claims to be');
+  assert.deepEqual(proj.deadlineDeferred, [], '[PDC-AC1] the projected run deferred on the deadline, so row C1a applies and this fixture is not the byte-dimension case it claims to be');
+  assert.deepEqual(
+    admissionArms(proj), admissionArms(base),
+    `[PDC-AC1] a byte decision moved: the projected arms differ from the base commit's.\nbase=${JSON.stringify(admissionArms(base))}\nproj=${JSON.stringify(admissionArms(proj))}`
+  );
+  assert.equal(proj.skippedQuarantined, base.skippedQuarantined, '[PDC-AC1] the quarantine-skip count moved');
 
   // The four populated arms, named so a corpus that quietly stopped exercising
   // one cannot leave this criterion green.
-  assert.deepEqual(proj.entries.map((e) => e.session_id), ['keep']);
-  assert.deepEqual(proj.deferred.map((e) => e.session_id), ['extra', 'tail']);
-  assert.deepEqual(proj.readDeferred.map((e) => e.session_id), ['partial']);
-  assert.deepEqual(proj.oversized.map((d) => path.basename(d.path)), ['big.jsonl']);
-  assert.deepEqual(proj.newlyQuarantined.map((d) => path.basename(d.path)), ['ceiling.jsonl']);
-  assert.equal(proj.skippedQuarantined, 1);
-  assert.equal(proj.intakeBytesTotal, primary.keep.intakeBytes);
+  assert.deepEqual(proj.entries.map((e) => e.session_id), ['keep'], '[PDC-AC1] admitted set');
+  assert.deepEqual(proj.deferred.map((e) => e.session_id), ['extra', 'tail'], '[PDC-AC1] capacity arm');
+  assert.deepEqual(proj.readDeferred.map((e) => e.session_id), ['partial'], '[PDC-AC1] read-deferred arm');
+  assert.deepEqual(proj.oversized.map((d) => path.basename(d.path)), ['big.jsonl'], '[PDC-AC1] oversized arm');
+  assert.deepEqual(proj.newlyQuarantined.map((d) => path.basename(d.path)), ['ceiling.jsonl'], '[PDC-AC1] quarantine arm');
+  assert.equal(proj.skippedQuarantined, 1, '[PDC-AC1] quarantine-skip count');
+  assert.equal(proj.intakeBytesTotal, primary.keep.intakeBytes, '[PDC-AC1] the run intake total');
 });
 
 test('dream-collect: [PDC-AC1a-more] a deadline-bound run admits MORE under projection, and no byte verdict moves', (t) => {
@@ -1486,8 +1489,10 @@ test('dream-collect: [PDC-AC1b] a filename collision keeps exactly the surviving
   assert.deepEqual(fs.readdirSync(result.scratchDir), ['claude-s_1.json']);
 
   // Row C4: exactly ONE session per distinct filename — the last one written.
-  assert.equal(result.gateExtracts.size, 1);
-  assert.deepEqual([...result.gateExtracts.keys()], ['claude:s_1']);
+  assert.equal(result.gateExtracts.size, 1,
+    `[PDC-AC1b] the gate map holds more than the surviving session: ${JSON.stringify([...result.gateExtracts.keys()])}`);
+  assert.deepEqual([...result.gateExtracts.keys()], ['claude:s_1'],
+    '[PDC-AC1b] the surviving filename must map to exactly the last session written');
   // …which is bit-for-bit the key set the base commit produced by RE-READING the
   // surviving file off disk.
   const reread = new Map();
@@ -1495,7 +1500,8 @@ test('dream-collect: [PDC-AC1b] a filename collision keeps exactly the surviving
     const ex = JSON.parse(fs.readFileSync(f, 'utf8'));
     reread.set(`${ex.harness}:${ex.session_id}`, ex);
   }
-  assert.deepEqual([...reread.keys()], [...result.gateExtracts.keys()]);
+  assert.deepEqual([...reread.keys()], [...result.gateExtracts.keys()],
+    '[PDC-AC1b] the in-memory map no longer equals the disk rebuild it replaces');
 
   // Row C2: the survivor's projection retained no messages and is written anyway.
   const survivor = JSON.parse(fs.readFileSync(collided, 'utf8'));
@@ -1504,7 +1510,8 @@ test('dream-collect: [PDC-AC1b] a filename collision keeps exactly the surviving
 
   // A learning counting the SURVIVOR is accepted, so the map is real evidence
   // and not merely small.
-  assert.equal(pdcLedgerVerdict('claude:s_1', result.gateExtracts), null);
+  assert.equal(pdcLedgerVerdict('claude:s_1', result.gateExtracts), null,
+    '[PDC-AC1b] the surviving session must still authorize a learning');
 
   // IN THIS WRITE ORDER THE OVERWRITTEN SESSION'S REFUSAL IS OVER-DETERMINED,
   // and the test says so rather than banking it. `SID_RE` in validate.js is
@@ -1513,7 +1520,8 @@ test('dream-collect: [PDC-AC1b] a filename collision keeps exactly the surviving
   // A ledger counting `claude:s.1` is therefore refused whatever the map holds,
   // which is why the eviction's authorization effect is proven by the sibling
   // test below, in the other write order, instead of here.
-  assert.match(String(pdcLedgerVerdict('claude:s.1', result.gateExtracts)), /malformed Session-ID/);
+  assert.match(String(pdcLedgerVerdict('claude:s.1', result.gateExtracts)), /malformed Session-ID/,
+    '[PDC-AC1b] the over-determination this test documents no longer holds');
 });
 
 test('dream-collect: [PDC-AC1b] the eviction is what refuses a learning counting the OVERWRITTEN session', () => {
@@ -1527,16 +1535,18 @@ test('dream-collect: [PDC-AC1b] the eviction is what refuses a learning counting
 
   const result = collectExtracts(paths, emptyLedger(), 400_000);
   const collided = path.join(result.scratchDir, 'claude-s_1.json');
-  assert.deepEqual(result.wrote, [collided, collided]);
-  assert.deepEqual([...result.gateExtracts.keys()], ['claude:s.1']);
-  assert.equal(JSON.parse(fs.readFileSync(collided, 'utf8')).session_id, 's.1');
+  assert.deepEqual(result.wrote, [collided, collided], '[PDC-AC1b] both sessions still write the colliding path');
+  assert.deepEqual([...result.gateExtracts.keys()], ['claude:s.1'],
+    `[PDC-AC1b] the gate map is not exactly the surviving session: ${JSON.stringify([...result.gateExtracts.keys()])}`);
+  assert.equal(JSON.parse(fs.readFileSync(collided, 'utf8')).session_id, 's.1', '[PDC-AC1b] the survivor on disk');
 
   // A learning counting the OVERWRITTEN session is refused as not among this
   // run's processed extracts — bit-for-bit what the base commit does by
   // re-reading the surviving file.
   assert.match(
     String(pdcLedgerVerdict('claude:s_1', result.gateExtracts)),
-    /not among this run's processed extracts/
+    /not among this run's processed extracts/,
+    '[PDC-AC1b] without the eviction the overwritten session still authorizes a learning the model never saw'
   );
 
   // NON-VACUITY: the same gate, the same ledger, against a session-keyed map
@@ -1549,8 +1559,9 @@ test('dream-collect: [PDC-AC1b] the eviction is what refuses a learning counting
     const { gateExtract } = transcripts.parsePrimaryWithOutcome(d, transcripts.newRunBudget());
     noEviction.set(`${d.harness}:${gateExtract.session_id}`, gateExtract);
   }
-  assert.equal(noEviction.size, 2);
-  assert.equal(pdcLedgerVerdict('claude:s_1', noEviction), null, 'without the eviction the refusal is lost');
+  assert.equal(noEviction.size, 2, '[PDC-AC1b] the no-eviction control map holds both sessions');
+  assert.equal(pdcLedgerVerdict('claude:s_1', noEviction), null,
+    '[PDC-AC1b] without the eviction the refusal is lost');
 });
 
 // ── Rows C2 / C3: what is written, and the memo ─────────────────────────────
