@@ -1,7 +1,7 @@
 ---
 id: WP-ep2-prune-once-per-run-test
 title: Give Table N row N2 its missing detector at the pipeline's one prune invocation
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-ep2-n2-rehome]
