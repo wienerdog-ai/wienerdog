@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 08de2bc335baa4a97bba2f33bca224f2f3a28517",
+    "baseRef": "08de2bc335baa4a97bba2f33bca224f2f3a28517",
+    "explicit": true
+  },
+  "threadId": "01a0b491-d9d1-7502-8bbe-ecc002664a5b",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-succ-r2",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 08de2bc335baa4a97bba2f33bca224f2f3a28517 from merge-base 08de2bc335baa4a97bba2f33bca224f2f3a28517."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Block dispatch: the retry design can silently mark an unrecovered transcript as processed and erase its quarantine warning.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Deleting the quarantine record can suppress the promised retry\",\n      \"body\": \"Table A1 assumes the no-record path always selects the file, but ledger.js:261–262 returns skip-processed when mtimeMs <= baseline_mtime. This is reachable when a previously recorded path is restored with an older timestamp: its changed fingerprint permits parsing, which can then quarantine it as parse-threw. Reproduced with baseline 2000 and restored mtime 1000: the specified deletion changes skip-quarantined to skip-processed. The hardened parser never runs, and removing the record also removes the warning.\",\n      \"file\": \"docs/specs/WP-ledger-retry-parse-threw-on-upgrade.md\",\n      \"line_start\": 158,\n      \"line_end\": 158,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Replace deletion with durable retryable state that bypasses the baseline, such as the existing deferred selection semantics, while retaining the one-shot gate. Update the contract and require an upgrade test with a matching quarantine fingerprint and mtime at or below the baseline, including a ledger round-trip.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the retry contract and its mirrored constraints before implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Block dispatch: the retry design can silently mark an unrecovered transcript as processed and erase its quarantine warning.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Deleting the quarantine record can suppress the promised retry",
+        "body": "Table A1 assumes the no-record path always selects the file, but ledger.js:261–262 returns skip-processed when mtimeMs <= baseline_mtime. This is reachable when a previously recorded path is restored with an older timestamp: its changed fingerprint permits parsing, which can then quarantine it as parse-threw. Reproduced with baseline 2000 and restored mtime 1000: the specified deletion changes skip-quarantined to skip-processed. The hardened parser never runs, and removing the record also removes the warning.",
+        "file": "docs/specs/WP-ledger-retry-parse-threw-on-upgrade.md",
+        "line_start": 158,
+        "line_end": 158,
+        "confidence": 0.99,
+        "recommendation": "Replace deletion with durable retryable state that bypasses the baseline, such as the existing deferred selection semantics, while retaining the one-shot gate. Update the contract and require an upgrade test with a matching quarantine fingerprint and mtime at or below the baseline, including a ledger round-trip."
+      }
+    ],
+    "next_steps": [
+      "Revise the retry contract and its mirrored constraints before implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Block dispatch: the retry design can silently mark an unrecovered transcript as processed and erase its quarantine warning.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Deleting the quarantine record can suppress the promised retry\",\n      \"body\": \"Table A1 assumes the no-record path always selects the file, but ledger.js:261–262 returns skip-processed when mtimeMs <= baseline_mtime. This is reachable when a previously recorded path is restored with an older timestamp: its changed fingerprint permits parsing, which can then quarantine it as parse-threw. Reproduced with baseline 2000 and restored mtime 1000: the specified deletion changes skip-quarantined to skip-processed. The hardened parser never runs, and removing the record also removes the warning.\",\n      \"file\": \"docs/specs/WP-ledger-retry-parse-threw-on-upgrade.md\",\n      \"line_start\": 158,\n      \"line_end\": 158,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Replace deletion with durable retryable state that bypasses the baseline, such as the existing deferred selection semantics, while retaining the one-shot gate. Update the contract and require an upgrade test with a matching quarantine fingerprint and mtime at or below the baseline, including a ledger round-trip.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the retry contract and its mirrored constraints before implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
