@@ -1,7 +1,7 @@
 ---
 id: WP-ep2-n2-rehome
 title: Re-home Table N row N2 and every registered mirror onto the real prune call site
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: []
@@ -11,6 +11,103 @@ epic: secret-lifecycle
 
 # WP-ep2-n2-rehome: re-home N2 onto the call site that exists
 
+> **Filed Done, 2026-09-18 (post-merge), with ERRATUM 3 below — four stale or
+> under-specified spec-prose facts. None is a defect in what shipped.**
+>
+> **Landed in PR #285** (merge `862f8277`, 2026-09-18 14:22:17 UTC), tip
+> `0b3d768c`. **Two gate rounds.** Round 1 (tip `8a24ebff`) found the mechanical
+> evidence green and **one family stale on THIS SPEC's side**, not in the diff:
+> Table M registered N2's trigger-locus mirrors but **not M-48's
+> mutation-identity mirrors**, so B10, the M-13 errata sentence and M-6
+> contradicted the re-keyed M-48, and this spec's "add mirrors on the spot" rule
+> collided with its own Deliverables restriction. **Errata 1 and 2 (#287, #290)**
+> — both already above — specified the family (row **N2R-13**), split **N2R-11**
+> into old-slug = 0 / new-slug = 10 after the mandated literals raised the count,
+> and recorded the implementer's precedence call (a mandated literal outranks a
+> verification count) as correct. **Round 2 on `0b3d768c`: both gates clean, CI
+> seven checks pass.** wd-reviewer returned APPROVE; the independent gate (Codex
+> plugin `review` on `gpt-6-astra`) returned *"consistently update the retention-
+> prune documentation and mutation references without changing executable code …
+> no actionable defects."*
+>
+> **Numbers on `0b3d768c`.** `npm test` 2906 tests / 2894 pass / **0 fail**;
+> `npm run lint` clean; `boundary-check` exit 0 with **exactly eleven hunk
+> regions** in the 6962-line Done spec, one per Table M `EDIT` row. **No
+> red-proofs run applies to this package — it ships no test and no executable
+> line**, so there is no `RUN:` verdict to record and none is claimed. V-1…V-8
+> green (V-5 old slug 0 / new slug 10 across nine lines; V-8's four digest slices
+> each extracted non-empty); N2R-13's six clauses byte-exact at their anchors;
+> every `CHECK` row re-read whole-cell with the cleared claim named; the
+> `src/core/dream/validate.js` diff is **JSDoc-only** (`5 3`, zero non-comment
+> lines); the successor's nine re-pinned `validate.js` cites verified against the
+> landed constructs; the ADR-0036 word-diff is **exactly one slug**, with
+> `OWNER-SIGNED` byte-identical.
+>
+> **Owner item O-1 was TAKEN UNDER THE STANDING PROCESS on 2026-09-18** and
+> recorded on `main` in **#283**. Nothing in this repository records the owner
+> approving, accepting, ratifying or signing it; the gate confirmed no approval
+> language anywhere in the diff.
+>
+> **ERRATUM 3 — 2026-09-18, after PR-gate round 2 (PR #285, tip `0b3d768c`).
+> Four items, all measured by the fidelity gate, none a finding against the
+> diff.** Each cites the spec line as it stood at merge.
+>
+> **(a) N2R-14's pin sentence was too broad.** *What was wrong:* the row said
+> *"so **`src/` stays pinned at `08de2bc3`**"*. That claims a pin over the whole
+> of `src/`, which this WP never touched and cannot speak for — a later package
+> moving an unrelated file would falsify a sentence this row had no business
+> making. *What is true:* the only `src/` file in this WP's Deliverables is
+> `src/core/dream/validate.js`, and the claim that holds is about **that file's
+> executable constructs**, which are byte-identical at `08de2bc3` because the
+> edit is comment text only (**AC-8**, **V-6**); only line numbers move, by `+2`.
+> *Routing:* **corrected in place** in row N2R-14 above. The `+2` sweep itself is
+> unaffected and was verified by the gate.
+>
+> **(b) This spec's own Current-state cites shift `+2` in the landed tree — one
+> sentence, recorded, NOT a re-pin sweep.** *What is wrong:* the `validate.js`
+> cites in this spec's own **Current state** section were written against
+> `08de2bc3` **before** the JSDoc grew from three lines to five. In the landed
+> tree every `validate.js` construct below `:1159-1175` sits **two lines lower**
+> than this spec prints it. *What is true, and why nothing is rewritten:* N2R-14
+> already contracts the `+2` shift and already sweeps it into
+> `WP-ep2-prune-once-per-run-test`, which is the spec that has to *use* those
+> cites. This spec's Current state is the record of what was true **at its own
+> pin**, not a live index into `main` — the same rule that governed erratum 10 of
+> `WP-dream-primary-dialogue-collection`. *Routing:* **recorded, not corrected.**
+> Add `+2` to any `validate.js` line number this spec's Current state prints
+> below the JSDoc block; the constructs, their order and every argument resting
+> on them are unchanged.
+>
+> **(c) M-12's "the two surfaces that pass added" stated a count where it owed a
+> list.** *What is wrong:* the N2 mirror bullet (d) in
+> `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:~3011` closed with *"this
+> list had omitted the growth story as well as the two surfaces that pass
+> added"*. **A count is checkable only beside the list it counts** — which is the
+> standing rule N2R-12 already binds for the other enumerations in that document,
+> and the exact defect that falsified M-48's own mirror count three rounds
+> running. *What is true:* the two surfaces are **Table B row B10** and **the
+> JSDoc above `pruneRedactedOriginals` in `src/core/dream/validate.js`**.
+> *Routing:* **a real edit, made in this PR**, in the Done spec at that anchor —
+> naming only, nothing else in the bullet changes.
+>
+> **(d) The AC-14 dated sentence lacked the qualifier its siblings carry.**
+> *What is wrong:* at
+> `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:~4250`, AC-14's third case
+> describes the 2026-07-28 run as *"the isolated N2-only mutation — move the
+> `pruneRedactedOriginals` call into the B4 loop …"* with **no date qualifier**,
+> while its two siblings — the M-48 census row at `:4525` and mutation row M-48
+> at `:4729` — both carry **"as it was spelled at that date"**. After the
+> re-key (N2R-9), an unqualified sentence reads as a description of M-48's
+> *current* mutation, which it is not. *What is true:* the sentence is a claim
+> about **2026-07-28** and is still true of that day (N2R-10); only its
+> qualification was missing. *Routing:* **a real edit, made in this PR** —
+> routing-only, the four words inserted, identical to the treatment `:4525`
+> already carries. Table M row **M-7** should have caught this: it marked AC-14's
+> third case `EDIT, ROUTING ONLY` and pinned the dated sentence at `:4229`
+> without noticing that the *same* case carries a second dated sentence at
+> `:4250`. **A row that names one instance of a pattern inside a range does not
+> cover the range.**
+>
 > **ERRATUM 1 — 2026-09-18, after PR-gate round 1 on the implementation
 > (PR #285).** Both gates landed on one family: **Table M registered only N2's
 > trigger-LOCUS mirrors, while N2R-9 re-keys a SECOND contract — M-48's mutation
@@ -260,7 +357,7 @@ prose in this spec defers to it and restates nothing.** Measured at `08de2bc3`.
 | **N2R-12** | **the union every mirror list must end up registering** | **Table M rows M-1 … M-16**, which is the union of the five lists named in Table M's `registered by` column, plus M-15 and the routed-slug surfaces. **Every list in Table M marked `EDIT` ends the pass registering exactly that union restricted to its own subject** (the N2-trigger lists register the trigger's mirrors; the routed-slug registration registers the slug's). **Each list names the surfaces it adds BY NAME, never by list position** — ADR-0036 row **A2** forbids an ordinal where a structural anchor is available, and here the ordinal is also false: **`Table B row B10` is FIRST in M-48's six-surface enumeration**, so a phrase like *"the last two"* names the wrong pair. The accepted form is M-12's — *"the two surfaces that pass added"*, followed by their names |
 
 | **N2R-13** | **the surfaces that IDENTIFY M-48 with the per-call form** — *erratum 1* | **Three cells assert what M-48's mutation IS, not where the prune runs, and N2R-9 falsifies all three.** Each is given with its anchor and its literal replacement; **nothing else in any of the three cells is touched.** <br>**(a) Table B row B10** (`:1572`) — anchor `reading it into this chain is a per-call prune, i.e. exactly what mutation M-48 does` → the literal **“reading it into this chain is a per-redaction prune — the schedule `WP-ep2-prune-once-per-run-test`'s proof (b) covers; M-48 is the duplicate-invocation form”** (the quotation marks are this table's delimiters and are not written) <br>**(b-i) the M-13 errata sentence** (`:2355`) — anchor `correctly and cites M-48 more accurately after the split than before it` → **`correctly; its M-48 citation was RE-KEYED on 2026-09-18, when M-48 became the duplicate-invocation form and B10's clause named the per-redaction schedule instead`** <br>**(b-ii) the same sentence's closing clause** (`:2357-2358`) — anchor `Both are registered as M-48 mirrors by this sentence, checked, and left byte-unchanged.` → **`Both are registered as M-48 mirrors by this sentence. Consequence 7 was checked and left byte-unchanged; B10 was left byte-unchanged on 2026-07-28 and RE-KEYED on 2026-09-18, so "two that did not" counts that pass and not today's.`** <br>**(c) the Security checklist's per-call-half clause** (`:3675`) — anchor `and only the per-call half now has a row` → the literal **“and on 2026-07-28 only the per-call half had a row. Since 2026-09-18 M-48 states the duplicate-invocation form, so neither half has a mutation row here; the per-call (per-redaction) schedule is covered by `WP-ep2-prune-once-per-run-test`'s proof (b)”** (delimiters not written) <br>**(d) that bullet's provenance date** (`:3670`) — anchor `**Re-keyed 2026-07-28, round 7 of the post-Done errata**` → the same with **`, and again on 2026-09-18`** appended inside the bold, **exactly as M-9's row already does**. Without it the bullet dates a 2026-09-18 statement to 2026-07-28 <br>**(e) the AC-15 census cell's dated mutation description** (`:4504`) — anchor `The isolated N2-only mutation — move the prune call into the B4 loop` → the same with **`as it was spelled at that date`** inserted after `mutation`, again matching M-9. The cell stays dated-past and its limb stays `gap` |
-| **N2R-14** | **the re-homed JSDoc's landed shape, and the shift it forces** — *erratum 1* | The re-homed opening paragraph of `pruneRedactedOriginals`'s JSDoc is **five lines where it was three**, so the block runs `:1159-1175` where it ran `:1159-1173` and **every construct below it in `src/core/dream/validate.js` shifts by `+2`**. The file's executable content is unchanged — the edit is comment text only (**AC-8**, **V-6**) — so **`src/` stays pinned at `08de2bc3`**; only line numbers move. **`WP-ep2-prune-once-per-run-test` is re-pinned by `+2` in the same PR as this erratum**, across every `validate.js` cite below the block: `:1174 → :1176`, `:1178 → :1180`, `:1180 → :1182`, `:1192 → :1194`, `:1320 → :1322`, `:1322 → :1324`, `:1415 → :1417`, `:1418 → :1420`, `:1556-1558 → :1558-1560`. `:663` and every `dream.js`, `private-fs.js` and test-file cite are unaffected. **The sweep is the whole set, not the three the gate named** — a count that moved is wrong wherever any sentence states it |
+| **N2R-14** | **the re-homed JSDoc's landed shape, and the shift it forces** — *erratum 1* | The re-homed opening paragraph of `pruneRedactedOriginals`'s JSDoc is **five lines where it was three**, so the block runs `:1159-1175` where it ran `:1159-1173` and **every construct below it in `src/core/dream/validate.js` shifts by `+2`**. The file's executable content is unchanged — the edit is comment text only (**AC-8**, **V-6**) — so **`src/core/dream/validate.js` stays pinned at `08de2bc3` for every executable construct in it** — *narrowed by erratum 3; the earlier wording said "`src/` stays pinned at `08de2bc3`", which claims a pin over files this WP never touched and over changes it cannot speak for*; only line numbers move. **`WP-ep2-prune-once-per-run-test` is re-pinned by `+2` in the same PR as this erratum**, across every `validate.js` cite below the block: `:1174 → :1176`, `:1178 → :1180`, `:1180 → :1182`, `:1192 → :1194`, `:1320 → :1322`, `:1322 → :1324`, `:1415 → :1417`, `:1418 → :1420`, `:1556-1558 → :1558-1560`. `:663` and every `dream.js`, `private-fs.js` and test-file cite are unaffected. **The sweep is the whole set, not the three the gate named** — a count that moved is wrong wherever any sentence states it |
 
 ### Mirrored Surface Checklist
 

@@ -1,7 +1,7 @@
 ---
 id: WP-ep2-prune-once-per-run-test
 title: Give Table N row N2 its missing detector at the pipeline's one prune invocation
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-ep2-n2-rehome]
@@ -10,6 +10,107 @@ epic: secret-lifecycle
 ---
 
 # WP-ep2-prune-once-per-run-test: one test for "the prune runs once per run"
+
+> **Errata, 2026-09-18 (post-merge) — four stale, mis-vocabularied or
+> under-predicted spec-prose facts. None is a defect in what shipped.**
+>
+> **Landed in PR #293** (merge `85029a8e`, 2026-09-18 15:14:42 UTC), tip
+> `4309405c`. **Both PR gates are clean on that tip, in ONE round:** wd-reviewer
+> returned APPROVE with executed evidence, and the independent gate (Codex plugin
+> `review` on `gpt-6-astra`) returned *"The added test and mutation proofs match
+> the specification and exercise the intended pruning behavior without changing
+> production code."*; CI seven checks pass.
+>
+> **Numbers on `4309405c`.** The fidelity gate, in its own detached worktree:
+> `npm test` 2907 tests / 2895 pass / **0 fail** / 12 skipped; `npm run lint`
+> clean; boundary exactly the three Deliverables paths. The implementer's
+> **UNFILTERED** `npm run red-proofs` on that tip: **106 declared proof(s), 106
+> selected**, `RUN: PROVEN`, **106 PROVEN**, and **zero** `FAILED`, `VACUOUS`,
+> `UNCONTROLLED`, `FILTERED` or `ERROR` — read from the implementer's own log,
+> not inferred. Re-measured on `main` at `85029a8e` while this filing was
+> written: `npm test` 2907 / 2895 / **0 fail** / 12 skipped, `npm run lint`
+> clean.
+>
+> **The three vacuity routes were closed by MEASUREMENT, not by argument**, and
+> that is why this package took one round: the seam is scoped to seeded basenames
+> (an unscoped interception trips `quarantinePreserve`'s post-condition at
+> `validate.js:684`); the neutralized deletes keep the directory over cap so a
+> second invocation is observable and nothing later diverges; the run genuinely
+> completes two redactions (neutering `BLOB_B` drops the count to 1); and leg two
+> reaches the call site — making the `completedRedactions > 0` guard
+> unconditional reddens leg two's assertion, so *"only after a completed
+> redaction"* is independently detecting.
+>
+> **Every erratum below was measured by the fidelity gate on `4309405c`**, not
+> inferred, and each cites the spec line as it stood at merge.
+>
+> **Erratum 1 — Table P row P-10's whole-suite totals were the CANDIDATE's, not
+> the landed tree's (`:259`).** *What is wrong:* the row printed
+> `tests 2905, pass 2892, fail 1, skipped 12` for each mutated run and
+> `tests 2905, pass 2893, fail 0, skipped 12` for the control. *What is true:*
+> those were measured in a worktree at `08de2bc3` carrying a candidate test, and
+> the suite grew by two tests before the merge; on `4309405c` — and again on
+> `main` at `85029a8e` — the control is `tests 2907, pass 2895, fail 0, skipped
+> 12`. *Routing:* **corrected in place**, and the row now says which of its
+> numbers is a contract: **the four delete counts (control 2, duplicate 4,
+> per-redaction-added 5, per-redaction-moved 3) are the contract; the whole-suite
+> totals are not.** A whole-suite total is a property of the tree and goes stale
+> on every merge; a delete count is a property of the schedule and does not.
+> **Class: a spec cell pinning a number it does not own.**
+>
+> **Erratum 2 — AC-2 (`:355`) was written in invocation vocabulary that Table P
+> row P-4 rules out, and stated the wrong number.** *What is wrong:* AC-2
+> asserted *"exactly one prune delete-path firing on a two-redaction run"*.
+> *What is true:* P-4 is the canonical cell, and it says the delete path attempts
+> **exactly two** deletions on that run — the count a single correct prune makes
+> when the directory ends two over the cap — and it says explicitly that **the
+> assertion is on the delete-path count, not on an invocation count**, because
+> the invocation is not directly observable (Table S). AC-2 was wrong twice: one
+> where P-4 says two, and "firing" where P-4 forbids invocation counting. Nothing
+> shipped wrong — the test asserts P-4 — but a criterion that counts invocations
+> cannot be checked by the seam this package built. *Routing:* **corrected in
+> place**, restated in P-4's terms. **Class: an acceptance criterion paraphrasing
+> its own canonical table instead of deferring to it — the exact failure ADR-0031
+> exists to prevent.**
+>
+> **Erratum 3 — Current state (`:154-156`) undercounted the declaration files
+> naming this suite.** *What is wrong:* *"Four declaration files already name
+> this suite"*, listing `dream-digest-omits-own-job-alerts`,
+> `dream-git-env-pinning`, `dream-lock-stale-owner-loud-pipeline` and
+> `dream-primary-collection-pipeline`, *"so a fifth is the established shape"*.
+> *What is true:* there are **five** — `dream-pipeline.proofs.json` (2026-09-02),
+> the one named after the suite itself, was missed — so this package's file is
+> the **sixth**. *Routing:* **corrected in place.** Nothing depended on the
+> number; the sentence's job is to show the shape is established, which five do
+> better than four. **Class: a count stated where a list was owed.**
+>
+> **Erratum 4 — the routed documentation pass could NOT "edit nothing else", and
+> the census row that said so was short by exactly one surface.** *What is
+> wrong:* the AC-15 census row for **M-48** in
+> `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` predicted that this package
+> *"moves this row's LIMB and adds its test, and **needs to edit nothing else**"*.
+> *What is true, measured against that document's own shipped V-30 checker:* the
+> census's `executed` limb is **structural**, not a phrase match — an `executed`
+> row must OPEN with the canonical verdict clause — `**RED:**` then a
+> backticked target, an em dash, and backticked counts — and **the target is
+> compared, as a string, against the PAIRED MUTATION ROW**. M-48's mutation row
+> named no test title, so the census row could not leave `gap` until the landed
+> test's title was spelled in the mutation row too. *Routing:* **both surfaces
+> edited in this PR** — the census row moved `gap` → `executed` with the landed
+> verdict, the declaration file and the four delete counts, keeping the dated
+> 2026-07-28 record verbatim and un-re-run (`WP-ep2-n2-rehome` row N2R-10); the
+> mutation row gained one dated sentence naming the same target. The limb tally
+> in that census moved with them — `executed` **2 → 3 rows**, `gap` **1 → 0
+> rows** — and the `gap` limb is **kept though empty**, because a census that
+> cannot say "uncovered" cannot do the one job it has. The `executed` limb's
+> prose definition was widened from *"**this errata** applied the row's
+> mutation"* to what its own predicate already enforced: the limb is about where
+> the verdict is **derivable from**, never about which pass performed the run.
+> **Class: an extent-predicting cell that under-predicts — the fourth in this
+> document, and the third this month across packages.** *No fourth limb was
+> invented: the schema pins the vocabulary at exactly `swept`, `executed`, `gap`,
+> and widening a definition to match its own check is smaller than adding a term
+> the checker would reject.*
 
 ## Context (read this, nothing else)
 
@@ -150,10 +251,14 @@ pristine copy, APPLIES the mutation into a fresh copy, observes RED there, and
 runs a CONTROL in a further fresh pristine copy, requiring the declared assertions
 — and only those — to fail **as assertion failures of their own test bodies**.
 
-**Four declaration files already name this suite** —
+**FIVE declaration files already name this suite** —
 `dream-digest-omits-own-job-alerts`, `dream-git-env-pinning`,
-`dream-lock-stale-owner-loud-pipeline`, `dream-primary-collection-pipeline` — so a
-fifth is the established shape, not a new one.
+`dream-lock-stale-owner-loud-pipeline`, `dream-primary-collection-pipeline` and
+`dream-pipeline.proofs.json` (2026-09-02) — so a **sixth** is the established
+shape, not a new one. *Corrected by erratum 3: this sentence said "Four … so a
+fifth", and `dream-pipeline.proofs.json` — the one named after the suite itself —
+was the one it missed. Nothing downstream depended on the number; the point of the
+sentence is that the shape is established, and five make it more so than four.*
 
 **The declaration format, taken from a shipped example**
 (`tests/red-proofs/dream-git-env-validate-seam.proofs.json`):
@@ -256,7 +361,7 @@ registered mirror in the same commit.** Measured at `08de2bc3`.
 | **P-7** | **the fixture** | built from the suite's own existing helpers — `setup()` (`:288`), `brainWrites()` (`:1162`), `runDream()` (`:347`). **Leg one:** two notes, each carrying a distinct context-free high-entropy blob (REDACT severity, established by the suite's `:1349` test), plus **50** seeded files in `<state>/quarantine/redacted/` that this run did not create, named `<YYYY-MM-DD>-<name>` so N3's date-prefix filter admits them, mode `0600` inside `0700`. **50 is the load-bearing number, and 49 is a measured defect** (design round 1, Astra, band B): at 49 the directory is at the cap after the first redaction, so a per-redaction prune returns without deleting and the run's total is **one** — identical to a correct once-per-run prune, and the detector misses the regression N2 exists for. At 50 the directory is **two** over the cap at the end of the run, so every schedule in P-8 separates. **Leg two:** one clean note and **51** seeded files, one over the cap, so an unconditional prune would attempt a deletion. **Reuse the suite's helpers; add no shared helper** |
 | **P-8** | **the regression schedules the test must catch** | **three, every one of them N2-only** — the accumulated set is untouched in all three, so N3 stays satisfied and no existing `EP2 retention:` test moves. **(a) DUPLICATE AT THE CALL SITE:** a second `gates.pruneRedacted();` beside `src/cli/dream.js:1102`. This is the mutation `WP-ep2-n2-rehome` re-keys M-48 to (that spec's Table N2R row N2R-9), so the row and proof (a) state one mutation byte-for-byte. **(b) PER-REDACTION, ADDED:** `pruneRedactedOriginals(stateDir, redactedCreated);` inserted immediately after `completedRedactions += 1;` in the secret gate's redact arm (`src/core/dream/validate.js:1420`), the end call left in place. **This is the modern spelling of M-48's own 2026-07-28 mutation** and the schedule the 49-seed fixture missed. **(c) PER-REDACTION, MOVED:** (b) with the `src/cli/dream.js:1102` call removed — a true move. **(a) and (b) are single-file and are declared (P-9); (c) spans two files, so a RED proof cannot express it and it is measured by hand (P-10).** All three attempt a delete count different from P-4's two |
 | **P-9** | **the RED declaration** | **two proofs** in `tests/red-proofs/ep2-prune-once-per-run.proofs.json`. Shared by both: `suite` = P-1; `wp` = `WP-ep2-prune-once-per-run-test`; `criterion` = `2`; `occurrences` = `1`; `testNamePattern` = `retention prune runs EXACTLY ONCE`; `expectRed[0].test` = `[P-2]`; `expectRed[0].signal` = P-3. **Proof (a)** — `id` = `ep2-prune-runs-once-per-run`; `file` = `src/cli/dream.js`; `find` = the exact `gates.pruneRedacted();` line at `:1102`, **including its six leading spaces**; `replace` = that line plus a newline and a duplicate carrying the marker; `marker` = `RP_MUT_EP2_PRUNE_TWICE`. **Proof (b)** — `id` = `ep2-prune-not-once-per-redaction`; `file` = `src/core/dream/validate.js`; `find` = the exact `completedRedactions += 1; // increments LAST, only after a verified scrub` line at `:1420`, **including its ten leading spaces** (measured: it occurs once in the file); `replace` = that line plus a newline and `pruneRedactedOriginals(stateDir, redactedCreated);` at the same indent carrying the marker; `marker` = `RP_MUT_EP2_PRUNE_PER_REDACTION`. Both identifiers are module-scope or closure-scope at that point, so the insertion compiles |
-| **P-10** | **the MEASURED red sets** | each schedule hand-applied at `08de2bc3` in a worktree carrying the candidate test, the **whole** suite run each time. **Every one of the three gives `tests 2905, pass 2892, fail 1, skipped 12`, the single failure being P-2 and NOTHING ELSE IN THE REPOSITORY reddening.** The delete counts the diagnostic reports: **(a) duplicate → 4** (`n2seed-00, n2seed-01, n2seed-00, n2seed-01`); **(b) per-redaction added → 5**; **(c) per-redaction moved → 3**. Control, same tree unmutated: **`tests 2905, pass 2893, fail 0, skipped 12`**, delete count **2**. *These are measurements of the candidate implementation, not promises about the implementer's; the implementer re-establishes (a) and (b) mechanically through P-11* |
+| **P-10** | **the MEASURED red sets** | each schedule hand-applied at `08de2bc3` in a worktree carrying the candidate test, the **whole** suite run each time. **Every one of the three reddens P-2 and NOTHING ELSE IN THE REPOSITORY.** **THE DELETE COUNTS ARE THE CONTRACT; the whole-suite totals are not.** The delete counts the diagnostic reports: **(a) duplicate → 4** (`n2seed-00, n2seed-01, n2seed-00, n2seed-01`); **(b) per-redaction added → 5**; **(c) per-redaction moved → 3**; **control, same tree unmutated → 2**. *Refreshed by erratum 1 to the LANDED tree.* On the landed tip `4309405c` the control is **`tests 2907, pass 2895, fail 0, skipped 12`** and each mutated run is **`tests 2907, pass 2895, fail 1, skipped 12`** — this pass re-measured the control on `main` at `85029a8e` and got the same 2907 / 2895 / 0 / 12. *This row originally printed `tests 2905, pass 2892/2893` throughout: those were measurements of the CANDIDATE implementation in a worktree at `08de2bc3` carrying a candidate test, taken before the package landed, and the suite grew by two tests between that worktree and the merge. **A whole-suite total is a property of the tree, not of this package**, and it goes stale on every merge; the four delete counts are what this row decides and what the gate re-established by hand. The implementer re-establishes (a) and (b) mechanically through P-11* |
 | **P-11** | **the check** | the **UNFILTERED** `npm run red-proofs` → `RUN: PROVEN`, zero `FAILED`, `VACUOUS`, `UNCONTROLLED`, `FILTERED` or `ERROR`. **A `--wp`-scoped run reports `RUN: FILTERED` and exits 1 by construction, so it can never satisfy a criterion and must never be written as a must-pass line** |
 | **P-12** | **what this WP does NOT assert** | N1, N3, N4, N5, N6, N7 — all six already have cases in `tests/unit/dream-validate.test.js` (five `EP2 retention:` tests). **Adding a second test for any of them exceeds this WP** |
 
@@ -351,9 +456,18 @@ ADR-0042 decision 1 requires it to be parsed and validated, never executed.
       test, titled byte-exactly P-2, and **no existing test or shared helper in that
       file changes**. Verified by the diff. (V-1)
 - [ ] **AC-2 (P-4, P-5, P-6, P-7)** The new test **passes** against unmodified
-      `src/`, and it asserts **both** halves: exactly one prune delete-path firing
-      on a two-redaction run, and zero on a zero-redaction run with the directory
-      already over the cap. (V-4)
+      `src/`, and it asserts **both** halves **in P-4's vocabulary, which is the
+      only vocabulary this package has**: over a run that completes **two**
+      redactions against P-7's fixture, the prune's delete path attempts
+      **exactly two deletions**; over a zero-redaction run with the directory
+      already over the cap, it attempts **zero**. **The count is DELETES, never
+      invocations.** (V-4) *Corrected by erratum 2: this criterion said "exactly
+      one prune delete-path firing on a two-redaction run", which is wrong twice
+      over — it states one where P-4 states two, and "firing" is invocation
+      vocabulary that P-4 rules out explicitly, because the invocation is not
+      directly observable (Table S) and every N2-violating schedule is
+      distinguished by its DELETE count (P-8, P-10). A criterion that counts
+      invocations cannot be checked by the seam this package actually built.*
 - [ ] **AC-3 (P-8, P-9, P-11)** The **UNFILTERED** `npm run red-proofs` reports
       `RUN: PROVEN` with zero `FAILED`, `VACUOUS`, `UNCONTROLLED`, `FILTERED` or
       `ERROR`, **including BOTH of this package's proofs,
