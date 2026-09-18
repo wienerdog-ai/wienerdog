@@ -95,7 +95,75 @@ state is new state. That contradiction is routed to the companion's owner item
 overruling it. Nothing in this repository records the owner approving,
 accepting, ratifying or signing any of it.
 
-## Round 2
+## Round 2 — dispositions
 
-A fresh Astra round follows the fix, because finding 1 is HEAVY. Not yet run at
+Reviewed tip `7aee86b9`. Raw and focus committed **before adjudication** at
+`d8bc9a57`:
+
+- `docs/specs/logbook/2026-09-18-parse-threw-successors-design-r2-astra-raw.json`
+- `docs/specs/logbook/2026-09-18-parse-threw-successors-design-r2-astra-focus.txt`
+
+**Nothing re-opened** on `WP-doctor-recognizes-parse-threw` or
+`WP-transcript-parsers-harden-text-values`. One finding, on the companion.
+
+| # | Finding | Source | Band | Weight | Disposition |
+|---|---------|--------|------|--------|-------------|
+| 7 | **`WP-ledger-retry-parse-threw-on-upgrade.md:158`, Table A row A1 assumed the no-record path always selects.** It does not: `ledger.js:260-261` returns `skip-processed` when `mtimeMs <= baseline_mtime[harness]`. Reachable when a path that already carries a record is restored with an older timestamp — its changed fingerprint permits the parse, the unhardened parser throws, and it is quarantined `parse-threw` below the baseline. After the deletion the file is **silently treated as processed** and its `reports/warnings.md` line disappears with the record: the session is lost **and** the notice of losing it is erased. | Astra, medium | A | **HEAVY** | **ACCEPTED. Mechanism replaced: CONVERT, do not delete.** See below. |
+
+**Reproduced before fixing**, on the base tree, with
+`baseline_mtime.codex = 2000` and a file at `mtimeMs = 1000`:
+
+| state | `selectState` |
+|-------|---------------|
+| quarantined `parse-threw`, fingerprint matches | `skip-quarantined` |
+| **after deletion (the round-1 design)** | **`skip-processed`** |
+| **converted to `{outcome:'deferred', reason:'parse-threw'}`** | **`select`** |
+| after deletion, same file with `mtimeMs = 3000` | `select` |
+
+The last row is why the defect reads as correct: deletion works whenever the
+mtime is above the baseline, which is the common case and the only one a
+casually-built test would cover.
+
+**The fix, and why it needs no new field.** `selectState` consults
+`baseline_mtime` **only** on the no-record path, so keeping any
+matching-fingerprint record bypasses it; `case 'deferred': return 'select'`
+(`:255-256`) is the existing state that already means "retry". The converted
+record is `{fingerprint: <unchanged>, outcome: 'deferred', reason: 'parse-threw',
+updated_at, harness}` — existing keys, existing values, **no `deferrals`**.
+Checked against the one guard that could have been disturbed:
+`secretDeferralCount`'s `deferred` arm opens
+`if (rec.reason !== SECRET_REVERT_REASON) return 0;` (`:288-289`), and it was
+measured returning **0** for exactly this record, so no secret-revert budget is
+consumed or invented. `activeQuarantines` (`:390-399`) selects
+`outcome === 'quarantined'` only, so the converted record leaves the banner for
+the span of the run and the run's own outcome rewrites it; a crash in that
+window leaves `reports/warnings.md` lagging by one run, which ADR-0023
+Amendment 2 permits in terms, and the `deferred` record is still selected next
+run — self-healing, not stuck.
+
+**What it costs against the filed spec, stated honestly.**
+`WP-dream-collect-parse-throw-quarantine`'s row **A2** still holds exactly (no
+new field, no counter, no stickiness; `recordQuarantined` untouched). Row
+**A12**'s "no new state" premise is now exceeded **twice**: by the one-shot
+ledger-level gate, and by the new transition `quarantined → deferred`, which
+also produces a combination the tree has never held — a `deferred` record whose
+`reason` is not `secret-revert`. Both are routed to the companion's owner item 1
+(recommend a short docs-only ADR-0023 amendment; overrule cost stated). Nothing
+in this repository records the owner approving, accepting, ratifying or signing
+any of it.
+
+**Mirrored in the same commit:** companion Table A rows A1 (rewritten), **A9**
+(the hazard, measured) and **A10** (the `secretDeferralCount` check) new; rows
+A4, A5, A6, A7 and Out of scope reworded from "drop/delete" to "convert";
+acceptance criteria 1, 3, 4 and 5 rewritten — criterion 1 now **requires** a
+corpus file at or below the baseline; two new RED declarations,
+`rpt-deletion-instead-of-deferral` (criterion 1) and
+`rpt-reason-dropped-on-conversion` (criterion 3); Current state item 2, the
+Implementation-notes bullet, the Security checklist and the Mirrored Surface
+Checklist all updated; and `WP-transcript-parsers-harden-text-values`' Table E
+rows E1/E4 now say the companion converts rather than deletes.
+
+## Round 3
+
+A fresh Astra round follows this fix, because finding 7 is HEAVY. Not yet run at
 the time of writing.
