@@ -6,6 +6,7 @@ const path = require('node:path');
 const { discoverClaude, parseClaudeTranscript } = require('./claude');
 const { discoverCodex, parseCodexTranscript } = require('./codex');
 const { redactOnly } = require('../secret-scan');
+const { createPrimaryProjection } = require('./primary-dialogue');
 const { Limits, newRunBudget, OVERSIZED_RECORD_MARKER } = require('./stream');
 
 /** @typedef {Object} Extract
@@ -124,31 +125,31 @@ function rebaseInvocations(invocations, dropped) {
 }
 
 /**
- * Parse + redact + size-cap one discovered entry, reporting the streaming
- * outcome. This is the export the quarantine ledger (WP-119) consumes: the
- * caller-owned `budget` bounds intake I/O (the collector supplies a fresh
- * allowance per session); `parse.outcome` carries the per-file quarantine signal.
- * @param {{harness:'claude'|'codex', path:string, size?:number}} entry
- * @param {{remaining:number}} budget  caller-owned allowance from newRunBudget()
- * @returns {{extract: Extract, parse: {outcome: ParseOutcome, oversizedRecords: number, runExhausted: boolean}}}
+ * The discovery-recorded size, or a stat fallback. Back-compat seam for
+ * pre-WP-118 callers whose entries lack `size` (discover now records it). A
+ * failed stat falls through to the parser, whose open fails the same way →
+ * 'read-error' quarantine signal.
+ * @param {{path:string, size?:number}} entry
+ * @returns {number}
  */
-function parseWithOutcome(entry, budget) {
-  let sizeBytes = entry.size;
-  if (typeof sizeBytes !== 'number') {
-    // Back-compat seam for pre-WP-118 callers whose entries lack `size`
-    // (discover now records it). A failed stat falls through to the parser,
-    // whose open fails the same way → 'read-error' quarantine signal.
-    try {
-      sizeBytes = fs.statSync(entry.path).size;
-    } catch {
-      sizeBytes = 0;
-    }
+function resolveSizeBytes(entry) {
+  if (typeof entry.size === 'number') return entry.size;
+  try {
+    return fs.statSync(entry.path).size;
+  } catch {
+    return 0;
   }
-  const { extract: raw, parse: outcome } =
-    entry.harness === 'codex'
-      ? parseCodexTranscript(entry.path, sizeBytes, budget)
-      : parseClaudeTranscript(entry.path, sizeBytes, budget);
+}
 
+/**
+ * Redact and size-cap one RAW extract — the second half of what
+ * `parseWithOutcome` has always done, lifted out so the primary-dialogue entry
+ * point below measures the SAME bytes from the SAME read (Table B row B4)
+ * instead of parsing the file a second time.
+ * @param {Extract} raw
+ * @returns {Extract}
+ */
+function capExtract(raw) {
   let truncated = raw.truncated;
   let messages = raw.messages.map((message) => {
     const { message: capped, capped: wasCapped } = capMessage(message);
@@ -185,7 +186,25 @@ function parseWithOutcome(entry, budget) {
   // already filename-sanitized downstream (scratch.js).
   out.source_path = boundExtractPath(out.source_path);
   out.cwd = boundExtractPath(out.cwd);
-  return { extract: out, parse: outcome };
+  return out;
+}
+
+/**
+ * Parse + redact + size-cap one discovered entry, reporting the streaming
+ * outcome. This is the export the quarantine ledger (WP-119) consumes: the
+ * caller-owned `budget` bounds intake I/O (the collector supplies a fresh
+ * allowance per session); `parse.outcome` carries the per-file quarantine signal.
+ * @param {{harness:'claude'|'codex', path:string, size?:number}} entry
+ * @param {{remaining:number}} budget  caller-owned allowance from newRunBudget()
+ * @returns {{extract: Extract, parse: {outcome: ParseOutcome, oversizedRecords: number, runExhausted: boolean}}}
+ */
+function parseWithOutcome(entry, budget) {
+  const sizeBytes = resolveSizeBytes(entry);
+  const { extract: raw, parse: outcome } =
+    entry.harness === 'codex'
+      ? parseCodexTranscript(entry.path, sizeBytes, budget)
+      : parseClaudeTranscript(entry.path, sizeBytes, budget);
+  return { extract: capExtract(raw), parse: outcome };
 }
 
 /**
@@ -199,10 +218,100 @@ function parse(entry) {
   return parseWithOutcome(entry, newRunBudget()).extract;
 }
 
+/** @typedef {{harness:'claude'|'codex', session_id:string,
+ *             messages:Array<{role:'user'|'assistant'|'tool_result'}>,
+ *             skill_invocations?:Array<{skill:string, index:number, resultIndex:number|null, errored:boolean}>}} GateExtract
+ *  A TEXT-FREE projection of the ORIGINAL capped timeline: same length, same
+ *  positions, roles verbatim, indices NOT renumbered. This is the whole of what
+ *  `src/core/dream/validate.js`'s learnings-ledger gate reads, so deriving it
+ *  from the raw timeline rather than from the dialogue keeps that gate's
+ *  verdicts identical — a gate must never gain permission because its evidence
+ *  was deleted. */
+
+/**
+ * OPT-IN (WP-dream-primary-dialogue-projection): parse one discovered entry to
+ * its PRIMARY DIALOGUE, in ONE bounded read. No caller uses this yet; the
+ * collector is switched over by the successor package.
+ *
+ * Three derived values come out of that single read, and each answers a
+ * different question:
+ *   - `extract`     what the dream model sees — primary dialogue only, with a
+ *                   code-derived `derived_from_untrusted` on every message.
+ *   - `gateExtract` what the code-owned safety gates see — the ORIGINAL
+ *                   timeline's geometry, with no text anywhere.
+ *   - `intakeBytes` what the collector's capacity bound is measured against —
+ *                   byte-identical to what `src/core/dream/scratch.js`
+ *                   computes today from `parseWithOutcome(...).extract`.
+ * The raw capped extract the last two are derived from is NOT returned: no
+ * caller can write tool text it never received.
+ *
+ * @param {{harness:'claude'|'codex', path:string, size?:number}} entry
+ * @param {{remaining:number}} budget  caller-owned allowance from newRunBudget()
+ * @returns {{extract: Extract, gateExtract: GateExtract, intakeBytes: number,
+ *            parse: {outcome: ParseOutcome, oversizedRecords: number, runExhausted: boolean}}}
+ */
+function parsePrimaryWithOutcome(entry, budget) {
+  const sizeBytes = resolveSizeBytes(entry);
+  const codex = entry.harness === 'codex';
+  const projection = createPrimaryProjection(codex ? 'codex' : 'claude');
+  // ONE call to streamLines per transcript, debiting the caller-owned budget
+  // exactly once: the projection rides the parser's existing per-line closure
+  // rather than opening the file a second time.
+  const { extract: raw, parse: outcome } = codex
+    ? parseCodexTranscript(entry.path, sizeBytes, budget, projection)
+    : parseClaudeTranscript(entry.path, sizeBytes, budget, projection);
+
+  const rawCapped = capExtract(raw);
+  const intakeBytes = Buffer.byteLength(JSON.stringify(rawCapped));
+
+  const gateExtract = {
+    harness: rawCapped.harness,
+    session_id: rawCapped.session_id,
+    messages: rawCapped.messages.map((message) => ({ role: message.role })),
+  };
+  // Verbatim, already rebased by the capping path above — or absent for Codex,
+  // exactly as today.
+  if (Array.isArray(rawCapped.skill_invocations)) gateExtract.skill_invocations = rawCapped.skill_invocations;
+
+  // Row A5e step 6: a non-'ok' outcome is TOTAL rather than partial — the raw
+  // extract is empty and carries no flags at all, so the projection is too.
+  const projected = outcome.outcome === 'ok' ? projection.messages : [];
+
+  // Row A6: the EXISTING limits, in the existing order — redact, then cap at
+  // MAX_MSG_CHARS, then retain the newest MAX_MESSAGES. No new cap, nothing
+  // restored, and never a truncation to fit a model.
+  let truncated = rawCapped.truncated;
+  let messages = projected.map((message) => {
+    const { message: capped, capped: wasCapped } = capMessage(message);
+    if (wasCapped) truncated = true;
+    return capped;
+  });
+  if (messages.length > MAX_MESSAGES) {
+    messages = messages.slice(messages.length - MAX_MESSAGES);
+    truncated = true;
+  }
+
+  return {
+    extract: {
+      harness: rawCapped.harness,
+      session_id: rawCapped.session_id,
+      started: rawCapped.started,
+      cwd: rawCapped.cwd,
+      source_path: rawCapped.source_path,
+      truncated,
+      messages,
+    },
+    gateExtract,
+    intakeBytes,
+    parse: outcome,
+  };
+}
+
 module.exports = {
   discover,
   parse,
   parseWithOutcome,
+  parsePrimaryWithOutcome,
   redact,
   rebaseInvocations,
   MAX_MSG_CHARS,

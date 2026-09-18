@@ -1,0 +1,3 @@
+{"type":"user","sessionId":"oversize-1","cwd":"/w","timestamp":"2026-09-17T09:00:00.000Z","message":{"role":"user","content":"before the loss"}}
+{"type":"user","timestamp":"2026-09-17T09:00:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":false,"content":[{"type":"text","text":"@@PAD@@"}]}]}}
+{"type":"assistant","timestamp":"2026-09-17T09:00:02.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"after the loss"}]}}

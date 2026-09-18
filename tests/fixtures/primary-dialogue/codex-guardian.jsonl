@@ -1,0 +1,3 @@
+{"type":"session_meta","payload":{"id":"cx-grd","timestamp":"2026-09-17T09:00:00.000Z","cwd":"/w","thread_source":"guardian_review","parent_thread_id":"p1"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"the review instruction"}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["user.text"]}}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"the review verdict"}]}}

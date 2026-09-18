@@ -1,0 +1,964 @@
+[
+  {
+    "name": "G2 a Claude tool record nested deeper than MAX_JSON_DEPTH",
+    "criterion": "AC3b",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"tu1\",\"content\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\"leaf\"]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "G2 a Codex tool record nested deeper than MAX_JSON_DEPTH",
+    "criterion": "AC3b",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"custom_tool_call_output\",\"output\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\"leaf\"]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "G3 a line that is not valid JSON (Claude)",
+    "criterion": "AC3b",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{not json",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "G3 a line that is not valid JSON (Codex)",
+    "criterion": "AC3b",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{not json",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "record level: a Claude record carrying a tool_result block but NO top-level type",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"tu1\",\"content\":\"EXTERNAL\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "record level: a Codex record with NO top-level type",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"payload\":{\"type\":\"custom_tool_call_output\",\"output\":\"EXTERNAL\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "payload level: a Codex response_item whose payload has NO type",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"role\":\"user\",\"content\":[]}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "payload level: a Codex response_item whose payload is NOT a plain object",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":\"custom_tool_call_output\"}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "payload level: a Codex payload.type OUTSIDE the decided list",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"brand_new_tool_output\",\"output\":\"EXTERNAL\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: the paired result block with its type DELETED",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:01:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu1\",\"name\":\"Bash\",\"input\":{}}]}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"tool_use_id\":\"tu1\",\"is_error\":false,\"content\":\"EXTERNAL\"},{\"type\":\"text\",\"text\":\"SUPPRESSED-BY-STEP-2\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: the paired result block with its type set to the number 7",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:01:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu1\",\"name\":\"Bash\",\"input\":{}}]}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":7,\"tool_use_id\":\"tu1\",\"content\":\"EXTERNAL\"},{\"type\":\"text\",\"text\":\"SUPPRESSED-BY-STEP-2\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: CONTROL the VALID paired result block — taints through A5d and still supplies its text",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:01:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu1\",\"name\":\"Bash\",\"input\":{}}]}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"tu1\",\"content\":\"EXTERNAL\"},{\"type\":\"text\",\"text\":\"and now sort them\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "and now sort them",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a block that is a bare STRING",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:01:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu1\",\"name\":\"Bash\",\"input\":{}}]}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[\"tool_result\",{\"type\":\"text\",\"text\":\"SUPPRESSED-BY-STEP-2\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a block that is null",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:01:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu1\",\"name\":\"Bash\",\"input\":{}}]}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[null,{\"type\":\"text\",\"text\":\"SUPPRESSED-BY-STEP-2\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a block type outside the decided list, TOOL_RESULT",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:01:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu1\",\"name\":\"Bash\",\"input\":{}}]}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"TOOL_RESULT\",\"tool_use_id\":\"tu1\",\"content\":\"EXTERNAL\"},{\"type\":\"text\",\"text\":\"SUPPRESSED-BY-STEP-2\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a block type outside the decided list, web_search_tool_result",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:01:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu1\",\"name\":\"Bash\",\"input\":{}}]}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"web_search_tool_result\",\"content\":\"EXTERNAL\"},{\"type\":\"text\",\"text\":\"SUPPRESSED-BY-STEP-2\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a Codex content block that is a bare STRING",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[\"input_text\",{\"type\":\"input_text\",\"text\":\"SUPPRESSED-BY-STEP-2\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\",\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a Codex content block that is null",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[null,{\"type\":\"input_text\",\"text\":\"SUPPRESSED-BY-STEP-2\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\",\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a Codex content block type outside the decided list",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text_v2\",\"text\":\"EXTERNAL\"},{\"type\":\"input_text\",\"text\":\"SUPPRESSED-BY-STEP-2\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\",\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a Claude user record whose message is NOT a plain object",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"message\":\"hello\"}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a Claude assistant record whose message is NOT a plain object",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"message\":\"hello\"}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a Claude assistant record whose message.content is NOT an array",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":\"hello\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "block level: a Claude user record whose message.content is null",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":null}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "CONTROL: a declined Claude top-level type, system",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"system\",\"subtype\":\"hook\",\"content\":\"hook ran\"}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
+  },
+  {
+    "name": "CONTROL: a declined Claude top-level type, attachment",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"attachment\",\"attachment\":{\"kind\":\"note\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
+  },
+  {
+    "name": "CONTROL: a Claude top-level type this repository has never seen",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"wienerdog_unseen_envelope\",\"detail\":{\"note\":\"future\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
+  },
+  {
+    "name": "CONTROL: a Codex payload.type of reasoning",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"reasoning\",\"summary\":[]}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
+  },
+  {
+    "name": "CONTROL: a normal session_meta header followed by a tool-free final_answer",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
+  },
+  {
+    "name": "CONTROL: a thinking block",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:03:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"weighing it up\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
+  },
+  {
+    "name": "CONTROL: an image block beside a text block",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"AA==\"}},{\"type\":\"text\",\"text\":\"look at this\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "look at this",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "CONTROL: a Codex input_image block",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,AA==\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.image\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
+  },
+  {
+    "name": "CONTROL: a Codex message whose content_item_kinds is MISALIGNED with content",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"},{\"type\":\"input_text\",\"text\":\"b\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
+  },
+  {
+    "name": "(a) a tool_result block inside an attachment record",
+    "criterion": "AC3d",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"attachment\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"tu1\",\"is_error\":false,\"content\":\"EXTERNAL\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ],
+    "rawTexts": [
+      "go",
+      "ok"
+    ]
+  },
+  {
+    "name": "(b) a tool_result block inside an unfamiliar top-level type",
+    "criterion": "AC3d",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"wienerdog_unseen_envelope\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"tu1\",\"is_error\":false,\"content\":\"EXTERNAL\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ],
+    "rawTexts": [
+      "go",
+      "ok"
+    ]
+  },
+  {
+    "name": "(c) a tool_result block inside an assistant record",
+    "criterion": "AC3d",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"tu1\",\"is_error\":false,\"content\":\"EXTERNAL\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ],
+    "rawTexts": [
+      "go",
+      "ok"
+    ]
+  },
+  {
+    "name": "(d) a tool_result block inside an isMeta: true user record",
+    "criterion": "AC3d",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"tu1\",\"is_error\":false,\"content\":\"EXTERNAL\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ],
+    "rawTexts": [
+      "go",
+      "ok"
+    ]
+  },
+  {
+    "name": "CONTROL: an attachment record carrying only a text block",
+    "criterion": "AC3d",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"attachment\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"attached note\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ],
+    "rawTexts": [
+      "go",
+      "ok"
+    ]
+  },
+  {
+    "name": "CONTROL: an unfamiliar top-level type carrying only a text block",
+    "criterion": "AC3d",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"wienerdog_unseen_envelope\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"future note\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ],
+    "rawTexts": [
+      "go",
+      "ok"
+    ]
+  },
+  {
+    "name": "CONTROL: a tool_use block with no paired result, in an assistant record",
+    "criterion": "AC3d",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:01:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu1\",\"name\":\"Bash\",\"input\":{}}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ],
+    "rawTexts": [
+      "go",
+      "ok"
+    ]
+  },
+  {
+    "name": "first-header latch: a FIRST session_meta whose payload is null leaves the rollout ineligible",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":null}",
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"copied history\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"copied conclusion\"}]}}"
+    ],
+    "texts": [],
+    "flags": []
+  },
+  {
+    "name": "first-header latch: a FIRST session_meta with NO payload key at all leaves the rollout ineligible",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\"}",
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"copied history\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"copied conclusion\"}]}}"
+    ],
+    "texts": [],
+    "flags": []
+  },
+  {
+    "name": "first-header latch: a FIRST session_meta whose payload is a STRING leaves the rollout ineligible",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":\"codex-tui\"}",
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"copied history\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"copied conclusion\"}]}}"
+    ],
+    "texts": [],
+    "flags": []
+  },
+  {
+    "name": "first-header latch: a FIRST session_meta whose payload is an ARRAY leaves the rollout ineligible",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":[]}",
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"copied history\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"copied conclusion\"}]}}"
+    ],
+    "texts": [],
+    "flags": []
+  },
+  {
+    "name": "first-header latch CONTROL: a valid first header then a malformed LATER session_meta taints but keeps the dialogue",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"session_meta\",\"payload\":null}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is an object with a null toString (the throwing shape) is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":{\"toString\":null}},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is a plain object is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":{\"a\":1}},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is a number is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":123},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is null is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":null},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is an array is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":[\"x\"]},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: CONTROL a Claude text block whose text is a normal string is accepted",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"first half\"},{\"type\":\"text\",\"text\":\"second half\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "first half\n\nsecond half",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude record whose ONLY text block has a non-string text supplies no dialogue and does not taint",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":{\"toString\":null}}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
+  }
+]
