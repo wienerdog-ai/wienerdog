@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b56c-602d-7ff2-91aa-1894060ed03e",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r5",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: the new root filter can silently bypass the unreadable-root safeguard and leave live jobs behind.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve root-resolution errors before applying D14\",\n      \"body\": \"D14 filters roots through contains(), but that helper catches every realpathSync error and returns false (src/core/manifest.js:1097–1104). An EACCES or EIO resolving an otherwise in-home scheduler root therefore excludes it before D9 can enumerate it and report it as unreadable. Executing the unchanged helper with an injected EACCES confirmed this exclusion. With scheduler authority present and the job missing from the manifest, uninstall would skip the live probe, attempt no unload, and remove the core around the live job—the failure D9 was meant to prevent.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 317,\n      \"line_end\": 317,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require root classification to distinguish confirmed external or absent roots from resolution failures. Report non-absence resolution errors through unreadable and abort before mutation; retain the external-root exclusion without relying solely on contains()'s boolean result.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Add regression coverage for EACCES and EIO during root canonicalization, asserting that uninstall aborts before removing any files.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch: the new root filter can silently bypass the unreadable-root safeguard and leave live jobs behind.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Preserve root-resolution errors before applying D14",
+        "body": "D14 filters roots through contains(), but that helper catches every realpathSync error and returns false (src/core/manifest.js:1097–1104). An EACCES or EIO resolving an otherwise in-home scheduler root therefore excludes it before D9 can enumerate it and report it as unreadable. Executing the unchanged helper with an injected EACCES confirmed this exclusion. With scheduler authority present and the job missing from the manifest, uninstall would skip the live probe, attempt no unload, and remove the core around the live job—the failure D9 was meant to prevent.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 317,
+        "line_end": 317,
+        "confidence": 0.99,
+        "recommendation": "Require root classification to distinguish confirmed external or absent roots from resolution failures. Report non-absence resolution errors through unreadable and abort before mutation; retain the external-root exclusion without relying solely on contains()'s boolean result."
+      }
+    ],
+    "next_steps": [
+      "Add regression coverage for EACCES and EIO during root canonicalization, asserting that uninstall aborts before removing any files."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: the new root filter can silently bypass the unreadable-root safeguard and leave live jobs behind.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve root-resolution errors before applying D14\",\n      \"body\": \"D14 filters roots through contains(), but that helper catches every realpathSync error and returns false (src/core/manifest.js:1097–1104). An EACCES or EIO resolving an otherwise in-home scheduler root therefore excludes it before D9 can enumerate it and report it as unreadable. Executing the unchanged helper with an injected EACCES confirmed this exclusion. With scheduler authority present and the job missing from the manifest, uninstall would skip the live probe, attempt no unload, and remove the core around the live job—the failure D9 was meant to prevent.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 317,\n      \"line_end\": 317,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Require root classification to distinguish confirmed external or absent roots from resolution failures. Report non-absence resolution errors through unreadable and abort before mutation; retain the external-root exclusion without relying solely on contains()'s boolean result.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Add regression coverage for EACCES and EIO during root canonicalization, asserting that uninstall aborts before removing any files.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
