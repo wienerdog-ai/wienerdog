@@ -30,7 +30,7 @@ So the swap closes it, and the field still fills its cap exactly.
 ## 2. The detector's oversized cliff, which the swap exposes
 
 `redactOnly('x'.repeat(300 * 1024))` returns
-`[wienerdog: oversized content withheld from secret scan]` — 55 characters —
+`[wienerdog: oversized content withheld from secret scan]` — 56 characters —
 because `Buffer.byteLength > ScanLimits.SCAN_MAX_BYTES` (262144) skips the scan
 entirely. Applying `.slice(0, 2000)` to that keeps all 55. This is why
 `WP-secret-sink-redact-before-truncate` carries an owner item: after the swap, a

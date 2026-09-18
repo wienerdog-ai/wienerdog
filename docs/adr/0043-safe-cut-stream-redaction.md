@@ -49,23 +49,37 @@ decides it rather than re-wording the same mechanism.
    partition the stream in order, and their concatenation is what reaches the log.
    Nothing is dropped and nothing is reordered.
 
-2. **A region ends only at an accepted cut point, and the accepted set is
-   enumerated positively.** A cut between the buffered bytes and the rest is
-   accepted when **all three** hold — this is the whole set; there is no
-   forbidden-set to keep closed:
-   - **C1 — the cut follows a line terminator** (the preceding character is `\n`).
-   - **C2 — the line before the cut does not end in an open key binder**: a
-     detector sensitive keyword, optional bounded filler, an optional quote,
-     optional whitespace, an optional separator token, an optional quote. Four
-     rule families (legacy `key=value`, JSON `"key": "value"`, extended
-     assignment, `Bearer <token>`) complete across a line break when the key ends
-     one line and the value begins the next; measured 2026-09-18.
-   - **C3 — no private-key block is open**: the buffered bytes contain no
-     `-----BEGIN … PRIVATE KEY-----` without its matching `-----END … PRIVATE
-     KEY-----`. That is the one rule whose body spans arbitrarily many lines.
+2. **A region ends only at an accepted cut point; the accepted set is enumerated
+   positively, and every condition is about an INCOMPLETE MATCH over the whole
+   buffered prefix `P`, never about `P`'s last line.** A cut is safe exactly when
+   no rule that could still complete on bytes yet to arrive has already begun in
+   `P`. A cut is accepted when **all four** hold — this is the whole set; there is
+   no forbidden-set to keep closed:
+   - **C1 — `P` ends with a line terminator** (`\n`).
+   - **C2 — no open key binder at the end of `P`**: `P` does not end with a
+     detector sensitive keyword (or `authorization`) followed only by — each
+     optional, in order — one quote, whitespace, **one** separator token,
+     whitespace, one quote. **That whitespace spans line breaks, CR and LF
+     included**, so the keyword may sit any number of blank lines back. Four rule
+     families complete this way because their separator group is `\s*` or `\s+`:
+     legacy `key=value`, the JSON `"key": "value"` key half, extended assignment
+     and `Bearer <token>`.
+   - **C3 — no open sensitive quoted value in `P`**: no `"<sensitive key>"`
+     followed by `\s*:\s*` and an opening `"` that `P` never closes. The JSON
+     rule's value class is `[^"\\]`, which **includes `\n`**, so a quoted value
+     stays open across arbitrarily many lines.
+   - **C4 — no open private-key block in `P`**: no `-----BEGIN … PRIVATE
+     KEY-----` without its matching `-----END … PRIVATE KEY-----`. That is the one
+     rule whose body spans arbitrarily many lines.
+
+   **A last-line predicate is not sufficient, and that was round 1's finding.**
+   Seven shapes — among them `password:`⏎⏎`value`, `password`⏎`:`⏎`value` and a
+   JSON value left open two lines back — are redacted when scanned whole and leak
+   across a cut such a predicate permits, all far below the bound of decision 4
+   (measured 2026-09-18).
 
 3. **The predicate is the detector's, derived from the detector's own
-   constants.** C2 and C3 live in the module that owns the rules
+   constants.** C2, C3 and C4 live in the module that owns the rules
    (`src/core/secret-scan.js`'s constants), and C2's keyword and separator sets
    are **derived from the same `SENSITIVE_KEYS` and `SEP` constants the rules are
    built from** — never written out a second time. A rule added later that can
@@ -87,9 +101,20 @@ decides it rather than re-wording the same mechanism.
 
 6. **The transform starts nothing** (ADR-0004): it is a plain synchronous
    function over strings, holds no file descriptor, no timer and no process, and
-   its state dies with the call that created it. It is flushed once when the
-   stream it filters ends, and the flush is ordinary buffered text, scanned the
-   same way.
+   its state dies with the call that created it. The flush is ordinary buffered
+   text, scanned the same way.
+
+7. **Buffering creates a shutdown obligation, and the sink owns it.** Holding
+   bytes means there is now a state in which output exists but has not been
+   written, so **every path that closes the log must flush first**. A sink that
+   buffers therefore exposes an explicit, idempotent shutdown step: flush every
+   redactor it owns, then latch closed so that any later handler call — from a
+   child that outlived the run and still holds the pipe — writes nothing. A pipe
+   `'end'` event is **not** a sufficient trigger on its own: a watchdog timeout
+   can close the log while the child survives, and without the explicit step the
+   buffered text is either lost or written into an already-ended stream (round 1,
+   HEAVY 2). This is a cost the per-chunk design did not have, and it is the price
+   of decision 1.
 
 ## Consequences
 
@@ -122,7 +147,8 @@ decides it rather than re-wording the same mechanism.
   (`private-key`, `Bearer`, legacy assignment, JSON value, extended assignment,
   and the keyword-bound entropy tier through those separators), and an
   unconditional newline cut would stop catching them everywhere instead of only
-  at chunk boundaries. C2 and C3 exist exactly to keep those cases.
+  at chunk boundaries. C2, C3 and C4 exist exactly to keep those cases, and each
+  is stated over the whole buffered prefix rather than its last line.
 - **Buffer the whole stream and scan once at exit.** Unbounded memory, no live
   log, and it reopens precisely the WP-118 surface the 2026-07-17 record named.
 - **Scan a sliding window with an overlap and write the overlap's output once.**

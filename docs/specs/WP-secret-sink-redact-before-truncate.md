@@ -23,7 +23,7 @@ replaced inline by `[REDACTED:<label>]`; for example the `anthropic-key` rule
 (`/sk-ant-[A-Za-z0-9\-_]{20,}/g`) turns a 48-character key into the 24-character
 token `[REDACTED:anthropic-key]`. The detector is **total and fail-closed**: a
 non-string becomes `''`; an input over `ScanLimits.SCAN_MAX_BYTES` (262144) is
-**not scanned at all** and the whole input is replaced by the fixed 55-character
+**not scanned at all** and the whole input is replaced by the fixed 56-character
 string `[wienerdog: oversized content withheld from secret scan]`; any internal
 error returns `[wienerdog: secret scan failed — content withheld]`. It never
 throws and never returns raw text on a degraded path.
@@ -124,7 +124,7 @@ coercion, same null handling, same cap, same variable names.
 
 The one behaviour change beyond the leak is at the detector's oversized cliff,
 and it is deliberate: a field longer than `SCAN_MAX_BYTES` (262144 bytes) is
-**not scanned**, so `redactOnly` returns the 55-character oversized marker and
+**not scanned**, so `redactOnly` returns the 56-character oversized marker and
 the cap keeps all of it. Such a field therefore becomes
 `[wienerdog: oversized content withheld from secret scan]` instead of its first
 2000 characters. That is fail-closed and visible, and it is the only order in
@@ -322,7 +322,7 @@ review finding updates the table and all its mirrors **in the same commit**
 
 ### Accepted residuals
 
-1. **A field over 262144 bytes loses its content.** It becomes the 55-character
+1. **A field over 262144 bytes loses its content.** It becomes the 56-character
    oversized marker instead of its first 2000 characters, so a very large alert
    `reason` stops being diagnosable. Priced and accepted in "Exact contracts":
    the alternative — falling back to a pre-cut above some size — restores the

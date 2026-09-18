@@ -29,7 +29,7 @@ Wienerdog has **one** shared secret detector, `src/core/secret-scan.js`
 `SEVERITY` and `hasHardFinding`. Matches are replaced inline by
 `[REDACTED:<label>]`. The module is **pure, synchronous, total and fail-closed**:
 a non-string becomes `''`; an input over `ScanLimits.SCAN_MAX_BYTES` (262144) is
-**not scanned at all** and is replaced wholesale by the fixed 55-character string
+**not scanned at all** and is replaced wholesale by the fixed 56-character string
 `[wienerdog: oversized content withheld from secret scan]`; an internal error
 returns `[wienerdog: secret scan failed — content withheld]`. It never throws and
 never returns raw text on a degraded path. It is stateless and has no incremental
@@ -52,7 +52,7 @@ The accepted set is enumerated positively in **Table S** (it is our own grammar,
 so it can be closed); a bound on region length is the only thing that can force
 an unaccepted cut, and that forced cut is ADR-0043's stated residual.
 
-Why a cut at just any newline would be wrong, and why Table S has three
+Why a cut at just any newline would be wrong, and why Table S has four
 conditions rather than one: **six rule families match across a line break**
 (measured 2026-09-18 against the shipped detector) — `private-key` (its body is
 `[\s\S]*?`), `Bearer <token>` (`\s+`), the legacy `key=value` assignment, the
@@ -74,7 +74,7 @@ state dies with the call that created it.
 Measured on `main` at **`08de2bc3`**. Line numbers disambiguate; grep for the
 cited construct, which is what authenticates it.
 
-- `src/core/secret-scan.js` — the detector, 326 lines. Module exports at `:325`:
+- `src/core/secret-scan.js` — the detector, 325 lines. Module exports at `:325`:
   `{ scanAndRedact, redactOnly, hasHardFinding, ScanLimits, SEVERITY }`.
   Relevant private constants this WP's predicate must be **derived from, never
   restate**: `ScanLimits` (`:21-26`, with `SCAN_MAX_BYTES: 256 * 1024` at `:22`
@@ -106,8 +106,8 @@ cited construct, which is what authenticates it.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/secret-scan.js | add `createStreamRedactor` per "Exact contracts" and Table S, add `STREAM_REGION_MAX` to `ScanLimits` per Table B, export the new function; change no existing rule, constant value or exported behaviour |
-| modify | tests/unit/secret-scan.test.js | add the suite the acceptance criteria require, including the three exactly-named tests of Table D; change no existing test |
-| create | tests/red-proofs/secret-stream-safe-cut.proofs.json | Table D rows D1, D2 and D3 only; `suite` is `tests/unit/secret-scan.test.js` |
+| modify | tests/unit/secret-scan.test.js | add the suite the acceptance criteria require, including the four exactly-named tests of Table D; change no existing test |
+| create | tests/red-proofs/secret-stream-safe-cut.proofs.json | Table D rows D1 through D4 only; `suite` is `tests/unit/secret-scan.test.js` |
 
 Add nothing else to those files.
 
@@ -170,25 +170,42 @@ declarations).
 
 ### Table S — canonical: the accepted cut set
 
-A cut between buffer position `i-1` and `i` is **accepted** when **all three**
+A cut between buffer position `i-1` and `i` is **accepted** when **all four**
 rows hold on the buffered text `P = buffer[0 .. i)`. This table is the whole set:
 there is no forbidden-set to keep closed, and anything not accepted here is not a
 cut.
 
-| # | Condition | What it keeps whole | Derivation (never restate a pattern) |
-|---|-----------|---------------------|--------------------------------------|
-| S1 | The character at `i-1` is `\n`. | Every rule whose pattern cannot contain a newline: the twelve labelled provider-prefix rules, `basic-auth`, and both entropy tiers (`hasBoundContext` never crosses `\n`, `src/core/secret-scan.js:228`). | — |
-| S2 | The final line of `P` (the text after its last `\n`, or all of `P` if it has none) does **not** end in an open key binder: a keyword from the detector's own `SENSITIVE_KEYS` alternation or the literal `authorization`, then up to `ScanLimits.ENTROPY_CTX_FILLER_MAX` characters of `[ \t\w.-]` filler, then optionally each of — one quote (`"`, `'` or backtick), horizontal whitespace, one separator token from the detector's own `SEP` alternation, horizontal whitespace, one quote — anchored to the line's end. | The four rule families that complete across a line break when the key ends one line and the value begins the next: legacy `key=value` (`:107-114`), the JSON `"key": "value"` value rule (`:128-137`), the extended assignment rule (`:140-148`), and `Bearer <token>` (`:101-105`). All four are measured to span a newline. | Built from `SENSITIVE_KEYS` (`:43-44`) and `SEP` (`:189`) by interpolation, exactly as `CTX_BINDER` (`:203-208`) is. `CTX_BINDER` itself is **not** reusable: it requires the separator, and `Bearer <token>` has none. |
-| S3 | `P` contains no `-----BEGIN` … `PRIVATE KEY-----` opener without a later matching `-----END` … `PRIVATE KEY-----` closer. | `private-key` (`:82`), the one rule whose body spans arbitrarily many lines. | The opener/closer shapes come from that rule's own pattern; count openers and closers in `P` rather than re-implementing the rule. |
+**Every condition is a statement about an INCOMPLETE MATCH over the whole of
+`P`, never about `P`'s last line.** That distinction is the round-1 design
+finding and it is load-bearing: a cut is safe exactly when no rule that could
+still complete on the bytes yet to arrive has already begun in `P`. A last-line
+predicate is blind to `password:\n\n`, to `password\n:\n` and to a quoted JSON
+value left open several lines back, and all three were measured to leak across a
+cut that such a predicate permits (round-1 logbook, HEAVY 1).
 
-**S2 is deliberately conservative.** Because the separator is optional, a line
-ending in the bare word `token` or `password` also blocks a cut. The cost is that
-the region grows by one line; the benefit is that `Bearer` and the quote-first
-JSON shape are covered without a second predicate. A blocked cut is never a leak.
+| # | Condition on `P` | What it keeps whole | Derivation (never restate a pattern) |
+|---|------------------|---------------------|--------------------------------------|
+| S1 | `P` ends with `\n` (`P` empty ⇒ no cut). | Every rule whose pattern cannot contain a newline: the twelve labelled provider-prefix rules, `basic-auth`, and both entropy tiers (`hasBoundContext` never crosses `\n`, `src/core/secret-scan.js:228`). | — |
+| S2 | **No open key binder at the end of `P`.** `P` does not end with: a keyword from the detector's own `SENSITIVE_KEYS` alternation, or `authorization`; then, in this order and each optional — one quote (`"`, `'` or backtick), whitespace, **one** separator token from the detector's own `SEP` alternation, whitespace, one quote. **The whitespace spans line breaks, CR and LF included**, so the keyword may sit any number of blank lines back. | The four rule families that complete across a line break because their separator group is `\s*` or `\s+`: legacy `key=value` (`:107-114`), the JSON `"key": "value"` key half (`:128-137`), the extended assignment rule (`:140-148`) and `Bearer <token>` (`:101-105`). Measured shapes it must refuse: `password:\n`, `password:\r\n`, `password\n`, `password\n:\n`, `"client_secret"\n`. | Built by interpolating `SENSITIVE_KEYS` (`:43-44`) and `SEP` (`:189`), as `CTX_BINDER` (`:203-208`) is. `CTX_BINDER` itself is **not** reusable: it is anchored to one line and it requires the separator, which `Bearer <token>` has none of. |
+| S3 | **No open sensitive quoted value in `P`.** `P` contains no `"<key>"` (key from `SENSITIVE_KEYS`) followed by `\s*:\s*` and an opening `"` with no closing `"` after it. | The JSON value rule's body is `[^"\\]{8,}`, which **includes `\n`** — a quoted value stays open across arbitrarily many lines until its closing quote. Measured shape it must refuse: `"client_secret":\n  "abc\n`. | The key set is `SENSITIVE_KEYS`; the quote and separator shapes come from that rule's own pattern (`:130`). Track the open/closed state over `P`, do not re-implement the rule. |
+| S4 | **No open private-key block in `P`.** `P` contains no `-----BEGIN` … `PRIVATE KEY-----` opener without a later matching `-----END` … `PRIVATE KEY-----` closer. | `private-key` (`:82`), whose body is `[\s\S]*?` and spans arbitrarily many lines. | The opener/closer shapes come from that rule's own pattern; count openers and closers in `P`. |
 
-**A rule added to `RULES` later that can match across a line break must extend
-this table and the predicate in the same change** (ADR-0043 decision 3). A rule
-that cannot is covered by S1 and needs nothing.
+**S2 and S3 are deliberately conservative.** The separator is optional in S2, so a
+line ending in the bare word `token` or `password` also blocks a cut, and S3
+blocks until a quote closes. The cost is that the region grows by a line or two;
+the benefit is that the `Bearer`, quote-first and blank-line shapes are covered
+without a fourth predicate. A blocked cut is never a leak, and the Table B bound
+is what keeps a permanently-blocked cut from growing the buffer.
+
+**These conditions are complete against today's rule list, and here is the
+argument.** A rule can be split by a cut only if its pattern can match a `\n`.
+Reading `RULES` (`src/core/secret-scan.js:79-156`) rule by rule, exactly six can:
+`private-key` (S4), the JSON value rule (S3 for its body, S2 for its key half),
+the legacy assignment, the extended assignment and `Bearer` (S2). Every other
+rule's alphabet excludes `\n`, so S1 alone keeps it whole. **A rule added to
+`RULES` later that can match across a line break must extend this table and the
+predicate in the same change** (ADR-0043 decision 3); one that cannot is covered
+by S1 and needs nothing.
 
 ### Table B — canonical: the bound and the forced cut
 
@@ -197,24 +214,60 @@ that cannot is covered by S1 and needs nothing.
 | Constant | `ScanLimits.STREAM_REGION_MAX`, added to the existing `ScanLimits` object; the tests import that one definition rather than a literal |
 | Value | `32 * 1024` **characters** |
 | Why this value, upper side | A region is scanned by one `redactOnly` call, and the detector does **not scan** an input over `SCAN_MAX_BYTES` (262144 bytes) — it replaces the whole input by its oversized marker, which would silently delete real log output. UTF-8 is at most 4 bytes per character, so `STREAM_REGION_MAX * 4 = 131072 < 262144` keeps every region scannable in the worst case |
-| Why this value, lower side | It must exceed one ordinary log line by a wide margin, so a forced cut is not the normal path. Larger values buy nothing: a cut is taken as soon as one is accepted, so the bound is reached only by a single logical line (or an open PEM, or an unbroken run of binder-terminated lines) longer than 32768 characters |
+| Why this value, lower side | It must exceed one ordinary log line by a wide margin, so a forced cut is not the normal path. Larger values buy nothing: a cut is taken as soon as one is accepted, so the bound is reached only by a single logical line (or an open PEM block, an open quoted sensitive value, or an unbroken run of binder-terminated lines) longer than 32768 characters |
 | Memory ceiling | one buffer per redactor instance, at most `STREAM_REGION_MAX` characters held. `WP-secret-sink-chunk-fix` creates four instances (one per stream per sink), so at most 4 × 32768 characters are ever held |
 | Forced cut | the only unaccepted cut. It ends the region at exactly `STREAM_REGION_MAX` characters and is ADR-0043 decision 5's residual: a secret can still be split by it |
-| Adversarial case, priced | a child that emits `-----BEGIN RSA PRIVATE KEY-----` and then never closes it, or one long unbroken line, forces a cut every `STREAM_REGION_MAX` characters. That is bounded work and bounded memory, and it degrades to the pre-fix chunk behaviour for that stream — never worse, and never unbounded |
+| Adversarial case, priced | a child that emits `-----BEGIN RSA PRIVATE KEY-----` or `\"token\": \"` and then never closes it, or one long unbroken line, forces a cut every `STREAM_REGION_MAX` characters. That is bounded work and bounded memory, and it degrades to the pre-fix chunk behaviour for that stream — never worse, and never unbounded |
 
 ### Table D — canonical: the declared RED proofs (ADR-0042)
 
-Each declaration removes exactly one of Table S's three conditions from the
+Each declaration removes exactly one of Table S's four conditions from the
 accepted-cut predicate and requires the one test that condition exists for to
-fail. The three test names below are **fixed by this spec** because the
-declarations mirror them; the rest of the suite's names, shapes and fixtures are
-the implementer's.
+fail. **D2, D3 and D4 are the RED baseline for the predicate**: each is a shape
+measured on 2026-09-18 to be redacted when scanned whole and to leak across a cut
+a weaker predicate permits (round-1 logbook, HEAVY 1). The four test names below
+are **fixed by this spec** because the declarations mirror them; the rest of the
+suite's names, shapes and fixtures are the implementer's.
 
 | # | Test name (exact) | What the test feeds | Mutation (semantics) | `testNamePattern` |
 |---|-------------------|---------------------|----------------------|-------------------|
 | D1 | `stream-redactor: a labelled secret split across two pushes is redacted whole` | `push(head)` then `push(tail + '\n')` where `head + tail` is one `sk-ant-…` key | make `push` emit its input immediately instead of buffering to an accepted cut (i.e. defeat S1 — every position becomes a cut) | `split across two pushes` |
-| D2 | `stream-redactor: a sensitive key and its value on the next line are redacted whole` | `push('password:\n')` then `push('  <12+ char value>\n')` | drop Table S row S2 from the predicate | `on the next line` |
-| D3 | `stream-redactor: a private-key block split across two pushes is redacted whole` | the `-----BEGIN`/body/`-----END` lines split across two pushes | drop Table S row S3 from the predicate | `private-key block split` |
+| D2 | `stream-redactor: a sensitive key whose value arrives on a later line is redacted whole` | **all four measured shapes**, each as two or more pushes split at a `\n`: `password:` ⏎ value; `password:` ⏎ ⏎ value; `password` ⏎ `:` ⏎ value; and the CRLF form of the second | drop Table S row S2 from the predicate | `value arrives on a later line` |
+| D3 | `stream-redactor: a quoted sensitive JSON value left open across a line break is redacted whole` | `push('"client_secret":\n  "abc\n')` then `push('defghijkl"\n')` | drop Table S row S3 from the predicate | `left open across a line break` |
+| D4 | `stream-redactor: a private-key block split across two pushes is redacted whole` | the `-----BEGIN`/body/`-----END` lines split across two pushes | drop Table S row S4 from the predicate | `private-key block split` |
+
+**The seven measured leak shapes, byte-exact (AC3a).** Each is one text; every
+one is redacted when `redactOnly` scans it whole, and every one leaks when a
+last-line-only predicate permits a cut at one of its `\n`s (measured 2026-09-18).
+They are published here rather than in table cells because the embedded newlines
+and leading spaces are load-bearing. `V` below is the literal
+`hunter2hunter2hunter2` (21 characters). The `# L<n>` lines are labels; `<CRLF>`
+means the same two lines with `\r\n` line endings throughout.
+
+```text
+# L1
+password:
+  V
+# L2
+password:
+
+V
+# L3
+password
+:
+V
+# L4
+password
+: V
+# L5
+"client_secret":
+  "abc
+defghijkl"
+# L6
+"client_secret"
+: "abcdefghijkl"
+# L7 = L2 <CRLF>
+```
 
 **Which fields this spec fixes and which the implementer fills.** The code these
 declarations mutate does not exist yet, so:
@@ -224,12 +277,12 @@ declarations mutate does not exist yet, so:
 | `suite` (`tests/unit/secret-scan.test.js`), `file` (`src/core/secret-scan.js`), `wp`, `criterion` (`AC6`) | this spec — Deliverables and the acceptance criteria |
 | `expectRed[].test` | this spec — Table D's `Test name` cell, verbatim, one-element array |
 | `testNamePattern` | this spec — Table D's cell; the implementer **may narrow** it if the mutation reddens a test beyond the declared one |
-| `id` | this spec — `stream-cut-s1-no-buffering`, `stream-cut-s2-open-binder`, `stream-cut-s3-open-pem`; kebab, unique across the whole declaration directory |
+| `id` | this spec — `stream-cut-s1-no-buffering`, `stream-cut-s2-open-binder`, `stream-cut-s3-open-quoted`, `stream-cut-s4-open-pem`; kebab, unique across the whole declaration directory |
 | `find`, `replace`, `marker`, `occurrences`, `why` | **the implementer**, against their own code, per the runner's rules below |
 
-**This constrains the implementation, and deliberately so:** each of D1, D2 and
-D3 must be expressible as **one exact-substring replacement**. If your predicate
-cannot be mutated that way, restructure it until it can (three separately named
+**This constrains the implementation, and deliberately so:** each of D1 through
+D4 must be expressible as **one exact-substring replacement**. If your predicate
+cannot be mutated that way, restructure it until it can (four separately named
 boolean sub-checks is the obvious shape) — ADR-0042 declarations are a shipping
 requirement, not an optional extra. Do not weaken a mutation to make it fit.
 
@@ -256,20 +309,22 @@ review finding updates the table and all its mirrors **in the same commit**
 
 - [ ] **Deliverables-table cells** — the `src/core/secret-scan.js` row (cites
       Table S and Table B rather than restating either), the
-      `tests/unit/secret-scan.test.js` row (Table D's three names) and the
-      declaration row (Table D's three row ids).
+      `tests/unit/secret-scan.test.js` row (Table D's four names) and the
+      declaration row (Table D's four row ids).
 - [ ] **Acceptance criteria** — AC1 (the exported shape), AC2 (the region
-      contract), AC3 (the three accepted-cut conditions), AC4 (the bound and the
-      forced cut), AC5 (totality and purity), AC6 (the declarations).
+      contract), AC3 and AC3a (the four accepted-cut conditions and the seven measured
+      leak shapes), AC4 (the bound and the forced cut), AC5 (totality and purity), AC6 (the declarations).
 - [ ] **Verification commands / greps** — the export grep; the
       `STREAM_REGION_MAX` definition grep and its `4 × value < SCAN_MAX_BYTES`
-      assertion (Table B); the three Table D test names; the
+      assertion (Table B); the four Table D test names; the
       no-timer/no-fd/no-process greps (ADR-0004); the declaration-shape check and
       `npm run red-proofs`; the permission-boundary whitelist.
 - [ ] **Current-state description** — the constants the predicate derives from
       and their line numbers, the `CTX_BINDER`-is-not-reusable note, the two
       precedent modules, and the `tests/red-proofs/` count.
-- [ ] **Operative prose steps** — the Context paragraph naming the six
+- [ ] **Operative prose steps** — Table S's incomplete-match preamble, its
+      conservatism note and its completeness argument over `RULES`; the
+      Context paragraph naming the six
       newline-spanning rule families; the whole of "Exact contracts" (the region
       contract, `push`, `end`, totality); Table S's conservatism note and its
       new-rule obligation; Table B's adversarial row; "Accepted residuals"; the
@@ -308,8 +363,8 @@ review finding updates the table and all its mirrors **in the same commit**
 ### Accepted residuals
 
 1. **A forced cut can still split a secret** (Table B). It needs a single logical
-   line, an open PEM block, or an unbroken run of binder-terminated lines longer
-   than 32768 characters. This is ADR-0043 decision 5's residual and it replaces
+   line, an open PEM block, an open quoted sensitive value, or an unbroken run of
+   binder-terminated lines longer than 32768 characters. This is ADR-0043 decision 5's residual and it replaces
    a residual that fired at every chunk boundary.
 2. **This WP leaks nothing and fixes nothing.** It has no caller; the four
    `WD-SINK-CHUNK-*` defects are open at merge and their probes stay green.
@@ -366,10 +421,16 @@ review finding updates the table and all its mirrors **in the same commit**
       return plus the `end` return equals the concatenation of `redactOnly`
       applied to that run's regions, in order, and the regions reconstruct the
       input exactly. No characters dropped, none duplicated, none reordered.
-- [ ] **AC3** — Each of Table S's three conditions is exercised by at least one
-      test that fails when that condition alone is removed, including the three
+- [ ] **AC3** — Each of Table S's four conditions is exercised by at least one
+      test that fails when that condition alone is removed, including the four
       exactly-named tests of Table D. A secret split across two `push` calls at
       an arbitrary offset is redacted whole.
+- [ ] **AC3a** — The **seven measured leak shapes** of the round-1 logbook are
+      each covered by an assertion: fed as two or more pushes split at a `\n`,
+      every one produces exactly what `redactOnly` produces for the same text
+      scanned whole. The seven shapes are published literally under Table D.
+      Each of them **leaks under a last-line-only predicate**, which is what this
+      criterion exists to keep out.
 - [ ] **AC4** — `ScanLimits.STREAM_REGION_MAX` is `32 * 1024`; a test asserts
       `STREAM_REGION_MAX * 4 < SCAN_MAX_BYTES`; an input with no accepted cut
       point is emitted in regions of exactly `STREAM_REGION_MAX` characters and
@@ -380,7 +441,7 @@ review finding updates the table and all its mirrors **in the same commit**
       redactor; two redactor instances share no state; and the module still
       registers no timer, no event handler, no file descriptor and no process.
 - [ ] **AC6** — `tests/red-proofs/secret-stream-safe-cut.proofs.json` exists with
-      exactly Table D's three rows, and the bare unfiltered `npm run red-proofs`
+      exactly Table D's four rows, and the bare unfiltered `npm run red-proofs`
       reports `PROVEN` for this WP's criterion and exits 0.
 - [ ] **AC7** — `npm test` passes and exits 0; every existing
       `tests/unit/secret-scan.test.js` test still passes unchanged; the four
@@ -437,7 +498,7 @@ for pat in 'setInterval' 'setTimeout' 'setImmediate' 'nextTick' 'require(.node:f
   need "$(grep -cE "$pat" src/core/secret-scan.js || true)" 0 "no $pat in secret-scan.js"
 done
 
-# AC3/AC6 — Table D's three names, present and passing.
+# AC3/AC6 — Table D's four names, present and passing.
 TAP="$(mktemp)"
 node --test --test-reporter=tap tests/unit/secret-scan.test.js >"$TAP" 2>&1 || true
 while IFS= read -r n; do
@@ -446,7 +507,8 @@ while IFS= read -r n; do
   need "$(printf '%s\n' "$LINE" | grep -c '^not ok' || true)" 0 "Table D test passes: $n"
 done <<'NAMES'
 stream-redactor: a labelled secret split across two pushes is redacted whole
-stream-redactor: a sensitive key and its value on the next line are redacted whole
+stream-redactor: a sensitive key whose value arrives on a later line is redacted whole
+stream-redactor: a quoted sensitive JSON value left open across a line break is redacted whole
 stream-redactor: a private-key block split across two pushes is redacted whole
 NAMES
 need "$(grep -cE '^not ok ' "$TAP" || true)" 0 "failing tests in secret-scan.test.js"
@@ -463,10 +525,11 @@ const d = JSON.parse(raw);
 if (d.suite !== "tests/unit/secret-scan.test.js") { console.log(`GATE FAIL: suite ${d.suite}`); bad++; }
 const NAMES = {
   "stream-cut-s1-no-buffering": "stream-redactor: a labelled secret split across two pushes is redacted whole",
-  "stream-cut-s2-open-binder": "stream-redactor: a sensitive key and its value on the next line are redacted whole",
-  "stream-cut-s3-open-pem": "stream-redactor: a private-key block split across two pushes is redacted whole",
+  "stream-cut-s2-open-binder": "stream-redactor: a sensitive key whose value arrives on a later line is redacted whole",
+  "stream-cut-s3-open-quoted": "stream-redactor: a quoted sensitive JSON value left open across a line break is redacted whole",
+  "stream-cut-s4-open-pem": "stream-redactor: a private-key block split across two pushes is redacted whole",
 };
-if (!Array.isArray(d.proofs) || d.proofs.length !== 3) { console.log(`GATE FAIL: expected 3 proofs, got ${d.proofs && d.proofs.length}`); bad++; }
+if (!Array.isArray(d.proofs) || d.proofs.length !== 4) { console.log(`GATE FAIL: expected 4 proofs, got ${d.proofs && d.proofs.length}`); bad++; }
 for (const pr of d.proofs || []) {
   if (pr.wp !== "WP-secret-stream-safe-cut-redactor") { console.log(`GATE FAIL: ${pr.id} wp=${pr.wp}`); bad++; }
   if (pr.file !== "src/core/secret-scan.js") { console.log(`GATE FAIL: ${pr.id} file=${pr.file}`); bad++; }
@@ -476,7 +539,7 @@ for (const pr of d.proofs || []) {
   else if (pr.expectRed[0].test[0] !== NAMES[pr.id]) { console.log(`GATE FAIL: ${pr.id} expectRed name is not Table D verbatim`); bad++; }
   if (!fs.readFileSync(pr.file, "utf8").includes(pr.find)) { console.log(`GATE FAIL: ${pr.id} find does not occur in ${pr.file}`); bad++; }
 }
-console.log(bad ? "" : `ok: ${p} — 3 proofs, all mirroring Table D`);
+console.log(bad ? "" : `ok: ${p} — 4 proofs, all mirroring Table D`);
 process.exit(bad ? 1 : 0);
 JS
 
@@ -491,7 +554,7 @@ echo "ALL GATES PASSED"
 ```
 
 Both-sides evidence, per `docs/runbooks/spec-authoring.md`, is required for every
-check above and pasted into the PR. D1–D3 supply it mechanically for the three
+check above and pasted into the PR. D1–D4 supply it mechanically for the four
 named tests. For every other new check, observe and paste all three states:
 **absent** (the export, constant or file missing → red), **compliant** (→ green)
 and **violating** (→ red).
