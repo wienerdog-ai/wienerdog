@@ -10,6 +10,7 @@ Raw reviewer output committed **before** adjudication, as the runbook requires.
 | Round | Reviewer | Raw | Commit |
 |-------|----------|-----|--------|
 | 1 | Astra (design) | `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-r1-astra-raw.json`, `…-r1-astra-focus.txt` | `ee17ae94` |
+| 2 | Astra (design) | `docs/specs/logbook/2026-09-18-quarantine-only-copy-shelf-design-r2-astra-raw.json`, `…-r2-astra-focus.txt` | `051a2147` |
 
 Round zero reproduced probes `OC-P1`–`OC-P4` bit-for-bit and re-derived every
 citation. Round 1 verdict: `needs-attention`, three findings. **All three
@@ -34,3 +35,16 @@ matched a later occurrence and removed the `## Contract reference` and
 (`grep -n '^## '`), recovered from `HEAD`, and the row rewrites re-applied. No
 content was lost. Recorded here because an unnoticed truncation of the canonical
 table would have been the worst possible failure of this package.
+
+## Round 2
+
+The three-class restatement, the RED redesign and the `OC-P6` fixture all held.
+One finding, `needs-attention`. **Accepted in full.**
+
+| # | Finding | Band | Weight | Disposition |
+|---|---------|------|--------|-------------|
+| R2-A | Class C treats unproven or unequal copies as safe duplicates. `validate.js:1489-1504` retains those files *because* equivalence is unproven; executing the identity branch and the real prune with unequal copies retained both, then destroyed the `redacted/` version while the different withheld version survived — which rows O2/O8 called "no loss / housekeeping" and used to justify the retention decision. A class-A-only test cannot expose it | A | **HEAVY** | **ACCEPTED.** The round-1 class C was **inverted**, and the inversion is now named in row O1 so it is not re-made: the gate DELETES proven-identical copies at `:1499` and KEEPS the unproven ones at `:1502`, so the fall-through files that actually survive are overwhelmingly potential only-copies. Class C is split: **C1** = `identical === true` **and** the best-effort `rmSync` at `:1500` threw — a proven byte-identical twin exists, true housekeeping, and (per the `else` never running) **not on the preservation record**; **C2** = `identical === false` with `preserved` non-null (read threw, or buffers differ) — kept **and recorded** at `:1502-1503`, and **the code's own comment at `:1478-1481` calls it *"the only copy of a version of the user's note that exists anywhere"***. C2 is now treated exactly as A and B are. Rows **O2**, **O5**, **O8** and **owner item 1** re-derived: the lossless part shrinks to C1 alone, so the item the owner signs is *bounded loss with a rare housekeeping case*, not the reverse. Doc clauses are unchanged in substance — the round-1 "**may be** the only copy" hedge is what makes them honest for C2, and it now hedges for **C1** instead. Regression coverage added as **`[OC-2]`** (buffers differ) and **`[OC-3]`** (comparison read throws), both fixture-level via `patchFs`, both driving the fall-through with the withheld preserve **succeeding**; the Deliverables cell widens from one test to three. Neither asserts the prune: the eviction is what `[OC-1]` already measures, and re-asserting it per class would be a drifting duplicate |
+
+**Scope note.** `size: S` is retained: three tests in one already-listed file, one
+RED declaration, two doc clauses, and still **no `src/` change**. If round 3 adds
+a fourth class or a production path, the package should be split rather than grown.
