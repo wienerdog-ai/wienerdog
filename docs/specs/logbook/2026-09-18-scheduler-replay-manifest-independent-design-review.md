@@ -311,7 +311,53 @@ swallowed — is fixed by **pointing at D15**, not by adding a row for that site
 If a site is found that cannot follow the rule, that is a named residual, not a
 new predicate.
 
-## Round 7
+## Round 7 (Astra)
+
+- **Reviewed tip:** `7968bbcf` (round-6 uniform D15 applied).
+- **Raw + focus committed BEFORE adjudication:** `c3f9557a`.
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r7-astra-raw.json`
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r7-astra-focus.txt`
+- **Verdict:** `needs-attention` — *"act-time resolution failures can still leave
+  live jobs behind while uninstall deletes their core."*
+- **The uniform D15 held.** The finding is **the exception D15 carved out for
+  itself**, which is the sharper result: the rule was right and the carve-out was
+  the defect.
+
+### Disposition
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| 10 | **The "can only preserve" exception was false at whole-uninstall scope.** D6 dropped a discovered path when its act-time `lstat`/resolution failed and let reversal continue. Measured: a disclosed, unrecorded plist whose D5a re-check hits `EIO` gets **no unload**, while the manifest loop and `disposeCoreMechanics` remove the core around it; if the error clears before D5b, D5b's *independent* re-check would even permit deleting the plist with no unload ever attempted. **R-stripped-manifest-orphan recreated**, and distinct from `R-failed-unload` because **no spawn occurs** | A | HEAVY | **ACCEPTED; the exception is removed, not narrowed.** D6 rewritten: in phase D5a, `ENOENT`/`ENOTDIR` is **absence** (drop that item, record it, continue); **any other failure stops the uninstall** with D9's abort shape, naming the path and `code`, **before the manifest entry loop and before `disposeCoreMechanics`**. Phase **D5b acts only on the items D5a passed** and performs no independent re-check that could re-admit one; its own checks may only skip. D15's scope line now reads "in discovery **and** at act time", with absence as its single special case. AC 17 gains this as a **fifth outcome**; Table S row S12, the Security-checklist row and the RED declaration's mutation are restated to include the act-time site |
+
+### Why this does not weaken `reverse()`'s per-entry error isolation
+
+`manifest.js:842-846` exists so a throwing reverser cannot leave an install
+**partially reversed and permanently un-uninstallable** — *"every retry hit the
+same entry"*. D5a's abort is the opposite case: it fires **before any entry
+reverser has run**, so the manifest, the core and every file are intact and a
+retry is unaffected once the I/O condition clears. It is also the shape ADR-0041
+Decision 2 already mandates for `uninstall` — abort loudly, having deleted
+nothing. Recorded because a reader meeting the abort at that line will ask.
+
+### What the architect got wrong, recorded plainly
+
+The exception was written in round 6 with the reasoning *"at that point failing
+can only ever preserve"*. That is true **of the one path** and false **of the
+uninstall**, and `docs/runbooks/spec-authoring.md` already names the question
+that catches it: *if my conclusion were false, would this evidence have shown
+it?* The evidence considered was one path's fate; the claim quantified over the
+whole run. Two rounds in a row the gate has been the thing asking that question.
+
+### Convergence note, restated
+
+**D15 is uniform across discovery AND act time**, with absence
+(`ENOENT`/`ENOTDIR`) as its single exception, at every site. The shape was frozen
+in round 3; the resolution semantics in round 6; round 7 removes the last
+carve-out from them. A further finding of this family is fixed by **pointing at
+D15**, and a site that genuinely cannot follow it becomes a **named residual**,
+never a new predicate and never a new exception.
+
+## Round 8
 
 Pending. Per the coordinator's standing instruction, a clean or LIGHT-only round
 closes the gate.
