@@ -357,7 +357,39 @@ carve-out from them. A further finding of this family is fixed by **pointing at
 D15**, and a site that genuinely cannot follow it becomes a **named residual**,
 never a new predicate and never a new exception.
 
-## Round 8
+## Round 8 (Astra)
+
+- **Reviewed tip:** `bbee59a3` (round-7 D6 rewrite applied).
+- **Raw + focus committed BEFORE adjudication:** `a6734862`.
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r8-astra-raw.json`
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r8-astra-focus.txt`
+- **D6 and D15 held.** One band-A HEAVY finding and one band-B LIGHT.
+
+### Dispositions
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| 11 | **A preserved plist reloads at the next login.** D11 sets `remove: false` for a plist recorded as `kind:'file'`; the file reverser **also** preserves it, because `~/Library/LaunchAgents` is outside `withinAllowedRoot`'s root set (`manifest.js:742`, gate `:872-883`) — verified. D5a unloads the job, the core is removed, the plist survives, and under R5's login-reload behaviour the next login re-registers it against a deleted core. The unload **succeeded**, so `R-failed-unload` does not cover it, and the ADR-0041 amendment's unconditional "CLOSED" was unsupported | A | HEAVY | **ACCEPTED as a NAMED RESIDUAL, not a new mechanism** — the branch the round-6/7 convergence note reserved. New Table R row **R9**, `R-preserved-reloadable-plist`, with its reachability (hand-edited or corrupted manifest only; no code path records a schedule file as anything but `scheduler-entry`, `schedule.js:358`) and its comparison to `c05a575b` (where the same install gets **no unload at all** and the same surviving file, so this package is strictly narrower). The ADR-0041 amendment text is **narrowed** and gains a residual row beside the closed one. Disclosure is **mandatory, not optional**: every `keep` line for a plist is followed by a plain-language warning. The alternative — a retryable refusal before core teardown — is **owner item 3**, deliberately not the default |
+| 12 | **Mirror drift in acceptance criterion 10.** It still required a validated `scheduler-entry` to **exclude** its file from discovery — the round-3 suppression D10 now forbids — contradicting criterion 14's double-unload assertion | B | LIGHT | **ACCEPTED.** Criterion 10 rewritten: recorded files **stay discovered** with `remove: false`, and D5a attempts their unload **independently of** the recorded reverser. Swept every acceptance criterion and Table S row for other pre-round-3 suppression vocabulary — **none found**; the remaining occurrences of "suppress" are the rows that describe the suppression channel's *removal* (D10, D13, S7, S12, the `srm-record-suppresses-unload` declaration) |
+
+### Why the refusal is not the default
+
+The only exit from a refusal, for a user unwilling to hand-edit their manifest,
+is for Wienerdog to delete a file another record owns — which re-opens the
+**deletion-widening question owner item 1 already carries**, one level deeper and
+without a ruling. A refusal clearable only by taking the option the owner has not
+yet ruled on is not a neutral default. Recorded as owner item 3 with its overrule
+cost: an uninstall that cannot complete on a corrupted manifest until the user
+edits that file by hand.
+
+### Convergence note — the residual branch was exercised
+
+Rounds 3, 6 and 7 froze the shape, the resolution semantics and the last
+carve-out, and stated that a site which cannot follow the rules becomes a **named
+residual, never a new exception**. Round 8 is the first finding to take that
+branch, and it took it without adding a predicate, a condition or a code path.
+
+## Round 9
 
 Pending. Per the coordinator's standing instruction, a clean or LIGHT-only round
 closes the gate.
