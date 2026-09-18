@@ -503,3 +503,31 @@ test('stream-redactor: two instances share no state (AC5)', () => {
   assert.equal(a.push('\n  hunter2hunter2hunter2\n'), redactOnly('password:\n  hunter2hunter2hunter2\n'));
   assert.equal(a.end(), '');
 });
+
+test('stream-redactor: adversarial chunk shapes stay bounded in time and memory', () => {
+  // Table B prices the adversarial cases as bounded work; these are the shapes
+  // that reach the bound without ever offering an accepted cut. The blank-line
+  // baits are the ones that matter: an ambiguous `\s*(?:SEP)?\s*` in the row S2
+  // binder, or a per-character `/\s/.test(p[j])`, turns each of them into
+  // seconds of blocking CPU inside one `push`.
+  const max = ScanLimits.STREAM_REGION_MAX;
+  const baits = [
+    `password${'\n'.repeat(max + 10)}abc\n`, // keyword, then a region of blank lines
+    '\n'.repeat(max + 10), // plain blank-line spam, as `yes ''` emits
+    '\r\n'.repeat(max), // the same with CRLF endings
+    `${'token:\n'.repeat(Math.ceil(max / 7) + 2)}`, // every line ends in an open binder
+    'a'.repeat(max * 2 + 7), // one unbroken line, two forced cuts
+    `-----BEGIN RSA PRIVATE KEY-----\n${'MIIBOgIBAAJBAKj\n'.repeat(3000)}`, // never closed
+    `"token":${'"x'.repeat(15000)}\n`, // a quoted sensitive value never closed
+  ];
+  const started = Date.now();
+  for (const bait of baits) {
+    const redactor = createStreamRedactor();
+    let out = '';
+    for (let i = 0; i < bait.length; i += 4096) out += redactor.push(bait.slice(i, i + 4096));
+    out += redactor.end();
+    assert.ok(out.length > 0, 'a bait must still produce output');
+  }
+  const elapsedMs = Date.now() - started;
+  assert.ok(elapsedMs < 5000, `stream redactor too slow on adversarial input: ${elapsedMs}ms`);
+});

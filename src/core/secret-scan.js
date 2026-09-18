@@ -348,10 +348,22 @@ function hasHardFinding(findings) {
  *  long as any string it matches, so `SENSITIVE_KEYS.length` bounds the longest
  *  keyword and `SEP.length` the longest separator token; the 2 is the binder's
  *  two optional quote slots. Over-estimating only widens the window, which can
- *  never fail open. Whitespace is taken for free, because the binder's
- *  whitespace runs are unbounded — the keyword may sit any number of blank lines
- *  back. */
+ *  never fail open. Whitespace does not count against this budget — the binder's
+ *  whitespace runs may span blank lines — and is bounded separately by
+ *  `CUT_BINDER_SPACE_MAX` below. */
 const CUT_BINDER_LOOKBACK = SENSITIVE_KEYS.length + SEP.length + 2;
+
+/** The most WHITESPACE that same walk will traverse before it stops looking.
+ *  Row S2 says the keyword may sit any number of blank lines back, and walking
+ *  the whole run is correct but QUADRATIC: the descending scan in
+ *  `nextRegionEnd` tests every newline in the run, and each test walks the run
+ *  again. MEASURED: one region of blank lines took 8660 ms inside a single
+ *  `push`, which a child doing nothing more exotic than `yes ''` produces.
+ *  Past this bound the walk stops and REFUSES the cut instead of guessing —
+ *  the FAIL-CLOSED direction, because a blocked cut is never a leak and Table
+ *  B's `STREAM_REGION_MAX` still bounds the buffer. 1024 characters is over a
+ *  thousand consecutive blank lines, far past any real key/value gap. */
+const CUT_BINDER_SPACE_MAX = 1024;
 
 /** Table S row S2 — an OPEN key binder at the end of the buffered text, spelled
  *  by interpolating the detector's own `SENSITIVE_KEYS` and `SEP`, exactly as
@@ -360,9 +372,17 @@ const CUT_BINDER_LOOKBACK = SENSITIVE_KEYS.length + SEP.length + 2;
  *  differs from it in the two ways that matter here: the separator is OPTIONAL
  *  (so `Bearer `, which has none, still blocks a cut, and so does a line ending
  *  in the bare word `token`), and the whitespace class is `\s`, which spans CR
- *  and LF (so `password:\n\n` and `password\n:\n` both still block). */
+ *  and LF (so `password:\n\n` and `password\n:\n` both still block).
+ *
+ *  The middle is spelled as the ALTERNATION `(?:\s*SEP\s*|\s*)` and NOT as the
+ *  shorter `\s*(?:SEP)?\s*`. The two accept exactly the same language — with no
+ *  separator, two adjacent `\s*` are one whitespace run — but the shorter form
+ *  is AMBIGUOUS over that run, and on a failing match the engine redistributes
+ *  it one character at a time. MEASURED on the shorter form: a keyword followed
+ *  by 50000 blank lines and a word took 7949 ms inside one `push`. Keep the
+ *  alternation; it is the linear-time spelling. */
 const CUT_OPEN_BINDER = new RegExp(
-  `(?:${SENSITIVE_KEYS}|authorization)["'\`]?\\s*(?:${SEP})?\\s*["'\`]?$`,
+  `(?:${SENSITIVE_KEYS}|authorization)["'\`]?(?:\\s*(?:${SEP})\\s*|\\s*)["'\`]?$`,
   'i',
 );
 
@@ -385,13 +405,31 @@ function cutS1EndsWithNewline(buffer, i) {
   return i > 0 && buffer.charCodeAt(i - 1) === 10;
 }
 
+/** True iff `code` is a character JS `\s` matches. The ASCII cases are spelled
+ *  out because the S2 walk below tests one character at a time, and
+ *  `/\s/.test(p[j])` allocates a single-character string on every one of them —
+ *  PROFILED as essentially the entire cost of a blank-line-heavy region.
+ *  Anything outside ASCII falls back to the regex, so the fast path and `\s`
+ *  agree by construction rather than by a second hand-written list.
+ *  @param {number} code @returns {boolean} */
+function isCutWhitespace(code) {
+  if (code === 32 || (code >= 9 && code <= 13)) return true;
+  return code > 127 && /\s/.test(String.fromCharCode(code));
+}
+
 /** Table S row S2: no open key binder at the end of `p`. @param {string} p */
 function cutS2NoOpenKeyBinder(p) {
   let j = p.length;
   let budget = CUT_BINDER_LOOKBACK;
+  let space = CUT_BINDER_SPACE_MAX;
   while (j > 0 && budget > 0) {
     j -= 1;
-    if (!/\s/.test(p[j])) budget -= 1;
+    if (!isCutWhitespace(p.charCodeAt(j))) budget -= 1;
+    else if (space > 0) space -= 1;
+    // Still inside whitespace with the whitespace budget spent: a keyword may
+    // sit further back than this walk will go, so refuse the cut rather than
+    // guess. Fail-closed, and the only direction that is never a leak.
+    else return false;
   }
   return !CUT_OPEN_BINDER.test(p.slice(j));
 }
