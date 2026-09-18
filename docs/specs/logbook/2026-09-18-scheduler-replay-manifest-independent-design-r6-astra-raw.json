@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b572-26d8-7f43-b3b8-8990c8758f83",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r6",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: candidate-resolution failures can still bypass the unreadable-root safeguard and leave live jobs behind.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Surface candidate-resolution errors before excluding schedules\",\n      \"body\": \"D15 protects root canonicalization, but D1 still gates each candidate through withinSchedulerRoot(), whose contains() helper swallows realpathSync errors. Read-only fault injection confirmed that roots can resolve successfully and lstat can report a regular file while an EIO resolving the candidate silently produces false. D9 therefore receives no unreadable result. For an unrecorded job with scheduler authority present, the specified flow attempts no unload and removes the core around the live registration—the failure this package is intended to close.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 304,\n      \"line_end\": 304,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Extend error-aware classification to candidate canonicalization during discovery. Report non-absence resolution failures through unreadable and abort before mutation. Add a regression where root resolution and lstat succeed but candidate realpath throws EIO.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend D1/D9 and their acceptance tests so candidate-resolution failures cannot silently exclude a schedule.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch: candidate-resolution failures can still bypass the unreadable-root safeguard and leave live jobs behind.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Surface candidate-resolution errors before excluding schedules",
+        "body": "D15 protects root canonicalization, but D1 still gates each candidate through withinSchedulerRoot(), whose contains() helper swallows realpathSync errors. Read-only fault injection confirmed that roots can resolve successfully and lstat can report a regular file while an EIO resolving the candidate silently produces false. D9 therefore receives no unreadable result. For an unrecorded job with scheduler authority present, the specified flow attempts no unload and removes the core around the live registration—the failure this package is intended to close.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 304,
+        "line_end": 304,
+        "confidence": 0.98,
+        "recommendation": "Extend error-aware classification to candidate canonicalization during discovery. Report non-absence resolution failures through unreadable and abort before mutation. Add a regression where root resolution and lstat succeed but candidate realpath throws EIO."
+      }
+    ],
+    "next_steps": [
+      "Amend D1/D9 and their acceptance tests so candidate-resolution failures cannot silently exclude a schedule."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: candidate-resolution failures can still bypass the unreadable-root safeguard and leave live jobs behind.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Surface candidate-resolution errors before excluding schedules\",\n      \"body\": \"D15 protects root canonicalization, but D1 still gates each candidate through withinSchedulerRoot(), whose contains() helper swallows realpathSync errors. Read-only fault injection confirmed that roots can resolve successfully and lstat can report a regular file while an EIO resolving the candidate silently produces false. D9 therefore receives no unreadable result. For an unrecorded job with scheduler authority present, the specified flow attempts no unload and removes the core around the live registration—the failure this package is intended to close.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 304,\n      \"line_end\": 304,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Extend error-aware classification to candidate canonicalization during discovery. Report non-absence resolution failures through unreadable and abort before mutation. Add a regression where root resolution and lstat succeed but candidate realpath throws EIO.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend D1/D9 and their acceptance tests so candidate-resolution failures cannot silently exclude a schedule.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

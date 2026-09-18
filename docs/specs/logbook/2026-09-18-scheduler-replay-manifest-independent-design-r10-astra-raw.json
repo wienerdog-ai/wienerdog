@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b58b-0d6b-7ff1-bc06-47ed3673e0db",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r10",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: mandatory acceptance criteria contradict the revised unload contract.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Reconcile mandatory tests with filesystem-free unloading\",\n      \"body\": \"Criterion 17 still requires an act-time D5a filesystem check, zero unload calls on EIO, and dropping absent candidates. D5/D6 now prohibit that check and require unconditional unloads; criterion 18 explicitly requires unloading an absent candidate. Criterion 7 likewise requires zero actions when replaying the same list, although D5a must attempt those unloads again. No implementation can satisfy all these requirements. Following the stale tests would reintroduce the skipped-unload defect round 9 fixes.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 761,\n      \"line_end\": 765,\n      \"confidence\": 1,\n      \"recommendation\": \"Rewrite criterion 17's act-time arm to assert an unload followed by a D5b removal skip and notice; update criterion 7 to permit repeated unload attempts while requiring no repeated deletion. Align criterion 3 and Table B's act-time mutations with removal-only rechecks.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Reconcile the acceptance criteria and RED-proof declarations with D5/D6 before implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: mandatory acceptance criteria contradict the revised unload contract.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Reconcile mandatory tests with filesystem-free unloading",
+        "body": "Criterion 17 still requires an act-time D5a filesystem check, zero unload calls on EIO, and dropping absent candidates. D5/D6 now prohibit that check and require unconditional unloads; criterion 18 explicitly requires unloading an absent candidate. Criterion 7 likewise requires zero actions when replaying the same list, although D5a must attempt those unloads again. No implementation can satisfy all these requirements. Following the stale tests would reintroduce the skipped-unload defect round 9 fixes.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 761,
+        "line_end": 765,
+        "confidence": 1,
+        "recommendation": "Rewrite criterion 17's act-time arm to assert an unload followed by a D5b removal skip and notice; update criterion 7 to permit repeated unload attempts while requiring no repeated deletion. Align criterion 3 and Table B's act-time mutations with removal-only rechecks."
+      }
+    ],
+    "next_steps": [
+      "Reconcile the acceptance criteria and RED-proof declarations with D5/D6 before implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: mandatory acceptance criteria contradict the revised unload contract.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Reconcile mandatory tests with filesystem-free unloading\",\n      \"body\": \"Criterion 17 still requires an act-time D5a filesystem check, zero unload calls on EIO, and dropping absent candidates. D5/D6 now prohibit that check and require unconditional unloads; criterion 18 explicitly requires unloading an absent candidate. Criterion 7 likewise requires zero actions when replaying the same list, although D5a must attempt those unloads again. No implementation can satisfy all these requirements. Following the stale tests would reintroduce the skipped-unload defect round 9 fixes.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 761,\n      \"line_end\": 765,\n      \"confidence\": 1,\n      \"recommendation\": \"Rewrite criterion 17's act-time arm to assert an unload followed by a D5b removal skip and notice; update criterion 7 to permit repeated unload attempts while requiring no repeated deletion. Align criterion 3 and Table B's act-time mutations with removal-only rechecks.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Reconcile the acceptance criteria and RED-proof declarations with D5/D6 before implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

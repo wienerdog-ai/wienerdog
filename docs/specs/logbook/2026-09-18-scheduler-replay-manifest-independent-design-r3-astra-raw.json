@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b559-5f40-7220-8906-3cd410fda759",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r3",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: D10 still permits false coverage that leaves a live job without any unload attempt.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Coverage must survive earlier manifest reversers\",\n      \"body\": \"On win32, an unrecorded schedules/wienerdog-dream.xml can have a scheduler-entry for an in-root, same-basename symlink resolving to it. All five D10 conditions pass, excluding the XML from discovery. If a deletable file record for the XML appears later in the manifest, reverse replay deletes the XML first. The covering scheduler entry then fails realpath containment and never unloads. Mocked execution confirmed every D10 condition passed while the file was removed and schedulerSpawn received zero calls. D5a cannot help because discovery excluded this candidate; uninstall subsequently disposes the core around the live task.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 304,\n      \"line_end\": 304,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Treat candidates whose covering entry can lose its filesystem evidence during replay as uncovered, so D5a unloads them before mutations. Add a regression combining equivalent-argv alias coverage with an earlier-executed file deletion.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise D10 and its acceptance tests, then rerun the design review.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch: D10 still permits false coverage that leaves a live job without any unload attempt.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Coverage must survive earlier manifest reversers",
+        "body": "On win32, an unrecorded schedules/wienerdog-dream.xml can have a scheduler-entry for an in-root, same-basename symlink resolving to it. All five D10 conditions pass, excluding the XML from discovery. If a deletable file record for the XML appears later in the manifest, reverse replay deletes the XML first. The covering scheduler entry then fails realpath containment and never unloads. Mocked execution confirmed every D10 condition passed while the file was removed and schedulerSpawn received zero calls. D5a cannot help because discovery excluded this candidate; uninstall subsequently disposes the core around the live task.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 304,
+        "line_end": 304,
+        "confidence": 0.99,
+        "recommendation": "Treat candidates whose covering entry can lose its filesystem evidence during replay as uncovered, so D5a unloads them before mutations. Add a regression combining equivalent-argv alias coverage with an earlier-executed file deletion."
+      }
+    ],
+    "next_steps": [
+      "Revise D10 and its acceptance tests, then rerun the design review."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: D10 still permits false coverage that leaves a live job without any unload attempt.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Coverage must survive earlier manifest reversers\",\n      \"body\": \"On win32, an unrecorded schedules/wienerdog-dream.xml can have a scheduler-entry for an in-root, same-basename symlink resolving to it. All five D10 conditions pass, excluding the XML from discovery. If a deletable file record for the XML appears later in the manifest, reverse replay deletes the XML first. The covering scheduler entry then fails realpath containment and never unloads. Mocked execution confirmed every D10 condition passed while the file was removed and schedulerSpawn received zero calls. D5a cannot help because discovery excluded this candidate; uninstall subsequently disposes the core around the live task.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 304,\n      \"line_end\": 304,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Treat candidates whose covering entry can lose its filesystem evidence during replay as uncovered, so D5a unloads them before mutations. Add a regression combining equivalent-argv alias coverage with an earlier-executed file deletion.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise D10 and its acceptance tests, then rerun the design review.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

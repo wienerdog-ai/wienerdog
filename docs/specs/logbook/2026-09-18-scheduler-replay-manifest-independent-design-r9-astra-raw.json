@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b583-3b27-79a0-afe7-1d3da1a7a836",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r9",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the act-time absence exception can still leave registered jobs pointing at a deleted core.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"A vanished schedule file does not prove its registration disappeared\",\n      \"body\": \"D6 drops a disclosed candidate on ENOENT/ENOTDIR and continues teardown. Consider an unrecorded wienerdog-dream.xml deleted during the confirmation prompt: the manifest comparison still passes, but the registered Windows task survives because registration stores its command in Task Scheduler's database (src/cli/schedule.js). D5a skips its unload, no manifest entry provides another attempt, and uninstall deletes the core around the registered task. This recreates the orphan being closed; R-failed-unload does not cover it because no unload was attempted.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 310,\n      \"line_end\": 310,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Distinguish absence during initial discovery from disappearance of an already-disclosed unloadable candidate. Require the latter to stop core teardown with recovery metadata retained. Add a regression where discovery succeeds, the XML disappears before D5a, and its registered task remains.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise D6, D15 and the act-time acceptance criteria to cover disappearance after disclosure.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: the act-time absence exception can still leave registered jobs pointing at a deleted core.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "A vanished schedule file does not prove its registration disappeared",
+        "body": "D6 drops a disclosed candidate on ENOENT/ENOTDIR and continues teardown. Consider an unrecorded wienerdog-dream.xml deleted during the confirmation prompt: the manifest comparison still passes, but the registered Windows task survives because registration stores its command in Task Scheduler's database (src/cli/schedule.js). D5a skips its unload, no manifest entry provides another attempt, and uninstall deletes the core around the registered task. This recreates the orphan being closed; R-failed-unload does not cover it because no unload was attempted.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 310,
+        "line_end": 310,
+        "confidence": 0.98,
+        "recommendation": "Distinguish absence during initial discovery from disappearance of an already-disclosed unloadable candidate. Require the latter to stop core teardown with recovery metadata retained. Add a regression where discovery succeeds, the XML disappears before D5a, and its registered task remains."
+      }
+    ],
+    "next_steps": [
+      "Revise D6, D15 and the act-time acceptance criteria to cover disappearance after disclosure."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: the act-time absence exception can still leave registered jobs pointing at a deleted core.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"A vanished schedule file does not prove its registration disappeared\",\n      \"body\": \"D6 drops a disclosed candidate on ENOENT/ENOTDIR and continues teardown. Consider an unrecorded wienerdog-dream.xml deleted during the confirmation prompt: the manifest comparison still passes, but the registered Windows task survives because registration stores its command in Task Scheduler's database (src/cli/schedule.js). D5a skips its unload, no manifest entry provides another attempt, and uninstall deletes the core around the registered task. This recreates the orphan being closed; R-failed-unload does not cover it because no unload was attempted.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 310,\n      \"line_end\": 310,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Distinguish absence during initial discovery from disappearance of an already-disclosed unloadable candidate. Require the latter to stop core teardown with recovery metadata retained. Add a regression where discovery succeeds, the XML disappears before D5a, and its registered task remains.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise D6, D15 and the act-time acceptance criteria to cover disappearance after disclosure.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

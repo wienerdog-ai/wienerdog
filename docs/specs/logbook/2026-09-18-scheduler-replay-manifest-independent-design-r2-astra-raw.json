@@ -1,0 +1,53 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b552-9eff-7172-bfc1-1a4074de5aaf",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r2",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: two specified paths still leave live jobs without any unload attempt.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Unload discovered jobs before another reverser deletes their files\",\n      \"body\": \"D5 runs after manifest reversal and skips paths in removedSet. On Windows, a valid file record for <core>/schedules/wienerdog-dream.xml is discovered under D10, but the existing file reverser deletes it first. D5 then skips it; D6 also rejects the now-missing file. The task remains registered while uninstall removes its core. A mocked dry-run confirmed that the existing reverser marks this XML removed without unloading it.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 297,\n      \"line_end\": 298,\n      \"confidence\": 1,\n      \"recommendation\": \"Perform discovered unloads before manifest reversers can remove their evidence, while retaining D11's separate deletion permissions. Add a Windows regression with an XML covered only by a deletable file record.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"Require equivalent unloads before treating aliases as coverage\",\n      \"body\": \"D10 equates resolved paths, but reverseSchedulerEntry derives argv from the recorded lexical basename. A scheduler-entry naming an in-root symlink ai.wienerdog...plist targeting ai.wienerdog.dream.plist satisfies all four D10 conditions. However, its loose basename passes withinSchedulerRoot while deriveUnloadArgv returns null. Discovery therefore suppresses the regular dream plist, and manifest reversal merely removes the alias. The real job receives no unload attempt. Mocked execution confirmed this predicate/argv mismatch.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 302,\n      \"line_end\": 302,\n      \"confidence\": 1,\n      \"recommendation\": \"Require both resolved-path equality and equivalent derived unload argv for coverage. Keep discovering the candidate when the recorded alias derives null or a different target, and test both alias cases.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise D5/D6 and D10, update their acceptance tests, and rerun the design review.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch: two specified paths still leave live jobs without any unload attempt.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Unload discovered jobs before another reverser deletes their files",
+        "body": "D5 runs after manifest reversal and skips paths in removedSet. On Windows, a valid file record for <core>/schedules/wienerdog-dream.xml is discovered under D10, but the existing file reverser deletes it first. D5 then skips it; D6 also rejects the now-missing file. The task remains registered while uninstall removes its core. A mocked dry-run confirmed that the existing reverser marks this XML removed without unloading it.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 297,
+        "line_end": 298,
+        "confidence": 1,
+        "recommendation": "Perform discovered unloads before manifest reversers can remove their evidence, while retaining D11's separate deletion permissions. Add a Windows regression with an XML covered only by a deletable file record."
+      },
+      {
+        "severity": "high",
+        "title": "Require equivalent unloads before treating aliases as coverage",
+        "body": "D10 equates resolved paths, but reverseSchedulerEntry derives argv from the recorded lexical basename. A scheduler-entry naming an in-root symlink ai.wienerdog...plist targeting ai.wienerdog.dream.plist satisfies all four D10 conditions. However, its loose basename passes withinSchedulerRoot while deriveUnloadArgv returns null. Discovery therefore suppresses the regular dream plist, and manifest reversal merely removes the alias. The real job receives no unload attempt. Mocked execution confirmed this predicate/argv mismatch.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 302,
+        "line_end": 302,
+        "confidence": 1,
+        "recommendation": "Require both resolved-path equality and equivalent derived unload argv for coverage. Keep discovering the candidate when the recorded alias derives null or a different target, and test both alias cases."
+      }
+    ],
+    "next_steps": [
+      "Revise D5/D6 and D10, update their acceptance tests, and rerun the design review."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: two specified paths still leave live jobs without any unload attempt.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Unload discovered jobs before another reverser deletes their files\",\n      \"body\": \"D5 runs after manifest reversal and skips paths in removedSet. On Windows, a valid file record for <core>/schedules/wienerdog-dream.xml is discovered under D10, but the existing file reverser deletes it first. D5 then skips it; D6 also rejects the now-missing file. The task remains registered while uninstall removes its core. A mocked dry-run confirmed that the existing reverser marks this XML removed without unloading it.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 297,\n      \"line_end\": 298,\n      \"confidence\": 1,\n      \"recommendation\": \"Perform discovered unloads before manifest reversers can remove their evidence, while retaining D11's separate deletion permissions. Add a Windows regression with an XML covered only by a deletable file record.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"Require equivalent unloads before treating aliases as coverage\",\n      \"body\": \"D10 equates resolved paths, but reverseSchedulerEntry derives argv from the recorded lexical basename. A scheduler-entry naming an in-root symlink ai.wienerdog...plist targeting ai.wienerdog.dream.plist satisfies all four D10 conditions. However, its loose basename passes withinSchedulerRoot while deriveUnloadArgv returns null. Discovery therefore suppresses the regular dream plist, and manifest reversal merely removes the alias. The real job receives no unload attempt. Mocked execution confirmed this predicate/argv mismatch.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 302,\n      \"line_end\": 302,\n      \"confidence\": 1,\n      \"recommendation\": \"Require both resolved-path equality and equivalent derived unload argv for coverage. Keep discovering the candidate when the recorded alias derives null or a different target, and test both alias cases.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise D5/D6 and D10, update their acceptance tests, and rerun the design review.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

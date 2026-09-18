@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b564-bb11-7eb0-9b4d-6c93125f5929",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r4",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: the specified discovery can make an existing integration test delete real scheduler files.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Isolate the integration test's XDG scheduler root before widening deletion\",\n      \"body\": \"D1 enumerates every scheduler root, but tests/integration/uninstall-core-e2e.test.js inherits XDG_CONFIG_HOME while redirecting HOME. Read-only execution of its environment builder confirmed systemdUserDir still resolves outside the sandbox. With a real wienerdog-personal-routine.timer there, discovery would include it and R4 would delete it because the fixture manifest does not record it. The test grants deletion clearance; WIENERDOG_LOADER_NOOP suppresses scheduler commands, not filesystem deletion. Thus npm test could remove the developer's real timer/service files. The affected integration test is also absent from the Deliverables table.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 303,\n      \"line_end\": 303,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Add the integration test to Deliverables and require its XDG_CONFIG_HOME to point inside the temporary HOME. Add a regression using a simulated external XDG root that verifies its schedule files survive the sandboxed uninstall, and audit other discovery callers for inherited scheduler roots.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend the isolation requirements and permitted files, then rerun the design review.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch: the specified discovery can make an existing integration test delete real scheduler files.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Isolate the integration test's XDG scheduler root before widening deletion",
+        "body": "D1 enumerates every scheduler root, but tests/integration/uninstall-core-e2e.test.js inherits XDG_CONFIG_HOME while redirecting HOME. Read-only execution of its environment builder confirmed systemdUserDir still resolves outside the sandbox. With a real wienerdog-personal-routine.timer there, discovery would include it and R4 would delete it because the fixture manifest does not record it. The test grants deletion clearance; WIENERDOG_LOADER_NOOP suppresses scheduler commands, not filesystem deletion. Thus npm test could remove the developer's real timer/service files. The affected integration test is also absent from the Deliverables table.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 303,
+        "line_end": 303,
+        "confidence": 0.99,
+        "recommendation": "Add the integration test to Deliverables and require its XDG_CONFIG_HOME to point inside the temporary HOME. Add a regression using a simulated external XDG root that verifies its schedule files survive the sandboxed uninstall, and audit other discovery callers for inherited scheduler roots."
+      }
+    ],
+    "next_steps": [
+      "Amend the isolation requirements and permitted files, then rerun the design review."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: the specified discovery can make an existing integration test delete real scheduler files.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Isolate the integration test's XDG scheduler root before widening deletion\",\n      \"body\": \"D1 enumerates every scheduler root, but tests/integration/uninstall-core-e2e.test.js inherits XDG_CONFIG_HOME while redirecting HOME. Read-only execution of its environment builder confirmed systemdUserDir still resolves outside the sandbox. With a real wienerdog-personal-routine.timer there, discovery would include it and R4 would delete it because the fixture manifest does not record it. The test grants deletion clearance; WIENERDOG_LOADER_NOOP suppresses scheduler commands, not filesystem deletion. Thus npm test could remove the developer's real timer/service files. The affected integration test is also absent from the Deliverables table.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 303,\n      \"line_end\": 303,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Add the integration test to Deliverables and require its XDG_CONFIG_HOME to point inside the temporary HOME. Add a regression using a simulated external XDG root that verifies its schedule files survive the sandboxed uninstall, and audit other discovery callers for inherited scheduler roots.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Amend the isolation requirements and permitted files, then rerun the design review.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

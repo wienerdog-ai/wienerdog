@@ -1,0 +1,53 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c05a575b305c1570b5f96f989dff405d847591c6",
+    "baseRef": "c05a575b305c1570b5f96f989dff405d847591c6",
+    "explicit": true
+  },
+  "threadId": "01a0b57c-f686-7442-930b-a0ceadf940e1",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-sched-r8",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c05a575b305c1570b5f96f989dff405d847591c6 from merge-base c05a575b305c1570b5f96f989dff405d847591c6."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: preserved launchd files undermine the claimed orphan closure, and an acceptance criterion reinstates the rejected suppression rule.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserved plists can recreate orphaned jobs at the next login\",\n      \"body\": \"D11 assigns remove:false when any validated record names a discovered file. For a plist recorded as kind:'file', the existing file reverser also preserves it because LaunchAgents is outside its allowed roots; this boundary was verified against the repository helpers. D5a unloads the job, but uninstall removes the core and leaves the plist. Under R5's explicitly stated login-reload behavior, the next login registers it again against the deleted core. This occurs even when unloading succeeds, so R-failed-unload does not cover it, and the unconditional CLOSED amendment is unsupported.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 314,\n      \"line_end\": 314,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Preserve D11's deletion protection, but either require a retryable refusal before core teardown for reloadable surviving plists or explicitly retain this case as a named residual and narrow the closure amendment. Add a regression covering a plist owned only by a non-scheduler record.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Acceptance criterion 10 requires the rejected coverage suppression\",\n      \"body\": \"Criterion 10 requires a validated scheduler-entry to exclude its file from discovery. D10 explicitly forbids that exclusion, and criterion 14 requires the same recorded job to unload through both discovery and its recorded reverser. These requirements cannot pass together. Implementing criterion 10 would also restore the suppression channel that rounds 2 and 3 demonstrated could strand live jobs.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 666,\n      \"line_end\": 668,\n      \"confidence\": 1,\n      \"recommendation\": \"Require recorded files to remain discovered with remove:false, and assert that D5a attempts their unload independently of the recorded reverser, consistent with D10 and criterion 14.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve the surviving-plist residual and reconcile criterion 10 before closing the design gate.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: preserved launchd files undermine the claimed orphan closure, and an acceptance criterion reinstates the rejected suppression rule.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Preserved plists can recreate orphaned jobs at the next login",
+        "body": "D11 assigns remove:false when any validated record names a discovered file. For a plist recorded as kind:'file', the existing file reverser also preserves it because LaunchAgents is outside its allowed roots; this boundary was verified against the repository helpers. D5a unloads the job, but uninstall removes the core and leaves the plist. Under R5's explicitly stated login-reload behavior, the next login registers it again against the deleted core. This occurs even when unloading succeeds, so R-failed-unload does not cover it, and the unconditional CLOSED amendment is unsupported.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 314,
+        "line_end": 314,
+        "confidence": 0.98,
+        "recommendation": "Preserve D11's deletion protection, but either require a retryable refusal before core teardown for reloadable surviving plists or explicitly retain this case as a named residual and narrow the closure amendment. Add a regression covering a plist owned only by a non-scheduler record."
+      },
+      {
+        "severity": "medium",
+        "title": "Acceptance criterion 10 requires the rejected coverage suppression",
+        "body": "Criterion 10 requires a validated scheduler-entry to exclude its file from discovery. D10 explicitly forbids that exclusion, and criterion 14 requires the same recorded job to unload through both discovery and its recorded reverser. These requirements cannot pass together. Implementing criterion 10 would also restore the suppression channel that rounds 2 and 3 demonstrated could strand live jobs.",
+        "file": "docs/specs/WP-scheduler-replay-manifest-independent.md",
+        "line_start": 666,
+        "line_end": 668,
+        "confidence": 1,
+        "recommendation": "Require recorded files to remain discovered with remove:false, and assert that D5a attempts their unload independently of the recorded reverser, consistent with D10 and criterion 14."
+      }
+    ],
+    "next_steps": [
+      "Resolve the surviving-plist residual and reconcile criterion 10 before closing the design gate."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: preserved launchd files undermine the claimed orphan closure, and an acceptance criterion reinstates the rejected suppression rule.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserved plists can recreate orphaned jobs at the next login\",\n      \"body\": \"D11 assigns remove:false when any validated record names a discovered file. For a plist recorded as kind:'file', the existing file reverser also preserves it because LaunchAgents is outside its allowed roots; this boundary was verified against the repository helpers. D5a unloads the job, but uninstall removes the core and leaves the plist. Under R5's explicitly stated login-reload behavior, the next login registers it again against the deleted core. This occurs even when unloading succeeds, so R-failed-unload does not cover it, and the unconditional CLOSED amendment is unsupported.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 314,\n      \"line_end\": 314,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Preserve D11's deletion protection, but either require a retryable refusal before core teardown for reloadable surviving plists or explicitly retain this case as a named residual and narrow the closure amendment. Add a regression covering a plist owned only by a non-scheduler record.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Acceptance criterion 10 requires the rejected coverage suppression\",\n      \"body\": \"Criterion 10 requires a validated scheduler-entry to exclude its file from discovery. D10 explicitly forbids that exclusion, and criterion 14 requires the same recorded job to unload through both discovery and its recorded reverser. These requirements cannot pass together. Implementing criterion 10 would also restore the suppression channel that rounds 2 and 3 demonstrated could strand live jobs.\",\n      \"file\": \"docs/specs/WP-scheduler-replay-manifest-independent.md\",\n      \"line_start\": 666,\n      \"line_end\": 668,\n      \"confidence\": 1,\n      \"recommendation\": \"Require recorded files to remain discovered with remove:false, and assert that D5a attempts their unload independently of the recorded reverser, consistent with D10 and criterion 14.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve the surviving-plist residual and reconcile criterion 10 before closing the design gate.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
