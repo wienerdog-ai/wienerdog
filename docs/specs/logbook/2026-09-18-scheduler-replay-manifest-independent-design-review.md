@@ -242,6 +242,43 @@ table's Linux row, the Mirrored Surface Checklist, the Security checklist, the
 gate-derived-rows implementation note, and the Definition of done's dispatch
 precondition.
 
-## Round 5
+## Round 5 (Astra)
 
-Pending — a fresh Astra round runs against the revised spec.
+- **Reviewed tip:** `4c95c587` (round-4 D14 applied).
+- **Raw + focus committed BEFORE adjudication:** `868f578e`.
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r5-astra-raw.json`
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r5-astra-focus.txt`
+- **Verdict:** `needs-attention` — *"the new root filter can silently bypass the
+  unreadable-root safeguard and leave live jobs behind."*
+- **D14 held as a design.** The finding is in **how** it is evaluated, inside the
+  frozen shape's candidate gate.
+
+### Disposition
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| 8 | **A resolution failure was indistinguishable from a confirmed-external root.** D14 filtered roots through `contains`, which catches **every** `realpathSync` error and returns `false` (`manifest.js:1097-1108`, `:1103-1104`). An `EACCES`/`EIO` resolving an otherwise in-home root therefore **excluded** it before D9 could enumerate it and report it unreadable. Astra injected `EACCES` against the unchanged helper and confirmed the exclusion. With authority present and the job unrecorded, uninstall skips the probe, unloads nothing, and removes the core around the live job — the failure D9 exists to prevent, reached through a different door | A | HEAVY | **ACCEPTED.** New Table D row **D15**: discovery classifies each root itself, with an explicit `try/catch` that surfaces `err.code`, into **(i) confirmed external** (resolved, inside neither anchor ⇒ excluded silently), **(ii) absent** (`ENOENT`/`ENOTDIR` ⇒ contributes nothing, matching D9's existing reading), **(iii) resolution failure** (any other code ⇒ `unreadable`, aborting through D9 before any mutation). Failing to resolve `paths.home` or `paths.core` itself is (iii) for **every** root, not a silent exclusion of all of them. **`contains` is not changed** — its fail-closed boolean is correct for `withinSchedulerRoot` (`:556`) and the vault guard (`:1144`), where an unresolvable side should mean *preserve*; D15 adds an error-surfacing resolution **beside** it for the one caller whose fail-closed direction is unsafe. New acceptance criterion 17 (all three outcomes, not just the new one), Table S row S12, RED declaration `srm-resolution-failure-read-as-external` |
+
+### On the declaration's anchor
+
+`srm-resolution-failure-read-as-external` mutates **new code authored by this
+package** (D15's classification), so it carries **no pre-measurable anchor at
+`c05a575b`** — stated in its Table B row, the same disclosure
+`srm-disposition-flipped` already makes. It is still declarable, and it is
+declared, because criterion 17 is abort-shaped: it goes green whenever the
+fixture never made a root unresolvable.
+
+### Surfaces updated in the same commit
+
+Table D (D14 now defers its resolution to D15; D9 gains root-resolution failure
+as a third source of `unreadable`; **D15** added), Table S (**S12** added), Table
+B (one declaration added), the Deliverables note for `manifest.js` — which now
+states that **`contains` stays byte-unchanged** — acceptance criterion 17 with
+the red-proofs criterion renumbered to 18, the Mirrored Surface Checklist, the
+Security checklist, the gate-derived-rows implementation note, and the Definition
+of done's dispatch precondition.
+
+## Round 6
+
+Pending. Per the coordinator's standing instruction, a clean or LIGHT-only round
+closes the gate.
