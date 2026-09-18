@@ -230,5 +230,31 @@ eight carry a pre-measurable anchor, four mutate code this package authors.
 criterion 14 carries two and criterion 18 now carries two; nine have a
 pre-measurable anchor, four mutate code this package authors.
 
+## Round 10 — Astra, 2026-09-18
+
+- **Reviewed tip:** `21b8c636`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r10-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r10-astra-focus.txt`
+- **Committed before adjudication at:** `878c50bf`
+- **Verdict:** `needs-attention` — *"the new manifest guard lacks a safe
+  absent-shelf contract and can strand an ordinary installation."*
+- **Held from round 9:** **Table V** and the **symmetric X16** were **not** re-opened.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R10-1** | **Distinguish absent shelves from failed shelf resolution.** Table X row **X16** (`:386`) preserved an entry whenever a shelf resolution failed, **without exempting `ENOENT`/`ENOTDIR`** — but `quarantinePreserve` creates the shelves **lazily** (`validate.js:950`), so on an install that has never quarantined anything **absence is normal**. Astra probed the shipped `reverse()` with that guard: **an ordinary app-tree removal became a skip**, and `uninstall.js` then deleted the manifest (`:424`), leaving the skipped component **with no retry ledger**. **And the naive repair is also wrong** — omitting absent roots from the guard leaves a shelf created *during* replay unprotected, which is Table X row **X3**'s window one deleter over | A | HEAVY (high, conf. 0.94) | **ACCEPTED IN FULL.** New canonical **Table X row X17 — one resolution rule over every path this package resolves, explicitly modelled on `WP-scheduler-replay-manifest-independent`'s Table D row D15**, which states one rule over that package's roots, candidates, vault path and act-time site rather than one per site. **(1)** **Lexical** anchors — `path.join(paths.state,'quarantine')`, its `redacted`, and every **X12** fold-equal name found at that level — are **always retained, present or not**, so the guard does not depend on the shelf existing. **(2)** **Resolved** anchors are derived through the **nearest validated existing ancestor** (`<state>`, else `<core>`) with the missing suffix appended **lexically**, so a shelf created **after guard initialisation** is still covered. **(3)** `ENOENT`/`ENOTDIR` at a shelf level is **ABSENCE**: no resolved anchor, nothing reported, **no entry skipped** — the clause whose absence stranded the ordinary install. **(4)** Any other code is **UNANSWERABLE**: the entry is **preserved and reported**, failing closed toward preservation as X16 already said. **(3) and (4) must be distinguishable in the implementation and in the tests**, not merged into one `catch` — they are the same syscall failing for opposite reasons, and collapsing them is exactly what this round caught. **X11**, **K3** and **K4** already carried absence-as-the-single-special-case and are **unchanged**: X17 generalises their rule rather than adding a second one, and **X16 was the site that lacked it**. **Acceptance criterion 18** gains three arms — (a) neither shelf exists ⇒ byte-identical output and **nothing newly skipped**, asserted over the whole `skipped` array *and* the complete stdout; (b) a shelf created after guard init but before replay is still protected; (c) a non-`ENOENT` failure **does** preserve while `ENOENT` on the same level preserves nothing. New RED proof **`quse-absent-shelf-read-as-unanswerable`** (collapse outcomes 3 and 4 into one `catch`) — **the mutation that turns this package's protection into a denial of service on every install that never quarantined anything**, i.e. the majority case |
+
+**Convergence note (requested, and it is the point of this round).** The
+resolution semantics of this package are now **uniform across X11, X12 and X16
+under X17** — the same consolidation the scheduler package reached with **D15**
+after rounds 5, 6 and 7 kept finding the identical defect at a new site.
+**A further finding of this family is closed by pointing at X17 and adding the
+site to it, not by writing a fourth rule.** That is ADR-0031's circuit-breaker
+applied to a resolution contract rather than to a prose contract.
+
+**Declaration count after round 10:** fourteen declarations over eleven criteria —
+criterion 14 carries two and criterion 18 now carries three; nine have a
+pre-measurable anchor, five mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean or LIGHT-only return
 (`docs/runbooks/codex-review.md`, "Weighted closure").
