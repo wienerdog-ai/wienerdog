@@ -397,6 +397,79 @@ this amendment is edited; it stands as the historical record.
     append-only comparison, and the committed read on the authorization path,
     which never runs the schema loop.
 
+## Amendment (2026-09-17): the model looks for skill learnings in dialogue only — WP-dream-primary-dialogue-collection
+
+Status: **ACCEPTED under standing authorization 2026-09-17 — owner signature pending.**
+
+**Decision.** The dream's model-visible input becomes primary dialogue: the
+person's requests and corrections, and the concluding assistant reply of each
+exchange. Tool calls, tool results, reasoning text, intermediate progress
+replies and harness-authored instructions are not in it. Table D in
+`docs/specs/WP-dream-primary-dialogue-collection.md` is canonical for the
+change; this amendment records the policy it implies for this ADR.
+
+**What the model may use as evidence of a skill learning.** Retained dialogue,
+and nothing else. The `skill_invocations` array is no longer carried on the
+extract the model reads, and neither is any other detail extracted from a tool
+record — an invocation name, an index, an error state. The model identifies a
+possible skill usage from what the person and the assistant said, for both
+harnesses alike, and **may not infer that an invocation succeeded or failed
+from the absence of evidence**: an outcome it cannot see is an outcome it does
+not report.
+
+**What does not change, and this is the whole safety argument.** Every
+code-owned check in this ADR keeps its current authority and its current
+inputs. The learnings-ledger validator still requires each newly counted
+`claude:` session to be present among the run's processed sessions and to carry
+a real invocation of that skill; it still derives `derived_from_untrusted` from
+the invocation window and still **refuses the whole ledger write** when the
+model declared a value lower than the derived one; a repeated `##` heading is
+still a refusal at all three reads; and a
+Codex session still never authorizes a skill-body revision. Those checks now
+read a **text-free projection of the original message timeline** — session
+identity, message roles in their original positions, and the unchanged
+invocation geometry — produced by code before anything is removed, kept in
+memory for the run, and never written where a model can read it. A gate must
+never gain permission because its evidence was deleted, and this is the
+mechanism that keeps that true.
+
+**The accepted cost.** A skill usage, or a skill failure, that appears only in
+tool records is now invisible to the model, so it will not become a learning.
+Fewer learnings will be proposed, and some real ones will be missed. That is
+accepted in exchange for input the model can actually read: on a 2026-09-16
+measurement of 187 sessions, more than half of what the dream was told was "the
+user speaking" was harness-authored control text. The ≥ 3-session recurrence
+gate on skill-body revision is unchanged, so a learning that is genuinely
+recurrent still has to recur in dialogue three times before it can touch a
+skill body.
+
+**Which of this is enforced by code, and which is only asked of the model.**
+Code produces the per-message provenance flag and no model can edit it; code
+derives and refuses the skill-learnings ledger's flag for a newly counted Claude
+session; code treats a ledger value that is not the exact literal `true` or
+`false` as untrusted; and code requires `derived_from_untrusted` to be exactly
+`false` for every Tier-3 write. What is **prompt only** is the step in between:
+propagating those message flags onto an ordinary note's frontmatter. No code
+checks which messages supported an ordinary candidate. That was equally true
+before this amendment — the rule it replaces read message roles out of the same
+prompt — and it is written down here because the new rule's code-produced input
+makes it easy to mistake the whole chain for code. Unknown or missing
+provenance remains `true`.
+
+**A second cost, stated so it is not discovered later.** A headless routine
+session — a scheduled digest, a routine run — is one prompt and one closing
+report, so its entire operational middle lives in tool records and is now
+outside the dream's view. And a routine's prompt is code-authored, yet it is an
+ordinary user record: a measurement across 7 headless and 53 interactive local
+transcripts found **no** top-level field distinguishing the two. So on a user
+message the extract's `derived_from_untrusted: false` means exactly "the harness
+attributed this record to the user role" — never "a human typed this", never
+"this is true", and never "this is safe to obey". On an assistant message it
+additionally means that no tool output and no context gap preceded it in that
+session, and that state, once set, is never cleared. **A user message is `false`
+by role regardless of what preceded it**, which is the rule this amendment
+carries forward from the role-based one it replaces rather than a new one.
+
 ## Future work (parked, not specced)
 
 - **Dormancy / staleness aging.** Hermes's curator auto-archives skills unused
