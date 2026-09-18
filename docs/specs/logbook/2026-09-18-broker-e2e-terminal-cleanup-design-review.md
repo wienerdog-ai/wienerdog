@@ -119,3 +119,43 @@ and a proof that mounts an input the routine cannot address measures nothing.
 
 **Not asserted:** nothing here records the owner approving, accepting, ratifying or
 signing this erratum, the spec, or ADR-0025 Amendment 6.
+
+## PR gate round 1 (2026-09-18) — implementation PR #284, tip `e60b1efe`
+
+Code byte-perfect against E1–E6; V-1 all three routines `CONTAINED`; Astra clean; CI 7/7.
+wd-reviewer returned REQUEST-CHANGES: one implementer item and four spec-side mirror-drift
+items. The four spec items land here as **erratum 2**, on `main`, **before** the
+implementer re-syncs, so the ADR block is re-applied once from a settled spec.
+
+| # | Finding | Owner | Disposition |
+|---|---------|-------|-------------|
+| PG1-1 | The ADR-0025 Amendment 6 append is the **pre-erratum** paragraph — the implementer re-applied only the three surfaces erratum 1's scope sentence named | implementer | **Not fixed here; unblocked here.** The root cause is PG1-4: erratum 1 named three of the five surfaces it had corrected. Erratum 2 names all five and says all five must be re-applied. The implementer re-applies **E6 and the Amendment 6 append** after this merges |
+| PG1-2 | Amendment 6's `weekly-review` floor row said "the poisoned daily note is **mounted**" — singular — while Table A's L1 and the shipped E3 loop require **all seven** `POISONED_NOTE_FILES` | architect | **FIXED.** The row now reads "all seven … one per day of the past week, named relative to the run". The ADR mirrors this row byte-for-byte, so the Amendment 6 block changed |
+| PG1-3 | Table C's E6 row said "the **two** constants"; E6 defines **three** | architect | **FIXED.** The row now says three and names them, so the count cannot drift again |
+| PG1-4 | Erratum 1's scope sentence named Table B, E3 and E5; it had also corrected **E6** and **the Amendment 6 section** | architect | **FIXED.** Erratum 1 now names all five, states that all five must be re-applied, and records that this omission is what produced PG1-1 |
+| PG1-5 | Vocabulary split: Table A defines L2 over the whole decoded `raw`; the Amendment 6 row and E6's JSDoc said "whose body carries" — narrower than both the contract and the committed predicate, which returns true for a marker only in the `Subject:` header | architect | **FIXED on Table A's wording, in both mirrors.** The predicate is deliberately **NOT** narrowed: a subject-only echo is still the marker travelling out of the note, and narrowing a shipped, Table-D-pinned predicate would be a closed-contract change an erratum may not make. E6's JSDoc is inside the literal block, so **E6 changed** and must be re-applied — stated explicitly in erratum 2 |
+
+### Mechanical verification of erratum 2
+
+E1–E6 re-applied to a fresh throwaway copy of `run-broker-e2e.js`:
+
+| Check | Result | Exit |
+|-------|--------|------|
+| `node --check` | `SYNTAX OK` | 0 |
+| **V-3** forbidden tokens | no output | **1** (required no-match) |
+| **V-10** Table D | `Table D: ALL ROWS HOLD` | 0 |
+| **V-11** four literal pins | `1`, `1`, `1`, `1` | 0 |
+| **V-12** Table F + F3 composite | `Table F: ALL ROWS HOLD` | 0 |
+| Amendment 6 block boundaries | 6264 chars, opens at `### Amendment 6 (2026-09-18) — LP2 is terminal-runnable; …` | — |
+
+No executable line of either predicate changed, so V-10/V-11/V-12 were expected to be
+unaffected and are.
+
+**The general lesson, and it is the second time this package has paid for it:** when an
+erratum corrects a spec in place, its scope sentence **is** the implementer's work order.
+Erratum 1 corrected five surfaces and named three, and exactly the two unnamed ones were
+left stale in the tree. A mirror list shorter than the diff is worse than no list, because
+it reads as complete.
+
+**Not asserted:** nothing here records the owner approving, accepting, ratifying or
+signing erratum 2, the spec, or ADR-0025 Amendment 6.
