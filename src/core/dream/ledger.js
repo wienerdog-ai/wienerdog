@@ -46,6 +46,18 @@ const SECRET_REVERT_MAX_DEFERRALS = 3;
  *  reason class cannot be retired by old code that assumed it was harmless. */
 const INFORMATIONAL_QUARANTINE_REASONS = Object.freeze(['over-ceiling', 'too-many-lines', 'read-error', 'parse-threw']);
 
+/** The ONE-TIME retry marker (ADR-0023 Amendment 4) and the top-level ledger key
+ *  that carries it. `parse-threw` is the only quarantine reason whose cause is
+ *  OUR OWN PARSER rather than the file, so a parser fix — and nothing the file
+ *  does — is what makes such a record obsolete; the ordinary
+ *  fingerprint-gated retry can never notice that. The marker records that THIS
+ *  retry, the one shipped with the hardened text-value parsers, has already had
+ *  its single pass on this install. It is NOT a general app-version field: a
+ *  later parser fix needs a later marker and a deliberate decision, never an
+ *  automatic re-run. Code-owned; no transcript byte reaches it. */
+const PARSE_THREW_RETRY_KEY = 'parse_threw_retry';
+const PARSE_THREW_RETRY_MARKER = 'parse-threw:harden-text-values';
+
 /** How long after a record's `updated_at` the informational quarantine sentence
  *  keeps rendering: 7 days (owner decision, 2026-08-29: 7 over 14). Past it the
  *  BANNER retires and nothing else does — the record stays quarantined, stays
@@ -100,6 +112,7 @@ function ledgerPath(stateDir) {
  *                                           'secret-revert'|'secret-revert-exhausted',
  *                                   deferrals?:number,
  *                                   updated_at:string, harness:'claude'|'codex'}>,
+ *            parse_threw_retry?: string,
  *            oversizedExtracts?: Record<string, {fingerprint:string, appVersion:string, extractBytes:number}>}} Ledger
  */
 
@@ -133,6 +146,16 @@ function optionalOversizedExtracts(value) {
   return Object.keys(oversizedExtracts).length ? { oversizedExtracts } : {};
 }
 
+/** Keep a version-1 ledger that has never had the one-shot `parse-threw` retry
+ *  byte-identical: the key exists only once the sweep has run. A non-string or
+ *  empty value is no marker at all, and the sweep then runs — which is the
+ *  fail-safe direction: an unreadable marker costs one extra reconsideration,
+ *  while trusting it would lose the sessions the retry exists for.
+ *  @param {unknown} value @returns {object} */
+function optionalParseThrewRetry(value) {
+  return typeof value === 'string' && value !== '' ? { [PARSE_THREW_RETRY_KEY]: value } : {};
+}
+
 /** Read the ledger. Missing/corrupt/malformed → a fresh empty ledger
  *  ({version:1, baseline_mtime:{claude:null,codex:null}, files:{}}) — fail closed (nothing
  *  recorded ⇒ everything above baseline eligible). Never throws.
@@ -151,6 +174,7 @@ function readLedger(stateDir) {
       },
       files: obj.files,
       ...optionalOversizedExtracts(obj.oversizedExtracts),
+      ...optionalParseThrewRetry(obj[PARSE_THREW_RETRY_KEY]),
     };
   } catch {
     return emptyLedger();
@@ -167,6 +191,7 @@ function writeLedger(stateDir, ledger) {
     {
       version: 1, baseline_mtime: ledger.baseline_mtime, files: ledger.files,
       ...optionalOversizedExtracts(ledger.oversizedExtracts),
+      ...optionalParseThrewRetry(ledger[PARSE_THREW_RETRY_KEY]),
     },
     null,
     2
@@ -198,6 +223,58 @@ function migrateFromWatermarks(stateDir, ledger) {
   return {
     ledger: { ...ledger, baseline_mtime: { claude: wm.claude, codex: wm.codex } },
     migrated: true,
+  };
+}
+
+/** ONE-TIME, IDEMPOTENT. Convert every `parse-threw` QUARANTINE record into a
+ *  retryable DEFERRED record, so the hardened parser gets one more look —
+ *  unless this ledger has already had its retry for this marker. Returns a NEW
+ *  ledger and the count converted; never mutates its argument, never throws.
+ *  The record is CONVERTED, never removed (Table A rows A1, A9).
+ *
+ *  WHY CONVERSION AND NOT DELETION. Deleting the record puts the file back on
+ *  selectState's NO-RECORD path, which consults `baseline_mtime` first and
+ *  answers 'skip-processed' for any file at or below it — so a transcript
+ *  restored from a backup or synced with an OLDER timestamp would be silently
+ *  treated as already processed, losing its session AND its
+ *  reports/warnings.md line. Keeping a record whose fingerprint still matches
+ *  bypasses the baseline entirely and lands on `case 'deferred': return
+ *  'select'`. No selectState branch is added and no new record field is
+ *  introduced: `outcome: 'deferred'` and `reason: 'parse-threw'` are existing
+ *  values of existing keys. The reason is KEPT rather than dropped, because a
+ *  deferred record carrying a reason other than `secret-revert` counts as ZERO
+ *  in secretDeferralCount — the full budget, not an invented exhaustion — and
+ *  because it is what tells the next reader why the deferral exists.
+ *  @param {import('./ledger').Ledger} ledger
+ *  @returns {{ledger: import('./ledger').Ledger, converted: number}} */
+function retryParseThrewOnce(ledger) {
+  if (ledger[PARSE_THREW_RETRY_KEY] === PARSE_THREW_RETRY_MARKER) return { ledger, converted: 0 };
+  const updatedAt = new Date().toISOString();
+  /** @type {Record<string, unknown>} */
+  const files = {};
+  let converted = 0;
+  for (const [key, rec] of Object.entries(ledger.files || {})) {
+    // A POSITIVE equality test on our OWN literal, never a rejection list: a
+    // reason from a later schema, an absent one and a non-string one all fail
+    // it, and the record is copied through untouched (Table A row A2). The key
+    // is only compared and re-used in place — never opened, never rendered,
+    // never interpolated and never removed.
+    if (isPlainObject(rec) && rec.outcome === 'quarantined' && rec.reason === 'parse-threw') {
+      files[key] = {
+        fingerprint: rec.fingerprint,
+        outcome: 'deferred',
+        reason: 'parse-threw',
+        updated_at: updatedAt,
+        harness: rec.harness,
+      };
+      converted += 1;
+    } else {
+      files[key] = rec;
+    }
+  }
+  return {
+    ledger: { ...ledger, files, [PARSE_THREW_RETRY_KEY]: PARSE_THREW_RETRY_MARKER },
+    converted,
   };
 }
 
@@ -531,6 +608,9 @@ module.exports = {
   readLedger,
   writeLedger,
   migrateFromWatermarks,
+  PARSE_THREW_RETRY_KEY,
+  PARSE_THREW_RETRY_MARKER,
+  retryParseThrewOnce,
   selectState,
   secretDeferralCount,
   recordProcessed,

@@ -1,7 +1,7 @@
 ---
 id: WP-ledger-retry-parse-threw-on-upgrade
 title: Give the hardened parser one bounded second look at transcripts quarantined parse-threw before it existed
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-transcript-parsers-harden-text-values]

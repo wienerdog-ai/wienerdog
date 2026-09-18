@@ -514,3 +514,45 @@ processed and ordinary eligibility permits retry.
 The secret-revert and quarantine-surface amendments remain in force. No new
 quarantine reason, report feature, runtime dependency, daemon or raw storage is
 introduced. ADR-0004 remains intact.
+
+### Amendment 4 (2026-09-19) — a quarantine reason whose cause is our own code may be retried once per fix, gated by ledger-level state
+
+Status: **ACCEPTED under standing authorization 2026-09-18 — owner signature pending.**
+
+**A quarantine reason can have two kinds of cause, and §2's retry rule only
+covers one of them.** A quarantine is skipped until the file changes, because
+the reason a file could not be read was taken to be a property of *the file*.
+`parse-threw` is not: it records that our own parser threw while preparing the
+transcript. When the parser is fixed the file has not changed, the fingerprint
+still matches, the file is still skipped, and the fixed parser never sees it
+again. Nothing the user can do recovers it — a completed transcript is never
+rewritten by either harness.
+
+**So a reason whose cause is OUR OWN CODE may be retried ONCE per fix that
+addresses it, and `parse-threw` is the first such reason.** The retry converts
+each affected quarantine record into a `deferred` record at the same key, with
+the same fingerprint, the same reason and no deferrals counter — the record is
+converted, never removed, because removing it would put the file on the
+no-record path, where the baseline answers "already processed" for any file at
+or below it. No selection rule changes and no record field is added: `deferred`
+and `parse-threw` are existing values of existing keys, and a deferral whose
+reason is not `secret-revert` spends none of that bounded budget. A file whose
+preparation still throws is re-quarantined by the existing fault boundary, under
+the same reason, and is skipped from then on by the ordinary rule.
+
+**The retry is gated by ledger-level state, not by the record.** One optional
+top-level ledger key carries a marker naming the fix it belongs to, written the
+first time the retry runs and read on every later run. It is not an app-version
+field: a later fix needs a later marker and a deliberate decision, never an
+automatic re-run. Absent, empty or non-string values are no marker at all and
+the retry runs, which costs one extra reconsideration rather than a lost
+session. A ledger that has never needed the retry does not gain the key, so
+version-1 ledgers stay byte-compatible, and older code that drops the key causes
+at most one extra reconsideration.
+
+The retry never runs on a preview: a dry run reports what it would convert and
+writes nothing. `reports/warnings.md` may lag by one dream run across a
+conversion, which Amendment 2 already permits in terms. Amendments 1–3 remain in
+force, including the sticky `secret-revert-exhausted` skip, which this retry
+never touches. No new quarantine reason, command, flag, runtime dependency or
+daemon is introduced. ADR-0004 remains intact.

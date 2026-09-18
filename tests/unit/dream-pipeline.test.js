@@ -3068,3 +3068,73 @@ test('dream-pipeline: the retention prune runs EXACTLY ONCE per run, and only af
     `${SIGNAL}: zero completed redactions must attempt zero deletions even 1 over the cap, got ${attempts2.length}`
   );
 });
+
+// ── WP-ledger-retry-parse-threw-on-upgrade: Table A row A5, criteria 1 and 5 ──
+//
+// The sweep observed through a REAL run of the production entry point: a
+// transcript quarantined `parse-threw` before the parser was fixed is
+// reconsidered by the very run that converts its record, a --dry-run reports
+// what it would convert and leaves the ledger file byte-identical, and the
+// one-shot marker stops the third run repeating any of it.
+
+test('dream-pipeline: [LRP-5] the one-time parse-threw retry reconsiders a quarantined transcript in the same run, and a dry run writes nothing', async () => {
+  const S = 'LRP-5-one-time-retry-through-a-real-run';
+  const ctx = setup();
+  const transcript = path.join(ctx.claude, 'projects', 'proj', 'inj.jsonl');
+  const st = fs.statSync(transcript);
+  const key = ledgerLib.foldKey(transcript);
+  // The ledger shape the upgrade actually finds: a `parse-threw` quarantine
+  // whose fingerprint still MATCHES the file on disk, under a baseline at that
+  // file's own mtime — the at-or-below-baseline case a deletion-based retry
+  // answers 'skip-processed' for (Table A row A9).
+  ledgerLib.writeLedger(ctx.state, {
+    version: 1,
+    baseline_mtime: { claude: st.mtimeMs, codex: null },
+    files: {
+      [key]: {
+        fingerprint: ledgerLib.fingerprint({ size: st.size, mtimeMs: st.mtimeMs, dev: st.dev, ino: st.ino }),
+        outcome: 'quarantined',
+        reason: 'parse-threw',
+        updated_at: '2026-09-01T00:00:00.000Z',
+        harness: 'claude',
+      },
+    },
+  });
+  const before = fs.readFileSync(ledgerLib.ledgerPath(ctx.state));
+
+  // Leg one — DRY RUN (criterion 5): it reports what it would convert and the
+  // ledger file is byte-identical afterwards.
+  const dry = await runDream(ctx, ['--dry-run']);
+  assert.equal(dry.thrown, null, `${S}: the dry run threw — ${dry.thrown && dry.thrown.message}`);
+  assert.match(dry.output, /would try 1 session transcript\(s\)/,
+    `${S}: --dry-run must report what the retry would convert`);
+  assert.deepEqual(fs.readFileSync(ledgerLib.ledgerPath(ctx.state)), before,
+    `${S}: --dry-run must leave transcript-ledger.json byte-identical`);
+
+  // Leg two — REAL RUN (criterion 1): the same run that converts the record
+  // admits the session, with no edit to the transcript.
+  const real = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: brainWrites(ctx, {
+        '03-Resources/lrp-note.md': '---\ntype: note\nderived_from_untrusted: false\n---\n\nbody\n',
+      }),
+    },
+  });
+  assert.equal(real.thrown, null, `${S}: the real run threw — ${real.thrown && real.thrown.message}`);
+  assert.match(real.output, /trying 1 session transcript\(s\)/, `${S}: the real run must report the retry`);
+  assert.doesNotMatch(real.output, /nothing new to dream/,
+    `${S}: the quarantined transcript must be admitted by the run that converted its record`);
+  const after = ledgerLib.readLedger(ctx.state);
+  assert.equal(after.files[key].outcome, 'processed',
+    `${S}: the retried transcript must end the run recorded processed`);
+  assert.equal(fs.statSync(transcript).mtimeMs, st.mtimeMs, `${S}: the transcript itself must not have been touched`);
+  assert.equal(after[ledgerLib.PARSE_THREW_RETRY_KEY], ledgerLib.PARSE_THREW_RETRY_MARKER,
+    `${S}: the one-shot marker must be durable after the real run`);
+
+  // Leg three — the gate holds: nothing is retried and nothing is announced.
+  const third = await runDream(ctx, ['--yes']);
+  assert.equal(third.thrown, null, `${S}: the third run threw — ${third.thrown && third.thrown.message}`);
+  assert.match(third.output, /nothing new to dream/, `${S}: the third run has nothing left to do`);
+  assert.doesNotMatch(third.output, /session transcript\(s\)/, `${S}: the retry must not run a second time`);
+});
