@@ -177,11 +177,12 @@ Everything below was read at `c05a575b`.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/scheduler/generators.js | add and export **one** recognizer, `recognizeScheduleBasename` — Table R rows R1/R2. Do **not** refactor `deriveUnloadArgv` / `deriveProbeArgv` / `deriveIdentityArgv`; their regexes stay byte-unchanged (Out of scope) |
-| modify | src/core/manifest.js | add and export `discoverSchedulesOnDisk` (Table D rows D1, **D9**, **D11**, **D12**; it reads no manifest entry to decide an unload — **D10**); add the **two-phase** widened pass to `reverse()` — unload before the entry loop, removal after (Table D row **D5**) — and its `discoveredSchedules` option + return field (Table D rows D4/D6); the disposition of Table R row **R4**. `withinSchedulerRoot`, `withinAllowedRoot`, `validateEntry` and `disposeCoreMechanics` stay byte-unchanged |
+| modify | src/core/manifest.js | add and export `discoverSchedulesOnDisk` (Table D rows D1, **D9**, **D11**, **D12**, **D14**; it reads no manifest entry to decide an unload — **D10**); add the **two-phase** widened pass to `reverse()` — unload before the entry loop, removal after (Table D row **D5**) — and its `discoveredSchedules` option + return field (Table D rows D4/D6); the disposition of Table R row **R4**. `withinSchedulerRoot`, `withinAllowedRoot`, `validateEntry` and `disposeCoreMechanics` stay byte-unchanged |
 | modify | src/cli/uninstall.js | discover once before the plan, **abort on an unreadable root** (Table D row **D9**), and disclose the block (Table D rows D2/D3, including D11's `keep` lines and D12's vault lines); pass the same snapshot to both `reverse()` calls (Table D rows D4/D7). `requireDeletionClearance`, the byte-compare and the `vaultPath` read at `:309` stay byte-unchanged |
 | modify | tests/unit/manifest.test.js | the recognition rule, the discovery set, the widened pass, the act-time re-check, the unreadable-root and coverage rows (Table D rows **D9**–**D12**), and the security rows of Table S |
 | modify | tests/unit/uninstall.test.js | disclosure-before-consent for the disk-derived set (Table D rows D2/D3/D7), the D9 abort and its `--dry-run` non-abort, and the `--dry-run` surface |
 | modify | tests/unit/scheduler-generators.test.js | `recognizeScheduleBasename` over Table R rows R1–R3, and its agreement with the three existing derive functions on a shared corpus |
+| modify | tests/integration/uninstall-core-e2e.test.js | **Round 4, and it must land even though the code fix makes it redundant.** `tempEnv()` (`:18-42`) spreads `...process.env` (`:27`) and then overrides `HOME` (`:28`), so a developer's real `XDG_CONFIG_HOME` is **inherited** and `systemdUserDir` resolves outside the sandbox. The literal edit: add `XDG_CONFIG_HOME: path.join(root, '.config'),` to that object literal, beside the existing `CLAUDE_CONFIG_DIR` / `CODEX_HOME` overrides, with a comment naming Table D row **D14**. Add the regression of acceptance criteria 15 and 16 here |
 | create | tests/red-proofs/scheduler-replay-manifest-independent.proofs.json | the declared RED proofs of Table B (ADR-0042) |
 | modify | docs/adr/0041-real-scheduler-mutation-is-opt-in.md | **owner item 2 only** — the dated amendment drafted under owner item 2, verbatim. The `Status:` and `OWNER-SIGNED` header lines (`:3-4`) are **never** touched, moved or reformatted (ADR-0035) |
 
@@ -300,7 +301,7 @@ Every fact about *what we accept* and *what happens to it* is decided here.
 
 | Row | Fact | Value |
 |---|---|---|
-| **D1** | **The candidate gate** | Each root of `schedulerOpts.schedulerRoots` (`manifest.js:753-757`) listed **non-recursively**. A candidate is kept only when **all** of: its basename is recognized (R2); `withinSchedulerRoot(candidate, roots)` is true; `fs.lstatSync` reports a **regular file** (not a symlink, not a directory); and it is not vault-resident (**D12**). **The gate consults the manifest for nothing** — see **D10**. Enumeration failure is not part of it either — see **D9** |
+| **D1** | **The candidate gate** | Each **discovery root** (**D14** — not every root `reverse()` computes) listed **non-recursively**. A candidate is kept only when **all** of: its basename is recognized (R2); `withinSchedulerRoot(candidate, roots)` is true; `fs.lstatSync` reports a **regular file** (not a symlink, not a directory); and it is not vault-resident (**D12**). **The gate consults the manifest for nothing** — see **D10**. Enumeration failure is not part of it either — see **D9** |
 | **D2** | **When discovery runs** | **Exactly once per `uninstall` invocation, before anything is printed** — and therefore before D9's abort, which is the first thing the result is examined for. The returned `schedules` array is the *accepted snapshot* of the disk-derived set, and it is the only such list the run ever uses. It is built with the vault path already read (`uninstall.js:309`) so D12 can apply |
 | **D3** | **How it is disclosed** | As its own labeled block in **both** the `--dry-run` output and the pre-confirm plan (`uninstall.js:353-358`), after the manifest-derived lines: a header line naming the block, then per item the re-derived `would run: <argv>` line (omitted when R6 yields `null`) and **one** of — a `remove <path>` line when R4's cell is `unload-and-remove` **and** the item's `remove` is true, or a `keep <path> (another manifest entry owns this file)` line when D11 withheld it, or nothing when R4's cell is `unload-only`. D12's `skippedForVault` entries get their own line naming the vault, in the shape `disposeCoreMechanics`'s caller already uses for `skippedForVault` (`uninstall.js:332`). **The `--dry-run` headline count at `:328` is left unchanged** — it already disclaims equality with the live total (`:324-326`), and leaving it alone keeps the headline independent of R4's cell. **The plan may show the same unregister command twice** — once from the ledger's `scheduler-entry` and once from this block — because since round 3 discovery no longer excludes recorded paths (D10). The block's header says these were **found on disk**, so the two lines are distinguishable, and D13 is why the duplicate is harmless. Deduplicating them would mean consulting the manifest to decide what to print, which is the channel D10 closed |
 | **D4** | **How it reaches `reverse()`** | Passed as `opts.discoveredSchedules` — the `{path, remove}` items of the Exact contracts — to **both** the plan call and the live call. The default is `[]`: `reverse()` **never discovers on its own**, so every other caller and every existing test is unchanged, and the post-confirm run cannot widen past what was disclosed. Carrying `remove` on the item is what keeps D11's decision at discovery time: `reverse()` applies it, never re-derives it |
@@ -313,6 +314,7 @@ Every fact about *what we accept* and *what happens to it* is decided here.
 | **D11** | **What a manifest record still does: narrow the REMOVAL** | When **any** entry accepted by `validateEntry` (`manifest.js:1044`) names a discovered path after realpath resolution, that item carries `remove: false`: phase D5a still unloads it and phase D5b prints `keep <path> (another manifest entry owns this file)` instead of removing it, whatever Table R row R4's cell says. That entry's own reverser owns the file's lifecycle — a `scheduler-entry` removes it itself (`:543`), and a `file` entry may hold a proof-before-delete this pass cannot evaluate (its `hash` gate, `:890`). **This rule is safe in a way a coverage rule is not:** it only ever makes uninstall delete *less*, so a forged, stale or evidence-losing record cannot use it to leave a job running — the unload has already happened. Unload and removal were always separate questions; three rounds are what established that only the removal side may be answered from the ledger |
 | **D12** | **Vault exclusion** | *Design gate round 1, finding 3.* Discovery takes the **accepted vault path** — the same value `uninstall.js:309` reads from `config.yaml` before the confirm and already hands to `disposeCoreMechanics` (`:320`, `:410`) — as `opts.vaultPath`, and excludes any candidate that equals or resolves inside it (`contains(vaultPath, candidate)`, `manifest.js:1097`), reporting it in a `skippedForVault` list the caller discloses. **Why this is load-bearing:** `disposeCoreMechanics` deliberately protects a legacy or hand-edited install whose vault sits inside a mechanics dir (`manifest.js:1123-1127`, `:1144-1147`). With the vault at `<core>/schedules`, a user-authored `wienerdog-notes.xml` satisfies every other D1 clause, and the widened pass would delete it **before** the protected sweep ever ran — a user file that survives today. **The act-time re-check does not re-derive it**, and does not need to: the value is read once pre-confirm and is the same value `disposeCoreMechanics` acts on, so re-deriving it could only disagree with the disclosed plan |
 | **D13** | **The DOUBLE UNLOAD D10 buys, and why it is tolerated** | Because D5a no longer excludes recorded paths, a normal install's every job is unloaded twice: once in D5a, once by its own `scheduler-entry` reverser. **The second attempt cannot fail the uninstall, and this is a property of the shipped code rather than of the tools:** `reverseSchedulerEntry` wraps the spawn in `try/catch` and **discards the result** (`manifest.js:532-536`), under a comment that already anticipates exactly this — *"Best-effort: the entry may already be unloaded. Ignore non-zero/errors"* (`:529`). Nothing reads the status, so no exit code reaches a decision; this package adds no propagation, which is `R-failed-unload`'s work package, not this one. Per platform, the second attempt's expected outcome — and in every case it is discarded at the same line: **launchd** `launchctl bootout gui/<uid>/<label>` on an already-booted-out label exits **non-zero** (no such process); **systemd** `systemctl --user disable --now <unit>.timer` on an already-disabled unit exits **0**, and non-zero only if the unit file is gone; **schtasks** `/delete /tn \Wienerdog\<name> /f` on a missing task exits **non-zero**. **Two costs, stated rather than hidden:** one extra `schedulerSpawn` per recorded scheduler entry, and — on a run without scheduler authority — one extra refusal line per entry on stderr (ADR-0041 Decision 1). Neither changes an outcome. **What this rules out:** any design in which D5a's unload is skipped because a record exists. Recording what D5a unloaded in order to suppress the *recorded* reverser's attempt was weighed and **not taken** — it re-introduces a suppression channel to save a spawn whose result is already discarded |
+| **D14** | **The DISCOVERY root set — narrower than `reverse()`'s, and derived from this run's own paths** | *Design gate round 4.* `reverse()` computes three roots at `manifest.js:753-757`; **discovery accepts only those `contains`-inside `paths.home` or `paths.core`** (`:1097`, realpath-aware, fail-closed). Per root: **LaunchAgents** is `path.join(home,'Library','LaunchAgents')` (`generators.js:89`) — inside `paths.home` by construction, always accepted. **The Windows XML root** is `path.join(paths.core,'schedules')` (`manifest.js:756`, matching `windowsTasksDir`, `generators.js:546`) — inside `paths.core` by construction, **never `APPDATA`-derived or otherwise ambient**, always accepted. **The systemd user dir** is `(env.XDG_CONFIG_HOME \|\| home/.config) + /systemd/user` (`generators.js:99-103`) — the one root an **ambient environment variable can move outside the home this run is reversing**, and the one this rule exists for. **Why a test fix alone is not the fix:** the escape is a property of the root derivation, not of any caller. `realSchedulerAuthority` (`spawn.js`, ADR-0041 Decision 1) does **not** cover it — it compares `getPaths().core` to `<os.userInfo().homedir>/.wienerdog` and gates the **mutation chokepoint**, whereas the damage here is an `fs.rmSync` on a file outside the sandbox, which no spawn guard can reach. **Named residual — `R-external-xdg-root-undiscovered`:** on an install whose `XDG_CONFIG_HOME` genuinely points outside `$HOME`, unrecorded systemd units there are **not discovered**. Recorded ones still reverse normally, because `reverse()`'s own `schedulerRoots` and `withinSchedulerRoot` are unchanged. That is strictly narrower than today's behaviour and is the direction ADR-0038 permits |
 
 ### Table S — security rows (canonical)
 
@@ -328,6 +330,7 @@ Every fact about *what we accept* and *what happens to it* is decided here.
 | **S8** | The widened deletion reaching a user's notes | Closed by Table D row **D12**: a candidate inside the accepted vault path is excluded from both unload and removal, preserving the protection `disposeCoreMechanics` already gives a nested vault (`manifest.js:1123-1127`, `:1144-1147`). Without it, a vault at `<core>/schedules` puts every user file whose name happens to match R2 inside this package's blast radius |
 | **S9** | Another reverser destroying the evidence the unload needs — the **ordering** failure | Closed by Table D row **D5**'s two phases: every discovered unload is attempted **before** the manifest entry loop can delete its file. The win32 case is the live one — `<core>/schedules` is inside `withinAllowedRoot`'s root set (`manifest.js:742`), so a `file` record there really is deletable — and a hand-edited manifest could otherwise convert "covered by a record that unloads" into "deleted by a record that does not" |
 | **S10** | A symlink alias, or any record whose own evidence disappears mid-replay, used as fake coverage | Closed by the same removal of the predicate (**D10**). Round 2 raised the alias that derives `null`; round 3 raised the alias that derives the *right* argv and is then stranded when a later `file` record deletes the symlink, so its reverser fails realpath containment and spawns nothing. Neither reaches a suppression decision any more, because there is none to reach |
+| **S11** | Discovery running against a scheduler root **outside** the home this run is reversing | Closed by Table D row **D14**: a discovery root must be `contains`-inside `paths.home` or `paths.core`. This is the incident class ADR-0041 was written for, one level down — a sandbox that redirects `HOME` and forgets that `XDG_CONFIG_HOME` is not a file it moved. **ADR-0041's authority predicate does not cover it:** that guard gates the mutation chokepoint, and the damage here is an `fs.rmSync` no spawn guard sees. Measured on this tree: `tests/integration/uninstall-core-e2e.test.js` `tempEnv()` spreads `...process.env` (`:27`) and overrides only `HOME` (`:28`), while granting `WIENERDOG_ALLOW_REAL_SCHEDULER=1` (`:39`) — so clearance is granted and `WIENERDOG_LOADER_NOOP` (`:33`) suppresses spawns but not deletions. Under R4's `unload-and-remove` and without D14, `npm test` would delete a developer's real `~/.config/systemd/user/wienerdog-*.timer`. **Both fixes ship:** D14 in the root derivation, and the test's own `XDG_CONFIG_HOME` override |
 
 ### Table B — the declared RED proofs (ADR-0042)
 
@@ -353,6 +356,7 @@ by this package carries no pre-measurable anchor and says so.
 
 | `srm-unload-moved-after-loop` | 12 | `src/core/manifest.js` | move phase **D5a** back to after the manifest entry loop, restoring the single-pass shape | `for (const entry of [...manifest.entries].reverse()) {` — **1** | *Round 2, finding 1.* Criterion 12 asserts an unload **happened** for a file another reverser deletes during the loop. Without the declaration a suite that only ever fixtures files **no** manifest entry touches stays green under the mutation, because the ordering is unobservable unless the corpus contains the overlapping win32 case |
 | `srm-record-suppresses-unload` | 13 | `src/core/manifest.js` | re-introduce a coverage exclusion into discovery: skip any candidate named by a validated manifest entry | `const removedSet = new Set([paths.manifest]);` — **1** (the adjacent, unchanged pre-loop region phase D5a is inserted before) | *Round 3, the convergence move.* Criterion 13 asserts that a candidate **covered** by a record — including the round-3 shape, a same-basename in-root symlink `scheduler-entry` whose own file a later `file` record deletes — is still unloaded. Under the mutation it is silently excluded and nothing unloads it, which is what three review rounds each measured. **This declaration replaces `srm-alias-counts-as-coverage`**, which pinned the old five-condition predicate that no longer exists |
+| `srm-external-root-discovered` | 15 | `src/core/manifest.js` | remove Table D row **D14**'s containment filter, so discovery enumerates every root `reverse()` computes | `gen.systemdUserDir(paths.home, process.env), // $XDG_CONFIG_HOME||~/.config + /systemd/user` — **1** (the unchanged root the filter is applied to) | *Round 4.* Criterion 15 asserts that files under an external XDG root **survive**. A survival assertion goes green whenever the fixture's external root was never populated, never reached, or silently mis-pathed — and the thing it guards against is `npm test` deleting a developer's real timer, which is the one failure nobody gets to discover twice |
 
 **Why round 1's finding 2 carries no declaration of its own.** Its criterion (10) asserts a
 **positive** effect — the unload argv for the uncovered file reaching the
@@ -388,7 +392,9 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       **11** asserts Table D row **D12** and Table S row S8; criterion **12**
       asserts Table D row **D5** and Table S row S9; criterion **13** asserts
       Table D rows **D10**/**D11** and Table S rows S7/S10; criterion **14**
-      asserts Table D row **D13**
+      asserts Table D row **D13**; criterion **15** asserts Table D row **D14**
+      and Table S row S11; criterion **16** asserts the Deliverables row for the
+      integration test
 - [ ] **Verification commands / greps** — the two `recognizeScheduleBasename`
       greps mirror Table R row R1's single-source requirement; the
       `/^ai\.wienerdog\..*\.plist$/` grep mirrors Table R row R3; the
@@ -519,9 +525,10 @@ unloaded and removed?**
   the first `console.log`, in the shape the file's other refusals already use
   (`:286-288`, `:386-390`). It is a refusal, not a crash: the message names each
   unreadable directory and its `code`, and says nothing was removed.
-- **Six rows exist because the design gate found them, not because they were
+- **Seven rows exist because the design gate found them, not because they were
   foreseen.** D9, D11 and D12 come from round 1; **D5**'s two phases from round 2; **D10**'s
-  removal of the coverage predicate, and **D13**, from round 3 (dispositions in
+  removal of the coverage predicate, and **D13**, from round 3; **D14** from
+  round 4 (dispositions in
   `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-review.md`).
   Each closes a way the package could have *claimed* to close
   R-stripped-manifest-orphan while leaving it open, or could have deleted
@@ -552,7 +559,7 @@ assume the suite exercised them all.
 | Platform | What the suite can execute on this machine (darwin), and what is assertion-by-fixture |
 |---|---|
 | macOS / launchd | **Yes, end to end, with no real-domain contact.** `paths.home` is `env.HOME \|\| os.homedir()` (`paths.js:54`), so a redirected `HOME` puts `launchAgentsDir` inside a temp dir; planting files there and running discovery + the widened pass is ordinary filesystem work. The **unload spawn** is not executed: `schedulerSpawn` is the chokepoint and the suite's guard covers it (ADR-0041 Decision 1; `tests/run.js:7`), so what is asserted is the **derived argv and the fact that it reached the chokepoint**, never a real `launchctl` call |
-| Linux / systemd | **Discovery and the widened pass: yes.** `reverse()` builds all three roots on every host (`manifest.js:753-757`), so the systemd user dir exists under a redirected `HOME` on darwin too and files planted in it are discovered and acted on identically. **The derived argv: assertion-by-fixture** — `deriveUnloadArgv` takes `platform` as a parameter (`generators.js:140`, "injected — never mock `process.platform`"), so the linux argv is asserted by injection, not by running on linux |
+| Linux / systemd | **Discovery and the widened pass: yes, with one caveat.** Table D row **D14** means a test must place `XDG_CONFIG_HOME` inside its temporary `HOME` or the systemd root is not a discovery root at all. `reverse()` builds all three roots on every host (`manifest.js:753-757`), so the systemd user dir exists under a redirected `HOME` on darwin too and files planted in it are discovered and acted on identically. **The derived argv: assertion-by-fixture** — `deriveUnloadArgv` takes `platform` as a parameter (`generators.js:140`, "injected — never mock `process.platform`"), so the linux argv is asserted by injection, not by running on linux |
 | Windows / schtasks | **Assertion-by-fixture, plus one executable part.** The XML root is `<core>/schedules` (`manifest.js:756`), which exists on darwin, so discovery of a `wienerdog-*.xml` there is executable. The `schtasks` argv and the win32 basename flavor (`path.win32.basename`) are asserted by injecting `platform: 'win32'`. **`recognizeScheduleBasename` takes a basename, not a path, so it is host-agnostic by construction** and needs no injection at all |
 
 Nothing in this package runs a scheduler client, on any platform, in any test.
@@ -580,6 +587,12 @@ Nothing in this package runs a scheduler client, on any platform, in any test.
       Table D row **D12**, Table S row S8.
 - [x] The unload cannot be starved by another reverser deleting its evidence
       first — Table D row **D5**'s two phases, Table S row S9.
+- [x] **Discovery never runs against a scheduler root outside the home this run
+      is reversing** — Table D row **D14**, Table S row S11. The guard is the
+      `contains` containment on `paths.home`/`paths.core`, **not** ADR-0041's
+      authority predicate: that one gates the mutation chokepoint and cannot see
+      an `fs.rmSync`. LaunchAgents and the Windows XML root are inside by
+      construction; the systemd user dir is the only ambient-movable one.
 - [x] **No manifest record can suppress an unload at all** — the coverage
       predicate is gone, not refined (Table D row **D10**, Table S rows S7/S10).
       The ledger may only withhold a *removal* (Table D row **D11**), which is the
@@ -667,7 +680,19 @@ Nothing in this package runs a scheduler client, on any platform, in any test.
       and a **non-zero second attempt does not fail the uninstall**: the run exits
       0 and every other reversal completes. Asserted by counting chokepoint calls,
       so the duplicate is observed rather than assumed.
-- [ ] **15.** The declared RED proofs of Table B are `PROVEN` in an **UNFILTERED**
+- [ ] **15.** *(Round 4 — Table D row **D14**, Table S row S11.)* With
+      `XDG_CONFIG_HOME` pointing at a directory **outside** the run's `HOME` and
+      `paths.core`, and recognized schedule files planted there, a non-dry-run
+      `uninstall` leaves **every one of them on disk and unloaded-untouched**: the
+      external root contributes no candidate, appears in no disclosed plan, and
+      produces no chokepoint call. The same files placed under an XDG root
+      **inside** the run's `HOME` **are** discovered — so the criterion measures
+      the containment rule, not merely that discovery found nothing.
+- [ ] **16.** `tests/integration/uninstall-core-e2e.test.js` sets
+      `XDG_CONFIG_HOME` inside its temporary `HOME` (Deliverables). Asserted by
+      the test's own environment, not by inspection: the value it passes resolves
+      under its `root`.
+- [ ] **17.** The declared RED proofs of Table B are `PROVEN` in an **UNFILTERED**
       `npm run red-proofs` run, with no `FILTERED`, `VACUOUS`, `UNCONTROLLED` or
       `FAILED` verdict.
 
@@ -700,7 +725,7 @@ test -f docs/adr/0041-real-scheduler-mutation-is-opt-in.md \
 grep -n '^Status: Accepted$' docs/adr/0041-real-scheduler-mutation-is-opt-in.md
 grep -n '^OWNER-SIGNED 2026-08-31$' docs/adr/0041-real-scheduler-mutation-is-opt-in.md
 
-# The declared RED proofs (criterion 15) — UNFILTERED.
+# The declared RED proofs (criterion 17) — UNFILTERED.
 npm run red-proofs
 ```
 
@@ -750,7 +775,9 @@ the Out-of-scope list and by criterion 2's agreement test.
    `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-review.md`.
    **Round 2 returned `needs-attention` with two further band-A HEAVY findings**
    (raw at `244d0cfc`) and **round 3 with one more** (raw at `dcf46033`), all
-   accepted and applied. Round 3 froze the surface: D5a unloads everything
+   accepted and applied. **Round 4 confirmed the simplified design held** — D1,
+   D5, D10, D11 and D13 were not re-opened — and returned one further band-A
+   HEAVY finding (raw at `b78ccba7`), also accepted and applied as **D14**. Round 3 froze the surface: D5a unloads everything
    recognized, and further findings are fixed within that shape or accepted as
    named residuals. The gate is therefore **open**, and at least one further
    round is required. **A review gate is not owner approval:** nothing

@@ -171,6 +171,77 @@ re-derived), the Deliverables notes, acceptance criteria 13 (rewritten) and 14
 15, the Mirrored Surface Checklist, the Security checklist, the gate-derived-rows
 implementation note, and the Definition of done's dispatch precondition.
 
-## Round 4
+## Round 4 (Astra)
+
+- **Reviewed tip:** `bca5b091` (round-3 convergence move applied).
+- **Raw + focus committed BEFORE adjudication:** `b78ccba7`.
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r4-astra-raw.json`
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r4-astra-focus.txt`
+- **Verdict:** `needs-attention` — *"the specified discovery can make an existing
+  integration test delete real scheduler files."*
+- **The frozen surface held.** Nothing about D1, D5, D10, D11 or D13 was
+  re-opened: no manifest-coverage suppression, D5a unloads everything, D11
+  narrows removal only, the double unload is discarded at
+  `manifest.js:529-536`. The finding is **inside** the frozen shape — it is about
+  which roots D1 enumerates — which is what the convergence note said further
+  findings would look like.
+
+### Disposition
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| 7 | **An inherited `XDG_CONFIG_HOME` puts a discovery root outside the sandbox.** `tests/integration/uninstall-core-e2e.test.js` `tempEnv()` spreads `...process.env` (`:27`) and overrides only `HOME` (`:28`), so `systemdUserDir` (`generators.js:99-103`) still resolves to the developer's real `~/.config/systemd/user`. Astra executed the environment builder read-only to confirm it. The test grants `WIENERDOG_ALLOW_REAL_SCHEDULER=1` (`:39`), so clearance is short-circuited, and `WIENERDOG_LOADER_NOOP` (`:33`) suppresses **spawns, not deletions** — so under R4's `unload-and-remove` a real `wienerdog-*.timer` there would be discovered, not found in the fixture manifest, and **deleted by `npm test`**. The integration test was also absent from the Deliverables table | A | HEAVY | **ACCEPTED, and fixed in the root derivation rather than only in the test.** See below |
+
+### Where the fix belongs, and why the existing guard does not reach it
+
+The coordinator's question was whether `WP-scheduler-mutation-home-authority`'s
+authority check covers this. **It does not, and structurally cannot.**
+`realSchedulerAuthority` compares `getPaths().core` to
+`<os.userInfo().homedir>/.wienerdog` and gates `schedulerSpawn` — the **mutation
+chokepoint**. The damage here is an `fs.rmSync` on a file outside the sandbox,
+which no spawn guard observes. ADR-0041's own sentence is the one being violated
+one level down: *a redirected `HOME` sandboxes the files, so it must also stop
+the mutation* — except `XDG_CONFIG_HOME` is not a file the redirect moved.
+
+So the fix is **Table D row D14**, in D1's root derivation: a discovery root must
+be `contains`-inside `paths.home` or `paths.core`. Per root —
+
+- **LaunchAgents** `path.join(home,'Library','LaunchAgents')` — inside
+  `paths.home` by construction. Always a discovery root.
+- **Windows XML** `path.join(paths.core,'schedules')` — inside `paths.core` by
+  construction, and **never `APPDATA`-derived or otherwise ambient**. Always a
+  discovery root. (Checked because the coordinator asked: the win32 root has no
+  environment input at all.)
+- **systemd user dir** `(XDG_CONFIG_HOME || home/.config)/systemd/user` — the
+  **only** root an ambient variable can move outside the home being reversed, and
+  the one D14 exists for.
+
+**Both fixes ship, and the test fix is not the load-bearing one.** The literal
+edit is in the Deliverables row: add `XDG_CONFIG_HOME: path.join(root,
+'.config'),` to `tempEnv()`'s object literal beside the existing
+`CLAUDE_CONFIG_DIR` / `CODEX_HOME` overrides.
+
+### Named residual
+
+**`R-external-xdg-root-undiscovered`** — on an install whose `XDG_CONFIG_HOME`
+genuinely points outside `$HOME`, unrecorded systemd units there are not
+discovered. Recorded ones still reverse, because `reverse()`'s own
+`schedulerRoots` and `withinSchedulerRoot` are untouched. Strictly narrower than
+today's behaviour, and therefore the direction ADR-0038 permits. This is the
+"accepted as a named residual" branch the convergence note reserved.
+
+### Surfaces updated in the same commit
+
+Table D (D1's root clause now cites D14; **D14** added), Table S (**S11** added),
+Table B (`srm-external-root-discovered` added, anchored on the unchanged
+`gen.systemdUserDir(paths.home, process.env)` line, measured unique at
+`c05a575b`), a **new Deliverables row** for
+`tests/integration/uninstall-core-e2e.test.js` carrying the literal edit,
+acceptance criteria 15 and 16 (red-proofs renumbered to 17), the Platform-scope
+table's Linux row, the Mirrored Surface Checklist, the Security checklist, the
+gate-derived-rows implementation note, and the Definition of done's dispatch
+precondition.
+
+## Round 5
 
 Pending — a fresh Astra round runs against the revised spec.
