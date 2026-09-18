@@ -1,7 +1,7 @@
 ---
 id: WP-secret-stream-safe-cut-redactor
 title: Give the detector a bounded stream redactor that cuts only where no rule can match across
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-secret-sink-wiring-probes]

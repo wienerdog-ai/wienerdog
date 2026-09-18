@@ -23,6 +23,11 @@ const ScanLimits = {
   ENTROPY_MIN_LEN: 24, // a contextual high-entropy candidate must be at least this long
   ENTROPY_MIN_BITS_PER_CHAR: 3.5, // Shannon bits/char over the candidate to count as high-entropy
   ENTROPY_CTX_FILLER_MAX: 20, // chars a sensitive keyword may sit before the separator it binds through
+  // ADR-0043 / Table B: the most characters `createStreamRedactor` holds, and so
+  // the longest region it hands to ONE `redactOnly` call. UTF-8 is at most 4
+  // bytes per character, so 32768 * 4 = 131072 < SCAN_MAX_BYTES keeps every
+  // region scannable and a region can never trip the oversized path.
+  STREAM_REGION_MAX: 32 * 1024,
 };
 
 /** @typedef {'redact'|'quarantine'} Severity
@@ -322,4 +327,198 @@ function hasHardFinding(findings) {
   return (findings || []).some((f) => f.severity === SEVERITY.QUARANTINE);
 }
 
-module.exports = { scanAndRedact, redactOnly, hasHardFinding, ScanLimits, SEVERITY };
+// ---------------------------------------------------------------------------
+// THE BOUNDED STREAM REDACTOR (ADR-0043).
+//
+// Per-chunk redaction is withdrawn: a credential whose two halves land in
+// separate stream chunks is redacted by neither call, and the two writes land
+// contiguous in the durable log. This transform instead accumulates stream text
+// and emits it as REGIONS, each scanned by exactly one `redactOnly` call, and a
+// region may end only at an ACCEPTED CUT POINT — a place where no rule in
+// `RULES` above can match across.
+//
+// The predicate lives in this file, with the rules it is derived from, on
+// purpose (ADR-0043 decision 3). Nothing below is exported but
+// `createStreamRedactor`.
+// ---------------------------------------------------------------------------
+
+/** How far back Table S row S2's binder reaches for its keyword, counted in
+ *  NON-whitespace characters. DERIVED from the two alternations the binder is
+ *  built out of and never a literal: a written alternation is always at least as
+ *  long as any string it matches, so `SENSITIVE_KEYS.length` bounds the longest
+ *  keyword and `SEP.length` the longest separator token; the 2 is the binder's
+ *  two optional quote slots. Over-estimating only widens the window, which can
+ *  never fail open. Whitespace is taken for free, because the binder's
+ *  whitespace runs are unbounded — the keyword may sit any number of blank lines
+ *  back. */
+const CUT_BINDER_LOOKBACK = SENSITIVE_KEYS.length + SEP.length + 2;
+
+/** Table S row S2 — an OPEN key binder at the end of the buffered text, spelled
+ *  by interpolating the detector's own `SENSITIVE_KEYS` and `SEP`, exactly as
+ *  `CTX_BINDER` above is; a second hand-written copy of either alternation is
+ *  the drift ADR-0031 exists to prevent. It is NOT a reuse of `CTX_BINDER` and
+ *  differs from it in the two ways that matter here: the separator is OPTIONAL
+ *  (so `Bearer `, which has none, still blocks a cut, and so does a line ending
+ *  in the bare word `token`), and the whitespace class is `\s`, which spans CR
+ *  and LF (so `password:\n\n` and `password\n:\n` both still block). */
+const CUT_OPEN_BINDER = new RegExp(
+  `(?:${SENSITIVE_KEYS}|authorization)["'\`]?\\s*(?:${SEP})?\\s*["'\`]?$`,
+  'i',
+);
+
+/** Table S row S3 — a sensitive JSON key plus the opening quote of its value.
+ *  The key set is `SENSITIVE_KEYS`; the quote and separator shapes are the JSON
+ *  value rule's own (`"(SENSITIVE_KEYS)"(\s*:\s*)"([^"\\]{8,})"`, above), whose
+ *  value body includes `\n` and so stays open across arbitrarily many lines. */
+const CUT_JSON_VALUE_OPEN = new RegExp(`"(?:${SENSITIVE_KEYS})"\\s*:\\s*"`, 'gi');
+
+/** Table S row S4 — the `private-key` rule's opener and closer, spelled from
+ *  that rule's own pattern above, whose body is `[\s\S]*?`. */
+const CUT_PEM_OPEN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
+const CUT_PEM_CLOSE = /-----END [A-Z ]*PRIVATE KEY-----/g;
+
+/** Table S row S1: the cut falls immediately after a `\n`. Taken on the buffer
+ *  and an index rather than on a slice, so the descending scan in
+ *  `nextRegionEnd` rejects a non-boundary in constant time and never copies.
+ *  @param {string} buffer @param {number} i @returns {boolean} */
+function cutS1EndsWithNewline(buffer, i) {
+  return i > 0 && buffer.charCodeAt(i - 1) === 10;
+}
+
+/** Table S row S2: no open key binder at the end of `p`. @param {string} p */
+function cutS2NoOpenKeyBinder(p) {
+  let j = p.length;
+  let budget = CUT_BINDER_LOOKBACK;
+  while (j > 0 && budget > 0) {
+    j -= 1;
+    if (!/\s/.test(p[j])) budget -= 1;
+  }
+  return !CUT_OPEN_BINDER.test(p.slice(j));
+}
+
+/** Table S row S3: no sensitive quoted value left open anywhere in `p`. Each
+ *  opener is skipped past its own closing quote, so the walk is linear.
+ *  @param {string} p */
+function cutS3NoOpenQuotedValue(p) {
+  CUT_JSON_VALUE_OPEN.lastIndex = 0;
+  for (let m = CUT_JSON_VALUE_OPEN.exec(p); m; m = CUT_JSON_VALUE_OPEN.exec(p)) {
+    const close = p.indexOf('"', m.index + m[0].length);
+    if (close === -1) return false;
+    CUT_JSON_VALUE_OPEN.lastIndex = close + 1;
+  }
+  return true;
+}
+
+/** Table S row S4: no private-key block left open anywhere in `p`.
+ *  @param {string} p */
+function cutS4NoOpenPrivateKey(p) {
+  CUT_PEM_OPEN.lastIndex = 0;
+  let lastOpenEnd = -1;
+  for (let m = CUT_PEM_OPEN.exec(p); m; m = CUT_PEM_OPEN.exec(p)) {
+    lastOpenEnd = m.index + m[0].length;
+  }
+  if (lastOpenEnd < 0) return true;
+  CUT_PEM_CLOSE.lastIndex = lastOpenEnd;
+  return CUT_PEM_CLOSE.exec(p) !== null;
+}
+
+/**
+ * Table S: a cut between `buffer[i-1]` and `buffer[i]` is ACCEPTED when all four
+ * rows hold on `P = buffer.slice(0, i)`. This is the whole accepted set; there
+ * is no forbidden set, and anything not accepted here is not a cut.
+ *
+ * EVERY ROW IS A STATEMENT ABOUT AN INCOMPLETE MATCH OVER THE WHOLE OF `P`,
+ * never about `P`'s last line. A last-line predicate is blind to `password:\n\n`,
+ * to `password\n:\n` and to a quoted JSON value left open several lines back,
+ * and all three were measured to leak across a cut such a predicate permits.
+ *
+ * A RULE ADDED TO `RULES` ABOVE THAT CAN MATCH ACROSS A LINE BREAK MUST EXTEND
+ * THIS PREDICATE AND TABLE S IN THE SAME CHANGE (ADR-0043 decision 3). A rule
+ * whose alphabet excludes `\n` is kept whole by S1 and needs nothing.
+ *
+ * @param {string} buffer @param {number} i @returns {boolean}
+ */
+function isAcceptedCut(buffer, i) {
+  if (!cutS1EndsWithNewline(buffer, i)) return false;
+  const p = buffer.slice(0, i);
+  if (!cutS2NoOpenKeyBinder(p)) return false;
+  if (!cutS3NoOpenQuotedValue(p)) return false;
+  if (!cutS4NoOpenPrivateKey(p)) return false;
+  return true;
+}
+
+/** The end offset of the next region `buffer` completes, or 0 when none can be
+ *  closed yet. The LAST accepted cut at or before `STREAM_REGION_MAX`; failing
+ *  that, and only once the buffer holds at least `STREAM_REGION_MAX`
+ *  characters, the FORCED CUT at exactly `STREAM_REGION_MAX` (Table B) — the
+ *  one unaccepted cut, and ADR-0043 decision 5's stated residual.
+ *
+ *  `rejected` is how far the caller has already searched without finding a cut.
+ *  Skipping that prefix is sound because `isAcceptedCut(buffer, i)` reads only
+ *  `buffer[0 .. i)`, which APPENDING NEVER CHANGES: a position once rejected
+ *  stays rejected for the life of the region. Without it, a long unbroken line
+ *  delivered a character at a time rescans its whole prefix on every `push`.
+ *  @param {string} buffer @param {number} rejected @returns {number} */
+function nextRegionEnd(buffer, rejected) {
+  const limit = Math.min(buffer.length, ScanLimits.STREAM_REGION_MAX);
+  for (let i = limit; i > rejected; i -= 1) {
+    if (isAcceptedCut(buffer, i)) return i;
+  }
+  return buffer.length >= ScanLimits.STREAM_REGION_MAX ? ScanLimits.STREAM_REGION_MAX : 0;
+}
+
+/**
+ * A bounded, stateful redactor for a text stream that arrives in arbitrary
+ * chunks (ADR-0043). NOT a Node stream: plain synchronous calls, no events, no
+ * file descriptor, no timer, no process (ADR-0004). Its state dies with the call
+ * that created it, and two instances share nothing.
+ *
+ * Let `T` be the concatenation of every `text` passed to `push`, in call order.
+ * `T` is partitioned into contiguous, ordered regions `R1 … Rn` with
+ * `R1 + … + Rn === T`, and the concatenation of every `push` return followed by
+ * the `end` return is exactly `redactOnly(R1) + … + redactOnly(Rn)`.
+ *
+ * `push` and `end` never throw; a non-string `text` is treated as `''`. A `push`
+ * after `end()` is a programming error, and is served as if the redactor were
+ * fresh. `end()` on an empty buffer returns `''`.
+ *
+ * @returns {{push(text: string): string, end(): string}}
+ */
+function createStreamRedactor() {
+  let buffer = '';
+  /** How far into the CURRENT region a cut has already been searched for in
+   *  vain; reset to 0 whenever the buffer is re-based. See `nextRegionEnd`. */
+  let rejected = 0;
+  return {
+    push(text) {
+      buffer += typeof text === 'string' ? text : '';
+      let out = '';
+      for (;;) {
+        const cut = nextRegionEnd(buffer, rejected);
+        if (cut === 0) {
+          rejected = Math.min(buffer.length, ScanLimits.STREAM_REGION_MAX);
+          break;
+        }
+        out += redactOnly(buffer.slice(0, cut));
+        buffer = buffer.slice(cut);
+        rejected = 0;
+      }
+      return out;
+    },
+    end() {
+      const rest = buffer;
+      buffer = '';
+      rejected = 0;
+      return rest === '' ? '' : redactOnly(rest);
+    },
+  };
+}
+
+module.exports = {
+  scanAndRedact,
+  redactOnly,
+  hasHardFinding,
+  createStreamRedactor,
+  ScanLimits,
+  SEVERITY,
+};

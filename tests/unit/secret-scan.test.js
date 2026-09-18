@@ -7,6 +7,7 @@ const {
   scanAndRedact,
   redactOnly,
   hasHardFinding,
+  createStreamRedactor,
   ScanLimits,
   SEVERITY,
 } = require('../../src/core/secret-scan');
@@ -296,4 +297,209 @@ test('ScanLimits carries the OWNER-APPROVED bounds', () => {
   assert.equal(ScanLimits.SCAN_MAX_BYTES, 256 * 1024);
   assert.equal(ScanLimits.ENTROPY_MIN_LEN, 24);
   assert.equal(ScanLimits.ENTROPY_MIN_BITS_PER_CHAR, 3.5);
+});
+
+// --- the bounded stream redactor (ADR-0043, WP-secret-stream-safe-cut-redactor) ---
+
+/** Feed `parts` to a fresh redactor in order; return every `push` return
+ *  concatenated with the `end` return — the whole of what a sink would write. */
+function streamThrough(parts) {
+  const redactor = createStreamRedactor();
+  let out = '';
+  for (const part of parts) out += redactor.push(part);
+  return out + redactor.end();
+}
+
+/** Split after every `\n`, which is how a line-buffered child delivers these
+ *  shapes and where a last-line-only predicate would happily cut. */
+function splitAfterNewlines(text) {
+  return text.split(/(?<=\n)/);
+}
+
+/** The seven cross-line leak shapes measured on 2026-09-18 (AC3a). Every one is
+ *  redacted when `redactOnly` scans it whole and every one leaks across a cut a
+ *  last-line-only predicate permits. `V` is a synthetic 21-character value. */
+const CROSS_LINE_LEAK_SHAPES = (() => {
+  const V = 'hunter2hunter2hunter2';
+  return {
+    L1: `password:\n  ${V}`,
+    L2: `password:\n\n${V}`,
+    L3: `password\n:\n${V}`,
+    L4: `password\n: ${V}`,
+    L5: '"client_secret":\n  "abc\ndefghijkl"',
+    L6: '"client_secret"\n: "abcdefghijkl"',
+    L7: `password:\r\n\r\n${V}`,
+  };
+})();
+
+test('stream-redactor: the returned surface is exactly push and end (AC1)', () => {
+  assert.equal(typeof createStreamRedactor, 'function');
+  const redactor = createStreamRedactor();
+  assert.deepEqual(Object.keys(redactor).sort(), ['end', 'push']);
+  assert.equal(typeof redactor.push, 'function');
+  assert.equal(typeof redactor.end, 'function');
+});
+
+test('stream-redactor: a labelled secret split across two pushes is redacted whole', () => {
+  // Neither half matches `sk-ant-[A-Za-z0-9\-_]{20,}` on its own, so a cut
+  // between them is the whole of the leak.
+  const head = 'sk-ant-api03-AAAABBBB';
+  const tail = 'CCCCDDDDEEEEFFFF';
+  const whole = redactOnly(`${head}${tail}\n`);
+  assert.ok(whole.includes('[REDACTED:anthropic-key]'), 'fixture must redact when scanned whole');
+  assert.equal(redactOnly(head), head, 'fixture head must be inert on its own');
+  assert.equal(
+    streamThrough([head, `${tail}\n`]),
+    whole,
+    'S1-cut-only-after-a-newline',
+  );
+});
+
+test('stream-redactor: a sensitive key whose value arrives on a later line is redacted whole', () => {
+  const { L1, L2, L3, L7 } = CROSS_LINE_LEAK_SHAPES;
+  for (const text of [L1, L2, L3, L7]) {
+    const whole = redactOnly(text);
+    assert.notEqual(whole, text, 'fixture must redact when scanned whole');
+    const parts = splitAfterNewlines(text);
+    assert.ok(parts.length >= 2, 'fixture must arrive as two or more pushes');
+    assert.equal(streamThrough(parts), whole, 'S2-no-open-key-binder-at-a-cut');
+  }
+});
+
+test('stream-redactor: a quoted sensitive JSON value left open across a line break is redacted whole', () => {
+  const parts = ['"client_secret":\n  "abc\n', 'defghijkl"\n'];
+  const whole = redactOnly(parts.join(''));
+  assert.ok(whole.includes('[REDACTED:client_secret]'), 'fixture must redact when scanned whole');
+  assert.equal(streamThrough(parts), whole, 'S3-no-open-quoted-value-at-a-cut');
+});
+
+test('stream-redactor: a private-key block split across two pushes is redacted whole', () => {
+  const parts = [
+    '-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKj34GkxFhD\n',
+    '-----END RSA PRIVATE KEY-----\n',
+  ];
+  const whole = redactOnly(parts.join(''));
+  assert.ok(whole.includes('[REDACTED:private-key]'), 'fixture must redact when scanned whole');
+  assert.equal(streamThrough(parts), whole, 'S4-no-open-private-key-block-at-a-cut');
+});
+
+test('stream-redactor: every one of the seven measured cross-line shapes survives newline delivery (AC3a)', () => {
+  for (const [id, text] of Object.entries(CROSS_LINE_LEAK_SHAPES)) {
+    const whole = redactOnly(text);
+    assert.notEqual(whole, text, `${id}: fixture must redact when scanned whole`);
+    const parts = splitAfterNewlines(text);
+    assert.ok(parts.length >= 2, `${id}: fixture must arrive as two or more pushes`);
+    assert.equal(streamThrough(parts), whole, `${id}: a cross-line shape leaked across a cut`);
+  }
+});
+
+test('stream-redactor: a secret cut at every single offset is still redacted whole (AC3)', () => {
+  const text = 'export ANTHROPIC_API_KEY=sk-ant-api03-AAAABBBBCCCCDDDDEEEEFFFF\n';
+  const whole = redactOnly(text);
+  assert.ok(whole.includes('[REDACTED:'), 'fixture must redact when scanned whole');
+  for (let i = 0; i <= text.length; i += 1) {
+    assert.equal(
+      streamThrough([text.slice(0, i), text.slice(i)]),
+      whole,
+      `a cut at offset ${i} changed the output`,
+    );
+  }
+});
+
+test('stream-redactor: the region contract holds over many random split points (AC2)', () => {
+  const withSecrets = [
+    '2026-09-18T07:00:00Z job start',
+    'export ANTHROPIC_API_KEY=sk-ant-api03-AAAABBBBCCCCDDDDEEEEFFFF',
+    'password:',
+    '  hunter2hunter2hunter2',
+    '{"client_secret": "abcdefghijklmnop"}',
+    'Authorization: Bearer abcdefghijklmnopqrstuvwx',
+    '-----BEGIN RSA PRIVATE KEY-----',
+    'MIIBOgIBAAJBAKj34GkxFhD',
+    '-----END RSA PRIVATE KEY-----',
+    'job done',
+    '',
+  ].join('\n');
+  const inert = ['line one', 'line two', '', 'line four ends here', ''].join('\n');
+  const expected = redactOnly(withSecrets);
+  assert.notEqual(expected, withSecrets, 'the property input must actually contain secrets');
+  assert.equal(redactOnly(inert), inert, 'the reconstruction input must be inert');
+
+  // A deterministic PRNG, so a failing split point is reproducible from the
+  // test alone and CI never flakes.
+  let seed = 0x2f6e2b1;
+  const rand = (n) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed % n;
+  };
+  for (let run = 0; run < 200; run += 1) {
+    /** @type {number[]} */
+    const cuts = [];
+    for (let k = 0; k < 1 + rand(5); k += 1) cuts.push(rand(withSecrets.length + 1));
+    cuts.sort((a, b) => a - b);
+    const chop = (text) => {
+      const parts = [];
+      let at = 0;
+      for (const cut of cuts) {
+        const bounded = Math.min(cut, text.length);
+        parts.push(text.slice(at, bounded));
+        at = bounded;
+      }
+      parts.push(text.slice(at));
+      return parts;
+    };
+    const chunked = chop(withSecrets);
+    assert.equal(chunked.join(''), withSecrets, `run ${run}: the split itself lost input`);
+    assert.equal(
+      streamThrough(chunked),
+      expected,
+      `run ${run}: region-wise scanning disagreed with scanning the whole text`,
+    );
+    assert.equal(
+      streamThrough(chop(inert)),
+      inert,
+      `run ${run}: inert input was not reconstructed exactly`,
+    );
+  }
+});
+
+test('stream-redactor: STREAM_REGION_MAX bounds the buffer and forces a cut (AC4)', () => {
+  const max = ScanLimits.STREAM_REGION_MAX;
+  assert.equal(max, 32 * 1024);
+  assert.ok(
+    max * 4 < ScanLimits.SCAN_MAX_BYTES,
+    'a region must never reach the detector oversized path and blank real log output',
+  );
+  // One unbroken line: no accepted cut point exists anywhere in it.
+  const line = 'a'.repeat(max * 2 + 7);
+  const redactor = createStreamRedactor();
+  const emitted = redactor.push(line);
+  assert.equal(emitted.length, max * 2, 'forced cuts must land at exactly STREAM_REGION_MAX');
+  const rest = redactor.end();
+  assert.equal(rest.length, 7, 'the buffer never held more than STREAM_REGION_MAX characters');
+  assert.equal(emitted + rest, line, 'the input is reconstructed exactly through forced cuts');
+});
+
+test('stream-redactor: push and end are total for every degenerate input (AC5)', () => {
+  const redactor = createStreamRedactor();
+  for (const bad of [undefined, null, 42, {}, [], true, Symbol.iterator]) {
+    assert.equal(redactor.push(bad), '', 'a non-string push contributes nothing');
+  }
+  assert.equal(redactor.push(''), '');
+  assert.equal(redactor.end(), '', 'end() on an untouched redactor returns the empty string');
+  assert.equal(redactor.end(), '', 'a second end() returns the empty string');
+  // A push after end() is a programming error: served as if the redactor were
+  // fresh, never a throw.
+  assert.equal(redactor.push('plain line\n'), 'plain line\n');
+  assert.equal(redactor.end(), '');
+});
+
+test('stream-redactor: two instances share no state (AC5)', () => {
+  const a = createStreamRedactor();
+  const b = createStreamRedactor();
+  assert.equal(a.push('password:'), '', 'a blocked cut holds the text in its own buffer');
+  assert.equal(b.push('an unrelated line\n'), 'an unrelated line\n');
+  assert.equal(b.end(), '');
+  assert.equal(a.push('\n  hunter2hunter2hunter2\n'), redactOnly('password:\n  hunter2hunter2hunter2\n'));
+  assert.equal(a.end(), '');
 });
