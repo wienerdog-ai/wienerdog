@@ -505,6 +505,7 @@ function quarantineReport(stateDir, vaultPath) {
   let overCeiling = 0;
   let tooManyLines = 0;
   let readError = 0;
+  let parseThrew = 0;
   let secretExhausted = 0;
   let unrecognized = 0;
 
@@ -521,6 +522,9 @@ function quarantineReport(stateDir, vaultPath) {
       case 'read-error':
         readError++;
         break;
+      case 'parse-threw':
+        parseThrew++;
+        break;
       case SECRET_REVERT_EXHAUSTED_REASON:
         secretExhausted++;
         break;
@@ -529,7 +533,7 @@ function quarantineReport(stateDir, vaultPath) {
     }
   }
 
-  const total = overCeiling + tooManyLines + readError + secretExhausted + unrecognized;
+  const total = overCeiling + tooManyLines + readError + parseThrew + secretExhausted + unrecognized;
   if (total === 0) {
     return [{ status: 'ok', msg: 'no session transcripts are being skipped' }];
   }
@@ -551,6 +555,12 @@ function quarantineReport(stateDir, vaultPath) {
     out.push({
       status: 'warn',
       msg: `${readError} session transcript(s) are being skipped: the session file could not be read`,
+    });
+  }
+  if (parseThrew > 0) {
+    out.push({
+      status: 'warn',
+      msg: `${parseThrew} session transcript(s) are being skipped: something in the session file stopped Wienerdog from reading it`,
     });
   }
   if (secretExhausted > 0) {
