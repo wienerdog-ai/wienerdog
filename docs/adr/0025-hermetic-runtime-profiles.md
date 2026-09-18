@@ -481,7 +481,7 @@ own follow-up, not this WP.
 
 ### Amendment 6 (2026-09-18) — LP2 is terminal-runnable; every routine's non-vacuity floor is a method in the call log
 
-Status: **ACCEPTED under standing authorization 2026-09-18 — owner signature pending.**
+Status: **ACCEPTED under standing authorization 2026-09-18 — owner-signed 2026-09-18.**
 
 Amendment 5 predicted the consequence; this amendment records it measured. On `main` at
 `0c3348b6`, macOS with Claude Code 2.1.275, `WIENERDOG_RUN_SCENARIOS=1 npm run
