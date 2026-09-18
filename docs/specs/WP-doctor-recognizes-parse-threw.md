@@ -1,7 +1,7 @@
 ---
 id: WP-doctor-recognizes-parse-threw
 title: Teach `wienerdog doctor` to name the parse-threw skip instead of calling it unrecognized
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-dream-collect-parse-throw-quarantine]
