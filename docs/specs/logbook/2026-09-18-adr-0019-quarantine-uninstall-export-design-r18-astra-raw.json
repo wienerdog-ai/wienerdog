@@ -1,0 +1,53 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b634-6943-7670-a26f-ecfb65f683b9",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r18",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch this design yet: alias removal can make a retry destroy a completed quarantine copy, and X17 still contains contradictory protection rules.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Absent-shelf alias removal loses protection across retries\",\n      \"body\": \"With a pre-existing state → logs symlink and initially absent shelves, X19 permits unlinking state. A concurrent dream can complete logs/quarantine/note after the absence decision but before that unlink. The first sweep preserves logs using its cached protected set, and W10 retains the manifest. On retry, state is absent, so the inventory misses the copy and the recomputed anchors no longer protect logs; its recursive deletion destroys the original. This follows the specified algorithm and was reproduced in an in-memory model. No concurrent alias creation or redirection is required, so R-alias-outside-closure does not cover it. X17's explanation addresses copies created after unlink, missing this before-unlink window.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 389,\n      \"line_end\": 389,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Do not unlink an alias into another swept directory based on shelf absence. Retain such aliases even for hypothetical shelves, or persist their physical protection across retries. Add an interleaving test that completes the copy after the retention decision and before unlink, then runs a full retry.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Remove the contradictory hypothetical-anchor classification\",\n      \"body\": \"X17 explicitly requires hypothetical shelf roots to retain full class (i) subtree protection, but its concluding operative sentence still requires 'treating a hypothetical anchor as class (ii) only.' Following that sentence restores the round-17 data-loss case documented in this same row: a physical-path file entry bypasses the guard when a shelf appears after anchor construction. The canonical contract therefore still directs implementations toward both the repaired and vulnerable predicates.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 387,\n      \"line_end\": 387,\n      \"confidence\": 1,\n      \"recommendation\": \"Replace the stale concluding clause with the class (i) rule for hypothetical shelf roots, keeping existence relevant only to X19. Verify criterion 18(b) against that single consistent definition.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve both contracts before implementation and add the before-unlink retry regression case.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch this design yet: alias removal can make a retry destroy a completed quarantine copy, and X17 still contains contradictory protection rules.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Absent-shelf alias removal loses protection across retries",
+        "body": "With a pre-existing state → logs symlink and initially absent shelves, X19 permits unlinking state. A concurrent dream can complete logs/quarantine/note after the absence decision but before that unlink. The first sweep preserves logs using its cached protected set, and W10 retains the manifest. On retry, state is absent, so the inventory misses the copy and the recomputed anchors no longer protect logs; its recursive deletion destroys the original. This follows the specified algorithm and was reproduced in an in-memory model. No concurrent alias creation or redirection is required, so R-alias-outside-closure does not cover it. X17's explanation addresses copies created after unlink, missing this before-unlink window.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 389,
+        "line_end": 389,
+        "confidence": 0.97,
+        "recommendation": "Do not unlink an alias into another swept directory based on shelf absence. Retain such aliases even for hypothetical shelves, or persist their physical protection across retries. Add an interleaving test that completes the copy after the retention decision and before unlink, then runs a full retry."
+      },
+      {
+        "severity": "medium",
+        "title": "Remove the contradictory hypothetical-anchor classification",
+        "body": "X17 explicitly requires hypothetical shelf roots to retain full class (i) subtree protection, but its concluding operative sentence still requires 'treating a hypothetical anchor as class (ii) only.' Following that sentence restores the round-17 data-loss case documented in this same row: a physical-path file entry bypasses the guard when a shelf appears after anchor construction. The canonical contract therefore still directs implementations toward both the repaired and vulnerable predicates.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 387,
+        "line_end": 387,
+        "confidence": 1,
+        "recommendation": "Replace the stale concluding clause with the class (i) rule for hypothetical shelf roots, keeping existence relevant only to X19. Verify criterion 18(b) against that single consistent definition."
+      }
+    ],
+    "next_steps": [
+      "Resolve both contracts before implementation and add the before-unlink retry regression case."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch this design yet: alias removal can make a retry destroy a completed quarantine copy, and X17 still contains contradictory protection rules.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Absent-shelf alias removal loses protection across retries\",\n      \"body\": \"With a pre-existing state → logs symlink and initially absent shelves, X19 permits unlinking state. A concurrent dream can complete logs/quarantine/note after the absence decision but before that unlink. The first sweep preserves logs using its cached protected set, and W10 retains the manifest. On retry, state is absent, so the inventory misses the copy and the recomputed anchors no longer protect logs; its recursive deletion destroys the original. This follows the specified algorithm and was reproduced in an in-memory model. No concurrent alias creation or redirection is required, so R-alias-outside-closure does not cover it. X17's explanation addresses copies created after unlink, missing this before-unlink window.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 389,\n      \"line_end\": 389,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Do not unlink an alias into another swept directory based on shelf absence. Retain such aliases even for hypothetical shelves, or persist their physical protection across retries. Add an interleaving test that completes the copy after the retention decision and before unlink, then runs a full retry.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Remove the contradictory hypothetical-anchor classification\",\n      \"body\": \"X17 explicitly requires hypothetical shelf roots to retain full class (i) subtree protection, but its concluding operative sentence still requires 'treating a hypothetical anchor as class (ii) only.' Following that sentence restores the round-17 data-loss case documented in this same row: a physical-path file entry bypasses the guard when a shelf appears after anchor construction. The canonical contract therefore still directs implementations toward both the repaired and vulnerable predicates.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 387,\n      \"line_end\": 387,\n      \"confidence\": 1,\n      \"recommendation\": \"Replace the stale concluding clause with the class (i) rule for hypothetical shelf roots, keeping existence relevant only to X19. Verify criterion 18(b) against that single consistent definition.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve both contracts before implementation and add the before-unlink retry regression case.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
