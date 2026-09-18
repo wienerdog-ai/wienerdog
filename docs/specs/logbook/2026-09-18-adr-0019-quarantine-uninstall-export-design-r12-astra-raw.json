@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b602-87d4-7611-b4fa-8ae683a862fd",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r12",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: unlinking a symlinked state directory can erase the evidence needed to protect quarantined originals.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve shelf aliases across both disposal sweeps\",\n      \"body\": \"X1 step 0 unlinks a symlinked state before step 1 computes protected targets. With <core>/state pointing to <core>/logs and an original in logs/quarantine, this removes the alias without removing the original. X17 then derives anchors under the now-absent state path, so X18 permits recursively deleting logs and the original. This is reachable through the exported direct sweep or a link-and-preserve introduced after the CLI gate. Computing anchors before unlinking only protects the first sweep: uninstall.js calls the disposer again at line 467, when the alias is already gone. An in-memory model of both orderings confirmed this loss.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 373,\n      \"line_end\": 373,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Amend X1/X18 to retain a state symlink when its target contains a protected shelf, so protection remains discoverable across sweeps and retries. Add direct-sweep and post-gate tests with state pointing to logs, asserting original bytes survive both live disposer calls.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Close the alias-lifetime gap and rerun the design review.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: unlinking a symlinked state directory can erase the evidence needed to protect quarantined originals.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Preserve shelf aliases across both disposal sweeps",
+        "body": "X1 step 0 unlinks a symlinked state before step 1 computes protected targets. With <core>/state pointing to <core>/logs and an original in logs/quarantine, this removes the alias without removing the original. X17 then derives anchors under the now-absent state path, so X18 permits recursively deleting logs and the original. This is reachable through the exported direct sweep or a link-and-preserve introduced after the CLI gate. Computing anchors before unlinking only protects the first sweep: uninstall.js calls the disposer again at line 467, when the alias is already gone. An in-memory model of both orderings confirmed this loss.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 373,
+        "line_end": 373,
+        "confidence": 0.97,
+        "recommendation": "Amend X1/X18 to retain a state symlink when its target contains a protected shelf, so protection remains discoverable across sweeps and retries. Add direct-sweep and post-gate tests with state pointing to logs, asserting original bytes survive both live disposer calls."
+      }
+    ],
+    "next_steps": [
+      "Close the alias-lifetime gap and rerun the design review."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: unlinking a symlinked state directory can erase the evidence needed to protect quarantined originals.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Preserve shelf aliases across both disposal sweeps\",\n      \"body\": \"X1 step 0 unlinks a symlinked state before step 1 computes protected targets. With <core>/state pointing to <core>/logs and an original in logs/quarantine, this removes the alias without removing the original. X17 then derives anchors under the now-absent state path, so X18 permits recursively deleting logs and the original. This is reachable through the exported direct sweep or a link-and-preserve introduced after the CLI gate. Computing anchors before unlinking only protects the first sweep: uninstall.js calls the disposer again at line 467, when the alias is already gone. An in-memory model of both orderings confirmed this loss.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 373,\n      \"line_end\": 373,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Amend X1/X18 to retain a state symlink when its target contains a protected shelf, so protection remains discoverable across sweeps and retries. Add direct-sweep and post-gate tests with state pointing to logs, asserting original bytes survive both live disposer calls.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Close the alias-lifetime gap and rerun the design review.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
