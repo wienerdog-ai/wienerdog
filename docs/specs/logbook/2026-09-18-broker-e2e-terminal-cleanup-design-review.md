@@ -159,3 +159,38 @@ it reads as complete.
 
 **Not asserted:** nothing here records the owner approving, accepting, ratifying or
 signing erratum 2, the spec, or ADR-0025 Amendment 6.
+
+## PR gate round 2 (2026-09-18) — implementation PR #284, tip `cd952b85`
+
+Astra found a real defect in E6's literal — one that **erratum 1 introduced**. Landed as
+**erratum 3** on `main`, docs-only, before the implementer re-applies E6.
+
+| # | Finding | Owner | Disposition |
+|---|---------|-------|-------------|
+| PG2-1 | `POISONED_NOTE_FILES` derived the seven names by subtracting `i * 86400000` ms from one instant and formatting in **local** time. A local day is 23 or 25 hours across a DST transition, so when the preceding week crosses one the derivation **repeats or skips** a local date. Astra's case, `TZ=Europe/Budapest` at `2026-10-26T23:30:00+01:00`: October 25 appears **twice**, six distinct names. Downstream: the seeding loop overwrites the duplicate so only six files exist, L1 checks the same file twice and accepts six, and V-7's seven-file check fails — loudly, but misattributed as a gate or seeding regression | architect | **ACCEPTED, reproduced by execution.** `ms-step` → 6 distinct, `cal-step` → 7 distinct, at exactly that instant. E6 now captures one reference `Date` at module load and steps the **local calendar day** per name — `new Date(ref)` then `setDate(d.getDate() - i)`, a fresh copy per `i` so nothing accumulates — preserving the once-at-module-load property. **PR-gate round 1's fidelity reviewer had reasoned the opposite and was wrong**; the 25-hour day is the case, which is why this was settled by running it rather than by argument |
+| PG2-2 | No assertion covered the property the proof depends on | architect | **FIXED.** New invariant in Table B: **seven DISTINCT local dates**, `new Set(POISONED_NOTE_FILES).size === 7`, asserted by V-7 and stated in E6's JSDoc. The Mirrored Surface Checklist now registers the **derivation** as a mirrored surface in its own right, because V-7 recomputes it rather than importing it |
+| PG2-3 | Is UTC the fix? | architect | **NO, and it is refused in writing.** The routine computes **local** dates: `SKILL.md` names no filenames, the layout is `07-Daily/<YYYY-MM-DD>.md` (`src/core/layout.js:35-39`, `:131`), and the product's own helper is documented "Today's date as local YYYY-MM-DD" with local getters (`resolveDate`, `src/cli/dream.js:47-56`). A fixed-offset UTC derivation would name a date the routine never asks for whenever the run sits near local midnight — trading a twice-a-year bug for a nightly one |
+
+### Mechanical verification of erratum 3
+
+| Check | Result | Exit |
+|-------|--------|------|
+| **V-7** (real clock, as written in the spec) | `distinct local dates: 7 OK`, `skipped: []`, 7 mounted daily notes, 1 dream report, `V-7 OK` | 0 |
+| New derivation at Astra's DST instant | `2026-10-26 … 2026-10-20`, **7 distinct** | — |
+| E1–E6 re-applied to a throwaway copy → `node --check` | `SYNTAX OK` | 0 |
+| **V-3** forbidden tokens | no output | **1** (required no-match) |
+| **V-10** / **V-12** | `Table D: ALL ROWS HOLD` / `Table F: ALL ROWS HOLD` | 0 / 0 |
+| **V-11** four literal pins | `1`, `1`, `1`, `1` | 0 |
+| Derivation evaluated **out of the applied source** under `TZ=Europe/Budapest` | 7 distinct | — |
+
+One further defect fixed in passing: V-7's new comment originally embedded the fragment
+`node -e "…"`, which breaks any naive extraction of the command that follows it (it did
+break mine). Reworded to "prefix the command with `TZ=…`".
+
+**The general lesson:** date arithmetic on milliseconds is not date arithmetic on days —
+a fixture whose identity is a *calendar* date must be stepped on the calendar. And a
+property a proof depends on belongs in an assertion, not in the reader's head: this
+survived two errata precisely because nothing checked it.
+
+**Not asserted:** nothing here records the owner approving, accepting, ratifying or
+signing erratum 3, the spec, or ADR-0025 Amendment 6.
