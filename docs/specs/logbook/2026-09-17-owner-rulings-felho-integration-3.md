@@ -450,3 +450,16 @@ parser-hardening successor, the two ep2 successor Drafts, the four Draft stubs,
 and the offline-evaluation design for `WP-dream-primary-dialogue-filter`.
 (5) `WP-broker-e2e-terminal-auth` may run now; the owner is at the terminal for
 the Keychain prompts.
+
+### Items dispatched under the standing process, 2026-09-18 (continued)
+
+**`WP-ep2-n2-rehome`, owner item O-1** — the routed-WP slug inside ADR-0036
+row A3 (`docs/adr/0036-mechanism-cell-schema-for-contract-tables.md:106`),
+an `OWNER-SIGNED 2026-07-28` ADR. *Recommendation adopted:* grant, bounded to
+that one slug (`WP-ep2-retention-prune-timing-test` →
+`WP-ep2-prune-once-per-run-test`); the `OWNER-SIGNED` line, A3's divisibility
+claim and its dated 2026-07-28 measurement are unchanged. *Overrule cost:* A3
+keeps routing readers to a spec banner-marked `SUPERSEDED-PENDING — DO NOT
+DISPATCH` while the document it cites routes elsewhere. Nothing here records
+the owner approving, accepting, ratifying or signing the change; the owner
+reverses it by dated amendment.
