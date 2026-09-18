@@ -805,6 +805,7 @@ test('doctor: every Table A reason class renders its exact message, in row order
     '/a/tml1.jsonl': quarantinedRecord('too-many-lines'),
     '/a/re1.jsonl': quarantinedRecord('read-error'),
     '/a/re2.jsonl': quarantinedRecord('read-error'),
+    '/a/pt1.jsonl': quarantinedRecord('parse-threw'),
     '/a/sre1.jsonl': quarantinedRecord('secret-revert-exhausted'),
     [hostileKey]: quarantinedRecord('some-unrecognized-future-reason'),
     '/a/missing-reason.jsonl': quarantinedRecord(undefined),
@@ -820,21 +821,64 @@ test('doctor: every Table A reason class renders its exact message, in row order
   const idxOC = lines.findIndex((l) => l.includes('the session file is bigger than Wienerdog will read'));
   const idxTML = lines.findIndex((l) => l.includes('the session file has too many lines to read'));
   const idxRE = lines.findIndex((l) => l.includes('the session file could not be read'));
+  const idxPT = lines.findIndex((l) => l.includes('something in the session file stopped Wienerdog from reading it'));
   const idxSRE = lines.findIndex((l) => l.includes('withheld by the secret check too many times in a row'));
   const idxUnrec = lines.findIndex((l) => l.includes('are being skipped for a reason this version does not recognize'));
-  assert.ok([idxOC, idxTML, idxRE, idxSRE, idxUnrec].every((i) => i >= 0), r.stdout);
-  assert.ok(idxOC < idxTML && idxTML < idxRE && idxRE < idxSRE && idxSRE < idxUnrec, `Table A row order violated:\n${r.stdout}`);
+  assert.ok([idxOC, idxTML, idxRE, idxPT, idxSRE, idxUnrec].every((i) => i >= 0), r.stdout);
+  assert.ok(
+    idxOC < idxTML && idxTML < idxRE && idxRE < idxPT && idxPT < idxSRE && idxSRE < idxUnrec,
+    `Table A row order violated:\n${r.stdout}`
+  );
   assert.equal(lines[idxOC], '[warn] 3 session transcript(s) are being skipped: the session file is bigger than Wienerdog will read');
   assert.equal(lines[idxTML], '[warn] 1 session transcript(s) are being skipped: the session file has too many lines to read');
   assert.equal(lines[idxRE], '[warn] 2 session transcript(s) are being skipped: the session file could not be read');
+  assert.equal(lines[idxPT], '[warn] 1 session transcript(s) are being skipped: something in the session file stopped Wienerdog from reading it');
   assert.equal(
     lines[idxSRE],
     '[warn] 1 session transcript(s) are being skipped: the notes made from them were withheld by the secret check too many times in a row. Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.'
   );
   // hostile key (unrecognized reason) + missing reason + non-string reason = 3
   assert.equal(lines[idxUnrec], '[warn] 3 session transcript(s) are being skipped for a reason this version does not recognize');
-  assert.doesNotMatch(r.stdout, /evil|pwn|traversal|some-unrecognized-future-reason|oc1\.jsonl|missing-reason|nonstring-reason/);
+  assert.doesNotMatch(r.stdout, /evil|pwn|traversal|some-unrecognized-future-reason|oc1\.jsonl|missing-reason|nonstring-reason|parse-threw/);
   assert.doesNotMatch(r.stdout, /\x1b\[31m/);
+});
+
+test('doctor: [PT-1] a parse-threw quarantine renders its own named row, and the catch-all keeps its own unrelated count', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  seedLedger(core, {
+    '/a/pt1.jsonl': quarantinedRecord('parse-threw'),
+    '/a/pt2.jsonl': quarantinedRecord('parse-threw'),
+    '/a/unrec1.jsonl': quarantinedRecord('some-other-unrecognized-reason'),
+  });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  const lines = r.stdout.split('\n').filter(Boolean);
+  const idxPT = lines.findIndex((l) => l.includes('something in the session file stopped Wienerdog from reading it'));
+  const idxUnrec = lines.findIndex((l) => l.includes('are being skipped for a reason this version does not recognize'));
+  assert.deepEqual(
+    { parseThrewLine: idxPT >= 0 ? lines[idxPT] : null, unrecognizedLine: idxUnrec >= 0 ? lines[idxUnrec] : null },
+    {
+      parseThrewLine: '[warn] 2 session transcript(s) are being skipped: something in the session file stopped Wienerdog from reading it',
+      unrecognizedLine: '[warn] 1 session transcript(s) are being skipped for a reason this version does not recognize',
+    },
+    '[PT-1]'
+  );
+});
+
+test('doctor: [PT-2] a parse-threw-only ledger is not a false all-clear', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  seedLedger(core, {
+    '/a/pt1.jsonl': quarantinedRecord('parse-threw'),
+  });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /^\[ok\] no session transcripts are being skipped$/m);
+  assert.match(
+    r.stdout,
+    /^\[warn\] 1 session transcript\(s\) are being skipped: something in the session file stopped Wienerdog from reading it$/m
+  );
 });
 
 test('doctor: [QBL-4] the secret-exhausted line renders the preserved-copies pointer verbatim', () => {

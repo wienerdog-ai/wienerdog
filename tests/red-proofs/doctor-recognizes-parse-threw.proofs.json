@@ -1,0 +1,20 @@
+{
+  "suite": "tests/unit/doctor.test.js",
+  "proofs": [
+    {
+      "id": "dpt-arm-removed-falls-to-unrecognized",
+      "wp": "WP-doctor-recognizes-parse-threw",
+      "criterion": "1",
+      "why": "removing the 'parse-threw' switch arm must redden an assertion that observes the new row's literal and the unrecognized row's count TOGETHER, not merely that some warn line appeared. Under the mutation doctor still exits 0 and still prints five warn lines — only which row the parse-threw records land under changes, and a test that only matched /being skipped/ would stay green over exactly the defect this package fixes",
+      "file": "src/cli/doctor.js",
+      "find": "      case 'parse-threw':\n        parseThrew++;\n        break;\n",
+      "replace": "      /* RP_MUT_DPT_ARM_REMOVED\n      case 'parse-threw':\n        parseThrew++;\n        break;\n      */\n",
+      "marker": "RP_MUT_DPT_ARM_REMOVED",
+      "occurrences": 1,
+      "testNamePattern": "\\[PT-1\\]",
+      "expectRed": [
+        { "test": ["doctor: [PT-1] a parse-threw quarantine renders its own named row, and the catch-all keeps its own unrelated count"], "signal": "[PT-1]" }
+      ]
+    }
+  ]
+}
