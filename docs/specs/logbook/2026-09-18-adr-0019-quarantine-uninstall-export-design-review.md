@@ -150,5 +150,25 @@ registered in the mirror class created at round 4.
 **Declaration count after round 5:** ten declarations over nine criteria; seven
 carry a pre-measurable anchor, three mutate code this package authors.
 
+## Round 6 — Astra, 2026-09-18
+
+- **Reviewed tip:** `bbfc4a1d`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r6-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r6-astra-focus.txt`
+- **Committed before adjudication at:** `7cfecf2a`
+- **Verdict:** `needs-attention` — *"the prescribed removal accounting contradicts
+  the required empty-shelf compatibility."*
+- **Held from round 5:** **X13** was **not** re-opened.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R6-1** | **Preserve removal accounting when empty shelf directories are deleted.** Table X row **X1** (`:356`) required pushing **every** successful `rmdir` onto the public `removed` array. With both shelf directories present and **empty**, that reports `redacted`, `quarantine` **and** `state` where the baseline reports **`state` only** — a two-item difference Astra confirmed by mocked execution. `uninstall.js` sums `removed.length` into the user-facing *"Removed N item(s)"* line (`:471-473`) **and** renders the same array as the `--dry-run` mechanics plan (`:337-341`), so both change. **The specified algorithm and Table W row W6 / acceptance criterion 7's byte-identical requirement could not both hold** | B | **HEAVY** — reclassified from the reviewer's `medium` because the user-visible count and plan change, and because it is a direct self-contradiction between two of this spec's own contracts | **ACCEPTED IN FULL.** The `rmdir` bookkeeping is now **internal**: **X1** step 3 pushes nothing onto `removed`, and **Table X row X4** is rewritten to fix the public contract — **`removed` keeps its original MECHANICS-DIRECTORY granularity: `paths.state` appears at most once, and only when the whole of `<state>` is gone** (the final `rmdirSync(<state>)` succeeded, or step 0 unlinked a symlinked `<state>` per **X10**); **the intermediate `rmdir`s never appear**; and **when any shelf level was preserved `paths.state` does not appear at all**, with `preservedQuarantine` carrying the detail. X4 now also records *why* this is a contract rather than a formatting choice, citing the caller's two consumers by line. **Acceptance criterion 7 gains the round-6 fixture** — both shelf directories present and **empty** — and requires the *"Removed N item(s)"* line **and** the `--dry-run` mechanics plan to be compared **in full**, because the granularity is visible in each and in neither alone. **Criterion 2** now also asserts `removed` contains `paths.state` exactly once and neither shelf path, in all three of its fixtures. **Table W row W5** gained the empty-shelf clause, and an Implementation note names the natural-but-wrong shape (push as you climb) so the implementer does not re-derive it |
+
+**Declaration count after round 6:** unchanged — ten declarations over nine
+criteria; seven carry a pre-measurable anchor, three mutate code this package
+authors. `quse-carve-out-dropped` already covers criterion 1's side of X1, and
+criterion 7 already carries `quse-block-printed-on-an-empty-shelf`, whose mutation
+makes the empty-shelf output differ — the same assertion this finding strengthens.
+
 **One confirming round remains.** The gate closes on a clean or LIGHT-only return
 (`docs/runbooks/codex-review.md`, "Weighted closure").
