@@ -477,6 +477,32 @@ closed by citation in a later round, not by a further revision.**
 **Declaration count after round 16:** twenty-one declarations over thirteen
 criteria; twelve have a pre-measurable anchor, nine mutate code this package authors.
 
+## Round 17 — Astra, 2026-09-18
+
+- **Reviewed tip:** `c45fd13f`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r17-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r17-astra-focus.txt`
+- **Committed before adjudication at:** `dd500826`
+- **Verdict:** `needs-attention` — *"the latest hypothetical-anchor rule reopens a
+  path to deleting newly quarantined originals."*
+- **Held from round 16:** **W10** and **W11** were not re-opened, and **nothing
+  inside the three named residuals was reported** — the third consecutive round in
+  which the bound held.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R17-1** | **Hypothetical shelf anchors must also protect future descendants — round 16's fix went one notch too far.** **X17** gave absent shelves **class (ii)** protection, which excludes descendants, while **X16** computes its anchors **once per `reverse()` call**. With a **stable** `<core>` → `/data/wienerdog` symlink and initially absent shelves, a pre-existing **hash-less** `{kind:'file'}` entry naming the **physical** path `/data/wienerdog/state/quarantine/2026-09-18-note.md` bypasses the lexical anchors **and**, once the dream creates that file **after anchor computation and before replay**, the hypothetical resolved ones too — the file neither equals nor contains them. A read-only mocked probe confirmed the predicate permits the entry and the shipped `reverse()` validates it and calls `rmSync`, destroying the sole original before the disposer runs. **No alias is created or redirected after computation, so `R-alias-outside-closure` does NOT cover it** | A | HEAVY (high, conf. 0.98) | **ACCEPTED IN FULL, and the correction is a narrowing of round 16's narrowing rather than a new rule.** **A hypothetical shelf ROOT keeps FULL class (i) SUBTREE protection — descendants included — in every deletion guard (X16, X18, X20).** **The ONLY thing conditioned on an EXISTING shelf is X19's alias-retention decision**, and **X19** now says so in its own cell, so the distinction lives in exactly one row. **Both neighbouring findings were re-checked in the same pass, because this is the third consecutive round to move this definition:** round 15 stays closed — on `<core>` → `/data/wienerdog` the hypothetical class (i) root is `/data/wienerdog/state/quarantine`, and `secrets`, `logs` and `app` neither equal it, contain it, nor sit inside it, so they are **still removed**; and round 16's contradiction stays removed, because it lived entirely in **X19** — with `<state>` → `/data/personal` and no `quarantine/`, no *existing* shelf's chain passes through the alias, so it is unlinked as at `5b77865f`, and the hypothetical root `/data/personal/quarantine` prevents nothing there since none of `<state>`'s children is inside it. **Acceptance criterion 14 was re-checked explicitly and holds unchanged.** Criterion **18(b)** gains the round-17 arm: **stable** symlinked core, shelves initially **absent**, a hash-less entry naming the **PHYSICAL** path, and the preserve completing **after `reverse()` initialises its anchors** — with the fixture required to use the physical path, because a `<core>`-relative one is caught by the lexical anchors and would make the arm vacuous. New RED proof **`quse-hypothetical-root-not-subtree`**: **nothing else in this package reddens under it**, since the lexical anchors still catch every `<core>`-relative path, so the declaration is what forces both fixture properties — physical path *and* late shelf creation — to exist |
+
+**On the bound, third round running.** Rounds 15, 16 and 17 each landed on the
+**rule**, not on the residuals: over-protection, a self-contradiction, and
+over-narrowing. `R-alias-outside-closure`, `R-post-ledger-preserve` and
+`R-post-uninstall-preserve` have drawn no findings. **What has moved three times is
+the hypothetical/existing definition**, which is now confined to a single row
+(**X19**) precisely so that a fourth move has one place to happen.
+
+**Declaration count after round 17:** twenty-two declarations over thirteen
+criteria; twelve have a pre-measurable anchor, ten mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean return, a LIGHT-only
 return, **or a finding that falls inside `R-alias-outside-closure`,
 `R-post-ledger-preserve` or `R-post-uninstall-preserve`**
