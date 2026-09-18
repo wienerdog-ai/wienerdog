@@ -519,17 +519,27 @@ test('dream-collect: whole admission preserves early and late skill invocations'
 
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0].truncatedToFit, false);
-  const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
-  assert.equal(extract.messages.length, 64);
+  // Row D1: the invocation geometry rides the TEXT-FREE gate projection of the
+  // ORIGINAL timeline, which the collector returns in memory — never the scratch
+  // file the model reads.
+  const gate = result.gateExtracts.get(`claude:${sessionId}`);
+  assert.equal(gate.messages.length, 64);
 
-  const skills = extract.skill_invocations.map((si) => si.skill);
+  const skills = gate.skill_invocations.map((si) => si.skill);
   assert.ok(skills.includes('early')); // no budget-induced prefix removal
 
-  const late = extract.skill_invocations.find((si) => si.skill === 'late');
+  const late = gate.skill_invocations.find((si) => si.skill === 'late');
   assert.ok(late, 'late invocation must survive whole admission');
-  assert.ok(late.index >= 0 && late.index < extract.messages.length);
-  assert.ok(late.resultIndex >= 0 && late.resultIndex < extract.messages.length);
-  assert.equal(extract.messages[late.resultIndex].text, 'done-late');
+  assert.ok(late.index >= 0 && late.index < gate.messages.length);
+  assert.ok(late.resultIndex >= 0 && late.resultIndex < gate.messages.length);
+  assert.equal(gate.messages[late.resultIndex].role, 'tool_result');
+
+  // Rows C2/D2: what the MODEL reads is dialogue, with no tool-record metadata
+  // and no tool text at all.
+  const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
+  assert.equal(extract.skill_invocations, undefined);
+  assert.ok(extract.messages.every((m) => m.role === 'user' || m.role === 'assistant'));
+  assert.ok(!JSON.stringify(extract).includes('done-late'), 'tool result text never reaches scratch');
 });
 
 test('dream-collect: whole admission preserves the parser result for a trailing invocation', () => {
@@ -564,9 +574,12 @@ test('dream-collect: whole admission preserves the parser result for a trailing 
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0].truncatedToFit, false);
   const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
-  const parsed = fullExtracts(paths)[0].extract;
+  const parsed = primaryExtracts(paths)[0].extract;
   assert.deepEqual(extract, parsed);
-  assert.equal(extract.skill_invocations[0].skill, 'bar');
+  // The trailing invocation's exact parser representation survives on the gate
+  // projection (row D1); the scratch extract carries no invocation array at all.
+  assert.equal(result.gateExtracts.get(`claude:${sessionId}`).skill_invocations[0].skill, 'bar');
+  assert.equal(extract.skill_invocations, undefined);
 });
 
 test('dream-collect: a session hitting the parser MAX_MESSAGES cap preserves its invocation without further truncation', () => {
@@ -614,14 +627,15 @@ test('dream-collect: a session hitting the parser MAX_MESSAGES cap preserves its
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0].truncatedToFit, false);
   const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
-  assert.equal(extract.messages.length, MAX_MESSAGES);
   assert.equal(extract.truncated, true);
-  assert.equal(extract.skill_invocations.length, 1);
-  const mid = extract.skill_invocations[0];
+  const gate = result.gateExtracts.get(`claude:${sessionId}`);
+  assert.equal(gate.messages.length, MAX_MESSAGES);
+  assert.equal(gate.skill_invocations.length, 1);
+  const mid = gate.skill_invocations[0];
   assert.equal(mid.skill, 'mid');
-  assert.ok(mid.index >= 0 && mid.index < extract.messages.length);
-  assert.ok(mid.resultIndex >= 0 && mid.resultIndex < extract.messages.length);
-  assert.equal(extract.messages[mid.resultIndex].text, 'done-mid');
+  assert.ok(mid.index >= 0 && mid.index < gate.messages.length);
+  assert.ok(mid.resultIndex >= 0 && mid.resultIndex < gate.messages.length);
+  assert.equal(gate.messages[mid.resultIndex].role, 'tool_result');
 });
 
 test('dream-collect: re-running empties stale scratch, cleanScratch removes it', () => {
@@ -645,6 +659,14 @@ function fullExtracts(paths) {
 }
 const compactBytes = (extract) => Buffer.byteLength(JSON.stringify(extract));
 
+/** The same discovery order, parsed through the PRIMARY-DIALOGUE entry point the
+ *  collector now uses: `.extract` is what reaches scratch, `.intakeBytes` is what
+ *  X is measured against (WP-dream-primary-dialogue-collection, rows C1 and C2). */
+function primaryExtracts(paths) {
+  return transcripts.discover(paths, { since: null }).sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .map((d) => ({ d, ...transcripts.parsePrimaryWithOutcome(d, transcripts.newRunBudget()) }));
+}
+
 test('dream-collect: preprocessing scalar accepts fractional seconds and rejects invalid or overflowing conversion', () => {
   const paths = tempPaths();
   fs.mkdirSync(paths.core, { recursive: true });
@@ -663,22 +685,28 @@ test('dream-collect: filtered complete content from both harnesses fits despite 
   for (const d of transcripts.discover(paths, { since: null })) {
     fs.appendFileSync(d.path, `${JSON.stringify({ type: 'ignored', padding: 'z'.repeat(900_000) })}\n`.repeat(3));
   }
-  const full = fullExtracts(paths);
-  assert.ok(full.reduce((sum, { extract }) => sum + compactBytes(extract), 0) < 400_000);
+  const primary = primaryExtracts(paths);
+  assert.ok(primary.reduce((sum, { intakeBytes }) => sum + intakeBytes, 0) < 400_000);
   const result = collectExtracts(paths, emptyLedger(), 400_000);
   assert.equal(result.entries.length, 2);
-  for (const { extract } of full) {
+  for (const { extract } of primary) {
     const entry = result.entries.find((e) => e.session_id === extract.session_id);
     assert.deepEqual(JSON.parse(fs.readFileSync(entry.scratchFile)), extract);
   }
   assert.deepEqual(result.truncated, []);
+  // Row C5: the run's intake total is the sum of the admitted sessions' intake.
+  assert.equal(result.intakeBytesTotal, primary.reduce((sum, { intakeBytes }) => sum + intakeBytes, 0));
 });
 
 test('dream-collect: compact metadata is charged even when larger than raw source; exact fit stops', () => {
   const paths = tempPaths();
   writeClaude(paths, 'tiny', 1, 1, new Date('2026-01-03'));
   const [{ d, extract }] = fullExtracts(paths);
+  const [primary] = primaryExtracts(paths);
+  // Row C1: the number X is measured against is byte-identical to the compact
+  // raw extract this loop measured before the projection landed.
   const exact = compactBytes(extract);
+  assert.equal(primary.intakeBytes, exact);
   assert.ok(exact > d.size);
   const tooSmall = collectExtracts(paths, emptyLedger(), exact - 1);
   assert.equal(tooSmall.entries.length, 0);
@@ -687,8 +715,9 @@ test('dream-collect: compact metadata is charged even when larger than raw sourc
   const result = collectExtracts(paths, emptyLedger(), exact);
   assert.equal(result.entries.length, 1);
   assert.deepEqual(result.deferred.map((e) => e.session_id), ['rollout-older']);
-  assert.equal(fs.readFileSync(result.wrote[0], 'utf8'), JSON.stringify(extract, null, 2));
-  assert.ok(fs.statSync(result.wrote[0]).size > exact, 'physical bytes are deliberately a different measure');
+  // …and the bytes WRITTEN are the projection's, which is a different quantity.
+  assert.equal(fs.readFileSync(result.wrote[0], 'utf8'), JSON.stringify(primary.extract, null, 2));
+  assert.equal(result.intakeBytesTotal, exact);
 });
 
 test('dream-collect: equal-mtime admission preserves discovery order', () => {
@@ -709,7 +738,7 @@ test('dream-collect: deadline includes discovery and scratch setup, equality exc
   t.mock.method(transcripts, 'discover', (...args) => { tick += 40; return discover(...args); });
   const mkdir = fs.mkdirSync;
   t.mock.method(fs, 'mkdirSync', (...args) => { tick += 20; return mkdir(...args); });
-  const parser = t.mock.method(transcripts, 'parseWithOutcome');
+  const parser = t.mock.method(transcripts, 'parsePrimaryWithOutcome');
   const result = collectExtracts(paths, emptyLedger(), 400_000, { preprocessTimeoutMs: 60, now: () => tick });
   assert.equal(parser.mock.callCount(), 0);
   assert.equal(result.deadlineDeferred.length, 1);
@@ -722,8 +751,8 @@ test('dream-collect: a started parse finishes across expiry, then deadline stops
   writeClaude(paths, 'new', 1, 10, new Date('2026-01-03'));
   writeCodex(paths, 'old', new Date('2026-01-02'));
   let tick = 0;
-  const parse = transcripts.parseWithOutcome;
-  t.mock.method(transcripts, 'parseWithOutcome', (...args) => { tick = 100; return parse(...args); });
+  const parse = transcripts.parsePrimaryWithOutcome;
+  t.mock.method(transcripts, 'parsePrimaryWithOutcome', (...args) => { tick = 100; return parse(...args); });
   const result = collectExtracts(paths, emptyLedger(), 400_000, { preprocessTimeoutMs: 60, now: () => tick });
   assert.equal(result.entries.length, 1);
   assert.equal(result.deadlineDeferred.length, 1);
@@ -746,9 +775,9 @@ test('dream-collect: incomplete reads are discarded and the next candidate recei
   const paths = tempPaths();
   writeClaude(paths, 'partial', 1, 10, new Date('2026-01-03'));
   writeCodex(paths, 'whole', new Date('2026-01-02'));
-  const parse = transcripts.parseWithOutcome;
+  const parse = transcripts.parsePrimaryWithOutcome;
   const budgets = [];
-  t.mock.method(transcripts, 'parseWithOutcome', (d, budget) => {
+  t.mock.method(transcripts, 'parsePrimaryWithOutcome', (d, budget) => {
     assert.equal(budget.remaining, Limits.MAX_RUN_BYTES);
     budgets.push(budget);
     const result = parse(d, budget);
@@ -814,7 +843,7 @@ test('dream-collect: oversized memo skips parsing only for matching fingerprint/
   assert.deepEqual(first.oversizedExtracts, { [ledgerLib.foldKey(d.path)]: memoFor(d, bytes) });
   const ledger = { ...emptyLedger(), oversizedExtracts: first.oversizedExtracts };
   const snapshot = structuredClone(ledger);
-  const parser = t.mock.method(transcripts, 'parseWithOutcome');
+  const parser = t.mock.method(transcripts, 'parsePrimaryWithOutcome');
   for (const x of [1000, 500, bytes - 1]) {
     const result = collectExtracts(paths, ledger, x);
     assert.equal(result.oversized[0].cached, true);
@@ -833,7 +862,7 @@ test('dream-collect: changed fingerprint/version or malformed memo forces fresh 
   writeClaude(paths, 'large', 10, 1000, new Date('2026-01-03'));
   const [{ d, extract }] = fullExtracts(paths);
   const valid = memoFor(d, compactBytes(extract));
-  const parser = t.mock.method(transcripts, 'parseWithOutcome');
+  const parser = t.mock.method(transcripts, 'parsePrimaryWithOutcome');
   const variants = [
     { ...valid, fingerprint: 'changed' }, { ...valid, appVersion: 'older' },
     null, [], { ...valid, extractBytes: '20000' }, { ...valid, extractBytes: 0 },
@@ -891,8 +920,8 @@ test('dream-collect: expired deadline retains valid unvisited memo even when X i
 test('dream-collect: parser quarantine and scratch write errors preserve their existing behavior', (t) => {
   const paths = tempPaths();
   writeClaude(paths, 'one', 1, 10, new Date('2026-01-03'));
-  const parse = transcripts.parseWithOutcome;
-  const parser = t.mock.method(transcripts, 'parseWithOutcome', (...args) => {
+  const parse = transcripts.parsePrimaryWithOutcome;
+  const parser = t.mock.method(transcripts, 'parsePrimaryWithOutcome', (...args) => {
     const result = parse(...args); result.parse.outcome = 'too-many-lines'; return result;
   });
   const result = collectExtracts(paths, emptyLedger(), 400_000);
@@ -1008,8 +1037,8 @@ function stopFixture(paths) {
 /** Collect with `partial`'s read forced incomplete — `runExhausted` is the
  *  collector's only evidence for the read-deferred arm. */
 function collectRun(t, paths, ledger, x, options) {
-  const parse = transcripts.parseWithOutcome;
-  t.mock.method(transcripts, 'parseWithOutcome', (d, budget) => {
+  const parse = transcripts.parsePrimaryWithOutcome;
+  t.mock.method(transcripts, 'parsePrimaryWithOutcome', (d, budget) => {
     const result = parse(d, budget);
     if (path.basename(d.path) === 'partial.jsonl') result.parse.runExhausted = true;
     return result;
@@ -1148,4 +1177,480 @@ test('dream-collect: a deadline stop partitions every discovered file exactly on
   assert.deepEqual(result.deadlineDeferred.map((e) => e.session_id), ['memoised', 'tail']);
   assert.deepEqual(result.oversizedExtracts[memoKey], memo, 'the memo behind the stop survives');
   assertNoRetryPromise(sixCounts(result));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WP-dream-primary-dialogue-collection — Table C
+//
+// The collector now parses through `parsePrimaryWithOutcome`: `X` is measured
+// against the RAW capped extract's compact length (`intakeBytes`), what reaches
+// scratch is the smaller PRIMARY DIALOGUE, and the text-free gate projection of
+// the ORIGINAL timeline is returned in memory for the ledger gate.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * THE BASE COMMIT'S COLLECTOR, reproduced without a second copy of the loop.
+ * Before this package the admission loop called `parseWithOutcome`, measured
+ * `Buffer.byteLength(JSON.stringify(extract))` and wrote that same extract.
+ * Substituting the new entry point with one that returns the RAW extract as
+ * `extract` and its own compact length as `intakeBytes` reproduces all three —
+ * the same measured number, the same newest-first order and the same written
+ * bytes — so a deep-equal against this run is a deep-equal against the base
+ * commit's behaviour. `costMs` and `exhaust` are the clock and read-outcome
+ * seams the deadline cases below drive.
+ * @param {*} t @param {*} paths @param {*} ledger @param {number} x
+ * @param {{options?:object, costMs?:number, tick?:{v:number}, exhaust?:string}} [o]
+ */
+function collectBaseline(t, paths, ledger, x, o = {}) {
+  const raw = transcripts.parseWithOutcome;
+  const m = t.mock.method(transcripts, 'parsePrimaryWithOutcome', (d, budget) => {
+    const { extract, parse } = raw(d, budget);
+    if (o.tick) o.tick.v += o.costMs || 0;
+    const gateExtract = {
+      harness: extract.harness,
+      session_id: extract.session_id,
+      messages: extract.messages.map((msg) => ({ role: msg.role })),
+      skill_invocations: extract.skill_invocations,
+    };
+    const exhausted = o.exhaust && path.basename(d.path) === o.exhaust;
+    return {
+      extract,
+      gateExtract,
+      intakeBytes: compactBytes(extract),
+      parse: exhausted ? { ...parse, runExhausted: true } : parse,
+    };
+  });
+  try {
+    return collectExtracts(paths, ledger, x, o.options || {});
+  } finally {
+    m.mock.restore();
+  }
+}
+
+/** The projected (real) collector, driven through the same two seams. */
+function collectProjected(t, paths, ledger, x, o = {}) {
+  const real = transcripts.parsePrimaryWithOutcome;
+  const m = t.mock.method(transcripts, 'parsePrimaryWithOutcome', (d, budget) => {
+    const out = real(d, budget);
+    if (o.tick) o.tick.v += o.costMs || 0;
+    if (o.exhaust && path.basename(d.path) === o.exhaust) {
+      return { ...out, parse: { ...out.parse, runExhausted: true } };
+    }
+    return out;
+  });
+  try {
+    return collectExtracts(paths, ledger, x, o.options || {});
+  } finally {
+    m.mock.restore();
+  }
+}
+
+/** The arms a byte decision can move. `gateExtracts` and `intakeBytesTotal` are
+ *  this package's ADDITIONS and are compared separately, never here. */
+function admissionArms(result) {
+  return {
+    entries: result.entries,
+    processed: result.processed,
+    deferred: result.deferred,
+    deadlineDeferred: result.deadlineDeferred,
+    readDeferred: result.readDeferred,
+    oversized: result.oversized,
+    newlyQuarantined: result.newlyQuarantined,
+    oversizedExtracts: result.oversizedExtracts,
+  };
+}
+
+/** A claude transcript whose ORIGINAL timeline is mostly TOOL OUTPUT — the shape
+ *  the projection shrinks. One real user line, then `pairs` Skill-free tool
+ *  exchanges whose results the projection removes entirely. */
+function writeToolHeavy(paths, sessionId, pairs, toolLen, when) {
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${sessionId}.jsonl`);
+  const ts = '2026-01-01T10:00:00.000Z';
+  const lines = [JSON.stringify({ type: 'user', sessionId, cwd: '/p', timestamp: ts, message: { role: 'user', content: 'ask' } })];
+  for (let i = 0; i < pairs; i++) {
+    lines.push(JSON.stringify({
+      type: 'assistant', sessionId, cwd: '/p', timestamp: ts,
+      message: { role: 'assistant', content: [{ type: 'tool_use', id: `t${i}`, name: 'Bash', input: {} }] },
+    }));
+    lines.push(JSON.stringify({
+      type: 'user', sessionId, cwd: '/p', timestamp: ts,
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `t${i}`, is_error: false, content: [{ type: 'text', text: 'o'.repeat(toolLen) }] }] },
+    }));
+  }
+  fs.writeFileSync(file, lines.join('\n') + '\n');
+  fs.utimesSync(file, when, when);
+  return file;
+}
+
+const idOfPath = (p) => path.basename(p).replace(/\.[^.]+$/, '');
+
+test('dream-collect: [PDC-AC1] every byte decision is the base commit\'s, and a session the projection would have fitted is still deferred', (t) => {
+  const paths = tempPaths();
+  writeClaude(paths, 'stuck', 1, 10, new Date('2026-01-08'));        // prior quarantine
+  writeOverCeiling(paths, 'ceiling', new Date('2026-01-07'));         // newlyQuarantined
+  writeToolHeavy(paths, 'big', 60, 2000, new Date('2026-01-06'));     // individually oversized
+  writeToolHeavy(paths, 'partial', 2, 100, new Date('2026-01-05'));   // readDeferred
+  writeToolHeavy(paths, 'keep', 8, 2000, new Date('2026-01-04'));     // admitted
+  writeToolHeavy(paths, 'extra', 8, 2000, new Date('2026-01-03'));    // capacity-deferred
+  writeToolHeavy(paths, 'tail', 8, 2000, new Date('2026-01-02'));     // behind the stop
+
+  let ledger = emptyLedger();
+  const byId = Object.fromEntries(transcripts.discover(paths, { since: null }).map((d) => [idOfPath(d.path), d]));
+  ledger = ledgerLib.recordQuarantined(ledger, byId.stuck, 'too-many-lines');
+  const primary = Object.fromEntries(primaryExtracts(paths).map((p) => [idOfPath(p.d.path), p]));
+
+  // X admits `keep` on its INTAKE and leaves one byte too little for `extra`'s.
+  const x = primary.keep.intakeBytes + primary.extra.intakeBytes - 1;
+  assert.ok(primary.big.intakeBytes > x, 'the oversized fixture really exceeds X');
+  // The premise of the criterion: measured on the PROJECTION, `extra` would fit
+  // in what is left after `keep` — and it must still be deferred.
+  const projectedKeep = compactBytes(primary.keep.extract);
+  const projectedExtra = compactBytes(primary.extra.extract);
+  assert.ok(projectedExtra <= x - projectedKeep, 'the projection would have let `extra` fit');
+
+  const base = collectBaseline(t, paths, ledger, x, { exhaust: 'partial.jsonl', options: { now: () => 0 } });
+  const proj = collectProjected(t, paths, ledger, x, { exhaust: 'partial.jsonl', options: { now: () => 0 } });
+
+  // Neither run deferred on the deadline — the condition row C1a states, and it
+  // is asserted for BOTH runs, because one finishing in time says nothing about
+  // the other.
+  assert.deepEqual(base.deadlineDeferred, [], '[PDC-AC1] the baseline run deferred on the deadline, so row C1a applies and this fixture is not the byte-dimension case it claims to be');
+  assert.deepEqual(proj.deadlineDeferred, [], '[PDC-AC1] the projected run deferred on the deadline, so row C1a applies and this fixture is not the byte-dimension case it claims to be');
+  assert.deepEqual(
+    admissionArms(proj), admissionArms(base),
+    `[PDC-AC1] a byte decision moved: the projected arms differ from the base commit's.\nbase=${JSON.stringify(admissionArms(base))}\nproj=${JSON.stringify(admissionArms(proj))}`
+  );
+  assert.equal(proj.skippedQuarantined, base.skippedQuarantined, '[PDC-AC1] the quarantine-skip count moved');
+
+  // The four populated arms, named so a corpus that quietly stopped exercising
+  // one cannot leave this criterion green.
+  assert.deepEqual(proj.entries.map((e) => e.session_id), ['keep'], '[PDC-AC1] admitted set');
+  assert.deepEqual(proj.deferred.map((e) => e.session_id), ['extra', 'tail'], '[PDC-AC1] capacity arm');
+  assert.deepEqual(proj.readDeferred.map((e) => e.session_id), ['partial'], '[PDC-AC1] read-deferred arm');
+  assert.deepEqual(proj.oversized.map((d) => path.basename(d.path)), ['big.jsonl'], '[PDC-AC1] oversized arm');
+  assert.deepEqual(proj.newlyQuarantined.map((d) => path.basename(d.path)), ['ceiling.jsonl'], '[PDC-AC1] quarantine arm');
+  assert.equal(proj.skippedQuarantined, 1, '[PDC-AC1] quarantine-skip count');
+  assert.equal(proj.intakeBytesTotal, primary.keep.intakeBytes, '[PDC-AC1] the run intake total');
+});
+
+test('dream-collect: [PDC-AC1a-more] a deadline-bound run admits MORE under projection, and no byte verdict moves', (t) => {
+  const paths = tempPaths();
+  for (let i = 0; i < 5; i++) writeToolHeavy(paths, `s${i}`, 4, 500, new Date(`2026-01-0${8 - i}`));
+  const x = 4_000_000; // far above the corpus: the deadline is the ONLY constraint
+
+  const tickA = { v: 0 };
+  const base = collectBaseline(t, paths, emptyLedger(), x, {
+    tick: tickA, costMs: 60, options: { preprocessTimeoutMs: 100, now: () => tickA.v },
+  });
+  const tickB = { v: 0 };
+  const proj = collectProjected(t, paths, emptyLedger(), x, {
+    tick: tickB, costMs: 10, options: { preprocessTimeoutMs: 100, now: () => tickB.v },
+  });
+
+  // The round-2 reviewer's shape: the projected run defers NOTHING while the
+  // baseline defers under the same limit.
+  assert.ok(base.deadlineDeferred.length > 0, 'the baseline is deadline-bound');
+  assert.deepEqual(proj.deadlineDeferred, []);
+  assert.ok(proj.entries.length > base.entries.length, `${proj.entries.length} > ${base.entries.length}`);
+
+  // …and every session the loop ACTUALLY VISITED got the base commit's byte
+  // verdict: nothing was capacity-deferred, nothing measured oversized, and the
+  // baseline's admitted list is a prefix of the projected one. The visited set
+  // moved; no byte decision did.
+  for (const r of [base, proj]) {
+    assert.deepEqual(r.deferred, []);
+    assert.deepEqual(r.oversized, []);
+    assert.deepEqual(r.oversizedExtracts, {});
+  }
+  const ids = (r) => r.entries.map((e) => e.session_id);
+  assert.deepEqual(ids(proj).slice(0, ids(base).length), ids(base));
+});
+
+test('dream-collect: [PDC-AC1a-fewer] a deadline-bound run admits FEWER under projection, and no byte verdict moves', (t) => {
+  const paths = tempPaths();
+  for (let i = 0; i < 5; i++) writeToolHeavy(paths, `s${i}`, 4, 500, new Date(`2026-01-0${8 - i}`));
+  const x = 4_000_000;
+
+  // The other direction: classifying two policies in one pass costs MORE than
+  // the write serialization it saves. The direction is a property of the
+  // machine, not of this package — row C1a says so, and both are exercised.
+  const tickA = { v: 0 };
+  const base = collectBaseline(t, paths, emptyLedger(), x, {
+    tick: tickA, costMs: 10, options: { preprocessTimeoutMs: 100, now: () => tickA.v },
+  });
+  const tickB = { v: 0 };
+  const proj = collectProjected(t, paths, emptyLedger(), x, {
+    tick: tickB, costMs: 60, options: { preprocessTimeoutMs: 100, now: () => tickB.v },
+  });
+
+  assert.deepEqual(base.deadlineDeferred, []);
+  assert.ok(proj.deadlineDeferred.length > 0, 'the projected run is deadline-bound');
+  assert.ok(proj.entries.length < base.entries.length, `${proj.entries.length} < ${base.entries.length}`);
+  for (const r of [base, proj]) {
+    assert.deepEqual(r.deferred, []);
+    assert.deepEqual(r.oversized, []);
+    assert.deepEqual(r.oversizedExtracts, {});
+  }
+  const ids = (r) => r.entries.map((e) => e.session_id);
+  assert.deepEqual(ids(base).slice(0, ids(proj).length), ids(proj));
+});
+
+// ── Rows C4 / C4a: the filename collision, and the eviction that reproduces
+//    today's refusal ────────────────────────────────────────────────────────
+
+const { makeGates } = require('../../src/core/dream/validate');
+const { defaultLayout } = require('../../src/core/layout');
+
+/** The registered parent skill the ledger below lives beside. */
+const PDC_SKILL = [
+  '---', 'id: foo', 'type: skill', 'created: 2026-07-05', 'updated: 2026-07-05',
+  'origin: dream', 'confidence: 0.9', 'recurrence: 3', 'derived_from_untrusted: false',
+  '---', '', 'skill body', '',
+].join('\n');
+
+/** A structurally valid one-entry learnings ledger counting exactly `sid`. */
+const pdcLedgerFor = (sid) => [
+  '---', 'id: foo-learnings', 'type: note', 'created: 2026-07-05',
+  'updated: 2026-07-11', 'origin: dream', 'derived_from_untrusted: false', '---', '',
+  '## deps.module-not-found', '',
+  '- Pattern-Key: `deps.module-not-found`',
+  '- Status: open',
+  '- Recurrence: 1',
+  `- Session-IDs: ${sid}`,
+  '- First-Seen: 2026-07-05',
+  '- Last-Seen: 2026-07-11',
+  '- derived_from_untrusted: false',
+  '- Observation: the install step failed when the module was missing.',
+  '',
+].join('\n');
+
+/** Ask the SHIPPED ledger gate for its verdict on a ledger counting `sid`,
+ *  given `extractsBySession`. `null` means the write is accepted. */
+function pdcLedgerVerdict(sid, extractsBySession) {
+  const layout = defaultLayout();
+  return makeGates({}).ledger({
+    rel: `${layout.skills_dir}/foo/LEARNINGS.md`,
+    candidateBytes: Buffer.from(pdcLedgerFor(sid)),
+    baselineLedgerBytes: null,
+    pairedSkillBytes: Buffer.from(PDC_SKILL),
+    registry: { skills: { [`${layout.skills_dir}/foo/SKILL.md`]: { id: 'foo', created: '2026-07-05' } } },
+    extractsBySession,
+    layout,
+  });
+}
+
+/** A claude transcript carrying ONE clean `foo` invocation — the skill's own
+ *  paired result is the only message in its window — and, optionally, a line of
+ *  real user dialogue before it. With `dialogue` omitted the PRIMARY projection
+ *  of this session retains ZERO messages. */
+function writeInvokingSession(paths, file, sessionId, when, dialogue) {
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  const full = path.join(dir, file);
+  const ts = '2026-01-01T10:00:00.000Z';
+  const lines = [];
+  if (dialogue) {
+    lines.push(JSON.stringify({ type: 'user', sessionId, cwd: '/p', timestamp: ts, message: { role: 'user', content: dialogue } }));
+  }
+  lines.push(JSON.stringify({
+    type: 'assistant', sessionId, cwd: '/p', timestamp: ts,
+    message: { role: 'assistant', content: [{ type: 'tool_use', id: 'k1', name: 'Skill', input: { skill: 'foo' } }] },
+  }));
+  lines.push(JSON.stringify({
+    type: 'user', sessionId, cwd: '/p', timestamp: ts,
+    message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'k1', is_error: false, content: [{ type: 'text', text: 'ran foo' }] }] },
+  }));
+  fs.writeFileSync(full, lines.join('\n') + '\n');
+  fs.utimesSync(full, when, when);
+  return full;
+}
+
+test('dream-collect: [PDC-AC1b] a filename collision keeps exactly the surviving session, and nothing else moves', () => {
+  const paths = tempPaths();
+  // `s.1` and `s_1` both sanitize to `claude-s_1.json`. Newest-first admission
+  // visits `s.1` first, so `s_1` is written LAST and is the SURVIVOR — the write
+  // order AC1b names. The survivor's primary projection retains ZERO messages,
+  // which is the empty case row C2 requires covering here.
+  writeInvokingSession(paths, 'a.jsonl', 's.1', new Date('2026-01-05'), 'please run foo');
+  writeInvokingSession(paths, 'b.jsonl', 's_1', new Date('2026-01-04')); // empty primary dialogue
+
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+
+  // Nothing else about the collision moved: both sessions are still parsed,
+  // still admitted, still marked processed, and the SAME path is in `wrote`
+  // twice. That the overwritten session's dialogue is lost is a pre-existing
+  // defect of the base commit and is deliberately NOT fixed here.
+  assert.deepEqual(result.entries.map((e) => e.session_id), ['s.1', 's_1']);
+  assert.deepEqual(result.processed.map((d) => path.basename(d.path)), ['a.jsonl', 'b.jsonl']);
+  const collided = path.join(result.scratchDir, 'claude-s_1.json');
+  assert.deepEqual(result.wrote, [collided, collided]);
+  assert.deepEqual(fs.readdirSync(result.scratchDir), ['claude-s_1.json']);
+
+  // Row C4: exactly ONE session per distinct filename — the last one written.
+  assert.equal(result.gateExtracts.size, 1,
+    `[PDC-AC1b] the gate map holds more than the surviving session: ${JSON.stringify([...result.gateExtracts.keys()])}`);
+  assert.deepEqual([...result.gateExtracts.keys()], ['claude:s_1'],
+    '[PDC-AC1b] the surviving filename must map to exactly the last session written');
+  // …which is bit-for-bit the key set the base commit produced by RE-READING the
+  // surviving file off disk.
+  const reread = new Map();
+  for (const f of result.wrote) {
+    const ex = JSON.parse(fs.readFileSync(f, 'utf8'));
+    reread.set(`${ex.harness}:${ex.session_id}`, ex);
+  }
+  assert.deepEqual([...reread.keys()], [...result.gateExtracts.keys()],
+    '[PDC-AC1b] the in-memory map no longer equals the disk rebuild it replaces');
+
+  // Row C2: the survivor's projection retained no messages and is written anyway.
+  const survivor = JSON.parse(fs.readFileSync(collided, 'utf8'));
+  assert.equal(survivor.session_id, 's_1');
+  assert.deepEqual(survivor.messages, []);
+
+  // A learning counting the SURVIVOR is accepted, so the map is real evidence
+  // and not merely small.
+  assert.equal(pdcLedgerVerdict('claude:s_1', result.gateExtracts), null,
+    '[PDC-AC1b] the surviving session must still authorize a learning');
+
+  // IN THIS WRITE ORDER THE OVERWRITTEN SESSION'S REFUSAL IS OVER-DETERMINED,
+  // and the test says so rather than banking it. `SID_RE` in validate.js is
+  // `^[a-z0-9]+:[A-Za-z0-9_-]+$` — exactly `sanitize`'s alphabet — so ANY id
+  // that collides with `s_1` without being `s_1` is also a schema violation.
+  // A ledger counting `claude:s.1` is therefore refused whatever the map holds,
+  // which is why the eviction's authorization effect is proven by the sibling
+  // test below, in the other write order, instead of here.
+  assert.match(String(pdcLedgerVerdict('claude:s.1', result.gateExtracts)), /malformed Session-ID/,
+    '[PDC-AC1b] the over-determination this test documents no longer holds');
+});
+
+test('dream-collect: [PDC-AC1b] the eviction is what refuses a learning counting the OVERWRITTEN session', () => {
+  const paths = tempPaths();
+  // THE OTHER WRITE ORDER, and the only one in which the refusal is decided by
+  // the map: the overwritten id is the schema-clean `s_1`, so the gate has no
+  // second reason to refuse it. Both sessions still collide on
+  // `claude-s_1.json`; here `s.1` is written last and survives.
+  writeInvokingSession(paths, 'a.jsonl', 's_1', new Date('2026-01-05'), 'please run foo');
+  writeInvokingSession(paths, 'b.jsonl', 's.1', new Date('2026-01-04'), 'please run foo again');
+
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+  const collided = path.join(result.scratchDir, 'claude-s_1.json');
+  assert.deepEqual(result.wrote, [collided, collided], '[PDC-AC1b] both sessions still write the colliding path');
+  assert.deepEqual([...result.gateExtracts.keys()], ['claude:s.1'],
+    `[PDC-AC1b] the gate map is not exactly the surviving session: ${JSON.stringify([...result.gateExtracts.keys()])}`);
+  assert.equal(JSON.parse(fs.readFileSync(collided, 'utf8')).session_id, 's.1', '[PDC-AC1b] the survivor on disk');
+
+  // A learning counting the OVERWRITTEN session is refused as not among this
+  // run's processed extracts — bit-for-bit what the base commit does by
+  // re-reading the surviving file.
+  assert.match(
+    String(pdcLedgerVerdict('claude:s_1', result.gateExtracts)),
+    /not among this run's processed extracts/,
+    '[PDC-AC1b] without the eviction the overwritten session still authorizes a learning the model never saw'
+  );
+
+  // NON-VACUITY: the same gate, the same ledger, against a session-keyed map
+  // built WITHOUT the eviction ACCEPTS it — so the refusal above is a property
+  // of the eviction and not of the ledger fixture. Without row C4 a learning
+  // would be authorized by a session whose dialogue the model never saw a byte
+  // of, which is the authorization difference round 2 measured.
+  const noEviction = new Map();
+  for (const d of transcripts.discover(paths, { since: null }).sort((a, b) => b.mtimeMs - a.mtimeMs)) {
+    const { gateExtract } = transcripts.parsePrimaryWithOutcome(d, transcripts.newRunBudget());
+    noEviction.set(`${d.harness}:${gateExtract.session_id}`, gateExtract);
+  }
+  assert.equal(noEviction.size, 2, '[PDC-AC1b] the no-eviction control map holds both sessions');
+  assert.equal(pdcLedgerVerdict('claude:s_1', noEviction), null,
+    '[PDC-AC1b] without the eviction the refusal is lost');
+});
+
+// ── Rows C2 / C3: what is written, and the memo ─────────────────────────────
+
+test('dream-collect: [PDC-AC2] the scratch file is the projection, byte-exact, and the intake it was measured on is a different number', () => {
+  const paths = tempPaths();
+  const dir = path.join(paths.codexDir, 'sessions', '2026', '01', '01');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'rollout-demo.jsonl');
+  fs.writeFileSync(file, [
+    JSON.stringify({ type: 'session_meta', payload: { id: 'demo', thread_source: 'user' } }),
+    JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'message', role: 'user',
+        content: [{ type: 'input_text', text: 'Keep explanations concise.' }],
+        internal_chat_message_metadata_passthrough: { content_item_kinds: ['user.text'] },
+      },
+    }),
+  ].join('\n') + '\n');
+  const when = new Date('2026-01-03');
+  fs.utimesSync(file, when, when);
+
+  const [primary] = primaryExtracts(paths);
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+  assert.deepEqual(result.wrote, [path.join(result.scratchDir, 'codex-demo.json')]);
+
+  // The spec's literal expected file, in the EMITTED key order. Only
+  // `source_path` is substituted: the literal is written for
+  // `/samples/rollout-demo.jsonl` and this fixture lives under a temp home,
+  // which the extract's own path-bounding rewrites.
+  const expected = {
+    harness: 'codex',
+    session_id: 'demo',
+    started: null,
+    cwd: null,
+    source_path: primary.extract.source_path,
+    truncated: false,
+    messages: [
+      { role: 'user', text: 'Keep explanations concise.', ts: null, derived_from_untrusted: false },
+    ],
+  };
+  assert.equal(fs.readFileSync(result.wrote[0], 'utf8'), JSON.stringify(expected, null, 2));
+  assert.ok(!fs.readFileSync(result.wrote[0], 'utf8').endsWith('\n'), 'the writer adds no trailing newline');
+
+  // THE BYTE COUNT THIS ADMISSION WAS MEASURED AGAINST IS NOT THE SIZE OF THAT
+  // FILE. This source has nothing to remove and the projection ADDS a
+  // `derived_from_untrusted` key per message, so here the projection is LARGER
+  // than the intake — projection shrinks extracts in aggregate, not on every
+  // session, and row C1 is what makes that harmless. The added key costs
+  // `,"derived_from_untrusted":false` = 31 compact bytes per message, which is
+  // also the difference between the spec's own 233 and 202 (its prose says 30).
+  assert.equal(result.intakeBytesTotal, primary.intakeBytes);
+  assert.equal(compactBytes(primary.extract), primary.intakeBytes + 31);
+  assert.ok(fs.statSync(result.wrote[0]).size > primary.intakeBytes);
+});
+
+test('dream-collect: [PDC-AC2] a session whose projection retains no messages is still written, and still counted', () => {
+  const paths = tempPaths();
+  writeInvokingSession(paths, 'silent.jsonl', 'silent', new Date('2026-01-03'));
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+  assert.deepEqual(result.entries.map((e) => e.session_id), ['silent']);
+  assert.equal(result.wrote.length, 1);
+  assert.equal(result.processed.length, 1);
+  const written = JSON.parse(fs.readFileSync(result.wrote[0], 'utf8'));
+  assert.deepEqual(written.messages, []);
+  assert.equal(written.session_id, 'silent');
+  // The agent may legitimately decide a session holds nothing worth
+  // remembering; that is a different state from the session being absent.
+  assert.equal(fs.existsSync(path.join(result.scratchDir, 'claude-silent.json')), true);
+});
+
+test('dream-collect: [PDC-AC2] an oversized memo written by the base commit is honoured unchanged, and gains no field', (t) => {
+  const paths = tempPaths();
+  writeToolHeavy(paths, 'large', 20, 2000, new Date('2026-01-03'));
+  const [{ d }] = primaryExtracts(paths);
+  const x = 1000;
+
+  const base = collectBaseline(t, paths, emptyLedger(), x, { options: { now: () => 0 } });
+  const key = ledgerLib.foldKey(d.path);
+  const memo = base.oversizedExtracts[key];
+  assert.deepEqual(Object.keys(memo).sort(), ['appVersion', 'extractBytes', 'fingerprint']);
+
+  // The projected collector accepts that memo as-is — no format discriminator,
+  // no new invalidation rule — and skips the parse on it.
+  const parser = t.mock.method(transcripts, 'parsePrimaryWithOutcome');
+  const proj = collectExtracts(paths, { ...emptyLedger(), oversizedExtracts: { [key]: memo } }, x);
+  assert.equal(parser.mock.callCount(), 0, 'a valid memo still skips the parse entirely');
+  assert.equal(proj.oversized[0].cached, true);
+  assert.deepEqual(proj.oversizedExtracts, base.oversizedExtracts);
+  assert.deepEqual(Object.keys(proj.oversizedExtracts[key]).sort(), ['appVersion', 'extractBytes', 'fingerprint']);
 });

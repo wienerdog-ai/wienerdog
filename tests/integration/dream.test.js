@@ -584,7 +584,12 @@ test('dream-integration: capacity-stop counts match dry-run and real run while o
   assert.equal(dry.thrown, null, dry.thrown && dry.thrown.message);
   assert.match(dry.output, /capacity stop: 2 session\(s\) deferred/);
   assert.match(dry.output, /claude sessions: 1/);
-  assert.match(dry.output, /total input bytes: [1-9][0-9]+/);
+  // Row C5: the preview names BOTH quantities — what the model is given, and
+  // what the configured limit was measured against — and never one label over
+  // the other.
+  assert.match(dry.output, /\n {2}session text given to the memory pass: [1-9][0-9]+ bytes\n/);
+  assert.match(dry.output, /\n {2}transcript text measured against the 300000-byte limit: [1-9][0-9]+ bytes\n/);
+  assert.doesNotMatch(dry.output, /total input bytes/);
   assert.doesNotMatch(dry.output.split('  brain argv:')[0], /private-first|private-second|truncated|floor|individually oversized/);
   assert.equal(readLedgerFile(ctx.core), null);
   const real = await runDream(ctx, ['--yes']);

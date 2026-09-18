@@ -1,7 +1,7 @@
 ---
 id: WP-dream-primary-dialogue-collection
 title: Collect primary dialogue into scratch and keep the code-owned gates on the original timeline
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-dream-primary-dialogue-projection]

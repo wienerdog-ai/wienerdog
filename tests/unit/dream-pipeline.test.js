@@ -2193,8 +2193,8 @@ test('dream-pipeline: mixed zero-input causes preserve memo and quarantine befor
   const performance = require('node:perf_hooks').performance;
   let elapsed = 0;
   t.mock.method(performance, 'now', () => elapsed);
-  const parse = transcripts.parseWithOutcome;
-  t.mock.method(transcripts, 'parseWithOutcome', (...args) => {
+  const parse = transcripts.parsePrimaryWithOutcome;
+  t.mock.method(transcripts, 'parsePrimaryWithOutcome', (...args) => {
     const result = parse(...args);
     if (args[0].path === incomplete) {
       elapsed = 500;
@@ -2747,4 +2747,226 @@ test('dream-pipeline: OWNJOB-AC8 — an unreadable config omits nothing and stil
   const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
   assert.equal(r.thrown, null, r.thrown && r.thrown.message);
   assert.deepEqual(calloutLines(ctx), [callout('dream'), callout('daily-digest')], 'an unreadable config omits nothing');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WP-dream-primary-dialogue-collection — Table D row D1 (with D3's correction)
+//
+// The learnings-ledger gate now reads the collector's TEXT-FREE projection of
+// each session's ORIGINAL timeline instead of a map rebuilt by re-reading the
+// scratch files. The scratch files are primary dialogue and carry no invocation
+// geometry at all, so rebuilding from them would delete the gate's evidence —
+// and a gate must never gain permission because its evidence was deleted.
+//
+// These cases are written against what the validator ACTUALLY does: on an
+// understated provenance flag it REFUSES the whole ledger write. It does not
+// raise the flag, and `SKILL.md` no longer says it does (row D3).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const { recordSkills } = require('../../src/core/dream/skill-registry');
+
+const PDC_DATE = DATE;
+const PDC_SKILL_REL = '05-Skills/foo/SKILL.md';
+const PDC_LEDGER_REL = '05-Skills/foo/LEARNINGS.md';
+const PDC_SKILL_BODY = [
+  '---', 'id: foo', 'type: skill', 'created: 2026-07-05', 'updated: 2026-07-05',
+  'origin: dream', 'confidence: 0.9', 'recurrence: 3', 'derived_from_untrusted: false',
+  '---', '', 'skill body', '',
+].join('\n');
+
+/** A one-entry learnings ledger counting `sid` and declaring `untrusted`. */
+const pdcLedger = (sid, untrusted) => [
+  '---', 'id: foo-learnings', 'type: note', 'created: 2026-07-05',
+  `updated: ${PDC_DATE}`, 'origin: dream', `derived_from_untrusted: ${untrusted}`, '---', '',
+  '## deps.module-not-found', '',
+  '- Pattern-Key: `deps.module-not-found`',
+  '- Status: open',
+  '- Recurrence: 1',
+  `- Session-IDs: ${sid}`,
+  '- First-Seen: 2026-07-05',
+  `- Last-Seen: ${PDC_DATE}`,
+  `- derived_from_untrusted: ${untrusted}`,
+  '- Observation: the install step failed when the module was missing.',
+  '',
+].join('\n');
+
+/**
+ * Plant a Claude transcript that invokes the dream-created skill `foo`.
+ * Its PRIMARY DIALOGUE is two ordinary messages and contains no tool record at
+ * all; its ORIGINAL timeline carries the invocation, the invocation's own paired
+ * result and — when `external` is true — one EXTERNAL tool result inside the
+ * same invocation window, which is what taints the window.
+ * @returns {string} the session id
+ */
+function plantInvokingTranscript(ctx, sessionId, external) {
+  const dir = path.join(ctx.claude, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  const ts = '2026-07-01T10:00:00.000Z';
+  const rec = (o) => JSON.stringify({ sessionId, cwd: '/p', timestamp: ts, ...o });
+  const lines = [
+    rec({ type: 'user', message: { role: 'user', content: 'please run the foo skill' } }),
+    rec({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'inv1', name: 'Skill', input: { skill: 'foo' } }] } }),
+    rec({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'inv1', is_error: false, content: [{ type: 'text', text: 'foo ran' }] }] } }),
+  ];
+  if (external) {
+    lines.push(rec({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'bash1', name: 'Bash', input: {} }] } }));
+    lines.push(rec({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'bash1', is_error: false, content: [{ type: 'text', text: 'shell output from outside the conversation' }] }] } }));
+  }
+  lines.push(rec({ type: 'assistant', message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'done.' }] } }));
+  fs.writeFileSync(path.join(dir, `${sessionId}.jsonl`), lines.join('\n') + '\n');
+  return sessionId;
+}
+
+/** Commit the registered parent skill into the vault and record its ownership. */
+function seedRegisteredSkill(ctx) {
+  writeFile(ctx.vault, PDC_SKILL_REL, PDC_SKILL_BODY);
+  git(ctx.vault, ['add', '-A']);
+  git(ctx.vault, ['commit', '-q', '-m', 'seed skill']);
+  recordSkills(ctx.state, [{ rel: PDC_SKILL_REL, created: '2026-07-05', id: 'foo' }]);
+}
+
+/**
+ * Drive the PRODUCTION entry point with a brain of this test's own, which writes
+ * one learnings ledger and one report into the workspace. The shipped fixture
+ * brain has no learnings scenario and is not a deliverable of this package, so
+ * the brain is installed the way `claim-1-pipeline` installs its capture
+ * harness: written into a temp bin dir and pinned.
+ */
+async function runDreamWritingLedger(ctx, ledgerBody) {
+  const realRoot = fs.realpathSync(ctx.root);
+  const binDir = path.join(realRoot, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const cmd = path.join(binDir, 'claude');
+  fs.writeFileSync(cmd,
+    '#!/usr/bin/env node\n'
+    + "'use strict';\n"
+    + 'const fs = require("node:fs");\n'
+    + 'const p = require("node:path");\n'
+    + 'if (process.argv.includes("--version")) { process.stdout.write("0.0.0 (ledger brain)\\n"); process.exit(0); }\n'
+    + 'const ws = process.env.WIENERDOG_DREAM_VAULT;\n'
+    + 'let date = "2026-07-02";\n'
+    + 'for (const a of process.argv.slice(2)) { const m = /^Today\'s date: (.+)$/m.exec(String(a)); if (m) date = m[1].trim(); }\n'
+    + `const body = ${JSON.stringify(ledgerBody)};\n`
+    + 'fs.mkdirSync(p.join(ws, "05-Skills", "foo"), { recursive: true });\n'
+    + 'fs.writeFileSync(p.join(ws, "05-Skills", "foo", "LEARNINGS.md"), body);\n'
+    + 'const scratch = process.env.WIENERDOG_DREAM_SCRATCH;\n'
+    + 'if (scratch) fs.writeFileSync(p.join(scratch, "EVIL.json"), JSON.stringify({ exfiltrate: true }));\n'
+    + 'fs.mkdirSync(p.join(ws, "reports", "dreams"), { recursive: true });\n'
+    + 'fs.writeFileSync(p.join(ws, "reports", "dreams", date + ".md"), "# Dream report — " + date + "\\n\\nConsolidated recent sessions.\\n");\n'
+    + 'process.exit(0);\n',
+    { mode: 0o755 }
+  );
+  const livePath = binDir + path.delimiter + process.env.PATH;
+  const pins = { claude: { commandPath: cmd, installDir: binDir, version: 'fake', pinnedAt: new Date().toISOString() } };
+  const gitHit = resolveOnPath('git', livePath);
+  if (gitHit) pins.git = { ...gitHit, version: 'fake', pinnedAt: new Date().toISOString() };
+  fs.mkdirSync(ctx.state, { recursive: true });
+  fs.writeFileSync(path.join(ctx.state, 'exec-pins.json'), JSON.stringify({ schema: 1, pins }), { mode: 0o600 });
+
+  const saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+  Object.assign(process.env, {
+    HOME: ctx.home, WIENERDOG_HOME: ctx.core, WIENERDOG_VAULT: ctx.vault,
+    CLAUDE_CONFIG_DIR: ctx.claude, CODEX_HOME: ctx.codex, PATH: livePath,
+  });
+  delete process.env.WIENERDOG_DREAM_RUN_TOKEN;
+  delete process.env.WIENERDOG_JOB;
+  const logs = [];
+  const origLog = console.log;
+  const origWarn = console.warn;
+  console.log = (...a) => logs.push(a.join(' '));
+  console.warn = (...a) => logs.push(a.join(' '));
+  let thrown = null;
+  try {
+    await dream.run(['--yes'], { skipContainmentProbe: true, now: NOW });
+  } catch (e) {
+    thrown = e;
+  } finally {
+    console.log = origLog;
+    console.warn = origWarn;
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+  const ledgerInVault = (() => {
+    try { return fs.readFileSync(path.join(ctx.vault, PDC_LEDGER_REL), 'utf8'); } catch { return null; }
+  })();
+  const report = (() => {
+    try { return fs.readFileSync(path.join(ctx.vault, 'reports', 'dreams', `${PDC_DATE}.md`), 'utf8'); } catch { return ''; }
+  })();
+  return { output: logs.join('\n'), thrown, ledgerInVault, report };
+}
+
+test('dream-pipeline: [PDC-AC4a] an UNDERSTATED provenance flag REFUSES the whole ledger write', async () => {
+  const ctx = setup({ withTranscript: false });
+  seedRegisteredSkill(ctx);
+  const sid = plantInvokingTranscript(ctx, 'tainted-session', true);
+
+  const r = await runDreamWritingLedger(ctx, pdcLedger(`claude:${sid}`, 'false'));
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+  // The window in the ORIGINAL timeline holds an external tool result, so the
+  // derived value is `true`; the declared `false` is lower, and the gate
+  // REFUSES. It does not raise: the candidate bytes are not rewritten — the
+  // ledger simply never reaches the vault.
+  assert.equal(r.ledgerInVault, null, '[PDC-AC4a] the understated ledger is not promoted');
+  assert.match(r.report, /## Refused by policy \(promotion enforcement\)/, '[PDC-AC4a] the enforcement section is rendered');
+  assert.match(r.report, /asserted lower than derived/,
+    `[PDC-AC4a] the refusal did not name the derived-provenance reason; report was:\n${r.report}`);
+  // …and the PRIMARY DIALOGUE the model read contains no tool record at all,
+  // which is the whole point: the gate's evidence is not in scratch.
+  assert.ok(!r.report.includes('shell output from outside the conversation'),
+    '[PDC-AC4a] tool text reached a model-visible surface');
+});
+
+test('dream-pipeline: [PDC-AC4b] the same entry declaring `true` is ACCEPTED', async () => {
+  const ctx = setup({ withTranscript: false });
+  seedRegisteredSkill(ctx);
+  const sid = plantInvokingTranscript(ctx, 'tainted-session', true);
+
+  const r = await runDreamWritingLedger(ctx, pdcLedger(`claude:${sid}`, 'true'));
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.ok(r.ledgerInVault, `[PDC-AC4b] the correctly-declared ledger was not promoted; report was:\n${r.report}`);
+  assert.match(r.ledgerInVault, /- derived_from_untrusted: true/, '[PDC-AC4b] the promoted entry keeps its declared flag');
+  assert.doesNotMatch(r.report, /asserted lower than derived/, '[PDC-AC4b] a correct declaration must not be refused');
+});
+
+test('dream-pipeline: [PDC-AC4c] a CLEAN window with a correct `false` is accepted — the control that proves the wiring', async () => {
+  const ctx = setup({ withTranscript: false });
+  seedRegisteredSkill(ctx);
+  const sid = plantInvokingTranscript(ctx, 'clean-session', false);
+
+  const r = await runDreamWritingLedger(ctx, pdcLedger(`claude:${sid}`, 'false'));
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+  // THIS IS THE CASE THAT REDDENS WHEN `extractsBySession` IS REBUILT FROM THE
+  // SCRATCH FILES. Those files are primary dialogue and carry no invocation
+  // array, so the very first check — "did this session invoke the skill?" —
+  // would fail, and a perfectly legitimate learning would be refused.
+  assert.ok(r.ledgerInVault, `[PDC-AC4c] the clean ledger was not promoted; report was:\n${r.report}`);
+  // `neutralise()` rewrites `'`, `:` and `/` in a reported reason, so these
+  // patterns are written against the RENDERED form — a regex over the raw
+  // reason string would never match and the negatives would be vacuous.
+  assert.doesNotMatch(r.report, /did not invoke skill/, '[PDC-AC4c] the gate lost the invocation evidence');
+  assert.doesNotMatch(r.report, /is not among this run_s processed extracts/, '[PDC-AC4c] the gate lost the session');
+  assert.doesNotMatch(r.report, /LEARNINGS\.md` — learnings ledger/, '[PDC-AC4c] the ledger was refused for some reason');
+});
+
+test('dream-pipeline: [PDC-AC4] a session that did not invoke the skill is still refused, and a brain write into scratch changes no verdict', async () => {
+  const ctx = setup({ withTranscript: false });
+  seedRegisteredSkill(ctx);
+  // The transcript invokes `foo`; the ledger counts a session that does not
+  // exist in this run at all.
+  plantInvokingTranscript(ctx, 'clean-session', false);
+
+  const r = await runDreamWritingLedger(ctx, pdcLedger('claude:never-ran', 'false'));
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.equal(r.ledgerInVault, null, '[PDC-AC4] an uncounted session must not authorize a ledger');
+  assert.match(r.report, /is not among this run_s processed extracts/, '[PDC-AC4] the refusal reason');
+  // The brain wrote a file into the read-only scratch dir on every run above;
+  // the stray-file sweep still deletes and records it, and the ledger verdicts
+  // are unchanged by it — the gate's evidence never lived there.
+  assert.match(r.report, /EVIL\.json` — brain wrote into the read-only scratch dir_ deleted/,
+    '[PDC-AC4] the stray-file sweep no longer records the brain write');
 });

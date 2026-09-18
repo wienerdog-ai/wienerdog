@@ -151,7 +151,11 @@ function printPlan(sel, cfg, vaultDir, workspaceDir, date, layout, settingsPath)
   for (const harness of Object.keys(perHarness).sort()) {
     console.log(`  ${harness} sessions: ${perHarness[harness]}`);
   }
-  console.log(`  total input bytes: ${totalBytes}`);
+  // Row C5: after WP-dream-primary-dialogue-collection the bytes the model is
+  // given and the bytes the limit bounds are DIFFERENT quantities, so the
+  // preview names both rather than printing one label over the other.
+  console.log(`  session text given to the memory pass: ${totalBytes} bytes`);
+  console.log(`  transcript text measured against the ${cfg.maxInputBytes}-byte limit: ${sel.intakeBytesTotal} bytes`);
   // The --dry-run preview must compose the SAME write-target argument the real
   // invocation does, or it prints a plan that is not the plan.
   const argv = buildClaudeArgs({ workspaceDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout, settingsPath });
@@ -1040,13 +1044,19 @@ async function run(argv, opts = {}) {
       //     inside the module: the run needs that same result for the decision
       //     above, and computing it twice would let the two answers disagree.
       const registry = readRegistry(paths.state);
-      const extractsBySession = new Map();
-      for (const f of sel.wrote) {
-        try {
-          const ex = JSON.parse(fs.readFileSync(f, 'utf8'));
-          if (ex && ex.harness && ex.session_id) extractsBySession.set(`${ex.harness}:${ex.session_id}`, ex);
-        } catch { /* unreadable extract → its sessions won't verify → the ledger gate fails closed */ }
-      }
+      //     ROW D1 — THE LEDGER GATE READS THE ORIGINAL TIMELINE, NOT SCRATCH.
+      //     The collector hands over a text-free projection of each written
+      //     session's ORIGINAL message timeline (roles in their original
+      //     positions, the unchanged invocation geometry, no text anywhere),
+      //     produced before anything was removed. Rebuilding this map by
+      //     re-reading `sel.wrote` would read the PRIMARY DIALOGUE instead,
+      //     which carries no `skill_invocations` at all — a gate must never gain
+      //     permission because its evidence was deleted. This is also strictly
+      //     stronger than the re-read: the evidence never touches a directory
+      //     the brain can write to, so nothing it did this run can reach it. A
+      //     session absent from the map fails the ledger gate closed, exactly as
+      //     an unreadable extract did.
+      const extractsBySession = sel.gateExtracts;
       const gates = makeGates({ stateDir: paths.state });
       let res;
       try {

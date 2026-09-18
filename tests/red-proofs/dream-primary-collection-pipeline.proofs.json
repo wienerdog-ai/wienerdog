@@ -1,0 +1,31 @@
+{
+  "suite": "tests/unit/dream-pipeline.test.js",
+  "proofs": [
+    {
+      "id": "ledger-gate-reads-the-original-timeline-not-scratch",
+      "wp": "WP-dream-primary-dialogue-collection",
+      "criterion": "4",
+      "why": "row D1 is the safety argument of the whole package: the learnings-ledger gate must keep reading the ORIGINAL message timeline, because the scratch files are now primary dialogue and carry no invocation geometry at all. Rebuilding `extractsBySession` by re-reading them is the one change that looks harmless — the map is still keyed the same way and still built from this run's sessions — while deleting the gate's entire evidence base. The fixture makes all three consequences observable at once: a legitimate learning becomes refused for never having invoked the skill, a correctly-declared untrusted learning stops being accepted, and an UNDERSTATED flag stops being refused for the reason row D3 names",
+      "file": "src/cli/dream.js",
+      "find": "      const extractsBySession = sel.gateExtracts;",
+      "replace": "      const extractsBySession = new Map(); /* RP_MUT_PDC_REREAD */\n      for (const f of sel.wrote) {\n        try {\n          const ex = JSON.parse(fs.readFileSync(f, \"utf8\"));\n          if (ex && ex.harness && ex.session_id) extractsBySession.set(`${ex.harness}:${ex.session_id}`, ex);\n        } catch { /* unreadable */ }\n      }",
+      "marker": "RP_MUT_PDC_REREAD",
+      "occurrences": 1,
+      "testNamePattern": "\\[PDC-",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: [PDC-AC4a] an UNDERSTATED provenance flag REFUSES the whole ledger write"],
+          "signal": "[PDC-AC4a]"
+        },
+        {
+          "test": ["dream-pipeline: [PDC-AC4b] the same entry declaring `true` is ACCEPTED"],
+          "signal": "[PDC-AC4b]"
+        },
+        {
+          "test": ["dream-pipeline: [PDC-AC4c] a CLEAN window with a correct `false` is accepted — the control that proves the wiring"],
+          "signal": "[PDC-AC4c]"
+        }
+      ]
+    }
+  ]
+}
