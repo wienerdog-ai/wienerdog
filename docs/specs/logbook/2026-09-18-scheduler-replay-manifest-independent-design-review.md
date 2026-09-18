@@ -278,7 +278,40 @@ the red-proofs criterion renumbered to 18, the Mirrored Surface Checklist, the
 Security checklist, the gate-derived-rows implementation note, and the Definition
 of done's dispatch precondition.
 
-## Round 6
+## Round 6 (Astra)
+
+- **Reviewed tip:** `999256f2` (round-5 D15 applied).
+- **Raw + focus committed BEFORE adjudication:** `07d2df2a`.
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r6-astra-raw.json`
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r6-astra-focus.txt`
+- **Verdict:** `needs-attention` — *"candidate-resolution failures can still
+  bypass the unreadable-root safeguard and leave live jobs behind."*
+- **D15 held for roots.** The finding is the **same defect one level down**.
+
+### Disposition
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| 9 | **Candidate canonicalization still swallowed its errors.** D15 covered roots, but D1 still gated each **candidate** through `withinSchedulerRoot` (`manifest.js:555`), which is built on `contains` and returns `false` on any `realpathSync` error. Read-only fault injection confirmed roots resolving and `lstat` reporting a regular file while an `EIO` on the candidate silently produced `false`; D9 received nothing, no unload was attempted, and the core was removed around the live registration | A | HEAVY | **ACCEPTED, and generalized rather than duplicated.** Adding a D16 for candidates would have invited a D17 for the vault path. **D15 is restated as ONE rule over every path discovery resolves** — each root, each candidate, and D12's vault path: `ENOENT`/`ENOTDIR` = absent; any other code = unreadable → D9 aborts before mutation; **only a successful resolution may classify a path as external or contained**. **Discovery calls neither `withinSchedulerRoot` nor `contains`** — it uses its own error-surfacing resolver for containment, and needs nothing else from `withinSchedulerRoot`, whose loose basename half R2 already supersedes (Table R row R3). Both helpers stay byte-unchanged for their own callers, where fail-closed correctly means *preserve*. **D12 explicitly follows the rule:** an unresolvable vault path is unreadable and aborts, never "nothing to exclude". Acceptance criterion 17 gains the candidate-`EIO` case as a **fourth outcome** rather than becoming a new criterion; Table S row S12 and the Security-checklist row are restated over all sites; the RED declaration's mutation becomes "collapse the three outcomes at **any** resolution site" |
+
+### The one place the rule deliberately does not reach
+
+The **act-time** re-check (D6) runs inside `reverse()`, after D9's abort has
+already passed, so a resolution failure there **drops the path**. At that point
+failing can only ever preserve, which is the narrowing direction. Stated in D15
+itself so it is not read as an inconsistency.
+
+### Convergence note, extended
+
+Round 3 froze the *shape*: D5a unloads everything recognized, contained,
+non-vault, regular-file. **Round 6 freezes the resolution semantics inside it:
+there is one rule for every path discovery resolves, stated in D15.** A further
+finding of this family — some path in discovery whose resolution error could be
+swallowed — is fixed by **pointing at D15**, not by adding a row for that site.
+If a site is found that cannot follow the rule, that is a named residual, not a
+new predicate.
+
+## Round 7
 
 Pending. Per the coordinator's standing instruction, a clean or LIGHT-only round
 closes the gate.
