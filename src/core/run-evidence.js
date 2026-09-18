@@ -61,7 +61,7 @@ function sanitizeArgv(argv) {
   const list = Array.isArray(argv) ? argv : [];
   for (let i = 0; i < list.length; i++) {
     const a = String(list[i]);
-    out.push(redactOnly(a.slice(0, 2000)));
+    out.push(redactOnly(a).slice(0, 2000));
     if (FREE_TEXT_FLAGS.has(a) && i + 1 < list.length) {
       const hash = crypto.createHash('sha256').update(String(list[i + 1])).digest('hex');
       out.push(`sha256:${hash}`);
@@ -71,11 +71,11 @@ function sanitizeArgv(argv) {
   return out;
 }
 
-/** Coerce a caller record to the known evidence fields, bounded + scrubbed.
+/** Coerce a caller record to the known evidence fields, scrubbed + bounded.
  *  @param {*} r @returns {RunEvidence} */
 function sanitizeRecord(r) {
   const o = r && typeof r === 'object' && !Array.isArray(r) ? r : {};
-  const scrub = (v) => redactOnly(String(v == null ? '' : v).slice(0, 2000));
+  const scrub = (v) => redactOnly(String(v == null ? '' : v)).slice(0, 2000);
   const hooks = o.policyHooks && typeof o.policyHooks === 'object' ? o.policyHooks : {};
   const rec = {
     at: scrub(o.at),

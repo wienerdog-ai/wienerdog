@@ -34,18 +34,17 @@ function alertsPath(paths) {
   return path.join(paths.state, ALERTS_FILE);
 }
 
-/** Coerce a record to the known string fields, each length-capped and then
- *  secret-scrubbed (EP3, audit A5 / ADR-0024 / WP-124): the cap bounds the scan
- *  input, then `redactOnly` guarantees no secret persists to alerts.jsonl or
- *  reaches the digest — `at`/`job`/`log_hint` are code-owned no-ops, but
- *  scanning uniformly is the fail-closed choice. Requires a non-null,
- *  non-array OBJECT — any other value (null, number, string, array) is
- *  treated as an empty object, so a valid-JSON primitive can't crash the deref.
- *  Drops unknown keys; missing fields become ''.
+/** Coerce a record to the known string fields, each secret-scrubbed and then
+ *  length-capped (EP3, audit A5 / ADR-0024 / WP-124): `redactOnly` scans the
+ *  whole value, then the cap bounds the stored length — `at`/`job`/`log_hint`
+ *  are code-owned no-ops, but scanning uniformly is the fail-closed choice.
+ *  Requires a non-null, non-array OBJECT — any other value (null, number,
+ *  string, array) is treated as an empty object, so a valid-JSON primitive
+ *  can't crash the deref. Drops unknown keys; missing fields become ''.
  *  @param {*} r @returns {{job:string, at:string, reason:string, log_hint:string}} */
 function sanitizeAlert(r) {
   const o = r && typeof r === 'object' && !Array.isArray(r) ? r : {};
-  const scrub = (v) => redactOnly(String(v == null ? '' : v).slice(0, MAX_FIELD_CHARS));
+  const scrub = (v) => redactOnly(String(v == null ? '' : v)).slice(0, MAX_FIELD_CHARS);
   return { job: scrub(o.job), at: scrub(o.at), reason: scrub(o.reason), log_hint: scrub(o.log_hint) };
 }
 

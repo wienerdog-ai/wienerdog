@@ -17,6 +17,7 @@ const {
   MAX_FILE_BYTES,
 } = require('../../src/core/alerts');
 const { renderDigest } = require('../../src/core/digest');
+const { ScanLimits } = require('../../src/core/secret-scan');
 
 /** Isolated temp core; state/ is created lazily by appendAlert. */
 function setup() {
@@ -417,11 +418,10 @@ const MARKER = '[REDACTED:anthropic-key]';
 // `artifact` is the file's text, read from disk after the sink ran.
 const safeOf = (artifact) => artifact.includes(MARKER) && !artifact.includes(PROBE_HEAD);
 
-const DEFECT_MSG = (id) =>
-  `${id}: this probe pins a KNOWN-OPEN defect and it now appears FIXED. ` +
-  'Do not delete this test to make the suite green. Convert it to the safe ' +
-  'form (assert.equal(safe, true, artifact)), move its row in Table P to ' +
-  'Status CORRECT, and say so in the PR.';
+const LEAK_MSG = (id) =>
+  `${id}: this sink must scan the whole value before it applies the field cap. ` +
+  'A raw head of a credential survived the cut. See Table A of ' +
+  'WP-secret-sink-redact-before-truncate; do not weaken or delete this test.';
 
 // Table S row S1 — src/core/alerts.js
 test('sink-probe: alerts — a labelled secret in an alert field is redacted in alerts.jsonl', () => {
@@ -435,20 +435,34 @@ test('sink-probe: alerts — a labelled secret in an alert field is redacted in 
 
 // Table S row S1 — src/core/alerts.js
 test(
-  'sink-probe: alerts — a labelled secret straddling MAX_FIELD_CHARS is NOT redacted in alerts.jsonl (KNOWN DEFECT WD-SINK-TRUNC-ALERTS)',
+  'sink-probe: alerts — a labelled secret straddling MAX_FIELD_CHARS is redacted in alerts.jsonl',
   () => {
     const { paths } = setup();
-    // Cut before scan (Table S row S1): 'F' padding + PROBE, sized so the
-    // sink's own slice(0, MAX_FIELD_CHARS) keeps exactly PROBE_HEAD.
+    // Scan before cut (Table S row S1): 'F' padding + PROBE, sized so the
+    // credential straddles the cap. The sink now scans the whole value before
+    // capping, so redactOnly sees PROBE and the cap keeps 'F' x 1976 followed
+    // by [REDACTED:anthropic-key] — exactly MAX_FIELD_CHARS characters.
     const straddling = 'F'.repeat(MAX_FIELD_CHARS - PROBE_HEAD.length) + PROBE;
     appendAlert(paths, rec('dream', '2026-07-04T01:00:00.000Z', straddling));
 
     const artifact = fs.readFileSync(path.join(paths.state, ALERTS_FILE), 'utf8');
     const safe = safeOf(artifact);
-    assert.equal(safe, false, DEFECT_MSG('WD-SINK-TRUNC-ALERTS'));
-    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
-    // exactly how a probe passes without the sink ever running. Assert the leak is
-    // POSITIVELY there.
-    assert.equal(artifact.includes(PROBE_HEAD), true, DEFECT_MSG('WD-SINK-TRUNC-ALERTS'));
+    assert.equal(safe, true, LEAK_MSG('WD-SINK-TRUNC-ALERTS'));
+  }
+);
+
+// AC5 — a field over the detector's own scan bound is not scanned at all
+// (fail-closed): the sink must record the detector's fixed oversized marker
+// and nothing of the original value, not the value's first MAX_FIELD_CHARS.
+test(
+  'sink-probe: alerts — a field over the detector scan bound is recorded as the oversized marker in alerts.jsonl',
+  () => {
+    const { paths } = setup();
+    const oversized = 'F'.repeat(ScanLimits.SCAN_MAX_BYTES + 1);
+    appendAlert(paths, rec('dream', '2026-07-04T01:00:00.000Z', oversized));
+
+    const artifact = fs.readFileSync(path.join(paths.state, ALERTS_FILE), 'utf8');
+    const record = JSON.parse(artifact.trim());
+    assert.equal(record.reason, '[wienerdog: oversized content withheld from secret scan]');
   }
 );
