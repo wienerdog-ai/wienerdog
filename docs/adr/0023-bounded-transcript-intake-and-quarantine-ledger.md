@@ -546,12 +546,18 @@ first time the retry runs and read on every later run. It is not an app-version
 field: a later fix needs a later marker and a deliberate decision, never an
 automatic re-run. Absent, empty or non-string values are no marker at all and
 the retry runs, which costs one extra reconsideration rather than a lost
-session. A ledger that has never needed the retry does not gain the key, so
-version-1 ledgers stay byte-compatible, and older code that drops the key causes
-at most one extra reconsideration.
+session. The key is OPTIONAL IN THE SERIALIZER, so a ledger written by code that
+has not run the retry stays byte-identical to what version-1 code wrote; once
+the retry has run, the marker rides the in-memory ledger and the first later
+write carries it, whether or not that run converted anything. The bound is
+per marker, not global: code old enough to drop the key on rewrite authorizes
+one further retry each time it does so, because the gate reads the marker and
+nothing else.
 
-The retry never runs on a preview: a dry run reports what it would convert and
-writes nothing. `reports/warnings.md` may lag by one dream run across a
+The retry runs in memory on a preview, so the plan it prints is truthful about
+what it would convert and the files it reconsiders; the preview persists
+neither the marker nor the conversions, and the next real run sweeps again
+identically. `reports/warnings.md` may lag by one dream run across a
 conversion, which Amendment 2 already permits in terms. Amendments 1–3 remain in
 force, including the sticky `secret-revert-exhausted` skip, which this retry
 never touches. No new quarantine reason, command, flag, runtime dependency or

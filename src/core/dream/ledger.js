@@ -250,8 +250,16 @@ function migrateFromWatermarks(stateDir, ledger) {
 function retryParseThrewOnce(ledger) {
   if (ledger[PARSE_THREW_RETRY_KEY] === PARSE_THREW_RETRY_MARKER) return { ledger, converted: 0 };
   const updatedAt = new Date().toISOString();
+  // NULL-PROTOTYPE, because this map is rebuilt by ASSIGNMENT and a ledger key
+  // is an arbitrary string from disk. On an ordinary object `files['__proto__']
+  // = rec` invokes the inherited setter and the record VANISHES instead of
+  // being copied — a record that disappears is exactly row A9's hazard, the one
+  // this function exists to avoid. Every reader of `files` uses
+  // Object.entries/values, JSON.stringify or a borrowed hasOwnProperty, all of
+  // which behave identically here, and the first withRecord spread restores an
+  // ordinary prototype.
   /** @type {Record<string, unknown>} */
-  const files = {};
+  const files = Object.create(null);
   let converted = 0;
   for (const [key, rec] of Object.entries(ledger.files || {})) {
     // A POSITIVE equality test on our OWN literal, never a rejection list: a
