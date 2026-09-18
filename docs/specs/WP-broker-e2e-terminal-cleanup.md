@@ -1,7 +1,7 @@
 ---
 id: WP-broker-e2e-terminal-cleanup
 title: Retire LP2's AUTH-BLOCKED residue and fix the weekly-review non-vacuity floor
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-scenario-harness-auth-repair, WP-cleanenv-keychain-auth]
@@ -359,10 +359,10 @@ poison to B2 "for symmetry".
 #### E2 — replacement run-failure detector
 
 ```js
-  // The detector the AUTH-BLOCKED short-circuit used to run is KEPT; only its
+  // The auth detector this harness has always run is KEPT; only its
   // DISPOSITION changes. Since WP-cleanenv-keychain-auth (ADR-0025 Amendment 5) a 401 is
   // a real failure, not a known limitation — so it must land in `failures`, not in an
-  // early return. Deleting the detector outright would be worse than the short-circuit
+  // early return. Deleting the detector outright would be worse than the early return
   // it replaces: a run that failed AFTER a qualifying broker call would leave the
   // remaining assertions passing and report CONTAINED on an incomplete run (design
   // round 2). Recorded here, then EVERY containment and non-vacuity assertion still runs
@@ -723,7 +723,8 @@ WIENERDOG_RUN_SCENARIOS=1 npm run scenarios:negative
 grep -n 'AUTH-BLOCKED\|Amendment 4' tests/scenarios/broker-e2e/run-broker-e2e.js
 
 # V-4  the floor is Table A's TWO legs, and the old file check is gone.
-#      Expect one hit each for the first three; NO output (exit 1) for the last.
+#      Expect exactly 2 hits for the first (the E6 declaration and the E3 call site),
+#      one hit each for the next two, and NO output (exit 1) for the last.
 grep -n 'draftEchoesPoisonedNote(log)' tests/scenarios/broker-e2e/run-broker-e2e.js
 grep -n 'HARNESS FAIL — the poisoned daily note was not mounted' tests/scenarios/broker-e2e/run-broker-e2e.js
 grep -n "'vault-snapshot', '07-Daily', POISONED_NOTE_FILE" tests/scenarios/broker-e2e/run-broker-e2e.js
@@ -734,7 +735,8 @@ grep -n 'if (log.length === 0) {' tests/scenarios/broker-e2e/run-broker-e2e.js
 grep -n "profileId !== 'weekly-review'" tests/scenarios/broker-e2e/run-broker-e2e.js
 
 # V-6  Table B is seeded, and the marker lives in exactly one file.
-#      Expect one hit each for the first two; the third must list ONLY
+#      Expect exactly 2 hits for the first (E5's seeding write and E3's mounted-note
+#      path), one hit for the second, and the third must list ONLY
 #      tests/scenarios/broker-e2e/run-broker-e2e.js.
 grep -n "'07-Daily', POISONED_NOTE_FILE" tests/scenarios/broker-e2e/run-broker-e2e.js
 grep -n "'reports', 'dreams', '2026-07-20-dream.md'" tests/scenarios/broker-e2e/run-broker-e2e.js
@@ -941,6 +943,15 @@ WP-broker-e2e-terminal-cleanup, which is harness-and-docs only.
 ---
 
 ## Dispatch precondition — owner items
+
+**Design gate: CLOSED 2026-09-18 at round 3.** Rounds 1 and 2 were HEAVY and each was
+followed by a fresh external round on the revised tip; round 3 was LIGHT and closed by
+mechanical verification, per `docs/runbooks/codex-review.md`. Raws are committed at
+`0aaabe68` (round 1), `71b5ffc5` (round 2) and `40d3d692` (round 3), and every finding's
+disposition is recorded in
+`docs/specs/logbook/2026-09-18-broker-e2e-terminal-cleanup-design-review.md`. This is a
+review gate, not an approval: nothing in it records the owner approving, accepting,
+ratifying or signing this spec, ADR-0025 Amendment 6, or either owner item below.
 
 Two items. **Neither was ruled on directly.** Each is **a recommendation adopted under
 standing authorization, not a direct ruling** — the standing process is recorded in

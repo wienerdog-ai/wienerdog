@@ -47,7 +47,40 @@ alongside the containment assertions rather than in place of them.* A proof that
 early reports nothing; a proof that records and continues reports both why it failed and
 what it observed.
 
+## Round 3 (2026-09-18, Astra) — verdict `needs-attention`, LIGHT
+
+Target: tip `e9e03b77`, the round-2 revision. Raw:
+`docs/specs/logbook/2026-09-18-broker-e2e-terminal-cleanup-design-r3-astra-raw.json`,
+focus: `…-design-r3-astra-focus.txt`, both introduced by **`40d3d692`**. Nothing about
+the product: round 2's fix held.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---------|------|--------|-------------|
+| R3-1 | "Remove the forbidden token from the required E2 replacement" (medium, conf 1.0) — E2's replacement comment inserted the literal `AUTH-BLOCKED` while AC-1 forbids every occurrence in the harness and V-3 requires zero grep matches. Applying all six prescribed edits in memory reproduces the failure; an implementer who may only additionally flip `status:` cannot satisfy both | C | LIGHT (spec machinery, no product effect) | **ACCEPTED.** E2's comment now reads "The auth detector this harness has always run is KEPT" and "worse than the early return it replaces" — the token appears nowhere in any prescribed block. Every other occurrence in the spec is prose *about* the deleted code or the PR title, neither of which V-3 greps |
+
+### Mechanical verification (this is what closes the round, in place of a fourth external round)
+
+All six literal blocks **E1–E6** were applied to a throwaway copy of
+`tests/scenarios/broker-e2e/run-broker-e2e.js` in the worktree, and the checks were run
+against that produced source — not against the spec's own text.
+
+| Check | Result | Exit |
+|-------|--------|------|
+| `node --check` on the applied source | `SYNTAX OK` | 0 |
+| **V-3** `grep 'AUTH-BLOCKED\|Amendment 4'` | no output | **1** (the required no-match) |
+| **V-10** Table D, five rows | `D1..D5 OK`, `Table D: ALL ROWS HOLD` | 0 |
+| **V-11** the three literal pins | `1`, one hit, one hit (`failures.push(...primaryRunFailures(` at `:323`) | 0, 0, 0 |
+| **V-12** Table F, five rows + the F3 composite | `F1..F5 OK`, composite `OK`, `Table F: ALL ROWS HOLD` | 0 |
+| V-4 / V-5 / V-6 side-checks | `stagingDir` and the `weekly-review` exemption both absent | 1, 1 |
+
+**Two spec corrections the mechanical run surfaced on its own**, both folded in: V-4's
+first grep yields **2** hits, not one (the E6 declaration plus the E3 call site), and
+V-6's first grep yields **2**, not one (E5's seeding write plus E3's mounted-note path).
+The stated expectations were wrong and are now exact — precisely the class of defect this
+step exists to catch.
+
 **Not asserted:** nothing here records the owner approving, accepting, ratifying or
 signing the spec, ADR-0025 Amendment 6, or either of the spec's two owner items. Rounds 1
-and 2 were both HEAVY, so a fresh Astra round follows each revised tip; the orchestrator
-runs it.
+and 2 were HEAVY and each drew a fresh external round on the revised tip; round 3 was
+LIGHT and closed by the mechanical verification above. **Design gate CLOSED 2026-09-18 at
+round 3**; the spec's `status:` moves to `Ready` in the same commit.
