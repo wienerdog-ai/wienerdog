@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b64e-bb31-7333-98cf-33b260c9b570",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r21",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: the new recovery gate can block uninstall indefinitely after the user clears the quarantine.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Exclude confirmed-absent targets from the recovery stop\",\n      \"body\": \"W10 assumes every shelfGuarded entry represents an artifact still on disk. However, X16 guards literal shelf paths before the existing already-gone check, and X17 retains anchors even when shelves are absent. With the hash-less shelf-file entry from criterion 18, clearing the preserved file and retrying still adds its nonexistent path to shelfGuarded. W10 consequently retains the manifest and refuses completion on every retry, despite an empty inventory and no disposer preservation. The prescribed move/delete-and-retry remedy cannot resolve this.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 413,\n      \"line_end\": 413,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Keep hypothetical anchors protecting late-arriving files, but distinguish guard skips from outstanding artifacts. Before W10 blocks on shelfGuarded, exclude targets confirmed absent, retaining unresolved targets and existing symlinks. Add a full retry test that preserves criterion 18's file, clears it without editing the manifest, and verifies uninstall completes.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the shelfGuarded/W10 contract and add the cleared-file retry acceptance case.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch: the new recovery gate can block uninstall indefinitely after the user clears the quarantine.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Exclude confirmed-absent targets from the recovery stop",
+        "body": "W10 assumes every shelfGuarded entry represents an artifact still on disk. However, X16 guards literal shelf paths before the existing already-gone check, and X17 retains anchors even when shelves are absent. With the hash-less shelf-file entry from criterion 18, clearing the preserved file and retrying still adds its nonexistent path to shelfGuarded. W10 consequently retains the manifest and refuses completion on every retry, despite an empty inventory and no disposer preservation. The prescribed move/delete-and-retry remedy cannot resolve this.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 413,
+        "line_end": 413,
+        "confidence": 0.98,
+        "recommendation": "Keep hypothetical anchors protecting late-arriving files, but distinguish guard skips from outstanding artifacts. Before W10 blocks on shelfGuarded, exclude targets confirmed absent, retaining unresolved targets and existing symlinks. Add a full retry test that preserves criterion 18's file, clears it without editing the manifest, and verifies uninstall completes."
+      }
+    ],
+    "next_steps": [
+      "Revise the shelfGuarded/W10 contract and add the cleared-file retry acceptance case."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch: the new recovery gate can block uninstall indefinitely after the user clears the quarantine.\",\n  \"findings\": [\n    {\n      \"severity\": \"medium\",\n      \"title\": \"Exclude confirmed-absent targets from the recovery stop\",\n      \"body\": \"W10 assumes every shelfGuarded entry represents an artifact still on disk. However, X16 guards literal shelf paths before the existing already-gone check, and X17 retains anchors even when shelves are absent. With the hash-less shelf-file entry from criterion 18, clearing the preserved file and retrying still adds its nonexistent path to shelfGuarded. W10 consequently retains the manifest and refuses completion on every retry, despite an empty inventory and no disposer preservation. The prescribed move/delete-and-retry remedy cannot resolve this.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 413,\n      \"line_end\": 413,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Keep hypothetical anchors protecting late-arriving files, but distinguish guard skips from outstanding artifacts. Before W10 blocks on shelfGuarded, exclude targets confirmed absent, retaining unresolved targets and existing symlinks. Add a full retry test that preserves criterion 18's file, clears it without editing the manifest, and verifies uninstall completes.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise the shelfGuarded/W10 contract and add the cleared-file retry acceptance case.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
