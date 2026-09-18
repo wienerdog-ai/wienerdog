@@ -64,15 +64,27 @@ the drift this family has already paid for twice.
 Re-derive them before you start — if the content has moved but is present, that is
 drift and you report it; if the content is absent, stop and say so.**
 
+> **Re-pinned 2026-09-18 by `WP-ep2-n2-rehome`'s erratum 1, and this package is
+> the successor, so its cites describe the tree AFTER that package lands.** The
+> re-homed JSDoc block in `src/core/dream/validate.js` is two lines longer than
+> the one at `08de2bc3` (that spec's row **N2R-14**), so **every `validate.js`
+> construct below it is cited here at `+2`** — `:1176`, `:1180`, `:1182`, `:1194`,
+> `:1322`, `:1324`, `:1417`, `:1420`, `:1558-1560`. **`src/` stays pinned at
+> `08de2bc3`**: the change is comment text only, so no executable byte moves and
+> nothing but the line numbers is affected. `:663` and every `dream.js`,
+> `private-fs.js` and test-file cite are unchanged. *The sweep is the whole set,
+> not the three the PR gate named — a line count that moved is wrong wherever any
+> sentence states it.*
+
 ### Where the prune is triggered from
 
 **`src/core/dream/validate.js`** builds the run state and the precondition:
 
-- `let completedRedactions = 0;` — **`:1322`**, closure-scoped in `makeGates()`,
-  incremented at **`:1418`** (`completedRedactions += 1; // increments LAST, only
+- `let completedRedactions = 0;` — **`:1324`**, closure-scoped in `makeGates()`,
+  incremented at **`:1420`** (`completedRedactions += 1; // increments LAST, only
   after a verified scrub`).
-- `const redactedCreated = new Set();` — **`:1320`**, filled at **`:1415`**.
-- **The guard, `:1556-1558`**, the last member of `makeGates`'s returned object:
+- `const redactedCreated = new Set();` — **`:1322`**, filled at **`:1417`**.
+- **The guard, `:1558-1560`**, the last member of `makeGates`'s returned object:
 
   ```js
       pruneRedacted: () => {
@@ -80,12 +92,12 @@ drift and you report it; if the content is absent, stop and say so.**
       },
   ```
 
-- `pruneRedactedOriginals(stateDir, created)` — **`:1174`**. After the `stateDir`
+- `pruneRedactedOriginals(stateDir, created)` — **`:1176`**. After the `stateDir`
   guard its body is, in order: `fs.readdirSync(dir, { withFileTypes: true })` over
-  `<stateDir>/quarantine/redacted/` (**`:1178`**); **`if (total <=
-  REDACTED_RETENTION_CAP) return;`** (**`:1180`**); then the date-prefix +
+  `<stateDir>/quarantine/redacted/` (**`:1180`**); **`if (total <=
+  REDACTED_RETENTION_CAP) return;`** (**`:1182`**); then the date-prefix +
   exclusion filter, the `(mtimeMs, name)` sort, and a delete loop that also breaks
-  at the cap (**`:1192`**). **Everything after the read is gated on the directory
+  at the cap (**`:1194`**). **Everything after the read is gated on the directory
   being over the cap** — that is the single fact Table P row P-6 turns on.
 
 **`src/cli/dream.js`** owns the timing:
@@ -240,10 +252,10 @@ registered mirror in the same commit.** Measured at `08de2bc3`.
 | **P-3** | **the assertion signal** | `N2-prune-must-run-exactly-once-per-run` — a literal substring of **every** assertion message in the test body, per `scripts/red-proofs.js:716-717`. Every assertion carries it, not just one, so whichever leg fails the runner's `signal` search finds it |
 | **P-4** | **what the test asserts, half one — CARDINALITY** | over a run that completes **two** redactions against P-7's fixture, the prune's delete path attempts **exactly two** deletions — the count a single correct prune makes when the directory ends **two** over the cap. **The assertion is on the delete-path count, not on an invocation count**, because the invocation is not directly observable (Table S). Every schedule that violates N2 attempts a different number: P-8 measures them |
 | **P-5** | **what the test asserts, half two — THE PRECONDITION** | over a second run, in the same test body, that completes **zero** redactions with the directory already **one** over the cap, the prune's delete path attempts **zero** deletions. This is the half `if (completedRedactions > 0)` holds, and it is what keeps P-4 from passing on a prune that always fires |
-| **P-6** | **THE SEAM — what is observed** | the prune's **delete path** over `<stateDir>/quarantine/redacted/`: `fs.rmSync` calls, mocked with `t.mock.method`, whose target's directory is that directory **and** whose basename is one of the fixture's own seeded names (P-7). Those calls are **recorded and NEUTRALIZED — counted, not performed**; every other `fs.rmSync` delegates to the real one. Neutralizing is what makes a later invocation observable: the helper returns at `validate.js:1180` whenever the directory is at or below the cap, and a performed prune leaves it exactly at the cap, so **an un-neutralized later invocation deletes nothing and is invisible**. The scoping to seeded basenames is mandatory and **measured**: neutralizing *every* `rmSync` under `redacted/` also swallows `quarantinePreserve`'s own temp cleanup and the run throws `quarantinePreserve: "…/.tmp-…" still exists after its removal was attempted` |
+| **P-6** | **THE SEAM — what is observed** | the prune's **delete path** over `<stateDir>/quarantine/redacted/`: `fs.rmSync` calls, mocked with `t.mock.method`, whose target's directory is that directory **and** whose basename is one of the fixture's own seeded names (P-7). Those calls are **recorded and NEUTRALIZED — counted, not performed**; every other `fs.rmSync` delegates to the real one. Neutralizing is what makes a later invocation observable: the helper returns at `validate.js:1182` whenever the directory is at or below the cap, and a performed prune leaves it exactly at the cap, so **an un-neutralized later invocation deletes nothing and is invisible**. The scoping to seeded basenames is mandatory and **measured**: neutralizing *every* `rmSync` under `redacted/` also swallows `quarantinePreserve`'s own temp cleanup and the run throws `quarantinePreserve: "…/.tmp-…" still exists after its removal was attempted` |
 | **P-7** | **the fixture** | built from the suite's own existing helpers — `setup()` (`:288`), `brainWrites()` (`:1162`), `runDream()` (`:347`). **Leg one:** two notes, each carrying a distinct context-free high-entropy blob (REDACT severity, established by the suite's `:1349` test), plus **50** seeded files in `<state>/quarantine/redacted/` that this run did not create, named `<YYYY-MM-DD>-<name>` so N3's date-prefix filter admits them, mode `0600` inside `0700`. **50 is the load-bearing number, and 49 is a measured defect** (design round 1, Astra, band B): at 49 the directory is at the cap after the first redaction, so a per-redaction prune returns without deleting and the run's total is **one** — identical to a correct once-per-run prune, and the detector misses the regression N2 exists for. At 50 the directory is **two** over the cap at the end of the run, so every schedule in P-8 separates. **Leg two:** one clean note and **51** seeded files, one over the cap, so an unconditional prune would attempt a deletion. **Reuse the suite's helpers; add no shared helper** |
-| **P-8** | **the regression schedules the test must catch** | **three, every one of them N2-only** — the accumulated set is untouched in all three, so N3 stays satisfied and no existing `EP2 retention:` test moves. **(a) DUPLICATE AT THE CALL SITE:** a second `gates.pruneRedacted();` beside `src/cli/dream.js:1102`. This is the mutation `WP-ep2-n2-rehome` re-keys M-48 to (that spec's Table N2R row N2R-9), so the row and proof (a) state one mutation byte-for-byte. **(b) PER-REDACTION, ADDED:** `pruneRedactedOriginals(stateDir, redactedCreated);` inserted immediately after `completedRedactions += 1;` in the secret gate's redact arm (`src/core/dream/validate.js:1418`), the end call left in place. **This is the modern spelling of M-48's own 2026-07-28 mutation** and the schedule the 49-seed fixture missed. **(c) PER-REDACTION, MOVED:** (b) with the `src/cli/dream.js:1102` call removed — a true move. **(a) and (b) are single-file and are declared (P-9); (c) spans two files, so a RED proof cannot express it and it is measured by hand (P-10).** All three attempt a delete count different from P-4's two |
-| **P-9** | **the RED declaration** | **two proofs** in `tests/red-proofs/ep2-prune-once-per-run.proofs.json`. Shared by both: `suite` = P-1; `wp` = `WP-ep2-prune-once-per-run-test`; `criterion` = `2`; `occurrences` = `1`; `testNamePattern` = `retention prune runs EXACTLY ONCE`; `expectRed[0].test` = `[P-2]`; `expectRed[0].signal` = P-3. **Proof (a)** — `id` = `ep2-prune-runs-once-per-run`; `file` = `src/cli/dream.js`; `find` = the exact `gates.pruneRedacted();` line at `:1102`, **including its six leading spaces**; `replace` = that line plus a newline and a duplicate carrying the marker; `marker` = `RP_MUT_EP2_PRUNE_TWICE`. **Proof (b)** — `id` = `ep2-prune-not-once-per-redaction`; `file` = `src/core/dream/validate.js`; `find` = the exact `completedRedactions += 1; // increments LAST, only after a verified scrub` line at `:1418`, **including its ten leading spaces** (measured: it occurs once in the file); `replace` = that line plus a newline and `pruneRedactedOriginals(stateDir, redactedCreated);` at the same indent carrying the marker; `marker` = `RP_MUT_EP2_PRUNE_PER_REDACTION`. Both identifiers are module-scope or closure-scope at that point, so the insertion compiles |
+| **P-8** | **the regression schedules the test must catch** | **three, every one of them N2-only** — the accumulated set is untouched in all three, so N3 stays satisfied and no existing `EP2 retention:` test moves. **(a) DUPLICATE AT THE CALL SITE:** a second `gates.pruneRedacted();` beside `src/cli/dream.js:1102`. This is the mutation `WP-ep2-n2-rehome` re-keys M-48 to (that spec's Table N2R row N2R-9), so the row and proof (a) state one mutation byte-for-byte. **(b) PER-REDACTION, ADDED:** `pruneRedactedOriginals(stateDir, redactedCreated);` inserted immediately after `completedRedactions += 1;` in the secret gate's redact arm (`src/core/dream/validate.js:1420`), the end call left in place. **This is the modern spelling of M-48's own 2026-07-28 mutation** and the schedule the 49-seed fixture missed. **(c) PER-REDACTION, MOVED:** (b) with the `src/cli/dream.js:1102` call removed — a true move. **(a) and (b) are single-file and are declared (P-9); (c) spans two files, so a RED proof cannot express it and it is measured by hand (P-10).** All three attempt a delete count different from P-4's two |
+| **P-9** | **the RED declaration** | **two proofs** in `tests/red-proofs/ep2-prune-once-per-run.proofs.json`. Shared by both: `suite` = P-1; `wp` = `WP-ep2-prune-once-per-run-test`; `criterion` = `2`; `occurrences` = `1`; `testNamePattern` = `retention prune runs EXACTLY ONCE`; `expectRed[0].test` = `[P-2]`; `expectRed[0].signal` = P-3. **Proof (a)** — `id` = `ep2-prune-runs-once-per-run`; `file` = `src/cli/dream.js`; `find` = the exact `gates.pruneRedacted();` line at `:1102`, **including its six leading spaces**; `replace` = that line plus a newline and a duplicate carrying the marker; `marker` = `RP_MUT_EP2_PRUNE_TWICE`. **Proof (b)** — `id` = `ep2-prune-not-once-per-redaction`; `file` = `src/core/dream/validate.js`; `find` = the exact `completedRedactions += 1; // increments LAST, only after a verified scrub` line at `:1420`, **including its ten leading spaces** (measured: it occurs once in the file); `replace` = that line plus a newline and `pruneRedactedOriginals(stateDir, redactedCreated);` at the same indent carrying the marker; `marker` = `RP_MUT_EP2_PRUNE_PER_REDACTION`. Both identifiers are module-scope or closure-scope at that point, so the insertion compiles |
 | **P-10** | **the MEASURED red sets** | each schedule hand-applied at `08de2bc3` in a worktree carrying the candidate test, the **whole** suite run each time. **Every one of the three gives `tests 2905, pass 2892, fail 1, skipped 12`, the single failure being P-2 and NOTHING ELSE IN THE REPOSITORY reddening.** The delete counts the diagnostic reports: **(a) duplicate → 4** (`n2seed-00, n2seed-01, n2seed-00, n2seed-01`); **(b) per-redaction added → 5**; **(c) per-redaction moved → 3**. Control, same tree unmutated: **`tests 2905, pass 2893, fail 0, skipped 12`**, delete count **2**. *These are measurements of the candidate implementation, not promises about the implementer's; the implementer re-establishes (a) and (b) mechanically through P-11* |
 | **P-11** | **the check** | the **UNFILTERED** `npm run red-proofs` → `RUN: PROVEN`, zero `FAILED`, `VACUOUS`, `UNCONTROLLED`, `FILTERED` or `ERROR`. **A `--wp`-scoped run reports `RUN: FILTERED` and exits 1 by construction, so it can never satisfy a criterion and must never be written as a must-pass line** |
 | **P-12** | **what this WP does NOT assert** | N1, N3, N4, N5, N6, N7 — all six already have cases in `tests/unit/dream-validate.test.js` (five `EP2 retention:` tests). **Adding a second test for any of them exceeds this WP** |
@@ -256,8 +268,8 @@ time pressure. Each verdict is a measurement, not a reading.**
 | id | candidate | verdict and evidence at `08de2bc3` |
 |----|-----------|------------------------------------|
 | **S-1** | **replace or wrap `makeGates` from the test** | **IMPOSSIBLE without a production change.** `src/cli/dream.js:34-39` destructures `makeGates` at require time, so `t.mock.method(validateLib, 'makeGates', …)` cannot reach the binding `dream.js` captured at `:1060`. `dream.run`'s JS-only opts seam carries `now`, `spawnGit`, `platform`, `probeCmd`, `skipContainmentProbe`, `reapTree`, `reapGroup`, `writeFilePrivate`, `pollDelayMs` and `writeFile` — **no gates seam**. Adopting S-1 puts `src/` in the Deliverables and makes this a different, larger package |
-| **S-2** | **count `fs.readdirSync` calls on `<stateDir>/quarantine/redacted/`** | **MEASURED CONTAMINATED — 3 reads, not 1**, on a two-redaction pipeline run. One is the prune (`validate.js:1178`); the other two come from `scanPrivateModes` → `insecureEntries` → `listPrivateEntries` → `listNames` (`src/core/private-fs.js:393`), the private-mode audit, which a successful run reaches **twice** through `regenerateDigest` (`src/cli/dream.js:1300` and `:1341`). A cardinality assertion over that count measures the audit as much as the prune, and it goes red whenever an unrelated package changes how the audit walks the private tree |
-| **S-3** | **a plain observable side effect, with the deletes performed** | **MEASURED UNOBSERVABLE.** `pruneRedactedOriginals` returns at `validate.js:1180` whenever the directory is at or below the cap, and the delete loop breaks at the same bound (`:1192`), so a performed first prune leaves the directory exactly at the cap and a second invocation returns before it stats or deletes anything. Every post-read step is gated on `total > cap` — which is why P-6 neutralizes the seeded deletes rather than performing them |
+| **S-2** | **count `fs.readdirSync` calls on `<stateDir>/quarantine/redacted/`** | **MEASURED CONTAMINATED — 3 reads, not 1**, on a two-redaction pipeline run. One is the prune (`validate.js:1180`); the other two come from `scanPrivateModes` → `insecureEntries` → `listPrivateEntries` → `listNames` (`src/core/private-fs.js:393`), the private-mode audit, which a successful run reaches **twice** through `regenerateDigest` (`src/cli/dream.js:1300` and `:1341`). A cardinality assertion over that count measures the audit as much as the prune, and it goes red whenever an unrelated package changes how the audit walks the private tree |
+| **S-3** | **a plain observable side effect, with the deletes performed** | **MEASURED UNOBSERVABLE.** `pruneRedactedOriginals` returns at `validate.js:1182` whenever the directory is at or below the cap, and the delete loop breaks at the same bound (`:1194`), so a performed first prune leaves the directory exactly at the cap and a second invocation returns before it stats or deletes anything. Every post-read step is gated on `total > cap` — which is why P-6 neutralizes the seeded deletes rather than performing them |
 
 ### Mirrored Surface Checklist
 
@@ -473,8 +485,9 @@ counts and the zero-redaction guard. Raws: `6b9e515d` (round 1) and `5ced42cd`
 (round 2), under `docs/specs/logbook/`; dispositions in
 `docs/specs/logbook/2026-09-18-ep2-successors-design-review.md`. **This is a
 REVIEW GATE, not owner approval**, and it grants nothing the owner has not been
-asked for: this package's own dispatch also waits on `WP-ep2-n2-rehome` landing, and
-on **owner item O-1** in that spec, which remains OPEN.
+asked for: this package's own dispatch still waits on `WP-ep2-n2-rehome` landing.
+**Owner item O-1 in that spec was taken under the standing process on 2026-09-18**
+and is no longer a blocker — the gate neither granted nor could grant it.
 
 1. All verification steps pass locally; output pasted into the PR body, including
    the **unfiltered** `npm run red-proofs` summary line.
