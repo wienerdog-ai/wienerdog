@@ -451,6 +451,33 @@ other direction.*
 **Declaration count after round 15:** twenty declarations over thirteen criteria;
 eleven have a pre-measurable anchor, nine mutate code this package authors.
 
+## Round 16 — Astra, 2026-09-18
+
+- **Reviewed tip:** `039d0483`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r16-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r16-astra-focus.txt`
+- **Committed before adjudication at:** `905d8ac3`
+- **Verdict:** `needs-attention` — *"late quarantine arrivals lose the retry ledger,
+  and absent shelves can permanently block symlinked-state uninstall."*
+- **Held from round 15:** the **two-class rule** was not re-opened, and **nothing
+  inside `R-alias-outside-closure` was reported** for the second round running.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R16-1** | **Preserve retryability when the SECOND sweep keeps a quarantine.** Table W row **W10** (`:407`) checked only the **first** live sweep at `uninstall.js:408`. That sweep can return nothing, a concurrent dream then recreates the shelf through `quarantinePreserve`'s recursive `mkdirSync`, the manifest and `config.yaml` are deleted at `:424`, and the **second** sweep at `:467` preserves the new copy — after which a retry fails with *"no install manifest found"* **even once the user clears the shelf**. Acceptance criterion 9 explicitly covers arrivals during **either** sweep; W10 did not | B | **HEAVY** — it changes the ordering the implementer builds and leaves a user with no supported way to finish | **ACCEPTED IN FULL.** W10's check now sits **immediately before `:424`**, two statements from the `rmSync`, and consults **both** the `preservedQuarantine` of **every** live sweep so far **and a fresh `quarantineInventory(paths)` read taken at that moment**. **The `:467` call is NOT moved, and the row says precisely why** — round 16 asked: its only remaining job is removing the **now-empty core**, and the shipped comment states it (*"with the manifest + unmodified config deleted the core is now empty, so this removes it"*, `:463-466`), so it must stay after them. What moves is the **check**, not the call; the shelf-capable work of **X1** steps 0–3 is idempotent and already runs in both. **The window is narrowed, not closed, and both remainders are NAMED in new Table W row W11:** `R-post-ledger-preserve` (a preserve landing between the check and the `rmSync` — manifest gone, copy **preserved** by the `:467` sweep, core kept) and `R-post-uninstall-preserve` (a preserve landing after the last sweep — `mkdirSync(…, {recursive:true})`, `validate.js:953`, recreates the whole path, so the copy **succeeds** into a recreated core). **Both are LEFTOVERS, neither is a loss**, recovery is one `rm -rf`, and both require a dream **already running**, since the scheduler entries are reversed earlier in the same command. **Because recovery is a manual `rm -rf`, Table W row W8 must now name the preserved directory LITERALLY rather than count it** — a count would leave the user guessing at the one path they still need. Acceptance criterion **9** gains the after-the-first-sweep arm, driven through the seam **between** the sweeps; new RED proof **`quse-w10-checks-first-sweep-only`**, whose point is that **every earlier interleaving fixture stays green under it** because they all seed before the first sweep |
+| **R16-2** | **Resolve the absent-shelf contradiction for a symlinked `state`.** For `<state>` → `/data/personal` with **no** `quarantine/`, **X17** still derived the anchors `/data/personal/quarantine` and its `redacted` child; **X19** then retained `<state>` because its target *contained* them, class (ii) protected the link as well, **the unlink branch became unreachable**, and with **W10** the uninstall **stopped repeatedly with nothing to clear** — contradicting acceptance criterion 14's required successful removal. Confirmed by a read-only containment model, with no concurrent mutation | B | **HEAVY** — it is a self-contradiction between two of this spec's own rows, and its effect is an uninstall that can never complete | **ACCEPTED IN FULL.** **X17 (1a)** gains its third distinction: an anchor derived through the nearest existing ancestor for a shelf that **does not exist** is **HYPOTHETICAL**, carries **class (ii) semantics only** — it stops a later recursive sweep from *covering* that location — and **never makes an alias "contain a shelf"** for **X19**'s retention test. An **EXISTING** chain keeps class (i) for its resolved target and class (ii) for its links. **So X19 retains a `<state>` alias only when an EXISTING shelf's chain passes through it; an absent-shelf alias is unlinked exactly as at `5b77865f`.** **And the shelf created after that unlink is still protected — established rather than asserted, and it is therefore NOT residual territory:** `quarantinePreserve` calls `fs.mkdirSync(qdir, {recursive: true, mode: 0o700})` (`validate.js:953`), which **recreates `<core>/state/quarantine/` as a real directory** even with `<state>` gone, and because the live disposer holds **no snapshot across calls** (**X2**) the next sweep computes its set afresh, sees a real non-empty shelf, and preserves it under **X1**. What remains in that case is **W11**'s `R-post-uninstall-preserve`. **Acceptance criterion 14 is reconciled and strengthened**: it now asserts the whole command **completes** on that layout — exit 0, link gone, core gone, manifest gone — and that a **second** run refuses with *"no install manifest found"* rather than with a preservation stop |
+
+**On the bound.** For the second consecutive round **nothing landed inside
+`R-alias-outside-closure`**. Round 15's finding was over-protection; round 16's were
+an ordering gap and a self-contradiction. **W11's two residuals are recorded beside
+X21's and under the same reasoning** — closing them needs an atomicity the platform
+does not offer and a resident process ADR-0004 forbids — **and like it they are
+closed by citation in a later round, not by a further revision.**
+
+**Declaration count after round 16:** twenty-one declarations over thirteen
+criteria; twelve have a pre-measurable anchor, nine mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean return, a LIGHT-only
-return, **or a finding that falls inside `R-alias-outside-closure`**
+return, **or a finding that falls inside `R-alias-outside-closure`,
+`R-post-ledger-preserve` or `R-post-uninstall-preserve`**
 (`docs/runbooks/codex-review.md`, "Weighted closure").
