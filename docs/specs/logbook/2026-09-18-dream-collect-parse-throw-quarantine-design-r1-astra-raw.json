@@ -1,0 +1,33 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "note": "two earlier attempts with attacker-framed focus text were refused by the provider safety filter (Codex error: content flagged for possible cybersecurity risk) at the point where the reviewer began constructing malformed probes; this run used focus text rephrased as a robustness review and asked for reading only",
+  "threadId": "01a0b20c-3396-78f1-8c18-69f00a84d098",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against b46a384398a6ff3fa44a463ceb7773b3fd986179",
+    "baseRef": "b46a384398a6ff3fa44a463ceb7773b3fd986179",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "The specified product boundary covers the documented crashes, but its verification permits an incomplete fix. No separate product blocker established beyond the named residuals and owner decisions.\n\nRead both target documents, scratch.js, the transcript parsers/index/stream, relevant private-fs, secret-scan, ledger, warnings, dream/doctor/reporting code, ADR-0023, the sibling collection spec, and relevant tests/RED runner. No malformed-input probes or tests executed.\n\nCompleteness: parser exceptions—including null-record property access and all four joins—are inside the boundary, as are compact serialization/byte measurement, session-ID coercion, filename construction and pretty serialization. Other admission bookkeeping uses discovery metadata or code-owned values. The write remains outside; the bound addresses its content-driven filename-component overflow. No uncovered content-type exception found in the remaining collector statements.\n\nMasking: open/read errors already return read-error; close errors are swallowed. The broad catch still includes allocations and os.homedir(), so it is not an absolute infrastructure-error classifier, but no material newly exposed routine I/O failure was established.\n\nRecord: the quarantine path carries no transcript-content or exception text into the listed durable surfaces. Truncation changes scratch filenames for IDs over 128 characters, but preserves the extract's session ID and discovery-path quarantine key; collisions and their evidence consequences remain the named residual. ADR-0023 supports the existing lifecycle, including retry and decay; no amendment requirement was found. The sibling interaction and second-lander rebase responsibility are explicit. Most citations resolve; the Claude assistant join is at 175–178, not 181–184.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "[machinery] Prove the boundary extends beyond the parser",
+        "body": "Criterion 2 injects only at the parse seam. Criterion 1's fixture also throws inside parsing, while criterion 7 checks a long string ID. A plausible wrong implementation can catch only parseWithOutcome, add the sanitize slice, and satisfy all three declared RED proofs while leaving sanitize outside the boundary. The already documented poisoned-object session ID would then still abort every nightly run. None of the prescribed checks discriminates that implementation from the intended full boundary.",
+        "file": "docs/specs/WP-dream-collect-parse-throw-quarantine.md",
+        "line_start": 432,
+        "line_end": 436,
+        "confidence": 0.99,
+        "recommendation": "Require a post-parse failure test using the documented poisoned session ID, assert quarantine plus continued admission, and add a RED mutation that moves filename derivation outside the boundary. Wrap expected successful collection in assert.doesNotThrow so the mutation produces ERR_ASSERTION."
+      }
+    ],
+    "next_steps": [
+      "Add the post-parse boundary test and RED declaration before dispatch.",
+      "Retain assertion wrappers for throwing mutations, especially pt-sanitize-unbounded; concrete expectRed identities remain unverified until implementation.",
+      "Correct the Claude assistant-join citation in both documents and record the existing owner decisions before implementation."
+    ]
+  }
+}

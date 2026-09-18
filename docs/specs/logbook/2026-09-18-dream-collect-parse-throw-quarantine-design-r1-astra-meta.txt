@@ -1,0 +1,5 @@
+gate: design  name: ptq-astra2  backend: codex plugin 1.0.6  model requested: gpt-6-astra
+tip: 20576faaeb47c4badf7efe581f40e1ada14c3c0d
+base: b46a384398a6ff3fa44a463ceb7773b3fd986179
+companion exit: 0
+porcelain: IDENTICAL before/after
