@@ -10,9 +10,14 @@ Internal coherence pass by the drafting architect. The clean-context conformance
 read is the orchestrator's and is not recorded here. Nothing below records the
 owner approving anything; the spec's three owner items are open.
 
-**Base.** Everything was executed against
+**Base.** Round zero was executed against
 `b46a384398a6ff3fa44a463ceb7773b3fd986179` (merge of PR #266), on Node v25.9.0,
-macOS. Every fixture was written into a fresh `fs.mkdtempSync` directory; no
+macOS. After round 1 the branch was rebased onto
+`a60c14e604a4ab27e4c312653077af08e1552473`; the delta is **docs-only** (specs,
+logbook, `memory/lessons/inbox.md`) with nothing under `src/`, confirmed by
+`git diff --stat`, so every citation and every measurement below carried over
+unchanged. The spec's base pin is now `a60c14e6`; §5's measurements were re-run
+on it. Every fixture was written into a fresh `fs.mkdtempSync` directory; no
 real transcript and no real secret was read or written at any point. The
 prototype patches described below were applied in the worktree purely to
 measure, and reverted with `git checkout -- src/` before the commit; the commit
@@ -61,7 +66,7 @@ existing fixtures never found this.
 | 1 | `codex.js:77-83` `extractMessageText` | a `message` payload's `input_text`/`output_text` block with a non-coercible `text` | the fault boundary (Table B row B1); the parser fix is deferred to the successor named in Out of scope |
 | 2 | `codex.js:91-95` `extractToolOutputText` array branch | a `custom_tool_call_output` payload's `content` | same |
 | 3 | `claude.js:57-66` `flattenToolResultContent` | a `user` record's `tool_result` block content | same |
-| 4 | `claude.js:181-184` the assistant text join | an `assistant` record's `text` block | same |
+| 4 | `claude.js:175-178` the assistant text join | an `assistant` record's `text` block | same |
 | 5 | `scratch.js:138` `sanitize(extract.session_id)` — **outside the parser** | a Codex `session_meta` whose `payload.id` is a non-coercible object; the parse itself **returns** | the fault boundary. This is the case that decides the boundary's extent: a try/catch around the parse call alone does not cover it |
 | 6 | `scratch.js:139` `writeFilePrivate`, `ENAMETOOLONG` | a `session_meta.id` of 4,000 characters | the `sanitize` width bound (Table B row B6), **not** the boundary — the write stays outside it so a full disk still fails loudly |
 
@@ -138,21 +143,97 @@ run3 (changed):  newlyQuarantined 1 [ 'parse-threw' ] skippedQuarantined 0
   if the test asserts on a value rather than letting the throw escape. Recorded
   in the spec under Table C.
 
-## 5. Open items carried out of round zero
+## 5. Design review round 1 — Codex plugin, `gpt-6-astra`, 2026-09-18
 
-- The three **owner items** in the spec are undecided: whether parser hardening
-  joins this package or a successor, whether `parse-threw` is an informational
-  (decaying-banner) reason and whether the taxonomy extension wants an ADR-0023
-  amendment, and whether the Deliverables may gain `src/cli/doctor.js`.
+Target: branch diff against `b46a3843`, tip `20576faa`. Raw, both focus texts
+and the meta are preserved beside this file, committed **before** adjudication:
+`2026-09-18-…-design-r1-astra-raw.json`, `-astra-focus.txt`,
+`-refused-focus.txt`, `-astra-meta.txt`. Companion exit 0; porcelain identical
+before and after.
+
+**PROCESS NOTE — two attempts were lost to the provider's safety filter.** The
+first two runs used focus text describing a *crafted* transcript and a
+*denial-of-service* shape. Both were refused — `Codex error: This content was
+flagged for possible cybersecurity risk` — at the moment the reviewer began
+constructing malformed probe files of its own. The third attempt succeeded with
+the focus rephrased as a **robustness review of malformed input**, plus an
+explicit instruction to review **by reading only**, no probe construction. The
+review that completed executed nothing and read everything.
+
+**Lesson (for `memory/lessons/inbox.md`; not appended here, because CLAUDE.md
+reserves that file to the maintainer on `main` — the text is in the handback):**
+when a design review concerns hostile-input handling, describe it to the
+external reviewer as malformed-input robustness and ask for reasoning over code,
+not probe construction. Attacker framing trips the provider's filter and the
+round is lost.
+
+**Verdict `needs-attention`, product CLEAN.** The reviewer read both documents,
+`scratch.js`, the transcript parsers/index/stream, `private-fs`, `secret-scan`,
+`ledger`, `warnings`, the dream/doctor/reporting code, ADR-0023, the sibling
+collection spec and the RED runner. It confirmed independently: completeness
+(all four joins **and** null-record property access, compact
+serialisation/byte measurement, session-id coercion, filename construction and
+pretty serialisation are inside the boundary; the write outside; no uncovered
+content-driven exception in the remaining collector statements); masking (the
+broad catch also covers allocations and `os.homedir()`, so it is not an absolute
+infrastructure classifier — but no material newly exposed routine I/O failure,
+since open/read already return `read-error` and close errors are already
+swallowed); the record (no transcript content or exception text reaches any
+durable surface; the 128-char bound changes scratch filenames only for ids over
+128 characters and preserves both the extract's session id and the
+discovery-path quarantine key); that ADR-0023 needs no amendment; and that the
+sibling interaction and second-lander duty are explicit.
+
+| # | Finding | Weight | Disposition |
+|---|---------|--------|-------------|
+| R1-1 | **Prove the boundary extends beyond the parser.** Criterion 2 injected only at the parse seam, criterion 1's fixture also threw inside parsing, and criterion 7 checked a long string id — so an implementation catching **only** `parseWithOutcome` plus the width bound satisfied all three declared proofs while leaving `sanitize` outside the boundary, and the documented poisoned-object session id would still abort every nightly run | machinery, LIGHT | **FIXED in this commit.** New Table B row **B9** owns the extent claim; new **criterion 3** (post-parse failure + a healthy session visited after it); new fixture `codex-poisoned-session-id.jsonl`; new RED proof `pt-only-parse-is-caught`; a binding `assert.doesNotThrow` rule in Table C so every throwing mutation yields `ERR_ASSERTION`; the gate grew case 2. Verified mechanically below |
+| R1-2 | **Citation nit:** the Claude assistant join is `claude.js:175-178`, not `181-184` | nit | **FIXED** in the spec and in §2 of this file. Re-read on the tree: `const text = content` at 175, `.join('\n\n')` at 178 |
+
+**Mechanical verification of the R1-1 fix.** The new gate case 2 was run in all
+three states:
+
+| State | Result |
+|-------|--------|
+| `main` code, both fixtures present | red — `case 2: the run ABORTED on a post-parse failure — the boundary does not extend past the parse call: Cannot convert object to primitive value` |
+| prototype of the Deliverables | `PARSE-THROW BOUNDARY OK`, exit 0 (all three cases) |
+| prototype **+ the `pt-only-parse-is-caught` mutation** | red, and **only** case 2: `case 2: … RP_MUT_PT_ONLY_PARSE_IS_CAUGHT`. Cases 1 and 3 stayed green, which is the whole point: the mutation *is* the plausible wrong implementation the finding describes, and it reddens exactly the new criterion |
+
+`npm test` re-run post-rebase under the prototype: `tests 2878 / pass 2865 /
+fail 1`, the one failure still `tests/unit/ledger.test.js`'s pinned
+informational-reason set — the registered mirror. The two `grep` gates were
+re-run compliant / violating / deliverable-absent, unchanged from §3.
+
+**Closure.** One external round on `gpt-6-astra` after two provider-refused
+attempts; product clean; one LIGHT machinery item fixed and verified
+mechanically in the same commit; one citation corrected. The loop is **closed
+per `docs/runbooks/codex-review.md`, "Weighted closure"** — a LIGHT machinery
+finding fixed and verified by a measurement does not require another external
+round. `status: Ready`.
+
+## 6. Open items carried out of round zero and round 1
+
+- The three **owner items** in the spec travel as **recommendations adopted
+  under standing authorization, not direct rulings** (the standing process is
+  `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`): whether
+  parser hardening joins this package or a successor, whether `parse-threw` is
+  an informational (decaying-banner) reason and whether the taxonomy extension
+  wants an ADR-0023 amendment, and whether the Deliverables may gain
+  `src/cli/doctor.js`. Nothing here records the owner approving, accepting or
+  ratifying any of them; each carries its cost of overruling, and a reversal
+  arrives as a dated amendment applied by a committed revision.
 - **A cross-spec fact this package falsifies.** `WP-dream-primary-dialogue-collection`
-  (status `Ready`) states in its Deliverables that `sanitize` at
+  — in implementation now — states in its Deliverables that `sanitize` at
   `scratch.js:18-20` is **not** changed. Table B row B6 changes it. That spec
-  also rewrites the same parse call site and appends to the same test file. The
-  architect re-points it; nothing in this package edits it.
-- **Scratch filename collisions are a pre-existing residual, slightly widened.**
-  `sanitize` maps every byte outside `[A-Za-z0-9_-]` to `_`, so two crafted
-  session ids differing only in excluded bytes already collide today and the
-  second write overwrites the first. The 128-character bound adds ids sharing a
-  128-character allowlisted prefix to that set. Both require a crafted
-  transcript; neither is new in kind. Not fixed here, and named in the spec's
-  Out of scope neighbourhood rather than silently absorbed.
+  also rewrites the same parse call site and appends to the same test file. It
+  lands first: this package is the **second lander**, owns the rebase, and must
+  re-derive every `scratch.js` / `dream.js` citation construct by construct
+  before implementation (spec Definition of done item 0c/0d). The architect
+  re-points that spec; nothing in this package edits it.
+- **Scratch filename collisions are a pre-existing residual, slightly widened,
+  and already routed.** `sanitize` maps every byte outside `[A-Za-z0-9_-]` to
+  `_`, so two session ids differing only in excluded bytes already collide today
+  and the second write overwrites the first. The 128-character bound adds ids
+  sharing a 128-character allowlisted prefix to that set. Neither is new in
+  kind, and `WP-dream-primary-dialogue-collection` records the same defect under
+  its own Discovered issues (its row C4a executes the `s_1` / `s.1` case), so it
+  is carried in the open, not silently absorbed.

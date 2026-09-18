@@ -1,10 +1,10 @@
 ---
 id: WP-dream-collect-parse-throw-quarantine
 title: Set aside a transcript whose preparation throws, instead of aborting the whole dream run
-status: Draft
+status: Ready
 model: opus
 size: S
-depends_on: []
+depends_on: [WP-dream-primary-dialogue-collection]
 adrs: [ADR-0004, ADR-0005, ADR-0023, ADR-0031, ADR-0042]
 ---
 
@@ -12,6 +12,12 @@ adrs: [ADR-0004, ADR-0005, ADR-0023, ADR-0031, ADR-0042]
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
+- **Design gate closed 2026-09-18 at round 1**, base `a60c14e6`: product clean,
+  one LIGHT machinery finding ("prove the boundary extends beyond the parser")
+  fixed in the same commit and verified mechanically, one citation corrected.
+  Round, dispositions and the two provider-refused attempts:
+  `docs/specs/logbook/2026-09-17-dream-collect-parse-throw-quarantine.md`.
+  Dispatch order and the re-derivation duty are in Definition of done item 0.
 
 ## Context (read this, nothing else)
 
@@ -64,11 +70,14 @@ grammar could never be closed.
 
 ## Current state
 
-**Base verified against `b46a384398a6ff3fa44a463ceb7773b3fd986179`** (merge of
-PR #266, `main` at drafting time). Every line citation below was read on that
-commit and every behavioral claim below was executed on it, not inferred; the
-probe and its output are in
-`docs/specs/logbook/2026-09-17-dream-collect-parse-throw-quarantine.md`.
+**Base verified against `a60c14e604a4ab27e4c312653077af08e1552473`** (`main` at
+the close of design-review round 1). Every line citation below was read and
+every behavioral claim below was executed on it, not inferred; the probes and
+their output are in
+`docs/specs/logbook/2026-09-17-dream-collect-parse-throw-quarantine.md`. The
+original drafting base was `b46a3843`; the delta to `a60c14e6` is **docs-only**
+(specs, logbook, `memory/lessons/inbox.md`) with no change under `src/`, so every
+citation carried over unchanged — confirmed by `git diff --stat`.
 
 **`src/core/dream/scratch.js`** — the collector. Line 18 defines
 `sanitize(id)`, which is `String(id).replace(/[^A-Za-z0-9_-]/g, '_')` with no
@@ -101,7 +110,7 @@ were never admitted):
 2. `src/core/transcripts/codex.js:91-95`, `extractToolOutputText`'s array branch
    — the same join over a `custom_tool_call_output` payload's `content`.
 3. `src/core/transcripts/claude.js:57-66`, `flattenToolResultContent`, and
-   `src/core/transcripts/claude.js:181-184`, the assistant text join — both the
+   `src/core/transcripts/claude.js:175-178`, the assistant text join — both the
    same shape, both reached by an ordinary `user`/`assistant` record.
 4. **Outside the parser entirely**, so a try/catch around the parse call alone
    would not cover it: `codex.js` sets `sessionId = payload.id || null` from
@@ -159,18 +168,34 @@ ledger write on `!dryRun`.
 | modify | tests/unit/dream-collect.test.js | Table B and Table A rows A1, A5, A6. **Append after the two blocks appended today** (`WP-secret-sink-wiring-probes` and `WP-dream-report-run-skips`, the file's current tail) |
 | modify | tests/unit/ledger.test.js | Table A row A3's pinned set at `:485` — one array literal |
 | modify | tests/unit/dream-warnings.test.js | Table A row A4's render |
-| create | tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl | The crafted rollout, byte-exact as given under "Exact contracts" |
+| create | tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl | The **in-parse** failure rollout, byte-exact as given under "Exact contracts" |
+| create | tests/fixtures/dream/transcripts/codex-poisoned-session-id.jsonl | The **post-parse** failure rollout (Table B row B9), byte-exact as given under "Exact contracts" |
 | create | tests/red-proofs/dream-collect-parse-throw.proofs.json | Table C — `suite` is `tests/unit/dream-collect.test.js` |
 
 ### Exact contracts
 
-**The fixture, in full.** Two lines, each terminated by `\n`; no trailing blank
-line. It is a Codex rollout whose second record's `output_text` block carries a
-`text` that is an object with a null `toString` — the coercion victim.
+**The two fixtures, in full.** Each is two lines, each line terminated by `\n`,
+no trailing blank line. **They fail at different points on purpose** (Table B
+row B9): the first throws *inside* the parse, the second parses cleanly and
+throws *after* it.
+
+`tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl` — the second
+record's `output_text` block carries a `text` that is an object with a null
+`toString`, so `extractMessageText`'s join throws:
 
 ```
 {"type":"session_meta","payload":{"id":"poisoned-text-block","timestamp":"2026-01-01T00:00:00.000Z","cwd":"/tmp/wd-fixture"}}
 {"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":{"toString":null}}]}}
+```
+
+`tests/fixtures/dream/transcripts/codex-poisoned-session-id.jsonl` — every
+block's `text` is an ordinary string, so **the parse returns normally** and the
+Extract's `session_id` is the header's non-string `id`; the throw happens later,
+at `sanitize(extract.session_id)` during filename derivation:
+
+```
+{"type":"session_meta","payload":{"id":{"toString":null},"timestamp":"2026-01-01T00:00:00.000Z","cwd":"/tmp/wd-fixture"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"a perfectly ordinary message"}]}}
 ```
 
 **`reports/warnings.md`, in full**, as `composeWarnings` renders it for a ledger
@@ -263,6 +288,7 @@ place its extent is decided.
 | B6 | What makes that split safe | `sanitize` gains a width bound: it returns at most `SCRATCH_ID_MAX_CHARS = 128` characters. The derived scratch path is then admissible by construction, so `ENAMETOOLONG` is no longer reachable from file content and every remaining `writeFilePrivate` failure really is environmental. 128 is generous against both harnesses' real ids (UUIDs, 36 characters) and leaves the whole name — `<harness>-<id>.json`, at most 139 bytes — far inside every supported filesystem's 255-byte limit. |
 | B7 | Why a boundary and not a list of throwing expressions | The expressions that can throw live in **someone else's grammar** — the shapes Claude Code and Codex CLI choose to write, which change without notice. A list of them is a forbidden-set enumeration and cannot be closed; a fault boundary states our own good instead: *one candidate's preparation either completes or that candidate is set aside*, which holds for every step inside B1, including steps a later package adds. |
 | B8 | What is still not caught | Anything thrown before the loop — `transcripts.discover`, `fs.rmSync(scratchDir)`, `mkdirPrivate(scratchDir)` — and anything thrown by a caller of `collectExtracts`. Unchanged, and deliberately so: none of them is per-candidate, so none can be attributed to a file. |
+| B9 | **How the extent is proven, and why row B1 needs its own evidence** | A boundary that wraps **only** the parse call, plus row B6's width bound, would satisfy an in-parse failure test, a seam-injected-throw test and a long-id test — and would still abort every nightly run on the documented non-string `session_id`, because that file's parse **returns**. So row B1's extent is proven by a **post-parse** failure whose throw is at `sanitize`/filename derivation: `codex-poisoned-session-id.jsonl`, admitted alongside a healthy file visited **after** it. Criterion 3 asserts it and Table C's `pt-only-parse-is-caught` is its mutation. This row is the reason the fixture set has two members, not one. |
 
 **Table C — the declared RED proofs (ADR-0042).** One file,
 `tests/red-proofs/dream-collect-parse-throw.proofs.json`, whose `suite` is
@@ -273,24 +299,33 @@ and this package adds tests to only one suite that carries proofs.
 |----------|-----------|------------------------------------------------------------|----------------|
 | `pt-boundary-drops-instead-of-quarantining` | 1, 2 | the `catch` arm's `newlyQuarantined.push({ ...d, reason: 'parse-threw' });` → `/* marker */` (leaving the bare `continue;`) | the assertion observes the **record**, not merely that the run survived: under the mutation the run still completes and the crafted file is silently dropped |
 | `pt-reason-literal-pinned` | 1 | `reason: 'parse-threw'` → `reason: 'read-error'` | the assertion pins the literal, not just "some quarantine happened" |
-| `pt-sanitize-unbounded` | 7 | `.slice(0, SCRATCH_ID_MAX_CHARS)` → `/* marker */` | the width bound is what admits a long-session-id rollout; without it the run aborts in `writeFilePrivate` |
+| `pt-only-parse-is-caught` | 3 | the `catch` arm gains a leading re-throw guarded on the parse having already returned — `if (extract !== undefined) throw new Error('<marker>');` before the existing push. `extract` is assigned immediately after the parse returns, so the guard is true for **exactly** a post-parse failure | **the boundary's extent (Table B row B9).** The mutation *is* the plausible wrong implementation — catch the parse, nothing after it — so criteria 1 and 2 stay green under it and only criterion 3 reddens. A criterion-3 test that passed here would be observing nothing |
+| `pt-sanitize-unbounded` | 8 | `.slice(0, SCRATCH_ID_MAX_CHARS)` → `/* marker */` | the width bound is what admits a long-session-id rollout; without it the run aborts in `writeFilePrivate` |
 
-`testNamePattern` for all three is `\\[PT-`, so every new test in this package
+**Binding on every test in this package, not a suggestion:**
+`scripts/red-proofs.js:1655` refuses any red whose failure `code` is not
+`ERR_ASSERTION` — *"a thrown error is not an assertion failure"* — so a
+mutation that makes production code **throw** is unprovable unless the test
+asserts on a value instead of letting the throw escape its body. Every test
+whose expected outcome is a **successful collection** therefore wraps the
+`collectExtracts` call in `assert.doesNotThrow`, which was measured on this
+tree's Node to report `AssertionError` with `code: 'ERR_ASSERTION'`. This
+applies to criteria 1, 3 and 8 at minimum — `pt-only-parse-is-caught` and
+`pt-sanitize-unbounded` both redden by making the collector throw.
+
+`testNamePattern` for all four is `\\[PT-`, so every new test in this package
 carries a `[PT-<n>]` tag in its name and a filtered run selects exactly them.
 **The `expectRed` test-name sets are `derived — the implementer measures and
 corrects`:** the tests do not exist yet, so the exact names cannot be measured
 from this tree. The sentences that depend on those sets, and that must be
 re-read once measured, are: this table's "Criterion" column; the
 `pt-boundary-drops-instead-of-quarantining` row's "What it proves" cell, which
-asserts that **two** criteria's assertions redden; acceptance criterion 9; and
-the `npm run red-proofs` line under "Verification steps".
-
-**A trap the runner imposes, measured:** `scripts/red-proofs.js:1655` refuses
-any red whose failure `code` is not `ERR_ASSERTION` — *"a thrown error is not an
-assertion failure"*. So a criterion whose mutation makes production code
-**throw** must be observed through a value the test asserts on. `node:assert`'s
-`assert.doesNotThrow(fn)` does report `ERR_ASSERTION` (measured on this tree's
-Node), so it is one way through; letting the throw escape the test body is not.
+asserts that **two** criteria's assertions redden; the `pt-only-parse-is-caught`
+row's "What it proves" cell, which asserts that criteria 1 and 2 stay **green**
+under it and that **only** criterion 3 reddens; the paragraph above naming
+criteria 1, 3 and 8 as the `assert.doesNotThrow` sites; acceptance criterion 10
+and its count of **four**; and the `npm run red-proofs` line under
+"Verification steps".
 
 ### Mirrored Surface Checklist
 
@@ -304,42 +339,50 @@ new mirror found in review is added here on the spot (register-new-mirrors).
       `ledger.js` → Table A row A3; `warnings.js` → Table A row A4;
       `dream-collect.test.js` → Table B plus Table A rows A1, A5, A6;
       `ledger.test.js` → Table A row A3; `dream-warnings.test.js` → Table A row
-      A4; the fixture → "Exact contracts"; the proofs file → Table C
-- [ ] Acceptance criteria that assert its facts — criteria 1 and 5 assert Table
+      A4; the **two** fixtures → "Exact contracts", with the post-parse one also
+      citing Table B row B9; the proofs file → Table C
+- [ ] Acceptance criteria that assert its facts — criteria 1 and 6 assert Table
       A rows A1 and A6; criterion 2 asserts Table B rows B1, B2 and B4;
-      criterion 3 asserts Table A row A5 and Table B row B3; criterion 4 asserts
-      Table A row A4; criterion 6 asserts Table B row B5; criterion 7 asserts
-      Table B row B6; criterion 8 asserts Table A row A3; criterion 9 asserts
-      Table C
+      **criterion 3 asserts Table B rows B1 and B9** (the boundary's extent past
+      the parse call); criterion 4 asserts Table A row A5 and Table B row B3;
+      criterion 5 asserts Table A row A4; criterion 7 asserts Table B row B5;
+      criterion 8 asserts Table B row B6; criterion 9 asserts Table A row A3;
+      criterion 10 asserts Table C
 - [ ] Verification commands / greps — the `node -e` boundary gate asserts Table A
-      rows A1 and A5 and Table B rows B2, B3 and B6 on a real corpus; the two
+      rows A1 and A5 and Table B rows B2, B3, B6 and B9 on real corpora, in three
+      cases whose numbering maps to criteria 1, 3 and 8 in that order; the two
       `grep` gates assert Table A row A1's **one site** and row A5's unbound
       `catch`; `npm test` carries every criterion's suite assertions;
       `npm run red-proofs` asserts Table C
 - [ ] Current-state description — the loop's line citations and arm order (Table
       B rows B1 and B4), the four measured aborts (Table B rows B1 and B6 for
-      what each one is covered by), the ledger record shape and `selectState`'s
+      what each one is covered by, and row B9 for why abort 4 is the one that
+      decides the boundary's extent), the ledger record shape and `selectState`'s
       fingerprint rule (Table A rows A2 and A6), `INFORMATIONAL_QUARANTINE_REASONS`
       and its test pin (Table A row A3), `GROUPS` and its catch-all row (Table A
       rows A4 and A7), and the "surfaces that need no change" paragraph (Table A
-      rows A8, A9, A10, A11) — plus the `b46a3843` base pin, which the Definition
+      rows A8, A9, A10, A11) — plus the `a60c14e6` base pin, which the Definition
       of done also names
 - [ ] Operative prose steps that apply it — **walked, in document order**:
       - Context's closing paragraph ("closes it on the collector side … the
         guarantee this buys is closed") → Table B rows B2 and B7
       - Current state's item 4 ("so a try/catch around the parse call alone
-        would not cover it") → Table B row B1's extent and row B6
-      - "Exact contracts": the fixture → criterion 1's corpus; the
+        would not cover it") → Table B row B1's extent, row B6 and **row B9**,
+        which is the same claim turned into evidence
+      - "Exact contracts": the **in-parse** fixture → criterion 1's corpus; the
+        **post-parse** fixture → criterion 3's corpus and Table B row B9; the
         `reports/warnings.md` render → Table A row A4; the console line → Table A
         row A8; the `collectExtracts` JSDoc's widened `reason` union → Table A
         row A1
       - the Contract-reference preamble's four ADR-0031 tests → Table A row A3
         (taxonomy), Table B row B2 (error behavior), Table A rows A7–A11
         (authority boundary), and this checklist (mirrored surfaces)
+      - Table C's binding `assert.doesNotThrow` paragraph → Table B row B9 (the
+        mutation it exists to make provable) and criteria 1, 3 and 8
       - Implementation notes' "order the change this way" bullet → Table B rows
         B1 and B5; its "no new reason lifecycle" bullet → Table A rows A2, A6 and
-        A12; its "the fixture stops throwing" bullet → Table A row A1 and Out of
-        scope's parser-hardening entry
+        A12; its "both fixtures stop throwing" bullet → Table A row A1, Table B
+        row B9 and Out of scope's parser-hardening entry
       - the Security checklist's second and third bullets → Table A row A5 and
         Table B row B6
       - Out of scope's collision note → Table B rows B1 and B5 (what the
@@ -369,14 +412,17 @@ new mirror found in review is added here on the spot (register-new-mirrors).
   `selectState` branch. `recordQuarantined` already passes any reason through,
   and `selectState`'s existing fingerprint comparison already gives Table A row
   A6's retry-on-change for free (Table A rows A2, A12).
-- **The fixture stops throwing once the parsers are hardened.** Criterion 1's
-  assertion is a real end-to-end proof *on this tree*, and it is deliberately
+- **Both fixtures stop throwing once the parsers are hardened.** Criteria 1 and
+  3 are real end-to-end proofs *on this tree*, and they are deliberately
   fail-loud rather than silently vacuous: when the parser-hardening successor
-  lands, the crafted rollout parses cleanly, the session is **admitted**, and
-  criterion 1's assertion fails with a red CI rather than passing over nothing.
-  That successor must re-point or retire it, and Out of scope names it. The
-  boundary itself is proved separately, by injecting a throw at the parse seam
-  (criterion 2), and that proof cannot go vacuous whatever the parsers do.
+  lands, `codex-poisoned-text-block.jsonl` parses cleanly and
+  `codex-poisoned-session-id.jsonl`'s non-string `payload.id` falls back to the
+  basename, so **both** sessions are admitted and **both** criteria fail with a
+  red CI rather than passing over nothing. That successor must re-point or retire
+  them together, and Out of scope names it. The boundary itself is proved by two
+  fixture-independent means that cannot go vacuous whatever the parsers do:
+  criterion 2's seam-injected throw, and Table C's `pt-only-parse-is-caught`
+  mutation, which is what holds Table B row B9's extent claim up.
 - **Known trap: the RED runner accepts only `ERR_ASSERTION`.** See the note
   under Table C.
 - **`tests/unit/dream-collect.test.js` was appended to by two packages today.**
@@ -425,49 +471,59 @@ new mirror found in review is added here on the spot (register-new-mirrors).
 ## Acceptance criteria
 
 - [ ] 1. **The run survives a crafted transcript, and the crafted transcript is
-      named.** Given a corpus of N healthy sessions plus the fixture rollout,
-      `collectExtracts` returns; all N healthy sessions are in `entries`; and the
-      crafted file appears exactly once in `newlyQuarantined` with
-      `reason === 'parse-threw'` (Table A rows A1, A6).
+      named.** Given a corpus of N healthy sessions plus the **in-parse** fixture
+      rollout (`codex-poisoned-text-block.jsonl`), `collectExtracts` returns; all
+      N healthy sessions are in `entries`; and the crafted file appears exactly
+      once in `newlyQuarantined` with `reason === 'parse-threw'` (Table A rows
+      A1, A6).
 - [ ] 2. **The boundary is not parser-specific.** With a throw injected at the
       `transcripts` parse seam for one candidate only, that candidate is
       classified `parse-threw` and the loop continues to the next; the other
       arms' classifications for the remaining candidates are unchanged (Table B
       rows B1, B2, B4).
-- [ ] 3. **A set-aside candidate consumes nothing and records nothing derived
+- [ ] 3. **The boundary extends past the parse call — a POST-parse failure is
+      caught too.** Given the **post-parse** fixture rollout
+      (`codex-poisoned-session-id.jsonl`, whose parse **returns** and whose throw
+      is at `sanitize`/filename derivation) plus at least one healthy session
+      whose mtime places it **after** the crafted file in the newest-first visit
+      order: `collectExtracts` returns, the crafted file is in `newlyQuarantined`
+      with `reason === 'parse-threw'`, **and the following healthy session is
+      still in `entries`** (Table B rows B1, B9). Criteria 1, 2 and 8 are all
+      satisfiable by a boundary that wraps only the parse call; this one is not.
+- [ ] 4. **A set-aside candidate consumes nothing and records nothing derived
       from the throw.** Its `newlyQuarantined` element has exactly the discovery
       record's keys plus `reason`; `remaining` is unchanged by it (a later
       candidate that fits still fits); no scratch file is written for it; and no
       substring of the thrown value's message, name or stack appears in the
       element, the written ledger, the rendered `reports/warnings.md` or the
       scratch directory (Table A row A5, Table B row B3).
-- [ ] 4. **`reports/warnings.md` renders it under its own heading**, byte-exact
+- [ ] 5. **`reports/warnings.md` renders it under its own heading**, byte-exact
       as given under "Exact contracts", and an unrecognized reason still falls to
       the catch-all row (Table A row A4).
-- [ ] 5. **Retried on change, skipped while unchanged.** Two consecutive runs
+- [ ] 6. **Retried on change, skipped while unchanged.** Two consecutive runs
       over an unchanged crafted file yield the file in `newlyQuarantined` on the
       first and in `skippedQuarantined` on the second; rewriting the file makes
       it a candidate again (Table A row A6).
-- [ ] 6. **A write failure still ends the run.** A `writeFilePrivate` failure
+- [ ] 7. **A write failure still ends the run.** A `writeFilePrivate` failure
       propagates out of `collectExtracts` and is not classified as
       `parse-threw` (Table B row B5).
-- [ ] 7. **A long session id no longer aborts the run.** `sanitize` returns at
+- [ ] 8. **A long session id no longer aborts the run.** `sanitize` returns at
       most 128 characters, and a Codex rollout whose `session_meta.id` is 4,000
       characters is admitted normally, with a scratch filename of at most 139
       bytes (Table B row B6).
-- [ ] 8. **`parse-threw` decays with its siblings.** It is a member of
+- [ ] 9. **`parse-threw` decays with its siblings.** It is a member of
       `INFORMATIONAL_QUARANTINE_REASONS`, and — observed through
       `quarantineBannerLine`, which is the exported surface;
       `hasFreshInformationalQuarantine` is module-private — a ledger holding one
       `parse-threw` record renders a banner at day 0 and `''` at day 8, matching
       `read-error` exactly, while a ledger holding one unrecognized reason still
       renders at day 8 (Table A row A3).
-- [ ] 9. **The declared RED proofs are `PROVEN`.** `npm run red-proofs` reports
-      `PROVEN` for all three declarations in Table C, and reports no `FILTERED`,
-      `VACUOUS` or `FAILED` verdict.
-- [ ] 10. `N/A — this WP ships no command and writes nothing outside the repo;
+- [ ] 10. **The declared RED proofs are `PROVEN`.** `npm run red-proofs` reports
+      `PROVEN` for all **four** declarations in Table C, and reports no
+      `FILTERED`, `VACUOUS` or `FAILED` verdict.
+- [ ] 11. `N/A — this WP ships no command and writes nothing outside the repo;
       the dream's own run-to-run idempotence over a quarantined file is what
-      criterion 5 asserts.`
+      criterion 6 asserts.`
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -489,36 +545,51 @@ test -f src/core/dream/scratch.js \
 ```
 
 ```bash
-# The boundary gate: Table A rows A1 and A5, Table B rows B2, B3 and B6, on a
-# real corpus built in a throwaway temp directory. Run from the repo root.
+# The boundary gate: Table A rows A1 and A5, Table B rows B2, B3, B6 and B9, on
+# real corpora built in throwaway temp directories. Run from the repo root.
+# Case 2 is the one that fails under a boundary wrapping only the parse call.
 node -e "
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {collectExtracts}=require('./src/core/dream/scratch');
 const {getPaths}=require('./src/core/paths');
+const F='tests/fixtures/dream/transcripts/';
 const bad=[];
 const mk=()=>fs.mkdtempSync(path.join(os.tmpdir(),'wd-pt-gate-'));
 const run=(r)=>collectExtracts(getPaths({HOME:r,WIENERDOG_HOME:path.join(r,'wd'),CLAUDE_CONFIG_DIR:path.join(r,'claude'),CODEX_HOME:path.join(r,'codex')}),{version:1,baseline_mtime:{claude:null,codex:null},files:{}},10485760,{});
-const seed=(r,n)=>{const d=path.join(r,'claude','projects','p');fs.mkdirSync(d,{recursive:true});for(let i=0;i<n;i++)fs.writeFileSync(path.join(d,'0000000'+i+'-0000-0000-0000-000000000000.jsonl'),JSON.stringify({type:'user',sessionId:'s'+i,message:{role:'user',content:'hello'}})+'\n');};
-const codex=(r,name,body)=>{const d=path.join(r,'codex','sessions','2026','01','01');fs.mkdirSync(d,{recursive:true});fs.writeFileSync(path.join(d,name),body);};
-let r=mk();seed(r,2);codex(r,'rollout-a.jsonl',fs.readFileSync('tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl','utf8'));
-let res=null;try{res=run(r);}catch(e){bad.push('the run ABORTED on a crafted transcript: '+e.message);}
+const claude=(r,i,when)=>{const d=path.join(r,'claude','projects','p');fs.mkdirSync(d,{recursive:true});const f=path.join(d,'0000000'+i+'-0000-0000-0000-000000000000.jsonl');fs.writeFileSync(f,JSON.stringify({type:'user',sessionId:'s'+i,message:{role:'user',content:'hello'}})+'\n');if(when)fs.utimesSync(f,when,when);};
+const codex=(r,name,body,when)=>{const d=path.join(r,'codex','sessions','2026','01','01');fs.mkdirSync(d,{recursive:true});const f=path.join(d,name);fs.writeFileSync(f,body);if(when)fs.utimesSync(f,when,when);};
+const fields=['harness','path','mtimeMs','size','dev','ino','reason'];
+const checkRecord=(q,where)=>{
+  const extra=Object.keys(q).filter((k)=>!fields.includes(k));
+  if(extra.length)bad.push(where+': the set-aside record carries fields beyond the discovery record and the reason: '+extra.join(','));
+  if(/TypeError|primitive|at Object|\.js:[0-9]/.test(JSON.stringify(q)))bad.push(where+': the caught error leaked into the set-aside record');
+};
+// CASE 1 - an IN-PARSE failure beside two healthy sessions.
+let r=mk();claude(r,0);claude(r,1);codex(r,'rollout-a.jsonl',fs.readFileSync(F+'codex-poisoned-text-block.jsonl','utf8'));
+let res=null;try{res=run(r);}catch(e){bad.push('case 1: the run ABORTED on a crafted transcript: '+e.message);}
 if(res){
-  if(res.entries.length!==2)bad.push('healthy sessions were lost: '+res.entries.length+' of 2');
+  if(res.entries.length!==2)bad.push('case 1: healthy sessions were lost: '+res.entries.length+' of 2');
   const q=res.newlyQuarantined.filter((x)=>x.reason==='parse-threw');
-  if(q.length!==1)bad.push('the crafted transcript was not set aside as parse-threw: '+JSON.stringify(res.newlyQuarantined.map((x)=>x.reason)));
-  else{
-    const ok=['harness','path','mtimeMs','size','dev','ino','reason'];
-    const extra=Object.keys(q[0]).filter((k)=>!ok.includes(k));
-    if(extra.length)bad.push('the set-aside record carries fields beyond the discovery record and the reason: '+extra.join(','));
-    if(/TypeError|primitive|at Object|\.js:[0-9]/.test(JSON.stringify(q[0])))bad.push('the caught error leaked into the set-aside record');
-  }
+  if(q.length!==1)bad.push('case 1: not set aside as parse-threw: '+JSON.stringify(res.newlyQuarantined.map((x)=>x.reason)));
+  else checkRecord(q[0],'case 1');
 }
-r=mk();codex(r,'rollout-b.jsonl',JSON.stringify({type:'session_meta',payload:{id:'A'.repeat(4000),timestamp:'2026-01-01T00:00:00.000Z',cwd:'/w'}})+'\n'+JSON.stringify({type:'response_item',payload:{type:'message',role:'user',content:[{type:'input_text',text:'hi'}]}})+'\n');
+// CASE 2 - a POST-parse failure (the parse RETURNS) visited BEFORE a healthy
+// session, which must still be admitted. Newest mtime is visited first.
+r=mk();claude(r,2,new Date('2026-01-02'));codex(r,'rollout-b.jsonl',fs.readFileSync(F+'codex-poisoned-session-id.jsonl','utf8'),new Date('2026-01-09'));
+res=null;try{res=run(r);}catch(e){bad.push('case 2: the run ABORTED on a post-parse failure — the boundary does not extend past the parse call: '+e.message);}
+if(res){
+  const q=res.newlyQuarantined.filter((x)=>x.reason==='parse-threw');
+  if(q.length!==1)bad.push('case 2: not set aside as parse-threw: '+JSON.stringify(res.newlyQuarantined.map((x)=>x.reason)));
+  else checkRecord(q[0],'case 2');
+  if(res.entries.length!==1)bad.push('case 2: the healthy session visited AFTER the crafted one was not admitted: '+res.entries.length+' of 1');
+}
+// CASE 3 - a 4000-character session id is admitted, with a bounded filename.
+r=mk();codex(r,'rollout-c.jsonl',JSON.stringify({type:'session_meta',payload:{id:'A'.repeat(4000),timestamp:'2026-01-01T00:00:00.000Z',cwd:'/w'}})+'\n'+JSON.stringify({type:'response_item',payload:{type:'message',role:'user',content:[{type:'input_text',text:'hi'}]}})+'\n');
 try{
   const s=run(r);
-  if(s.entries.length!==1)bad.push('a 4000-character session id was not admitted: '+s.entries.length+' of 1');
-  else{const n=path.basename(s.entries[0].scratchFile);if(n.length>140)bad.push('the scratch filename is unbounded: '+n.length+' bytes');}
-}catch(e){bad.push('a 4000-character session id ABORTED the run: '+e.message);}
+  if(s.entries.length!==1)bad.push('case 3: a 4000-character session id was not admitted: '+s.entries.length+' of 1');
+  else{const n=path.basename(s.entries[0].scratchFile);if(n.length>140)bad.push('case 3: the scratch filename is unbounded: '+n.length+' bytes');}
+}catch(e){bad.push('case 3: a 4000-character session id ABORTED the run: '+e.message);}
 if(bad.length){console.error(bad.join(' | '));process.exit(1);}
 console.log('PARSE-THROW BOUNDARY OK');"
 ```
@@ -531,27 +602,31 @@ console.log('PARSE-THROW BOUNDARY OK');"
   `sessionId`, `cwd` and `timestamp` only as the strings the `Extract` typedef
   declares them to be. This is belt-and-braces over the guarantee this package
   ships, it is where **owner item 1** puts a successor package, and it is what
-  will make criterion 1's fixture stop throwing (see Implementation notes). Do
-  not touch `src/core/transcripts/` here.
+  will make **both** fixtures stop throwing, failing criteria 1 and 3 loudly
+  (see Implementation notes). Do not touch `src/core/transcripts/` here.
 - **`src/cli/doctor.js`** — Table A row A7 and **owner item 3**.
-- **Collision, not scope: `WP-dream-primary-dialogue-collection` (status
-  `Ready`) modifies the same admission loop and the same test file.** It swaps
+- **Collision, not scope: `WP-dream-primary-dialogue-collection` — in
+  implementation now, and this package's dispatch waits on it (Definition of
+  done item 0c) — modifies the same admission loop and the same test file.** It swaps
   `parseWithOutcome` for `parsePrimaryWithOutcome`, measures capacity on
   `intakeBytes` instead of `Buffer.byteLength(JSON.stringify(extract))`, and its
   Deliverables cell states that `sanitize` at `scratch.js:18-20` is not changed —
-  a sentence this package falsifies (Table B row B6). Whichever lands second
-  rebases onto the other; the invariant to preserve either way is that the new
-  parse call and the new measurement stay **inside** the boundary (Table B row
-  B1) and `writeFilePrivate` stays **outside** it (row B5). Do not edit that
-  spec from this package; the architect re-points it.
+  a sentence this package falsifies (Table B row B6). **This package is the
+  second lander and owns the rebase.** The invariants to preserve over whatever
+  shape it leaves behind: the new parse call, the new measurement and the
+  filename derivation stay **inside** the boundary (Table B rows B1, B9) and
+  `writeFilePrivate` stays **outside** it (row B5). Do not edit that spec from
+  this package; the architect re-points it.
 - **Scratch filename collisions**, a pre-existing residual this package widens
   slightly and does not fix. `sanitize` maps every byte outside
-  `[A-Za-z0-9_-]` to `_`, so two crafted session ids differing only in excluded
-  bytes already collide today and the second write overwrites the first; Table B
-  row B6's 128-character bound adds ids sharing a 128-character allowlisted
-  prefix to that set. Both require a crafted transcript and neither is new in
-  kind, so the fix — a collision-free scratch name — is a separate package. Do
-  not attempt it here.
+  `[A-Za-z0-9_-]` to `_`, so two session ids differing only in excluded bytes
+  already collide today and the second write overwrites the first; Table B row
+  B6's 128-character bound adds ids sharing a 128-character allowlisted prefix
+  to that set. It is **already routed**: `WP-dream-primary-dialogue-collection`
+  records the same defect under its own Discovered issues (its Table row C4a
+  executes the `s_1` / `s.1` case and states that the overwritten session's
+  dialogue is silently lost and never retried) and deliberately does not fix it
+  either. Do not attempt it here.
 - Any change to the ledger's record shape, to `selectState`, to
   `secretDeferralCount`, or to the secret-revert deferral lifecycle.
 - Any change to the digest banner, the dream report section or the console line
@@ -559,9 +634,18 @@ console.log('PARSE-THROW BOUNDARY OK');"
 
 ## Dispatch precondition — owner items
 
-Three decisions are the owner's. None of them has been made; the spec as drafted
-implements the recommendation in each case, and each row states what changes if
-the owner rules the other way.
+Every item below is **a recommendation adopted under standing authorization, not
+a direct ruling** — the standing process is recorded in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`: the
+architect records a recommendation with the cost of overruling it, the session
+may dispatch under that recommendation, and **the owner reverses any of them by
+dated amendment**, applied to this spec by a committed revision rather than by a
+dispatch message, because `scripts/boundary-check.js` reads the Deliverables
+table in this file and nothing a message says changes what CI sees. **Nothing in
+this repository records the owner approving, accepting or ratifying any of them,
+and this spec asserts no such acceptance.** Each was raised by the architect
+during round zero and carried through design-review round 1, dispositioned in
+`docs/specs/logbook/2026-09-17-dream-collect-parse-throw-quarantine.md`.
 
 **1. Should the parser hardening land in this package, or as a successor?**
 
@@ -579,9 +663,9 @@ the owner rules the other way.
   `src/core/transcripts/claude.js`, `tests/unit/transcripts.test.js`, two more
   fixtures and a second `.proofs.json` (its `suite` would be
   `tests/unit/transcripts.test.js`) into this package. Roughly eleven added
-  one-line conditions plus their tests; **the size becomes M**, and criterion
-  1's fixture-based assertion must be re-pointed within the same package rather
-  than by a successor.
+  one-line conditions plus their tests; **the size becomes M**, and criteria 1
+  and 3's fixture-based assertions must both be re-pointed within the same
+  package rather than by a successor.
 
 **2. Is `parse-threw` an informational (decaying-banner) reason, and does the
 taxonomy extension need an ADR-0023 amendment?**
@@ -597,7 +681,7 @@ taxonomy extension need an ADR-0023 amendment?**
   because the reason adds no record field, no counter and no new state.
 - *Overrule cost:* leaving it out of `INFORMATIONAL_QUARANTINE_REASONS` is one
   line less in `ledger.js` and no change to `tests/unit/ledger.test.js:485`, and
-  criterion 8 inverts. Ratifying the taxonomy extension is a separate docs-only
+  criterion 9 inverts. Ratifying the taxonomy extension is a separate docs-only
   ADR-0023 Amendment 4 work package (S), with no code change and no effect on
   this one.
 
@@ -616,9 +700,30 @@ taxonomy extension need an ADR-0023 amendment?**
 
 ## Definition of done
 
-0. The branch is cut from `b46a384398a6ff3fa44a463ceb7773b3fd986179` or a
-   descendant, and the three owner items above have been ruled on by the owner
-   before implementation starts.
+0. **DISPATCH PRECONDITION.** (a) The design gate is **closed at round 1**,
+   which is what makes this spec `Ready` (`docs/runbooks/codex-review.md`,
+   "Weighted closure"): one external round on `gpt-6-astra` after two
+   provider-refused attempts, verdict `needs-attention` with the **product
+   clean**, and one LIGHT machinery finding fixed and verified. The round, its
+   disposition and the two refusals are in
+   `docs/specs/logbook/2026-09-17-dream-collect-parse-throw-quarantine.md`, with
+   the raw, both focus texts and the meta preserved beside it before
+   adjudication. (b) The owner items travel with this package as
+   **recommendations adopted under standing authorization**; any the owner
+   reverses by dated amendment is applied by a committed revision, never by a
+   dispatch message. (c) **This package is dispatched AFTER
+   `WP-dream-primary-dialogue-collection` lands** — that package is in
+   implementation now, rewrites the same admission loop and appends to the same
+   test file, so this one is the second lander and owns the rebase (see Out of
+   scope) — which is why `depends_on` names it, although this package needs
+   nothing that package produces: the dependency is merge order, not contract.
+   (d) **Every cite is pinned to base `a60c14e6` and was verified on
+   2026-09-18.** Once the sibling lands, **re-derive every citation into
+   `src/core/dream/scratch.js` and `src/cli/dream.js` construct by construct**
+   before writing code — the sibling moves the parse call, the measured quantity
+   and the surrounding line numbers, and Table B row B1's extent must be
+   re-established over whatever shape it leaves behind. (e) Branch
+   `wp/dream-collect-parse-throw-quarantine`.
 1. All verification steps pass locally; output pasted into the PR body.
 2. Conventional commits; PR titled `fix(dream): title (WP-dream-collect-parse-throw-quarantine)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
