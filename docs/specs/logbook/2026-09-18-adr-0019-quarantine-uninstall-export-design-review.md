@@ -602,6 +602,72 @@ discipline is now clearly earning more than it costs.
 criteria; fourteen have a pre-measurable anchor, eleven mutate code this package
 authors.
 
+## Round 21 — Astra, 2026-09-18
+
+- **Reviewed tip:** `14706933`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r21-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r21-astra-focus.txt`
+- **Committed before adjudication at:** `c32aaea2`
+- **Verdict:** `needs-attention` — *"the new recovery gate can block uninstall
+  indefinitely after the user clears the quarantine."*
+- **Held from round 20:** **X22** was not re-opened; nothing inside the residuals,
+  seventh consecutive round.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R21-1** | **Exclude confirmed-absent targets from the recovery stop.** **W10** assumed every `shelfGuarded` entry represented an artifact still on disk. But **X16** guards literal shelf paths **before** `reverse()`'s existing already-gone check (`manifest.js:865-869`), and **X17** keeps anchors even when the shelves are absent. With criterion 18's hash-less shelf-file entry, **clearing the preserved file and retrying still adds its nonexistent path to `shelfGuarded`**, so W10 retained the manifest and refused completion on **every** retry — despite an empty inventory and no disposer preservation. **The prescribed move-or-delete remedy could not resolve it** | B | **HEAVY** — the command blocks forever, which for a user is indistinguishable from the product being broken | **ACCEPTED IN FULL, with the guard left alone.** Hypothetical anchors must keep protecting a late-arriving file, so the fix is in the **decision**, not the guard: **W10 now counts only OUTSTANDING entries**, stated as one sentence — ***W10 blocks on what still exists or cannot be checked, never on what is confirmed gone.*** Each `shelfGuarded` entry is `lstat`ed **at decision time** and classified with **X17**'s own vocabulary — this is that rule at a **third site**, not a new one: `ENOENT`/`ENOTDIR` = confirmed **ABSENT** ⇒ excluded; any other code = **UNANSWERABLE** ⇒ blocks; an existing file, directory or symlink ⇒ blocks. **The filter is scoped to `shelfGuarded` alone and the row says why the other two inputs need none:** `preservedQuarantine` is computed by *this* run's sweep, and the fresh inventory read *is* the current state by definition — only `shelfGuarded` can carry a path that never existed, precisely because the guard runs before the existence check. **Acceptance criterion 19** gains the remedy-terminates arm — stop, clear the file **without editing the manifest**, re-run, **complete** — plus the complementary assertions (file still present, or its `lstat` failing for a non-`ENOENT` reason ⇒ still stops), so the filter is measured **as a filter** rather than as a removal. New RED proof **`quse-w10-blocks-on-absent-guarded-path`**: **every other W10 fixture asserts that a run STOPS**, so all of them stay green under a mutation that only makes W10 block more. It is the single declaration guarding the **refusing-forever** direction |
+
+**Two rounds have now found the same failure direction.** Round 1's **K2** (counting
+the product-created shelf roots) and round 21's W10 filter are both ways this package
+could refuse **forever**. That is recorded in the Security checklist as a third
+failure direction beside *destroying the user's text* and *stranding a credential*:
+**a protection that can never be satisfied is a denial of service on the user's own
+machine, not a safeguard.**
+
+## Sizing — is this still one M? (asked at round 21; Astra did not opine)
+
+**Measured, not estimated.** At `14706933` the spec is **~1,950 lines**: 8
+deliverables, **six canonical tables** (K 7 rows, X **22** rows, V, W **11** rows, Y
+10 rows, B **26** declarations), **13 acceptance criteria carrying ~45 arms**, 4 owner
+items and 3 named residuals. `docs/runbooks/spec-authoring.md` warns in as many words
+that this is the failure shape — *"how a 300-line contract becomes an 800-line
+fortress"* — and we are past twice that. **CLAUDE.md sizes a work package at one
+implementer session and one PR. This is no longer one session.**
+
+**Recommendation: SPLIT INTO TWO, and split when the gate CLOSES — not before.**
+
+- **A — the gate (S/M).** `quarantineInventory` (Table **K**), the pre-plan refusal
+  and its disclosure (**W1**–**W6**, **W9**), the two documentation clauses, the
+  ADR-0019 amendment, owner items 1–3. **It touches no deleter**: `src/cli/uninstall.js`
+  only, plus the new export. **It is safe alone and strictly better than `main`** —
+  today the shelf is destroyed unconditionally; after A the command refuses instead —
+  and it *is* the 2026-07-27 mandate ("option B": amend the ADR, add the warn step).
+  Its one honest residual is the concurrent-dream window (**X3**), closed by B.
+- **B — the deletion-side contracts (M).** Tables **X** and **V**, **W7**/**W8**/
+  **W10**/**W11**, owner item 4, and every residual the gate named. **B cannot be
+  subdivided further without shipping a measured defect**: rounds 11–21 each found a
+  path that the *previous* round's partial rule left open, so any cut inside X10–X22
+  ships one of them knowingly.
+
+**Cost of splitting:** two design gates instead of one — though B inherits 21 rounds
+of settled contracts and should converge fast; a four-long `depends_on` chain; line
+numbers re-pinned twice; and the ADR-0019 amendment lands with A while its enforcement
+lands with B, so A's amendment text must be true without B (it is: it says uninstall
+*stops*, which is exactly what A ships).
+
+**Cost of not splitting:** one implementer session must land 8 files, 22
+deletion-contract rows, 26 RED declarations and ~45 criterion arms in one PR — against
+a repo rule that says S or M only, and a One-Document Rule aimed at a mid-tier model
+reading one spec.
+
+**Why NOT now, which is the coordinator's instruction and also the right call:**
+splitting mid-gate would restart both gates and orphan 21 rounds of dispositions that
+are keyed to row ids in **this** document. The split is a mechanical extraction once
+the gate returns clean; done now it is a redesign.
+
+**Declaration count after round 21:** twenty-six declarations over thirteen criteria;
+fifteen have a pre-measurable anchor, eleven mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean return, a LIGHT-only
 return, **or a finding that falls inside `R-alias-outside-closure`,
 `R-post-ledger-preserve` or `R-post-uninstall-preserve`**
