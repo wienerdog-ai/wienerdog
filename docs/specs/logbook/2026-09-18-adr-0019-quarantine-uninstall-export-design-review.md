@@ -263,5 +263,32 @@ applied to a resolution contract rather than to a prose contract.
 criterion 14 carries two and criterion 18 now carries three; nine have a
 pre-measurable anchor, five mutate code this package authors.
 
+## Round 11 — Astra, 2026-09-18
+
+- **Reviewed tip:** `a2bc5c7a`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r11-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r11-astra-focus.txt`
+- **Committed before adjudication at:** `fe6ab693`
+- **Verdict:** `needs-attention` — *"the prescribed sweep can delete quarantined
+  originals through a sibling-directory alias."*
+- **Held from round 10:** **X17** was **not** re-opened. The finding is **X16's own
+  rule applied to a site the spec had exempted**.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R11-1** | **Protect shelf targets before recursively deleting sibling directories.** With `<state>/quarantine` a **symlink to `<state>/cache`**, Table X row **X1** step 2 recursively deletes `cache` — a non-shelf sibling *by name* — **before** step 3 preserves the `quarantine` link. `quarantinePreserve` writes **through** the alias, so the deleted sibling can hold **the sole original**. Reachable through the exported direct sweep, and through the link-and-preserve appearing after the CLI gate — the interleaving **X3** already covers. Astra executed the prescribed sequence in memory: **the original was deleted and the surviving, now-dangling link was reported as *preserved*.** **Top-down `lstat` validation does not protect data deleted through another pathname** | A | HEAVY (high, conf. 0.97) | **ACCEPTED IN FULL, and fixed by pointing at the rule rather than adding one.** New **Table X row X18** applies **X16**'s symmetric containment check, over **X17**'s anchors, to the recursive deletion the spec had been treating as ordinary mechanics. **Order, which is the whole fix:** protected shelf **targets** (lexical **and** resolved-through-the-nearest-validated-existing-ancestor, alias-aware) → step 2 → step 3; computing them after step 2 leaves the check with nothing to check. A target that **contains, equals or is contained by** a protected resolved target is **preserved and reported**; unanswerable preserves (**X17** outcome 4), absent does not (outcome 3). **Extended beyond the measured site, because it is the same shape:** the `mechanics` loop's `fs.rmSync(dir, {recursive:true, force:true})` (`:1148`) over `logs`/`schedules`/`secrets` is gated too — `<core>/logs` can be a real directory a shelf symlink resolves into. **Table V amended:** `:1148` is listed as **governed by X16 via X1/X18**, not as an exemption, and step 2's new per-child delete is listed as a fourth entry; the verification step now requires **every** `grep -n 'recursive: true'` hit to be **accounted for** in Table V rather than expecting a fixed count, since this package adds one. **W6 is unaffected** and the row says why: on an ordinary install nothing overlaps the shelf, so nothing new is preserved or reported. **Acceptance criteria 1 and 9** gain alias arms — direct sweep and post-gate interleaving, with a `<core>/logs` alias target as well — and **assert the alias TARGET's survival before anything about the link**, because round 11's measured outcome was a **loss reported as a save**. New RED proof **`quse-step2-deletes-through-alias`** (compute the protected targets *after* step 2): **the only mutation in this package that produces a dangling link listed in `preservedQuarantine`** — the shape a reviewer reading the output would be least likely to question |
+
+**Convergence note, extended as requested.** Two rules now cover this package's
+whole deletion surface, and both are single rows rather than per-site clauses:
+**X17** for resolution semantics (uniform across X11, X12, X16) and **X16** for
+containment — and after round 11, **every recursive delete in this package, the
+replay kinds of Table V *and* the disposer's own two sweeps, is one X16 rule over
+X17 anchors. No site is exempt, and Table V no longer lists one.** **A further
+finding of either family is closed by pointing at the rule and adding the site to
+it, not by writing a new rule.**
+
+**Declaration count after round 11:** fifteen declarations over eleven criteria;
+nine have a pre-measurable anchor, six mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean or LIGHT-only return
 (`docs/runbooks/codex-review.md`, "Weighted closure").
