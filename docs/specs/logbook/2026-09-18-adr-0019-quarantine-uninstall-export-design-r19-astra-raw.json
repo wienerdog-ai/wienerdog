@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 5b77865ff2fbda3633be795a34af1783244cae8f",
+    "baseRef": "5b77865ff2fbda3633be795a34af1783244cae8f",
+    "explicit": true
+  },
+  "threadId": "01a0b63c-a192-77b0-9093-dfda4a84614f",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/f170987d-e33b-4ab8-8cd7-66ae3b6be861/scratchpad/orch/plugin-wt-export-r19",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 5b77865ff2fbda3633be795a34af1783244cae8f from merge-base 5b77865ff2fbda3633be795a34af1783244cae8f."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: X19 still permits alias removal that makes a retry destroy a completed quarantine copy.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Alias retention misses deletion targets beneath the alias target\",\n      \"body\": \"X19(b) checks whether the alias target lies INSIDE a swept target, missing the opposite relationship. Consider state → ~/.claude, initially absent shelves, and a sparse manifest containing a hashless file entry for ~/.claude/quarantine/2026-09-18-note.md. X19 permits unlinking state because ~/.claude is outside core and is an ancestor of the replay target. A dream can complete that copy after the absence decision but before unlink. If the subsequent secrets removal throws EPERM, X13 retains the manifest for retry. On retry, state is absent, so the rebuilt shelf anchors miss the original and the file entry deletes it. An in-memory model confirmed the predicate gap; the shipped reverse() accepts and deletes that file. No concurrent alias creation or redirection is required.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 389,\n      \"line_end\": 389,\n      \"confidence\": 0.96,\n      \"recommendation\": \"Retain the alias whenever its hypothetical shelf subtree overlaps any replay mutation target, including individual files beneath it. Supply the necessary replay targets to the disposer or conservatively protect all allowed replay roots. Add a regression covering copy completion before unlink, a subsequent mechanics failure, and a full retry.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct X19's containment rule and add the failure-and-retry regression before implementation.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: X19 still permits alias removal that makes a retry destroy a completed quarantine copy.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Alias retention misses deletion targets beneath the alias target",
+        "body": "X19(b) checks whether the alias target lies INSIDE a swept target, missing the opposite relationship. Consider state → ~/.claude, initially absent shelves, and a sparse manifest containing a hashless file entry for ~/.claude/quarantine/2026-09-18-note.md. X19 permits unlinking state because ~/.claude is outside core and is an ancestor of the replay target. A dream can complete that copy after the absence decision but before unlink. If the subsequent secrets removal throws EPERM, X13 retains the manifest for retry. On retry, state is absent, so the rebuilt shelf anchors miss the original and the file entry deletes it. An in-memory model confirmed the predicate gap; the shipped reverse() accepts and deletes that file. No concurrent alias creation or redirection is required.",
+        "file": "docs/specs/WP-adr-0019-quarantine-uninstall-export.md",
+        "line_start": 389,
+        "line_end": 389,
+        "confidence": 0.96,
+        "recommendation": "Retain the alias whenever its hypothetical shelf subtree overlaps any replay mutation target, including individual files beneath it. Supply the necessary replay targets to the disposer or conservatively protect all allowed replay roots. Add a regression covering copy completion before unlink, a subsequent mechanics failure, and a full retry."
+      }
+    ],
+    "next_steps": [
+      "Correct X19's containment rule and add the failure-and-retry regression before implementation."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not dispatch yet: X19 still permits alias removal that makes a retry destroy a completed quarantine copy.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"Alias retention misses deletion targets beneath the alias target\",\n      \"body\": \"X19(b) checks whether the alias target lies INSIDE a swept target, missing the opposite relationship. Consider state → ~/.claude, initially absent shelves, and a sparse manifest containing a hashless file entry for ~/.claude/quarantine/2026-09-18-note.md. X19 permits unlinking state because ~/.claude is outside core and is an ancestor of the replay target. A dream can complete that copy after the absence decision but before unlink. If the subsequent secrets removal throws EPERM, X13 retains the manifest for retry. On retry, state is absent, so the rebuilt shelf anchors miss the original and the file entry deletes it. An in-memory model confirmed the predicate gap; the shipped reverse() accepts and deletes that file. No concurrent alias creation or redirection is required.\",\n      \"file\": \"docs/specs/WP-adr-0019-quarantine-uninstall-export.md\",\n      \"line_start\": 389,\n      \"line_end\": 389,\n      \"confidence\": 0.96,\n      \"recommendation\": \"Retain the alias whenever its hypothetical shelf subtree overlaps any replay mutation target, including individual files beneath it. Supply the necessary replay targets to the disposer or conservatively protect all allowed replay roots. Add a regression covering copy completion before unlink, a subsequent mechanics failure, and a full retry.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct X19's containment rule and add the failure-and-retry regression before implementation.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
