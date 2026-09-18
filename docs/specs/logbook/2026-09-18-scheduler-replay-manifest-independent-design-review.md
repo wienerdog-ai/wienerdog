@@ -52,6 +52,43 @@ shapes, the worked example), the Deliverables notes for `manifest.js`,
 renumbered to stay last), the Mirrored Surface Checklist and the Security
 checklist.
 
-## Round 2
+## Round 2 (Astra)
+
+- **Reviewed tip:** `6afda2b6` (round-1 findings applied).
+- **Raw + focus committed BEFORE adjudication:** `244d0cfc`.
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r2-astra-raw.json`
+  - `docs/specs/logbook/2026-09-18-scheduler-replay-manifest-independent-design-r2-astra-focus.txt`
+- **Verdict:** `needs-attention` — *"Do not dispatch: two specified paths still
+  leave live jobs without any unload attempt."*
+- **Round 1's D9 and D12 held.** Both new findings were **executed** by the
+  reviewer against mocked I/O rather than argued, and both land on rows round 1
+  itself introduced — the class each closes is real, the closure was incomplete.
+
+### Dispositions
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| 4 | **Ordering: another reverser deletes the evidence first.** D5 ran after the manifest entry loop and skipped paths in `removedSet`. On win32 `<core>/schedules` **is** inside `withinAllowedRoot`'s root set (`manifest.js:742`), so a schema-valid, deletable `{kind:'file'}` record for `wienerdog-dream.xml` is discovered under D10 yet deleted by the file reverser during the loop; the post-loop pass then skips it and D6 rejects the missing file. The Task Scheduler entry stays registered while the core is swept. A mocked dry-run confirmed the reverser marks the XML removed without unloading it | A | HEAVY | **ACCEPTED.** D5 becomes **two phases**: **D5a**, the unload phase, runs **before** the entry loop; **D5b**, the removal phase, runs after it and keeps D11's separate deletion permission and the `removedSet` skip. D6 is restated per phase. `reverse()`'s returned `unrecordedSchedules` is now defined as the paths **D5a unloaded**. New acceptance criterion 12 (the win32 regression), new Table S row S9, new RED declaration `srm-unload-moved-after-loop` |
+| 5 | **Alias coverage: resolved-path equality is not an equivalent unload.** D10 equated *resolved* paths, but `reverseSchedulerEntry` derives its argv from the recorded **lexical** basename (`:524`) while its containment gate resolves (`:512`). A `scheduler-entry` naming an in-root symlink `ai.wienerdog...plist` → `ai.wienerdog.dream.plist` satisfies (a)–(d) — the loose `withinSchedulerRoot` basename passes — yet `deriveUnloadArgv` returns `null`, so the reverser unlinks the alias and unloads nothing while discovery suppresses the real plist. Mocked execution confirmed the predicate/argv mismatch | A | HEAVY | **ACCEPTED.** D10 gains condition **(e)**: coverage additionally requires `deriveUnloadArgv(<recorded lexical path>, platform)` to deep-equal `deriveUnloadArgv(<candidate path>, platform)`, `null` equal only to `null`. A recorded alias deriving `null` or a different target leaves the candidate discovered. New acceptance criterion 13 (both alias cases), new Table S row S10, new RED declaration `srm-alias-counts-as-coverage` |
+
+### Note on the declaration set
+
+Both round-2 findings are **absence-shaped** — an ordering that is unobservable
+unless the corpus contains the overlapping win32 case, and a non-suppression that
+is unobservable without a symlink alias — so both carry declarations, unlike
+round 1's finding 2. Completeness of the set remains a review judgment (ADR-0042
+decision 5).
+
+### Surfaces updated in the same commit
+
+Table D (D5 rewritten as two phases, D6 restated per phase, D10 gains condition
+(e)), Table S (S9, S10 added), Table B (two declarations added; the
+why-no-declaration note rescoped to round 1's finding 2), the `reverse()` return
+JSDoc, the Deliverables note for `manifest.js`, acceptance criteria 12–13 (with
+the red-proofs criterion renumbered to 14 to stay last), the Mirrored Surface
+Checklist, the Security checklist, the Implementation note on gate-derived rows,
+and the Definition of done's dispatch precondition.
+
+## Round 3
 
 Pending — a fresh Astra round runs against the revised spec.
