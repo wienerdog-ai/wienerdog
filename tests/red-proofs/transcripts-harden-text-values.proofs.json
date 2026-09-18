@@ -1,0 +1,103 @@
+{
+  "suite": "tests/unit/transcripts.test.js",
+  "proofs": [
+    {
+      "id": "htv-site1-codex-message-check-removed",
+      "wp": "WP-transcript-parsers-harden-text-values",
+      "criterion": "1, 2",
+      "why": "site 1 is the join a Codex `message` item's content blocks go through, and it is the one the crafted rollout reaches. Without the conjunct `Array.prototype.join` coerces every non-string `text` and an object with a null `toString` throws out of the parse entirely. A test that only checked that the parser returned SOMETHING would stay green on the coercing forms, so the assertions observe the check itself: the parse completes, and no coerced form reaches a message text",
+      "file": "src/core/transcripts/codex.js",
+      "find": "    .filter((block) => block && (block.type === 'input_text' || block.type === 'output_text') && typeof block.text === 'string')\n    .map((block) => block.text)\n    .join('\\n');",
+      "replace": "    .filter((block) => block && (block.type === 'input_text' || block.type === 'output_text')) /* RP_MUT_HTV_S1 */\n    .map((block) => block.text)\n    .join('\\n');",
+      "marker": "RP_MUT_HTV_S1",
+      "occurrences": 1,
+      "testNamePattern": "\\[HTV-",
+      "expectRed": [
+        {
+          "test": [
+            "transcripts: [HTV-1] the crafted rollout parses cleanly instead of throwing (criterion 1)"
+          ],
+          "signal": "[HTV-1]"
+        },
+        {
+          "test": [
+            "transcripts: [HTV-2] site 1 — a codex message block whose text is not a string is declined (criterion 2)"
+          ],
+          "signal": "[HTV-2]"
+        },
+        {
+          "test": [
+            "transcripts: [HTV-6] the first law — the default parse is byte-identical to the base, with one named exception (criterion 3)"
+          ],
+          "signal": "[HTV-6]"
+        }
+      ]
+    },
+    {
+      "id": "htv-site2-codex-tool-output-check-removed",
+      "wp": "WP-transcript-parsers-harden-text-values",
+      "criterion": "1, 2",
+      "why": "site 2 is `extractToolOutputText`'s array branch — the join a Codex tool-output item's content blocks go through. It is a separate join from site 1 and reached by a different item type, so site 1's proof observes nothing here: a single declaration over the two would leave this one provable only by a test that might never run it",
+      "file": "src/core/transcripts/codex.js",
+      "find": "      .filter((block) => block && (block.type === 'input_text' || block.type === 'output_text') && typeof block.text === 'string')\n      .map((block) => block.text)\n      .join('\\n');",
+      "replace": "      .filter((block) => block && (block.type === 'input_text' || block.type === 'output_text')) /* RP_MUT_HTV_S2 */\n      .map((block) => block.text)\n      .join('\\n');",
+      "marker": "RP_MUT_HTV_S2",
+      "occurrences": 1,
+      "testNamePattern": "\\[HTV-",
+      "expectRed": [
+        {
+          "test": [
+            "transcripts: [HTV-3] site 2 — a codex tool-output block whose text is not a string is declined (criterion 2)"
+          ],
+          "signal": "[HTV-3]"
+        }
+      ]
+    },
+    {
+      "id": "htv-site3-claude-tool-result-check-removed",
+      "wp": "WP-transcript-parsers-harden-text-values",
+      "criterion": "1, 2",
+      "why": "site 3 is `flattenToolResultContent`'s array branch. Its `find` carries the trailing `.map`/`.join` pair rather than the filter line alone BECAUSE the filter line at six spaces is a proper substring of site 4's at ten: a naive one-line declaration here matches at site 4 too, reports 2, and — measured while the spec was drafted — silently rewrites site 4 as well, leaving the four-site gate passing with site 4 unhardened. The `'\\n'` separator is what makes this block unique against site 4's `'\\n\\n'`",
+      "file": "src/core/transcripts/claude.js",
+      "find": "      .filter((block) => block && block.type === 'text' && typeof block.text === 'string')\n      .map((block) => block.text)\n      .join('\\n');",
+      "replace": "      .filter((block) => block && block.type === 'text') /* RP_MUT_HTV_S3 */\n      .map((block) => block.text)\n      .join('\\n');",
+      "marker": "RP_MUT_HTV_S3",
+      "occurrences": 1,
+      "testNamePattern": "\\[HTV-",
+      "expectRed": [
+        {
+          "test": [
+            "transcripts: [HTV-4] site 3 — a claude tool_result block whose text is not a string is declined (criterion 2)"
+          ],
+          "signal": "[HTV-4]"
+        }
+      ]
+    },
+    {
+      "id": "htv-site4-claude-assistant-check-removed",
+      "wp": "WP-transcript-parsers-harden-text-values",
+      "criterion": "1, 2",
+      "why": "site 4 is the assistant text join, the default parser's counterpart to the primary-dialogue projection's own `joinTextBlocks`. It is the site where the two readings of one Claude record disagreed before this package: the projection declined a non-string `text` while the default parser coerced or threw on it",
+      "file": "src/core/transcripts/claude.js",
+      "find": "          .filter((block) => block && block.type === 'text' && typeof block.text === 'string')\n          .map((block) => block.text)\n          .join('\\n\\n');",
+      "replace": "          .filter((block) => block && block.type === 'text') /* RP_MUT_HTV_S4 */\n          .map((block) => block.text)\n          .join('\\n\\n');",
+      "marker": "RP_MUT_HTV_S4",
+      "occurrences": 1,
+      "testNamePattern": "\\[HTV-",
+      "expectRed": [
+        {
+          "test": [
+            "transcripts: [HTV-5] site 4 — a claude assistant text block whose text is not a string is declined (criterion 2)"
+          ],
+          "signal": "[HTV-5]"
+        },
+        {
+          "test": [
+            "transcripts: [HTV-7] the default parsers and the primary-dialogue projection now agree (criterion 4)"
+          ],
+          "signal": "[HTV-7]"
+        }
+      ]
+    }
+  ]
+}

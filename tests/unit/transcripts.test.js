@@ -15,6 +15,7 @@ const {
   MAX_MESSAGES,
   Limits,
   newRunBudget,
+  parsePrimaryWithOutcome,
 } = require('../../src/core/transcripts');
 const { mapCodexItem } = require('../../src/core/transcripts/codex');
 
@@ -521,4 +522,212 @@ test('parse: back-compat — equals parseWithOutcome(entry, fresh budget).extrac
   assert.deepEqual(viaOld, viaNew.extract);
   assert.equal(viaNew.parse.outcome, 'ok');
   assert.equal(viaOld.parse, undefined); // parse() returns a bare Extract
+});
+
+// ═══ WP-transcript-parsers-harden-text-values — [HTV-] ═══════════════════════
+//
+// Table A row A0: a content block contributes text to a join IF AND ONLY IF its
+// `text` is a string. A block that does not satisfy it is DECLINED — it
+// contributes nothing, it is not coerced, and it does not throw. That is
+// `src/core/transcripts/primary-dialogue.js:83`'s rule, applied at the four
+// default-parser sites (rows A1–A4).
+//
+// Transcript content is fully attacker-influenceable, so every input below is
+// hostile by construction. `Array.prototype.join` COERCES: `{}` invents
+// "[object Object]", a number invents its digits, an array invents its
+// comma-joined elements, and an object with a null `toString` THROWS
+// `TypeError: Cannot convert object to primitive value`.
+//
+// Every test whose expected outcome is "the parse completes" wraps the call in
+// `assert.doesNotThrow`: the ADR-0042 runner accepts only `ERR_ASSERTION`
+// (`scripts/red-proofs.js:1655`), so a mutation that makes the parser THROW is
+// unprovable unless the assertion is the thing that fails. Each declared signal
+// lives in its own assertion's MESSAGE, not only in the test name.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** The declined values. Not the rule — the rule is row A0's allowlist; these
+ *  are five values that are not strings. */
+const HTV_POISON = [{ toString: null }, {}, 42, null, ['a', 'b']];
+/** What join() would INVENT from them. `null` is absent on purpose: join
+ *  renders it as the empty string, indistinguishable from a decline. */
+const HTV_COERCED = ['[object Object]', '42', 'a,b'];
+
+/** @param {'claude'|'codex'} harness @param {Object[]} lines @returns {Object} an entry */
+function htvEntry(harness, lines) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-htv-'));
+  const file = path.join(dir, harness === 'codex' ? 'rollout-x.jsonl' : 's.jsonl');
+  fs.writeFileSync(file, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
+  return { harness, path: file, size: fs.statSync(file).size };
+}
+
+/** Row A0 + row A5 at one site: the parse completes, no coerced form reaches a
+ *  message text, and the SIBLING string block still contributes its own text in
+ *  its own position. `build(poison)` returns the record lines for the site.
+ *  @param {string} tag the declared signal @param {(p:unknown)=>Object[]} build
+ *  @param {'claude'|'codex'} harness @param {string} keep @param {string} sep */
+function htvSiteDeclines(tag, harness, build, keep, sep) {
+  for (const poison of HTV_POISON) {
+    const shown = JSON.stringify(poison) || String(poison);
+    const entry = htvEntry(harness, build(poison));
+    let extract = null;
+    assert.doesNotThrow(() => {
+      extract = parse(entry);
+    }, `${tag} the parse must COMPLETE on a non-string text value ${shown}, never throw`);
+    const texts = extract.messages.map((m) => String(m.text));
+    for (const coerced of HTV_COERCED) {
+      assert.ok(
+        !texts.some((t) => t.includes(coerced)),
+        `${tag} invented dialogue — the coerced form ${JSON.stringify(coerced)} reached a message text from ${shown}: ${JSON.stringify(texts)}`
+      );
+    }
+    // Block-scoped, not record-scoped (row A5): the sibling STRING block keeps
+    // its text, and the decline contributes not even a separator.
+    assert.ok(
+      texts.includes(keep),
+      `${tag} the sibling STRING block was lost too — the decline is not block-scoped, and it must not leave ${JSON.stringify(sep)} behind: ${JSON.stringify(texts)}`
+    );
+  }
+}
+
+test('transcripts: [HTV-1] the crafted rollout parses cleanly instead of throwing (criterion 1)', () => {
+  const file = path.join(__dirname, '..', 'fixtures', 'dream', 'transcripts', 'codex-poisoned-text-block.jsonl');
+  const entry = { harness: 'codex', path: file, size: fs.statSync(file).size };
+
+  let bare = null;
+  let outcome = null;
+  assert.doesNotThrow(() => {
+    bare = parse(entry);
+  }, '[HTV-1] parse() over the crafted rollout must complete — the poisoned block is declined, not coerced');
+  assert.doesNotThrow(() => {
+    outcome = parseWithOutcome(entry, newRunBudget());
+  }, '[HTV-1] parseWithOutcome() over the crafted rollout must complete too');
+
+  // Table B row B3's pinned value, source_path excepted (row B2).
+  const pinned = {
+    harness: 'codex',
+    session_id: 'poisoned-text-block',
+    started: '2026-01-01T00:00:00.000Z',
+    cwd: '/tmp/wd-fixture',
+    truncated: false,
+    messages: [{ role: 'assistant', text: '', ts: null }],
+  };
+  assert.deepEqual(withoutSourcePath(bare), pinned, '[HTV-1] parse() returns Table B row B3 exactly — the block declined, the message survived with text: ""');
+  assert.deepEqual(withoutSourcePath(outcome.extract), pinned, '[HTV-1] parseWithOutcome().extract is the same pinned value');
+  assert.deepEqual(outcome.parse, { outcome: 'ok', oversizedRecords: 0, runExhausted: false }, '[HTV-1] the parse outcome is a clean ok, not a quarantine signal');
+});
+
+test('transcripts: [HTV-2] site 1 — a codex message block whose text is not a string is declined (criterion 2)', () => {
+  htvSiteDeclines('[HTV-2]', 'codex', (poison) => [
+    { type: 'session_meta', payload: { id: 's1', timestamp: '2026-01-01T00:00:00.000Z', cwd: '/w' } },
+    {
+      type: 'response_item',
+      payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: poison }, { type: 'output_text', text: 'KEEP1' }] },
+    },
+  ], 'KEEP1', '\n');
+});
+
+test('transcripts: [HTV-3] site 2 — a codex tool-output block whose text is not a string is declined (criterion 2)', () => {
+  htvSiteDeclines('[HTV-3]', 'codex', (poison) => [
+    { type: 'session_meta', payload: { id: 's2', timestamp: '2026-01-01T00:00:00.000Z', cwd: '/w' } },
+    {
+      type: 'response_item',
+      payload: { type: 'custom_tool_call_output', content: [{ type: 'output_text', text: poison }, { type: 'output_text', text: 'KEEP2' }] },
+    },
+  ], 'KEEP2', '\n');
+});
+
+test('transcripts: [HTV-4] site 3 — a claude tool_result block whose text is not a string is declined (criterion 2)', () => {
+  htvSiteDeclines('[HTV-4]', 'claude', (poison) => [
+    {
+      type: 'user',
+      sessionId: 's3',
+      message: { role: 'user', content: [{ type: 'tool_result', content: [{ type: 'text', text: poison }, { type: 'text', text: 'KEEP3' }] }] },
+    },
+  ], 'KEEP3', '\n');
+});
+
+test('transcripts: [HTV-5] site 4 — a claude assistant text block whose text is not a string is declined (criterion 2)', () => {
+  htvSiteDeclines('[HTV-5]', 'claude', (poison) => [
+    { type: 'user', sessionId: 's4', message: { role: 'user', content: 'hi' } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: poison }, { type: 'text', text: 'KEEP4' }] } },
+  ], 'KEEP4', '\n\n');
+});
+
+test('transcripts: [HTV-6] the first law — the default parse is byte-identical to the base, with one named exception (criterion 3)', () => {
+  const repoRoot = path.join(__dirname, '..', '..');
+  const snapshot = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'transcripts', 'parse-baseline.snapshot.json'), 'utf8'));
+  // Table B row B2: source_path depends on how deep the checkout sits.
+  const drop = (v) => JSON.parse(JSON.stringify(v, (k, x) => (k === 'source_path' ? undefined : x)));
+  const EXCEPTION = 'tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl';
+
+  assert.equal(Object.keys(snapshot).length, 17, '[HTV-6] the committed baseline still covers all three corpora');
+  assert.deepEqual(snapshot[EXCEPTION], { threw: 'TypeError' }, '[HTV-6] the committed baseline is BASE-derived — the exception key still carries the pre-change throw');
+
+  for (const key of Object.keys(snapshot)) {
+    const file = path.join(repoRoot, key);
+    assert.ok(fs.existsSync(file), `[HTV-6] the baseline names a fixture that no longer exists: ${key}`);
+    const name = path.basename(key);
+    const entry = { harness: name.startsWith('codex-') ? 'codex' : 'claude', path: file, size: fs.statSync(file).size };
+    let now = null;
+    assert.doesNotThrow(() => {
+      now = { parse: drop(parse(entry)), outcome: drop(parseWithOutcome(entry, newRunBudget())) };
+    }, `[HTV-6] the parse of ${key} must complete`);
+    if (key === EXCEPTION) continue;
+    assert.deepEqual(now, snapshot[key], `[HTV-6] the default parse of ${key} changed — the first law allows exactly one exception, and this is not it`);
+  }
+
+  // Table B row B3's new value, pinned here rather than regenerated into the
+  // committed snapshot, so the one intended difference is visible in this diff.
+  const file = path.join(repoRoot, EXCEPTION);
+  const entry = { harness: 'codex', path: file, size: fs.statSync(file).size };
+  const pinned = {
+    harness: 'codex',
+    session_id: 'poisoned-text-block',
+    started: '2026-01-01T00:00:00.000Z',
+    cwd: '/tmp/wd-fixture',
+    truncated: false,
+    messages: [{ role: 'assistant', text: '', ts: null }],
+  };
+  assert.deepEqual(
+    { parse: drop(parse(entry)), outcome: drop(parseWithOutcome(entry, newRunBudget())) },
+    { parse: pinned, outcome: { extract: pinned, parse: { outcome: 'ok', oversizedRecords: 0, runExhausted: false } } },
+    '[HTV-6] the one exception is exactly Table B row B3'
+  );
+});
+
+test('transcripts: [HTV-7] the default parsers and the primary-dialogue projection now agree (criterion 4)', () => {
+  // One record carrying both a string-valued and a non-string-valued text block.
+  const entry = htvEntry('claude', [
+    { type: 'user', sessionId: 'agree', timestamp: '2026-01-01T00:00:00.000Z', message: { role: 'user', content: 'ask' } },
+    {
+      type: 'assistant',
+      timestamp: '2026-01-01T00:00:01.000Z',
+      // `stop_reason: 'end_turn'` is what makes the projection read this record
+      // at all (its own row A2 rule); without it the comparison below would be
+      // between two empty sets and would prove nothing.
+      message: {
+        role: 'assistant',
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: { toString: null } }, { type: 'text', text: 'AGREED' }, { type: 'text', text: 42 }],
+      },
+    },
+  ]);
+
+  let bare = null;
+  let primary = null;
+  assert.doesNotThrow(() => {
+    bare = parse(entry);
+  }, '[HTV-7] the DEFAULT parse must complete — before this package it threw where the projection declined');
+  assert.doesNotThrow(() => {
+    primary = parsePrimaryWithOutcome(entry, newRunBudget());
+  }, '[HTV-7] the PROJECTION must still complete');
+
+  const defaultAssistant = bare.messages.filter((m) => m.role === 'assistant').map((m) => m.text);
+  const primaryAssistant = primary.extract.messages.filter((m) => m.role === 'assistant').map((m) => m.text);
+  assert.deepEqual(defaultAssistant, ['AGREED'], '[HTV-7] the default parse takes text from the string block and from no other');
+  assert.deepEqual(
+    primaryAssistant,
+    defaultAssistant,
+    '[HTV-7] the two readings of the same record disagree about which blocks contribute text (Table A row A6)'
+  );
 });

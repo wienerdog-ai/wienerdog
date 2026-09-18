@@ -1,7 +1,7 @@
 ---
 id: WP-transcript-parsers-harden-text-values
 title: Make the default transcript parsers decline a non-string text value instead of throwing or inventing dialogue
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-dream-collect-parse-throw-quarantine]

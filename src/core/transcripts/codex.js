@@ -77,7 +77,7 @@ const TOOL_OUTPUT_TYPES = new Set([
 function extractMessageText(payload) {
   const content = Array.isArray(payload.content) ? payload.content : [];
   return content
-    .filter((block) => block && (block.type === 'input_text' || block.type === 'output_text'))
+    .filter((block) => block && (block.type === 'input_text' || block.type === 'output_text') && typeof block.text === 'string')
     .map((block) => block.text)
     .join('\n');
 }
@@ -90,7 +90,7 @@ function extractToolOutputText(payload) {
   if (payload.output && typeof payload.output.content === 'string') return payload.output.content; // FunctionCallOutputPayload struct
   if (Array.isArray(payload.content)) {                                             // observed custom_tool_call_output 0.144.x
     return payload.content
-      .filter((block) => block && (block.type === 'input_text' || block.type === 'output_text'))
+      .filter((block) => block && (block.type === 'input_text' || block.type === 'output_text') && typeof block.text === 'string')
       .map((block) => block.text)
       .join('\n');
   }
