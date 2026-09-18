@@ -122,5 +122,33 @@ rows each defers to, so the class cannot go unregistered again.
 **Declaration count after round 4:** nine declarations over eight criteria; six
 carry a pre-measurable anchor, three mutate code this package authors.
 
+## Round 5 — Astra, 2026-09-18
+
+- **Reviewed tip:** `9a8dd2ea`, against base `5b77865f`.
+- **Raw:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r5-astra-raw.json`
+- **Focus:** `docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-r5-astra-focus.txt`
+- **Committed before adjudication at:** `59064c78`
+- **Verdict:** `needs-attention` — *"the blanket no-throw requirement breaks
+  uninstall recovery after cleanup failures."*
+- **Held from round 4:** **X12** was **not** re-opened.
+- **Notable:** the first finding of this gate to land on the spec's **Implementation
+  notes** rather than on a contract table — which is itself the lesson, because a
+  table row gets swept for mirrors and a prose bullet did not.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| **R5-1** | **Preserve error propagation for failed mechanics deletion.** The Implementation note *"`disposeCoreMechanics` must never throw"* (`:709-713`), implemented literally, **swallows an `EPERM` removing `secrets/`**. The cited guarantee — *"never let this final cosmetic step crash the uninstall"* (`manifest.js:1163`) — applies **only** to the empty-core removal; the ordinary recursive deletion at `:1148` is **not** wrapped and propagates today. After the disposer returns, `uninstall.js` deletes the manifest and then `config.yaml` (`:423-462`), so a swallowed failure **leaves a live OAuth credential on disk** *and* makes the retry refuse with *"no install manifest found"*. The shipped mid-sweep recovery test relies on propagation, and the note also contradicted this spec's own requirement that non-quarantine disposal be unchanged | A | HEAVY (high, conf. 0.99) | **ACCEPTED IN FULL, and the blanket claim is WITHDRAWN rather than softened.** New canonical **Table X row X13**: *the disposer's no-throw promise covers the shelf and the empty-core step only.* **Caught and reported:** every shelf-specific outcome of **X1** step 3 — an `lstat` failure or non-directory level (**X10**/**X11**), an `ENOTEMPTY`/`EEXIST`, **X12**'s fold ambiguity — each preserved and reported in `preservedQuarantine`; plus the **pre-existing** empty-core `try/catch`, unchanged. **Still throws, byte-for-byte as at `5b77865f`:** a failure enumerating `paths.state`, any **X1** step 2 `fs.rmSync` on a non-shelf child, and the recursive `rmSync` over `logs/`, `schedules/` and `secrets/`. **The asymmetry is stated as the reason, not left implicit:** preserving at a shelf level can only leave *more of the user's own text* alive, disclosed via `preservedQuarantine` and **W8**; swallowing a mechanics failure leaves a *credential* alive and destroys the retry — and ADR-0019's Decision (`:47-50`) already says why `secrets/` must go. **Table K row K4's deleter arm was narrowed in the same pass** to "at a shelf level only", since it was the row the blanket note leaned on. New **Table Y row Y10**; new **acceptance criterion 16** (injected `EPERM` on `secrets/` ⇒ throws, manifest **and** config still present by existence *and* content, retry succeeds once cleared; plus the `paths.state` enumeration arm and, in the same run, a shelf-level `ENOTEMPTY` that does **not** throw, so the criterion measures the **boundary** rather than one side of it); RED-proof criterion moved **16 → 17**; new RED proof **`quse-mechanics-failure-swallowed`** anchored on `const mechanics = [` (**1** at `5b77865f`), whose mutation is exactly what a literal reading of the withdrawn note would have produced |
+
+**Blanket-phrase re-scan, run as instructed.** `never throw` / `no-throw` /
+`never throws` / `crash the uninstall` across the whole spec: four remaining
+occurrences, all correct — `quarantineInventory`'s own never-throws contract (it
+reports into `unreadable` instead), the Current-state quotation of the shipped
+`:1163` comment, and the two scoped statements in **X13** and the corrected
+Implementation note. A new **Security-checklist propagation bullet** was added and
+registered in the mirror class created at round 4.
+
+**Declaration count after round 5:** ten declarations over nine criteria; seven
+carry a pre-measurable anchor, three mutate code this package authors.
+
 **One confirming round remains.** The gate closes on a clean or LIGHT-only return
 (`docs/runbooks/codex-review.md`, "Weighted closure").
