@@ -210,12 +210,12 @@ function recognizeScheduleBasename(basename)
  * @param {Manifest} manifest
  * @param {{platform?:NodeJS.Platform, schedulerRoots?:string[],
  *          vaultPath?:string|null}} [opts]
- * @returns {{schedules: Array<{path:string, remove:boolean, ownedByScheduler:boolean}>,
+ * @returns {{schedules: Array<{path:string, real:string, remove:boolean}>,
  *            unreadable: Array<{root:string, code:string}>,
  *            skippedForVault: string[]}}
  *   `schedules` — absolute paths, sorted lexicographically, deduplicated, each
- *     carrying D11's `remove` permission and round 11 ruling R-A's
- *     `ownedByScheduler`.
+ *     carrying D11's `remove` permission and ruling R-C′'s `real` (the
+ *     D15-resolved path as at discovery time).
  *   `unreadable` — roots that exist but could not be enumerated (D9); a
  *     non-empty array MUST abort a non-dry-run uninstall before any disclosure.
  *   `skippedForVault` — candidates excluded by D12, disclosed not deleted.
@@ -224,7 +224,7 @@ function discoverSchedulesOnDisk(paths, manifest, opts)
 
 // src/core/manifest.js — CHANGED.
 /** @param {{dryRun?: boolean,
- *            discoveredSchedules?: Array<{path:string, remove:boolean, ownedByScheduler:boolean}>}} [opts]
+ *            discoveredSchedules?: Array<{path:string, real:string, remove:boolean}>}} [opts]
  *  `discoveredSchedules` defaults to `[]` — every caller that does not pass it
  *  behaves exactly as today. Each item carries the path AND the deletion
  *  permission Table D row D11 decided at discovery time, so `reverse()` never
@@ -248,9 +248,9 @@ schema-valid `{kind:'file'}` entry for `ai.wienerdog.digest.plist`, with
 ```
 discoverSchedulesOnDisk(...)  →  {
   schedules: [
-    { path: '…/ai.wienerdog.catchup.plist', remove: true,  ownedByScheduler: false },
-    { path: '…/ai.wienerdog.digest.plist',  remove: false, ownedByScheduler: false },
-    { path: '…/ai.wienerdog.dream.plist',   remove: false, ownedByScheduler: true  },
+    { path: '…/ai.wienerdog.catchup.plist', real: '…', remove: true  },
+    { path: '…/ai.wienerdog.digest.plist',  real: '…', remove: false },
+    { path: '…/ai.wienerdog.dream.plist',   real: '…', remove: false },
   ],
   unreadable: [], skippedForVault: [],
 }
@@ -275,14 +275,17 @@ Scheduled jobs found on disk:
   keep /tmp/h/Library/LaunchAgents/ai.wienerdog.digest.plist (another manifest entry owns this file)
     This scheduled job will start again the next time you log in, until you delete that file yourself.
   would run: launchctl bootout gui/501/ai.wienerdog.dream
-  keep /tmp/h/Library/LaunchAgents/ai.wienerdog.dream.plist (another manifest entry owns this file)
+  removed by its own manifest entry (listed above)
 ```
 
-`digest` carries R9's warning and `dream` does not: round 11 ruling R-A scopes
-that line to a plist whose owning record is **not** a `scheduler-entry`. Under
-ruling R-B `catchup`'s `remove` line appears **only** here — it is subtracted
-from the manifest-derived `remove` lines and from the `--dry-run` headline
-count.
+Under ruling **R-B′** each line is decided from the plan itself, not from an
+ownership flag. `dream`'s `scheduler-entry` reverser deletes the plist, so the
+plan already lists it above and the block points at that line. `digest`'s
+`{kind:'file'}` record does **not** delete it — `~/Library/LaunchAgents` is
+outside `withinAllowedRoot`'s root set — so it is kept and carries R9's warning.
+`catchup`'s `remove` line appears **only** here: it is phase D5b's own deletion,
+and it is the one class subtracted from the manifest-derived `remove` lines and
+from the `--dry-run` headline count.
 
 `dream`'s `would run:` line appears **twice** in the whole plan — once here and
 once from its `scheduler-entry` — which D3 and D13 cover.
@@ -436,38 +439,42 @@ new mirror found in review is added here on the spot (register-new-mirrors):
 These are **architect rulings** made on the PR-#308 review round. Nothing here
 records the owner approving, accepting, ratifying or signing anything.
 
-**R-A (D3/R9 scope collision → D3 narrows; R9 unchanged).** R9's residual exists
-only when the record that owns the kept plist is NOT a `scheduler-entry`: a
-`scheduler-entry`'s own reverser removes the file (`manifest.js:543`), so for
-such a plist the warning would be false, and on a normal macOS install every job
-has one. Discovery items therefore carry a third field:
-`{path, remove, ownedByScheduler}`, where `ownedByScheduler` is true iff a
-`validateEntry`-accepted entry of kind `scheduler-entry` names the path
-(lexically or after D15 resolution — the same equality D11 already uses for
-`remove`). The plan prints R9's plain-language warning after a `keep` line only
-when `ownedByScheduler` is false. Phase D5b's stderr notice on an unreadable skip
-is a different site and keeps its warning unconditionally: there the file is
-being left standalone by this run.
+**R-B′ (amended at round 2 of the PR gate — REPLACES R-A and R-B).** The
+manifest-derived `remove` lines and the `--dry-run` headline exclude only the
+paths the disk block itself discloses with a `remove` line — items with
+`remove === true` under `unload-and-remove` (phase D5b's own deletions). A
+`remove:false` item's fate belongs to its owning record's reverser, and that
+reverser's own line stays. For a `remove:false` item the disk block prints, after
+`would run:`, ONE of: `removed by its own manifest entry (listed above)` when the
+dry-run `reverse()` reports the path in `removed`; otherwise
+`keep <path> (another manifest entry owns this file)` followed by R9's
+plain-language warning when the basename recognizes as launchd. Decided from the
+same plan the user is shown, so a record naming a symlink alias (alias unlinked,
+target survives) warns correctly without any ownership flag. Every discovered
+path appears in the plan exactly once, and the sum of what the plan says will be
+removed equals what the run removes.
 
-**R-B (D3 headline vs `reverse()` `@returns` → both hold, at different layers).**
-`reverse().removed` is the post-action record and includes every D5b deletion
-(the `@returns` governs). The pre-confirm plan and the `--dry-run` output are
-disclosure, and a discovered path is disclosed exactly once — in the
-`Scheduled jobs found on disk:` block. `uninstall.js` therefore excludes the
-discovered set's paths from the manifest-derived `remove` lines and from the
-`--dry-run` headline count, which keeps that count independent of R4's cell as D3
-requires. No path appears twice in the plan.
+*Why R-A and R-B were withdrawn:* R-B as first written excluded EVERY discovered
+path from the manifest-derived `remove` lines, including a `remove:false` plist
+whose owning `scheduler-entry` reverser deletes it — measured, one
+`scheduler-entry` with its plist present gave `--dry-run: 0 item(s) would be
+removed` plus a `keep …dream.plist` line, while `--yes` removed it. The plan
+under-stated a deletion on every normal macOS install. R-A's `ownedByScheduler`
+flag is gone with it: ownership for the warning is read off the plan, not from a
+flag.
 
-**R-C (act-time re-check — D6/D1/D15/S1/S2, closes Astra P1 and F1).** Phase D5b
-re-checks each item before removal, in this order: `fs.lstatSync(item.path)` must
-report a regular file (not a symlink, not a directory); D15 resolution must
-SUCCEED; the resolved path must be contained in one of this run's discovery roots
-(D14). Absent (`ENOENT`/`ENOTDIR`) = skip silently. Any other outcome —
-unreadable, non-regular, external — = skip with the
-`wienerdog: keeping <path> — …` notice, plus R9's warning where the basename
-recognizes as launchd. The removal is `fs.rmSync(item.path, {force:true})` on the
-DISCLOSED path, never on the resolved one. The unload (D5a) stays unconditional;
-removal stays a subset of the disclosed set (D7).
+**R-C′ (amended at round 2 of the PR gate — REPLACES R-C's containment
+re-check with identity).** Re-asserting *containment* at act time re-derives the
+roots, and a root swapped for a symlink into the vault re-derives as contained
+(the vault is inside HOME). The act-time check must instead assert **identity
+with what was disclosed**: each discovery item carries `real` — its D15-resolved
+path at discovery time — and phase D5b removes only when `lstat` reports a
+regular file, D15 resolution succeeds, and `res.real === item.real`. Any other
+outcome skips with the notice (+R9 where launchd). Identity implies
+discovery-time containment and discovery-time vault exclusion in one comparison,
+and closes every swap class (final-component symlink, parent or root swapped,
+hardlink to elsewhere) without re-deriving anything. Item shape becomes
+`{path, real, remove}`.
 
 **R-D (D8 wording).** D8's "prints and removes nothing, exactly as
 `reverseSchedulerEntry:526-527` behaves" reads: "prints nothing (D3 owns the

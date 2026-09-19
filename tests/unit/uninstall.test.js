@@ -1499,32 +1499,9 @@ function planText(env) {
   }
 }
 
-test('WP-scheduler-replay AC10: a plist owned by a NON-scheduler record is disclosed as `keep` WITH R9\'s warning', (t) => {
-  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
-  const S = 'SRM-10-keep-line-carries-the-login-warning';
-  const manifestLib = require('../../src/core/manifest');
-  const { env, la, addEntries } = schedInstall();
-  const [plist] = plantSchedules(la, ['ai.wienerdog.dream.plist']);
-  addEntries([{ kind: 'file', path: plist }]);
-  const out = planText(env);
-  assert.ok(out.includes(`keep ${plist} (another manifest entry owns this file)`), `${S}: the plan carries the keep line — ${out}`);
-  assert.ok(out.includes(manifestLib.R9_LOGIN_RELOAD_WARNING), `${S}: and R9's plain-language login warning`);
-  assert.ok(out.includes(`would run: ${bootout('ai.wienerdog.dream').join(' ')}`), `${S}: and still discloses the unload`);
-  assert.equal(fs.existsSync(plist), true, `${S}: declining deletes nothing`);
-});
 
-test('WP-scheduler-replay AC10 / round-11 R-A: a plist owned by a SCHEDULER-ENTRY is `keep` with NO warning', (t) => {
-  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
-  const S = 'SRM-10b-scheduler-entry-keep-has-no-warning';
-  const manifestLib = require('../../src/core/manifest');
-  const { env, la, addEntries } = schedInstall();
-  const [plist] = plantSchedules(la, ['ai.wienerdog.dream.plist']);
-  addEntries([{ kind: 'scheduler-entry', path: plist }]);
-  const out = planText(env);
-  assert.ok(out.includes(`keep ${plist} (another manifest entry owns this file)`), `${S}: the plan carries the keep line — ${out}`);
-  assert.ok(!out.includes(manifestLib.R9_LOGIN_RELOAD_WARNING),
-    `${S}: R9 does not apply: the scheduler-entry's own reverser removes the file, so the warning would be false`);
-});
+
+
 
 test('WP-scheduler-replay AC11 disclosure: a vault-resident candidate gets its own line naming the vault', (t) => {
   if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
@@ -1539,22 +1516,77 @@ test('WP-scheduler-replay AC11 disclosure: a vault-resident candidate gets its o
   assert.equal(fs.existsSync(notes), true, `${S}: and is not deleted`);
 });
 
-test('WP-scheduler-replay round-11 R-B: a discovered path is disclosed EXACTLY once, and the headline excludes it', (t) => {
+
+
+test('WP-scheduler-replay AC10 / round-2 R-B′: every discovered path is disclosed ONCE, in the vocabulary its fate warrants', (t) => {
   if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
-  const S = 'SRM-RB-disclosed-exactly-once';
-  const { env, la } = schedInstall();
-  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+  const S = 'SRM-10-plan-vocabulary-matches-the-fate';
+  const manifestLib = require('../../src/core/manifest');
+  const { core, env, la, addEntries } = schedInstall();
+  // F5's four-item corpus: one of each fate the block has a line for.
+  const [orphan, byScheduler, byFile, aliasTarget] = plantSchedules(la, [
+    'ai.wienerdog.orphan.plist',   // unrecorded            → remove
+    'ai.wienerdog.dream.plist',    // scheduler-entry        → removed by its own entry
+    'ai.wienerdog.digest.plist',   // {kind:'file'} entry    → keep + warning (outside allowed roots)
+    'ai.wienerdog.weekly.plist',   // scheduler-entry ALIAS  → keep + warning (alias unlinked, plist survives)
+  ]);
+  const alias = path.join(la, 'ai.wienerdog.alias.plist');
+  fs.symlinkSync(aliasTarget, alias);
+  addEntries([
+    { kind: 'scheduler-entry', path: byScheduler },
+    { kind: 'file', path: byFile },
+    { kind: 'scheduler-entry', path: alias },
+  ]);
+
   const out = planText(env);
-  const removeLines = out.split('\n').filter((l) => l.trim() === `remove ${orphan}`);
-  assert.equal(removeLines.length, 1, `${S}: exactly one remove line for the discovered path — ${out}`);
-  const blockAt = out.indexOf('Scheduled jobs found on disk:');
-  assert.ok(blockAt >= 0 && out.indexOf(`remove ${orphan}`) > blockAt, `${S}: and it is the one inside the block`);
+  const lines = out.split('\n').map((l) => l.trimEnd());
+  const once = (needle) => lines.filter((l) => l.trim() === needle).length;
+  assert.equal(once(`remove ${orphan}`), 1, `${S}: the unrecorded orphan is disclosed once, as a removal — ${out}`);
+  assert.equal(once(`remove ${byScheduler}`), 1,
+    `${S}: its OWN reverser's manifest-derived line stays — R-B\u2032 excludes only the block's own removals`);
+  assert.ok(lines.some((l) => l.trim() === 'removed by its own manifest entry (listed above)'),
+    `${S}: the scheduler-entry-owned plist is disclosed as removed by its own entry — ${out}`);
+  assert.equal(once(`keep ${byFile} (another manifest entry owns this file)`), 1,
+    `${S}: the file-record-owned plist is kept`);
+  assert.equal(once(`keep ${aliasTarget} (another manifest entry owns this file)`), 1,
+    `${S}: so is the alias's TARGET — its record unlinks the alias, not the plist`);
+  const warnings = lines.filter((l) => l.trim() === manifestLib.R9_LOGIN_RELOAD_WARNING).length;
+  assert.equal(warnings, 2, `${S}: exactly the two surviving reloadable plists carry R9's warning — ${out}`);
 
   const dry = run(['uninstall', '--dry-run'], env);
   assert.equal(dry.status, 0, `${S}: --dry-run exits 0 — ${dry.stderr}`);
+  assert.ok(dry.stdout.includes(`remove ${orphan}`), `${S}: --dry-run carries the same block`);
+
+  // Every path a `remove` line named is gone afterwards, and every path a `keep`
+  // line named survives — the plan's promise, checked against the fate.
+  const promisedGone = lines
+    .map((l) => /^\s*remove (\/\S+?)(?: \(.*\))?$/.exec(l))
+    .filter(Boolean).map((m) => m[1]);
+  assert.ok(promisedGone.includes(orphan), `${S}: the block's removal is among the promises`);
+
+  const r = runUninstallCli(['uninstall', '--yes'], env);
+  assert.equal(r.status, 0, `${S}: the uninstall completed — ${r.stderr}`);
+  assert.equal(fs.existsSync(orphan), false, `${S}: the removal the block promised happened`);
+  assert.equal(fs.existsSync(byScheduler), false, `${S}: the scheduler-entry's own reverser removed its plist, as the plan said`);
+  assert.equal(fs.existsSync(byFile), true, `${S}: the kept plist survives, as the plan said`);
+  assert.equal(fs.existsSync(aliasTarget), true, `${S}: and so does the alias's target`);
+  assert.equal(fs.existsSync(alias), false, `${S}: while the alias the record named is gone`);
+  const stillThere = promisedGone.filter((p2) => fs.existsSync(p2));
+  assert.deepEqual(stillThere, [], `${S}: everything the plan promised to remove is gone — ${r.stdout}`);
+  assert.equal(fs.existsSync(core), false, `${S}: the kept plists sit outside the core, which is swept either way`);
+});
+
+test('WP-scheduler-replay round-2 R-B′: the --dry-run headline is independent of the block’s own removals', (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-RB-headline-excludes-the-blocks-removals';
+  const { env, la } = schedInstall();
+  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+  const dry = run(['uninstall', '--dry-run'], env);
+  assert.equal(dry.status, 0, `${S}: --dry-run exits 0 — ${dry.stderr}`);
   const withOrphan = Number(/--dry-run: (\d+) item\(s\)/.exec(dry.stdout)[1]);
+  const removeLines = dry.stdout.split('\n').filter((l) => l.trim() === `remove ${orphan}`);
+  assert.equal(removeLines.length, 1, `${S}: disclosed exactly once, in the block — ${dry.stdout}`);
   fs.rmSync(orphan);
-  const dry2 = run(['uninstall', '--dry-run'], env);
-  const without = Number(/--dry-run: (\d+) item\(s\)/.exec(dry2.stdout)[1]);
-  assert.equal(withOrphan, without, `${S}: the headline count is independent of the discovered set (R4-cell independent)`);
+  const without = Number(/--dry-run: (\d+) item\(s\)/.exec(run(['uninstall', '--dry-run'], env).stdout)[1]);
+  assert.equal(withOrphan, without, `${S}: the count does not move with the discovered set (R4-cell independent)`);
 });

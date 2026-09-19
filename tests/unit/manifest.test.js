@@ -2374,6 +2374,11 @@ function captureStderrText(fn) {
   return out;
 }
 
+/** A discovery item without its `real` field — realpath's /private prefix on
+ *  darwin makes the canonical path unreadable in a literal expectation, and each
+ *  test that cares asserts `real` on its own. @param {any} it */
+const shape = (it) => ({ path: it.path, remove: it.remove });
+
 /** A temp install plus its LaunchAgents dir. */
 function schedFixture() {
   const paths = tempPaths();
@@ -2395,11 +2400,14 @@ test('D1/D10/D11/R2 discovery: every recognized file is found, the manifest only
   manifestLib.record(manifest, { kind: 'file', path: digest });
 
   const res = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(res.schedules, [
-    { path: catchup, remove: true, ownedByScheduler: false },
-    { path: digest, remove: false, ownedByScheduler: false },
-    { path: dream, remove: false, ownedByScheduler: true },
+  assert.deepEqual(res.schedules.map(shape), [
+    { path: catchup, remove: true },
+    { path: digest, remove: false },
+    { path: dream, remove: false },
   ], 'all three recognized files discovered; only `remove` reflects the ledger');
+  for (const item of res.schedules) {
+    assert.equal(item.real, fs.realpathSync(item.path), 'R-C\u2032: each item carries its discovery-time resolved path');
+  }
   assert.deepEqual(res.unreadable, []);
   assert.deepEqual(res.skippedForVault, []);
 });
@@ -2519,7 +2527,7 @@ test('D14/S11: only roots inside THIS run\'s home or core are discovery roots �
   const insideTimer = path.join(insideUnits, 'wienerdog-dream.timer');
   fs.writeFileSync(insideTimer, 'x');
   const inside = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(inside.schedules, [{ path: insideTimer, remove: true, ownedByScheduler: false }]);
+  assert.deepEqual(inside.schedules.map(shape), [{ path: insideTimer, remove: true }]);
 });
 
 test('D5/S9 (criterion 12): a win32 XML deleted by a `file` record during the loop is STILL unloaded — phase D5a runs first', () => {
@@ -2532,7 +2540,7 @@ test('D5/S9 (criterion 12): a win32 XML deleted by a `file` record during the lo
   // root set, so the file reverser really does remove it mid-loop.
   manifestLib.record(manifest, { kind: 'file', path: xml });
   const discovered = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(discovered.schedules, [{ path: xml, remove: false, ownedByScheduler: false }], 'discovered, with its removal withheld (D11)');
+  assert.deepEqual(discovered.schedules.map(shape), [{ path: xml, remove: false }], 'discovered, with its removal withheld (D11)');
 
   const calls = countingSpawn((c) => {
     withDerivedPlatform('win32', () => {
@@ -2587,7 +2595,7 @@ test('D15/R9 (criterion 17, act time): an EIO in phase D5b leaves the file, prin
   const plist = path.join(la, 'ai.wienerdog.dream.plist');
   fs.writeFileSync(plist, 'x');
   const discovered = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(discovered.schedules, [{ path: plist, remove: true, ownedByScheduler: false }]);
+  assert.deepEqual(discovered.schedules.map(shape), [{ path: plist, remove: true }]);
   let res;
   const err = captureStderrText(() => {
     countingSpawn((calls) => {
@@ -2597,7 +2605,7 @@ test('D15/R9 (criterion 17, act time): an EIO in phase D5b leaves the file, prin
     });
   });
   assert.equal(fs.existsSync(plist), true, 'the file stays on disk');
-  assert.match(err, /could not be checked before removal \(EIO\)/);
+  assert.match(err, /it is no longer the file that was shown to you \(EIO\)/);
   assert.ok(err.includes(manifestLib.R9_LOGIN_RELOAD_WARNING), 'a preserved launchd plist carries R9\'s plain-language warning');
   assert.equal(res.removed.includes(plist), false);
 });
@@ -2664,17 +2672,42 @@ test('D13 (criterion 14): a recorded job is unloaded TWICE and a non-zero second
   assert.ok(res.removed.includes(paths.config) || res.deferredConfig, 'the rest of the replay ran');
 });
 
-test('D4 (criterion 6): reverse() without `discoveredSchedules` discovers nothing, spawns nothing, and returns an empty list', () => {
+test('D4 (criterion 6): reverse() without `discoveredSchedules` discovers nothing, spawns nothing, and adds ZERO fs calls', () => {
   const { paths, manifest, la } = schedFixture();
   fs.writeFileSync(path.join(la, 'ai.wienerdog.orphan.plist'), 'x');
+
+  /** Count every fs call the widened machinery could make, and record their args. */
+  const instrument = (fn) => {
+    const orig = {
+      realpathSync: fs.realpathSync, lstatSync: fs.lstatSync, readdirSync: fs.readdirSync,
+    };
+    /** @type {string[]} */ const seen = [];
+    fs.realpathSync = Object.assign((p2, ...r) => { seen.push(`realpath:${p2}`); return orig.realpathSync(p2, ...r); }, { native: orig.realpathSync.native });
+    fs.lstatSync = (p2, ...r) => { seen.push(`lstat:${p2}`); return orig.lstatSync(p2, ...r); };
+    fs.readdirSync = (p2, ...r) => { seen.push(`readdir:${p2}`); return orig.readdirSync(p2, ...r); };
+    try {
+      fn();
+    } finally {
+      Object.assign(fs, orig);
+    }
+    return seen;
+  };
+
   const res = countingSpawn((calls) => {
-    const r = withHome(paths.home, () => manifestLib.reverse(paths, manifest, { dryRun: true }));
+    let r;
+    const omitted = instrument(() => { r = withHome(paths.home, () => manifestLib.reverse(paths, manifest, { dryRun: true })); });
+    const explicit = instrument(() => withHome(paths.home, () => manifestLib.reverse(paths, manifest, { dryRun: true, discoveredSchedules: [] })));
     assert.equal(calls.length, 0, 'no spawn and no discovery when the option is absent');
+    assert.deepEqual(omitted, explicit, 'passing the empty list is byte-identical to omitting it — the widened pass adds no I/O');
+    assert.deepEqual(omitted.filter((c) => c.includes('Library/LaunchAgents')), [],
+      'and nothing under a scheduler root is ever touched');
+    assert.deepEqual(omitted.filter((c) => c.startsWith('readdir:') && c.includes('systemd')), []);
     return r;
   });
   assert.deepEqual(res.discoveredSchedules, []);
   assert.equal(fs.existsSync(path.join(la, 'ai.wienerdog.orphan.plist')), true);
 });
+
 
 test('D8: in dry-run the widened pass removes nothing and spawns nothing', () => {
   const { paths, manifest, la } = schedFixture();
@@ -2693,7 +2726,7 @@ test('R4 (criterion 4): the disposition is observable and exclusive — an unrec
   const orphan = path.join(la, 'ai.wienerdog.orphan.plist');
   fs.writeFileSync(orphan, 'x');
   const discovered = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(discovered.schedules, [{ path: orphan, remove: true, ownedByScheduler: false }]);
+  assert.deepEqual(discovered.schedules.map(shape), [{ path: orphan, remove: true }]);
   const res = countingSpawn(() =>
     withHome(paths.home, () => manifestLib.reverse(paths, manifest, { discoveredSchedules: discovered.schedules })));
   assert.equal(manifestLib.DISCOVERED_DISPOSITION, 'unload-and-remove', 'Table R row R4\'s cell as shipped');
@@ -2707,7 +2740,7 @@ test('criterion 10: a plist named ONLY by a non-scheduler record is discovered a
   fs.writeFileSync(plist, 'x');
   manifestLib.record(manifest, { kind: 'file', path: plist }); // ~/Library/LaunchAgents is outside withinAllowedRoot
   const discovered = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(discovered.schedules, [{ path: plist, remove: false, ownedByScheduler: false }]);
+  assert.deepEqual(discovered.schedules.map(shape), [{ path: plist, remove: false }]);
   const res = countingSpawn((calls) => {
     const r = withHome(paths.home, () => manifestLib.reverse(paths, manifest, { discoveredSchedules: discovered.schedules }));
     if (process.platform === 'darwin') {
@@ -2762,7 +2795,7 @@ test('D6/D15/S1/S2 act time: a disclosed file SWAPPED for a symlink out of the r
   const plist = path.join(la, 'ai.wienerdog.orphan.plist');
   fs.writeFileSync(plist, 'x');
   const discovered = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(discovered.schedules, [{ path: plist, remove: true, ownedByScheduler: false }], 'a regular file was disclosed');
+  assert.deepEqual(discovered.schedules.map(shape), [{ path: plist, remove: true }], 'a regular file was disclosed');
 
   // The confirmation-prompt window: a same-user process replaces the disclosed
   // regular file with a symlink to a treasure outside every scheduler root.
@@ -2782,7 +2815,7 @@ test('D6/D15/S1/S2 act time: a disclosed file SWAPPED for a symlink out of the r
   });
   assert.equal(fs.existsSync(victim), true, 'the symlink TARGET survives — the swap was never followed');
   assert.deepEqual(fs.readFileSync(victim, 'utf8'), 'someone else\'s file\n', 'byte-identical');
-  assert.match(err, /keeping .* — it is no longer a regular file \(refusing to follow it\)/);
+  assert.match(err, /keeping .* — it is no longer the file that was shown to you \(not a regular file\)/);
   assert.equal(res.removed.includes(plist), false, 'the removal is skipped, so it stays a subset of the disclosed set');
 });
 
@@ -2792,9 +2825,9 @@ test('D6/D15/S1 act time: a disclosed path that now resolves OUTSIDE every disco
   const plist = path.join(la, 'ai.wienerdog.dream.plist');
   fs.writeFileSync(plist, 'x');
   const discovered = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(discovered.schedules, [{ path: plist, remove: true, ownedByScheduler: false }]);
+  assert.deepEqual(discovered.schedules.map(shape), [{ path: plist, remove: true }]);
 
-  // Resolution SUCCEEDS but lands outside the roots — the containment half of
+  // Resolution SUCCEEDS but no longer to the file that was disclosed — the containment half of
   // the act-time rule, distinct from the "no longer a regular file" half.
   const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-elsewhere-')));
   let res;
@@ -2815,7 +2848,7 @@ test('D6/D15/S1 act time: a disclosed path that now resolves OUTSIDE every disco
     });
   });
   assert.equal(fs.existsSync(plist), true, 'nothing outside the roots is deleted, and the named file is kept');
-  assert.match(err, /keeping .* — it now resolves outside every Wienerdog scheduler folder/);
+  assert.match(err, /keeping .* — it is no longer the file that was shown to you/);
   assert.ok(err.includes(manifestLib.R9_LOGIN_RELOAD_WARNING), 'a preserved launchd plist carries R9\'s warning');
   assert.equal(res.removed.includes(plist), false);
 });
@@ -2839,7 +2872,7 @@ test('D6/D15/S1 act time: a disclosed file SWAPPED for a directory is kept — t
     });
   });
   assert.equal(fs.existsSync(path.join(plist, 'inside.txt')), true, 'the directory and its contents survive');
-  assert.match(err, /keeping .* — it is no longer a regular file \(refusing to follow it\)/);
+  assert.match(err, /keeping .* — it is no longer the file that was shown to you \(not a regular file\)/);
   assert.equal(res.removed.includes(plist), false);
   assert.ok(res.removed.length > 0, 'and the rest of the replay completed rather than throwing');
 });
@@ -2851,7 +2884,7 @@ test('AC1 linux arm: a discovered, unrecorded timer reaches the chokepoint with 
   const timer = path.join(units, 'wienerdog-dream.timer');
   fs.writeFileSync(timer, '[Timer]\n');
   const discovered = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(discovered.schedules, [{ path: timer, remove: true, ownedByScheduler: false }]);
+  assert.deepEqual(discovered.schedules.map(shape), [{ path: timer, remove: true }]);
   const calls = countingSpawn((c) => {
     withDerivedPlatform('linux', () => withHome(paths.home, () =>
       manifestLib.reverse(paths, manifest, { discoveredSchedules: discovered.schedules })));
@@ -2862,18 +2895,93 @@ test('AC1 linux arm: a discovered, unrecorded timer reaches the chokepoint with 
   assert.equal(fs.existsSync(timer), false, 'and the unit file is disposed of per Table R row R4');
 });
 
-test('R-A (round 11): `ownedByScheduler` is true only for a scheduler-entry record', () => {
+
+
+test('R-C′ (round 2): a scheduler ROOT swapped for a symlink INTO THE VAULT never deletes the vault file', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
   const { paths, manifest, la } = schedFixture();
-  const byScheduler = path.join(la, 'ai.wienerdog.dream.plist');
-  const byFile = path.join(la, 'ai.wienerdog.digest.plist');
-  const unowned = path.join(la, 'ai.wienerdog.catchup.plist');
-  for (const p of [byScheduler, byFile, unowned]) fs.writeFileSync(p, 'x');
-  manifestLib.record(manifest, { kind: 'scheduler-entry', path: byScheduler });
-  manifestLib.record(manifest, { kind: 'file', path: byFile });
-  const res = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
-  assert.deepEqual(res.schedules, [
-    { path: unowned, remove: true, ownedByScheduler: false },
-    { path: byFile, remove: false, ownedByScheduler: false },
-    { path: byScheduler, remove: false, ownedByScheduler: true },
-  ]);
+  const plist = path.join(la, 'ai.wienerdog.orphan.plist');
+  fs.writeFileSync(plist, 'the real schedule\n');
+  const discovered = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
+  assert.deepEqual(discovered.schedules.map(shape), [{ path: plist, remove: true }]);
+
+  // The confirmation-prompt window: the ROOT becomes a symlink into the vault,
+  // which sits inside HOME — so a re-derived CONTAINMENT check still says yes,
+  // and the vault's same-named file would be the one deleted. R-C-prime's
+  // identity comparison is what refuses it.
+  const vault = path.join(paths.home, 'my-vault');
+  fs.mkdirSync(vault, { recursive: true });
+  const treasure = path.join(vault, 'ai.wienerdog.orphan.plist');
+  fs.writeFileSync(treasure, 'my notes\n');
+  fs.rmSync(la, { recursive: true, force: true });
+  fs.symlinkSync(vault, la);
+
+  let res;
+  const err = captureStderrText(() => {
+    countingSpawn((calls) => {
+      res = withDerivedPlatform('darwin', () => withHome(paths.home, () =>
+        manifestLib.reverse(paths, manifest, { discoveredSchedules: discovered.schedules })));
+      assert.deepEqual(calls, [['launchctl', 'bootout', `gui/${process.getuid()}/ai.wienerdog.orphan`]],
+        'the unload is unconditional and still happened (D6)');
+    });
+  });
+  assert.equal(fs.existsSync(treasure), true, 'the vault file survives the root swap');
+  assert.equal(fs.readFileSync(treasure, 'utf8'), 'my notes\n', 'byte-identical');
+  assert.match(err, /keeping .* — it is no longer the file that was shown to you/);
+  assert.equal(res.removed.includes(plist), false);
 });
+
+test('R-C′ (round 2): a swapped PARENT directory is refused by the same identity check', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const { paths, manifest, la } = schedFixture();
+  const plist = path.join(la, 'ai.wienerdog.orphan.plist');
+  fs.writeFileSync(plist, 'x');
+  const discovered = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
+  assert.equal(discovered.schedules.length, 1);
+
+  // Same basename, same containment, DIFFERENT file object behind the parent.
+  const decoy = path.join(paths.home, 'Library', 'decoy');
+  fs.mkdirSync(decoy, { recursive: true });
+  const other = path.join(decoy, 'ai.wienerdog.orphan.plist');
+  fs.writeFileSync(other, 'not the one you were shown\n');
+  fs.rmSync(la, { recursive: true, force: true });
+  fs.symlinkSync(decoy, la);
+
+  let res;
+  const err = captureStderrText(() => {
+    countingSpawn(() => {
+      res = withDerivedPlatform('darwin', () => withHome(paths.home, () =>
+        manifestLib.reverse(paths, manifest, { discoveredSchedules: discovered.schedules })));
+    });
+  });
+  assert.equal(fs.existsSync(other), true, 'the substituted file survives');
+  assert.match(err, /keeping .* — it is no longer the file that was shown to you/);
+  assert.equal(res.removed.includes(plist), false);
+});
+
+test('R-B\u2032 (round 2): discovery carries NO ownership flag — only `path`, `real` and `remove`', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const { paths, manifest, la } = schedFixture();
+  const aliased = path.join(la, 'ai.wienerdog.dream.plist');
+  const lexical = path.join(la, 'ai.wienerdog.digest.plist');
+  fs.writeFileSync(aliased, 'x');
+  fs.writeFileSync(lexical, 'x');
+  // The record names an ALIAS of `aliased`: reverseSchedulerEntry unlinks only
+  // `entry.path`, so that plist survives — exactly R9's residual. R-B\u2032 reads
+  // that off the PLAN rather than from an ownership flag, so nothing here
+  // records which record owns what.
+  const alias = path.join(la, 'ai.wienerdog.alias.plist');
+  fs.symlinkSync(aliased, alias);
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: alias });
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: lexical });
+
+  const res = withHome(paths.home, () => manifestLib.discoverSchedulesOnDisk(paths, manifest, {}));
+  for (const item of res.schedules) {
+    assert.deepEqual(Object.keys(item).sort(), ['path', 'real', 'remove'],
+      'the item shape is exactly {path, real, remove}');
+  }
+  const byPath = Object.fromEntries(res.schedules.map((i2) => [i2.path, i2]));
+  assert.equal(byPath[aliased].remove, false, 'D11 still withholds the deletion on the RESOLVED match');
+  assert.equal(byPath[lexical].remove, false, 'and on the lexical one');
+});
+

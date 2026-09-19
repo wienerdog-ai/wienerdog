@@ -255,24 +255,32 @@ function requireDeletionClearance(paths, opts) {
 }
 
 /**
- * Table D rows D3/D11/D12 + Table R rows R4/R9: disclose the DISK-DERIVED set as
- * its own labeled block, in both `--dry-run` and the pre-confirm plan, after the
+ * Table D rows D3/D11/D12 + Table R rows R4/R9, as amended by ruling R-B′ at
+ * round 2 of the PR gate: disclose the DISK-DERIVED set as its own labeled
+ * block, in both `--dry-run` and the pre-confirm plan, after the
  * manifest-derived lines. Per item: the re-derived `would run:` line (omitted
  * when the derivation yields nothing — a `.service`, a uid-less darwin), then
- * one of `remove` (the disposition permits it and no record owns the file),
- * `keep` (Table D row D11 withheld it), or nothing under `unload-only`. Every
- * `keep` line for a launchd plist carries R9's plain-language login warning.
  *
- * The block's header says these were FOUND ON DISK, which is what makes the
- * duplicate `would run:` line a recorded job also produces distinguishable —
- * deduplicating them would mean consulting the manifest to decide what to print,
- * the channel Table D row D10 closed.
- * @param {{schedules:Array<{path:string, remove:boolean}>, unreadable:Array<{root:string, code:string}>, skippedForVault:string[]}} discovery
+ *   - `remove <path>` when the disposition permits it and no record owns the
+ *     file — phase D5b's own deletion, and the one case the manifest-derived
+ *     lines exclude so nothing is disclosed twice;
+ *   - `removed by its own manifest entry (listed above)` when a record owns the
+ *     file AND THE PLAN SAYS that record's reverser deletes it, which is read
+ *     off the same plan the user is shown rather than from an ownership flag;
+ *   - otherwise `keep <path> (another manifest entry owns this file)`, plus
+ *     R9's plain-language login warning when the basename recognizes as
+ *     launchd — correct even for a record naming a symlink alias, whose
+ *     reverser unlinks the alias and leaves the plist behind.
+ *
+ * Every discovered path therefore appears in the plan exactly once, and what the
+ * plan says will be removed sums to what the run removes.
+ * @param {{schedules:Array<{path:string, real:string, remove:boolean}>, unreadable:Array<{root:string, code:string}>, skippedForVault:string[]}} discovery
  * @param {NodeJS.Platform} platform
  * @param {string} vaultPath
+ * @param {Set<string>} planRemoved  the paths this run's plan reports in `removed`
  * @returns {void}
  */
-function printDiscoveredSchedules(discovery, platform, vaultPath) {
+function printDiscoveredSchedules(discovery, platform, vaultPath, planRemoved) {
   const gen = require('../scheduler/generators');
   if (discovery.schedules.length === 0 && discovery.skippedForVault.length === 0) return;
   console.log('\nScheduled jobs found on disk:');
@@ -282,14 +290,13 @@ function printDiscoveredSchedules(discovery, platform, vaultPath) {
     if (manifestLib.DISCOVERED_DISPOSITION === 'unload-and-remove' && item.remove) {
       console.log(`  remove ${item.path}`);
     } else if (!item.remove) {
-      console.log(`  keep ${item.path} (another manifest entry owns this file)`);
-      // Round 11 ruling R-A: R9's residual exists only when the owning record is
-      // NOT a `scheduler-entry`. A scheduler-entry's own reverser removes the
-      // file, so for such a plist the warning would be false — and on a normal
-      // macOS install every job has one.
-      if (!item.ownedByScheduler
-        && gen.recognizeScheduleBasename(path.basename(item.path)) === 'launchd') {
-        console.log(`    ${manifestLib.R9_LOGIN_RELOAD_WARNING}`);
+      if (planRemoved.has(item.path)) {
+        console.log(`  removed by its own manifest entry (listed above)`);
+      } else {
+        console.log(`  keep ${item.path} (another manifest entry owns this file)`);
+        if (gen.recognizeScheduleBasename(path.basename(item.path)) === 'launchd') {
+          console.log(`    ${manifestLib.R9_LOGIN_RELOAD_WARNING}`);
+        }
       }
     }
   }
@@ -365,7 +372,16 @@ async function run(argv, opts = {}) {
   // `Scheduled jobs found on disk:` block. Subtract it from the manifest-derived
   // `remove` lines and from the --dry-run headline count, which also keeps that
   // count independent of Table R row R4's cell, as Table D row D3 requires.
-  const discoveredPaths = new Set(discovery.schedules.map((s) => s.path));
+  // Ruling R-B′ (round 2 of the PR gate): exclude from the manifest-derived
+  // `remove` lines and from the --dry-run headline ONLY the paths the disk block
+  // itself discloses with a `remove` line — phase D5b's own deletions. A
+  // `remove:false` item's fate belongs to its owning record's reverser, and that
+  // reverser's own line stays, or the plan under-states a deletion.
+  const discoveredRemovals = new Set(
+    manifestLib.DISCOVERED_DISPOSITION === 'unload-and-remove'
+      ? discovery.schedules.filter((it) => it.remove).map((it) => it.path)
+      : []
+  );
   // Table D rows D9/D15: an unreadable root is NOT an empty root. With scheduler
   // authority present the live probe is short-circuited, so a silently empty
   // result would let the core be disposed without anything ever having LOOKED at
@@ -398,7 +414,7 @@ async function run(argv, opts = {}) {
     // removed" count — otherwise it is silently dropped from the plan. The
     // mechanics dirs and the core stay separate disclosure lines (ADR-0019), so
     // this headline is NOT claimed to equal the live `Removed N` total.
-    const headline = removed.filter((p) => !discoveredPaths.has(p)).length + (deferredConfig ? 1 : 0);
+    const headline = removed.filter((p) => !discoveredRemovals.has(p)).length + (deferredConfig ? 1 : 0);
     console.log(`\n--dry-run: ${headline} item(s) would be removed, ${skipped.length} skipped.`);
     if (preserved.length > 0) {
       const vaultFiles = manifest.entries.filter((e) => e.kind === 'vault-file').length;
@@ -413,7 +429,7 @@ async function run(argv, opts = {}) {
       for (const d of mech) console.log(`  ${d}`);
     }
     console.log(`  ${paths.core}  (the canonical core — removed once empty)`);
-    printDiscoveredSchedules(discovery, process.platform, vaultPath);
+    printDiscoveredSchedules(discovery, process.platform, vaultPath, new Set(removed));
     if (discovery.unreadable.length > 0) {
       console.log('\nFolders that can hold scheduled jobs but could not be read (a real uninstall would stop here):');
       for (const u of discovery.unreadable) console.log(`  ${u.root} (${u.code})`);
@@ -435,13 +451,13 @@ async function run(argv, opts = {}) {
     });
     const mechPlan = manifestLib.disposeCoreMechanics(paths, { dryRun: true, vaultPath });
     for (const p of plan.removed) {
-      if (discoveredPaths.has(p)) continue; // R-B — disclosed once, in the block below
+      if (discoveredRemovals.has(p)) continue; // R-B′ — disclosed once, in the block below
       console.log(`  remove ${p}`);
     }
     if (plan.deferredConfig) console.log(`  remove ${plan.deferredConfig} (unmodified config — deleted last)`);
     for (const d of mechPlan.removed) console.log(`  remove ${d} (machine-generated state, recursive)`);
     console.log(`  remove ${paths.core} (the canonical core — removed once empty)`);
-    printDiscoveredSchedules(discovery, process.platform, vaultPath);
+    printDiscoveredSchedules(discovery, process.platform, vaultPath, new Set(plan.removed));
     const ok = await confirm('\nProceed with removal? [y/N] ');
     if (!ok) {
       console.log('Aborted.');
