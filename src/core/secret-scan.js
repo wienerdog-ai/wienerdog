@@ -17,19 +17,22 @@
 /**
  * Bounded-scan limits (audit A5, ADR-0024). Named so the tests import ONE
  * definition. The four SCAN values are OWNER-APPROVED — see the WP-122 spec's
- * OWNER-APPROVED block. `STREAM_REGION_MAX` is NOT one of them: it is
- * ADR-0043's, adopted under standing authorization, and nothing records the
- * owner approving it.
+ * OWNER-APPROVED block. `STREAM_REGION_MAX` is NOT one of them: its value comes
+ * from `WP-secret-stream-safe-cut-redactor` Table B (ADR-0043 decides the
+ * mechanism but never names a number), adopted under standing authorization,
+ * and nothing records the owner approving this value.
  */
 const ScanLimits = {
   SCAN_MAX_BYTES: 256 * 1024, // a text longer than this is NOT regex-scanned
   ENTROPY_MIN_LEN: 24, // a contextual high-entropy candidate must be at least this long
   ENTROPY_MIN_BITS_PER_CHAR: 3.5, // Shannon bits/char over the candidate to count as high-entropy
   ENTROPY_CTX_FILLER_MAX: 20, // chars a sensitive keyword may sit before the separator it binds through
-  // ADR-0043 / Table B: the most characters `createStreamRedactor` holds, and so
-  // the longest region it hands to ONE `redactOnly` call. UTF-8 is at most 4
+  // Table B: the most characters `createStreamRedactor` holds BETWEEN calls, and
+  // so the longest region it hands to ONE `redactOnly` call. UTF-8 is at most 4
   // bytes per character, so 32768 * 4 = 131072 < SCAN_MAX_BYTES keeps every
-  // region scannable and a region can never trip the oversized path.
+  // region scannable and a region can never trip the oversized path. A `push`
+  // appends before it cuts, so during a call the buffer transiently holds the
+  // appended chunk on top of this.
   STREAM_REGION_MAX: 32 * 1024,
 };
 
@@ -481,33 +484,110 @@ function cutS2NoOpenKeyBinder(buffer, i, solid, solidCount) {
  *  opener, as in `"token":"x"client_secret": "…` — resuming one character later
  *  skips `"client_secret"` and accepts a cut inside its value.
  *
- *  Still linear. `lastIndex` is strictly increasing, because the next opener
- *  ends after the quote we resumed on, so its own value starts later and its
- *  closing quote is found strictly beyond the previous one; and each `indexOf`
- *  begins where the previous opener's value began, so the scans advance
- *  monotonically over `p` rather than re-reading it.
- *  @param {string} p @returns {boolean} */
-function cutS3NoOpenQuotedValue(p) {
-  CUT_JSON_VALUE_OPEN.lastIndex = 0;
-  for (let m = CUT_JSON_VALUE_OPEN.exec(p); m; m = CUT_JSON_VALUE_OPEN.exec(p)) {
-    const close = p.indexOf('"', m.index + m[0].length);
-    if (close === -1) return false;
-    CUT_JSON_VALUE_OPEN.lastIndex = close;
+ *  @param {string} buffer @param {RegExp} re @param {number} limit
+ *  @returns {{index:number, end:number}[]} */
+function cutAllMatches(buffer, re, limit) {
+  const found = [];
+  re.lastIndex = 0;
+  for (let m = re.exec(buffer); m; m = re.exec(buffer)) {
+    if (m.index >= limit) break;
+    found.push({ index: m.index, end: m.index + m[0].length });
+    // Resume at `index + 1`, NOT past the match: the detector applies its rules
+    // with `String.replace`, whose engine tries EVERY start position, so an
+    // opener that begins inside another opener is a real opener and skipping it
+    // accepts a cut inside a value the rule would have caught. Measured leaks
+    // from resuming later: `"token":"x"client_secret": "…` (a closing quote that
+    // also opens) and `"token":"token": "…` (an OPENING quote that also opens).
+    re.lastIndex = m.index + 1;
   }
-  return true;
+  return found;
 }
 
-/** Table S row S4: no private-key block left open anywhere in `p`.
- *  @param {string} p */
-function cutS4NoOpenPrivateKey(p) {
-  CUT_PEM_OPEN.lastIndex = 0;
-  let lastOpenEnd = -1;
-  for (let m = CUT_PEM_OPEN.exec(p); m; m = CUT_PEM_OPEN.exec(p)) {
-    lastOpenEnd = m.index + m[0].length;
+/** Mark `[from .. through]` as blocked in a difference array. */
+function cutMarkBlocked(diff, from, through, limit) {
+  if (from > limit || through < from) return;
+  diff[Math.max(0, from)] += 1;
+  if (through + 1 <= limit) diff[through + 1] -= 1;
+}
+
+/**
+ * Rows S3 and S4 for EVERY candidate at once, in one forward pass over
+ * `buffer[0 .. limit)`.
+ *
+ * Both rows are prefix-determined in exactly the way row S2 is — whether
+ * something is still open in `P = buffer[0 .. i)` depends only on `P` — so each
+ * opener contributes one CONTIGUOUS RANGE of blocked candidates and the answer
+ * for a candidate is a lookup. Evaluating them per candidate instead, over a
+ * fresh `buffer.slice(0, i)`, is quadratic in the region: measured at 4.36
+ * us/char for one 32 KiB region of a private-key opener followed by blank lines,
+ * which is a shape Table B already names.
+ *
+ * S3: an opener ending at `e` leaves its value open while no `"` has appeared,
+ * so it blocks `[e .. q]`, where `q` is the first `"` at or after `e` (a quote
+ * at `q` is inside `P` only once `i > q`).
+ * S4: an opener ending at `e` blocks `[e .. c-1]`, where `c` is the earliest end
+ * of any closer starting at or after `e` — the one the rule's lazy body would
+ * take — and the whole remaining range when there is none.
+ *
+ * @param {string} buffer @param {number} limit
+ * @returns {{s3: Int32Array, s4: Int32Array}}
+ */
+function cutBlockedState(buffer, limit) {
+  const s3 = new Int32Array(limit + 2);
+  const s4 = new Int32Array(limit + 2);
+
+  // The first `"` at or after each offset, so a value's close is O(1).
+  const nextQuote = new Int32Array(limit + 1);
+  nextQuote[limit] = limit;
+  for (let k = limit - 1; k >= 0; k -= 1) {
+    nextQuote[k] = buffer.charCodeAt(k) === 34 ? k : nextQuote[k + 1];
   }
-  if (lastOpenEnd < 0) return true;
-  CUT_PEM_CLOSE.lastIndex = lastOpenEnd;
-  return CUT_PEM_CLOSE.exec(p) !== null;
+  for (const opener of cutAllMatches(buffer, CUT_JSON_VALUE_OPEN, limit)) {
+    if (opener.end > limit) continue;
+    cutMarkBlocked(s3, opener.end, nextQuote[opener.end], limit);
+  }
+
+  // Closers ascending by start, with the smallest end over every suffix, so the
+  // earliest closer that can complete after an opener is a binary search away.
+  const closers = cutAllMatches(buffer, CUT_PEM_CLOSE, limit).filter((c) => c.end <= limit);
+  const minEndFrom = new Int32Array(closers.length + 1);
+  minEndFrom[closers.length] = limit + 1;
+  for (let k = closers.length - 1; k >= 0; k -= 1) {
+    minEndFrom[k] = Math.min(closers[k].end, minEndFrom[k + 1]);
+  }
+  for (const opener of cutAllMatches(buffer, CUT_PEM_OPEN, limit)) {
+    if (opener.end > limit) continue;
+    let lo = 0;
+    let hi = closers.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (closers[mid].index < opener.end) lo = mid + 1;
+      else hi = mid;
+    }
+    cutMarkBlocked(s4, opener.end, minEndFrom[lo] - 1, limit);
+  }
+
+  let open3 = 0;
+  let open4 = 0;
+  for (let i = 0; i <= limit; i += 1) {
+    open3 += s3[i];
+    open4 += s4[i];
+    s3[i] = open3 > 0 ? 1 : 0;
+    s4[i] = open4 > 0 ? 1 : 0;
+  }
+  return { s3, s4 };
+}
+
+/** Table S row S3: no sensitive quoted value left open in `buffer[0 .. i)`.
+ *  @param {{s3: Int32Array}} blocked @param {number} i @returns {boolean} */
+function cutS3NoOpenQuotedValue(blocked, i) {
+  return blocked.s3[i] === 0;
+}
+
+/** Table S row S4: no private-key block left open in `buffer[0 .. i)`.
+ *  @param {{s4: Int32Array}} blocked @param {number} i @returns {boolean} */
+function cutS4NoOpenPrivateKey(blocked, i) {
+  return blocked.s4[i] === 0;
 }
 
 /**
@@ -524,15 +604,21 @@ function cutS4NoOpenPrivateKey(p) {
  * THIS PREDICATE AND TABLE S IN THE SAME CHANGE (ADR-0043 decision 3). A rule
  * whose alphabet excludes `\n` is kept whole by S1 and needs nothing.
  *
+ * Every row is answered from state `nextRegionEnd` computed once for the whole
+ * buffer, so a candidate costs O(CUT_BINDER_LOOKBACK) and never a prefix copy.
+ *
  * @param {string} buffer @param {number} i
- * @param {number[]} solid @param {number} solidCount @returns {boolean}
+ * @param {number[]} solid @param {number} solidCount
+ * @param {{s3: Int32Array, s4: Int32Array}} blocked @returns {boolean}
  */
-function isAcceptedCut(buffer, i, solid, solidCount) {
+function isAcceptedCut(buffer, i, solid, solidCount, blocked) {
+  // Ordered by cost, not by row number: S1, S3 and S4 are O(1) lookups, so a
+  // candidate a private key or an open value already blocks is rejected without
+  // building row S2's window. The rows are a conjunction, so the order is free.
   if (!cutS1EndsWithNewline(buffer, i)) return false;
+  if (!cutS3NoOpenQuotedValue(blocked, i)) return false;
+  if (!cutS4NoOpenPrivateKey(blocked, i)) return false;
   if (!cutS2NoOpenKeyBinder(buffer, i, solid, solidCount)) return false;
-  const p = buffer.slice(0, i);
-  if (!cutS3NoOpenQuotedValue(p)) return false;
-  if (!cutS4NoOpenPrivateKey(p)) return false;
   return true;
 }
 
@@ -559,10 +645,11 @@ function nextRegionEnd(buffer, rejected) {
   for (let k = 0; k < limit; k += 1) {
     if (!isCutWhitespace(buffer.charCodeAt(k))) solid.push(k);
   }
+  const blocked = cutBlockedState(buffer, limit);
   let solidCount = solid.length;
   for (let i = limit; i > rejected; i -= 1) {
     while (solidCount > 0 && solid[solidCount - 1] >= i) solidCount -= 1;
-    if (isAcceptedCut(buffer, i, solid, solidCount)) return i;
+    if (isAcceptedCut(buffer, i, solid, solidCount, blocked)) return i;
   }
   return buffer.length >= ScanLimits.STREAM_REGION_MAX ? ScanLimits.STREAM_REGION_MAX : 0;
 }
@@ -591,7 +678,30 @@ function createStreamRedactor() {
   let rejected = 0;
   return {
     push(text) {
-      buffer += typeof text === 'string' ? text : '';
+      const added = typeof text === 'string' ? text : '';
+      buffer += added;
+      // FAST PATH. A candidate cut only ever sits where row S1 puts one, and
+      // acceptance of a candidate reads only the buffer below it — the same
+      // fact the `rejected` watermark rests on. So an append that carries no
+      // candidate cannot have created an accepted cut, and while the buffer is
+      // still under the ceiling no forced cut is due either: there is nothing
+      // to scan for. Without this, a long line arriving in small chunks
+      // rebuilds the whole prefix state on every call — measured at 3.35 s for
+      // one 32 KiB line delivered one character at a time.
+      //
+      // Row S1 is asked THROUGH `cutS1EndsWithNewline`, never re-spelled here,
+      // so this shortcut cannot drift from the predicate it is derived from.
+      let addsCandidate = false;
+      for (let k = added.length; k > 0; k -= 1) {
+        if (cutS1EndsWithNewline(added, k)) {
+          addsCandidate = true;
+          break;
+        }
+      }
+      if (!addsCandidate && buffer.length < ScanLimits.STREAM_REGION_MAX) {
+        rejected = buffer.length;
+        return '';
+      }
       let out = '';
       for (;;) {
         const cut = nextRegionEnd(buffer, rejected);
