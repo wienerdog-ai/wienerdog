@@ -60,9 +60,10 @@ or re-injecting the secret while you clean up.
      is deleted, so review a redaction within about two months rather than
      leaving it indefinitely — right after a run
      that rewrote a great many notes it can briefly hold more, because a run
-     never deletes its own copies. And `wienerdog uninstall` removes this
-     folder along with everything else Wienerdog keeps, so copy out anything
-     you want to keep before you uninstall.
+     never deletes its own copies. And `wienerdog uninstall` will not remove
+     this folder: while either quarantine folder still holds a file, it stops
+     and asks you to move those files somewhere you keep, or delete them,
+     first — so uninstalling cannot lose them.
 
 4. **Clean the git history.** The vault is a local git repository (`git log` in
    your vault folder), and a committed secret lives in its history, not just

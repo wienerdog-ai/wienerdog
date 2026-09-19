@@ -305,6 +305,90 @@ function printDiscoveredSchedules(discovery, platform, vaultPath, planRemoved) {
   }
 }
 
+/** The "may be the only copy" hedge of Table W row **W4**, verbatim.
+ *  `WP-quarantine-only-copy-shelf`'s Table O row **O8** verified it against all
+ *  four shelf classes and fixed the phrasing: **may be**, never "is", and never
+ *  "a spare". No surface may strengthen it. */
+const QUARANTINE_HEDGE =
+  'Some or all of these may be the only copy of that text on this computer, and they hold the original, not a blanked-out version.';
+
+/**
+ * POSIX single-quote a path so the printed remedy lines are SAFE TO COPY.
+ * Double quotes were not: inside them a shell still expands `$`, `` ` `` and
+ * `\`, so a core under a home directory containing `$HOME`, a backtick or a
+ * quote character would produce an `rm -rf` line that addresses a DIFFERENT
+ * path, or that executes the embedded text — on a command whose whole purpose
+ * is to delete the user's only copy of their own notes. Inside single quotes
+ * nothing is special, and the one character that cannot appear is escaped the
+ * only way POSIX allows: end the quoting, emit a literal quote, resume.
+ * Table W row **W4** pins the CONTENT of the five items, not the quoting.
+ * @param {string} p @returns {string}
+ */
+function shQuote(p) {
+  return `'${String(p).split("'").join("'\\''")}'`;
+}
+
+/**
+ * The secret-quarantine disclosure block (Table W row **W4**), printed
+ * byte-for-byte by the refusal and by `--dry-run` (Table W row **W5**) so the
+ * two can never disagree about what is on the shelf. It carries the total entry
+ * count and the total size in bytes as a plain integer, one line per shelf
+ * directory that HOLDS at least one entry (an existing-but-empty shelf
+ * contributes no entry by Table K row **K2** and so no line — a refusal listing
+ * an empty directory would tell the user to deal with nothing), one line per
+ * `blockers` path, the hedge, and the remedy as two literal shell lines followed
+ * by the re-run and the runbook pointer. When the shelf's state could not be
+ * determined it names each directory and its `code` instead of a count.
+ *
+ * It NEVER prints a filename and never a byte of any file's content (Table Y row
+ * **Y1**): the inventory opened no file (Table K row **K6**), every
+ * `unreadable[].dir` is a DIRECTORY rather than an entry, and the user is about
+ * to list the directory themselves, so printing names buys nothing and not
+ * printing them is strictly safer.
+ * @param {{roots:Array<{dir:string, entries:number, bytes:number}>, blockers:string[], entries:number, bytes:number, unreadable:Array<{dir:string, code:string}>}} inv
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @returns {string}
+ */
+function quarantineBlock(inv, paths) {
+  // The remedy names a path that EXISTS wherever one does — `roots` and
+  // `blockers` both report their ACTUAL on-disk path, so a capitalized shelf,
+  // or a file sitting where the shelf should be, is named as it is stored
+  // (Table K rows K1/K8). The canonical join is the last resort only.
+  const target =
+    (inv.roots.length > 0 && inv.roots[0].dir) ||
+    (inv.blockers.length > 0 && inv.blockers[0]) ||
+    path.join(paths.state, 'quarantine');
+  /** @type {string[]} */ const lines = [];
+  if (inv.unreadable.length > 0) {
+    lines.push(
+      'Wienerdog set aside copies of your own notes that looked like they held a password or a key, and it cannot tell what is in them right now — so removing them could lose text without ever saying it was there:'
+    );
+    for (const u of inv.unreadable) lines.push(`  ${u.dir} (${u.code})`);
+  } else {
+    lines.push(
+      `Wienerdog set aside ${inv.entries} file(s) of your own notes, ${inv.bytes} bytes in total, because they looked like they held a password or a key:`
+    );
+    for (const r of inv.roots) {
+      if (r.entries === 0) continue;
+      lines.push(`  ${r.dir} — ${r.entries} file(s), ${r.bytes} bytes`);
+    }
+    for (const b of inv.blockers) {
+      lines.push(`  ${b} — not a folder; something else is sitting where the quarantine folder goes`);
+    }
+  }
+  lines.push('', QUARANTINE_HEDGE, '');
+  lines.push(
+    inv.unreadable.length > 0
+      ? 'Fix the permission or disk problem so it can be read, then move it somewhere you keep, or delete it:'
+      : 'Move that somewhere you keep, or delete it:'
+  );
+  lines.push(`  mv ${shQuote(target)} ~/wienerdog-quarantine`);
+  lines.push(`  rm -rf ${shQuote(target)}`);
+  lines.push('then run `wienerdog uninstall` again.');
+  lines.push('There is more about these copies in docs/runbooks/secret-incident.md.');
+  return lines.join('\n');
+}
+
 /** Read the configured vault path from config.yaml, or null. `[ \t]*` (not
  *  `\s*`) so a bare `vault:` line cannot let the match run onto the next line.
  *  @param {string} configPath @returns {string|null} */
@@ -358,6 +442,38 @@ async function run(argv, opts = {}) {
 
   // Capture the vault path BEFORE reverse removes config.yaml (for the summary).
   const vaultPath = readVaultPath(paths.config) || paths.vault;
+
+  // ── Table K row K5 / Table W row W3: the SECRET-QUARANTINE GATE. One
+  //    read-only walk, EXACTLY ONCE per invocation, and BEFORE THE FIRST
+  //    console.log — so before the manifest headline, before any plan, before
+  //    Table D row D2's discovery and therefore before its D9 abort, and before
+  //    every deletion (Table W row W7: the shelf gate goes first because it is
+  //    the cheaper check — one walk inside our own core, no ambient roots — and
+  //    because it reports data we would DESTROY, while D9 reports a deletion we
+  //    might fail to perform; both aborts delete nothing and both are retryable).
+  //    It fires on NON-EMPTY or UNREADABLE (Table K rows K3/K4): an unreadable
+  //    shelf is never an empty one, because `rmSync({force:true})` succeeds
+  //    silently on a tree the walk could not see (Table Y row Y5).
+  const quarantine = manifestLib.quarantineInventory(paths);
+  if (quarantine.entries > 0 || quarantine.unreadable.length > 0) {
+    if (dryRun) {
+      // --dry-run does NOT abort: it deletes nothing, and a --dry-run that
+      // refuses to show the plan defeats the surface a user consults precisely
+      // to find out what an uninstall will do (Table W row W5).
+      console.log(quarantineBlock(quarantine, paths));
+      console.log(
+        '\nA real `wienerdog uninstall` stops at this point. The rest of this plan is what it would do once these files have been moved or deleted.'
+      );
+    } else {
+      // A refusal in the shape this command's other refusals already use — it
+      // names what was found, says nothing was removed, and gives the remedy.
+      // Identical with and without `--yes`: `--yes` skips the PROMPT, and a
+      // refusal is not a prompt (Table W row W2, Table Y row Y7, ADR-0035).
+      throw new WienerdogError(
+        `wienerdog uninstall stopped — nothing was removed.\n\n${quarantineBlock(quarantine, paths)}`
+      );
+    }
+  }
 
   // ── Table D row D2: discovery runs EXACTLY ONCE per invocation, BEFORE
   //    anything is printed, with the accepted vault path already read so D12 can

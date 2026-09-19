@@ -1444,6 +1444,194 @@ function contains(outer, inner) {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
+/** The two secret-quarantine shelf directory names, as `quarantinePreserve`
+ *  writes them (`src/core/dream/validate.js`): `<state>/quarantine` for a
+ *  withheld note and `<state>/quarantine/redacted` for a pre-scrub original.
+ *  Matched by ASCII case fold, never by byte equality (Table K row K8). */
+const QUARANTINE_DIRNAME = 'quarantine';
+const QUARANTINE_REDACTED_DIRNAME = 'redacted';
+
+/**
+ * ASCII case fold (Table K row K8): only `A`–`Z` map to `a`–`z`, every other
+ * code unit matching exactly. Deliberately NOT `String.prototype.toLowerCase`,
+ * whose Unicode mappings are broader than the property being tested — a
+ * case-insensitive volume folds ASCII, and our own directory names are pure
+ * ASCII with no combining marks, so their ASCII case variants are exactly the
+ * closed set such a volume could collide with.
+ * @param {string} name @returns {string}
+ */
+function asciiFold(name) {
+  let out = '';
+  for (let i = 0; i < name.length; i += 1) {
+    const c = name.charCodeAt(i);
+    out += c >= 0x41 && c <= 0x5a ? String.fromCharCode(c + 0x20) : name[i];
+  }
+  return out;
+}
+
+/** The ONE special case of Table K row K3: a path Wienerdog never wrote is
+ *  genuinely absent, not unreadable. Every other code means the state is
+ *  UNKNOWN and must never read as empty (K4, Table Y row Y5).
+ *  @param {string} code @returns {boolean} */
+function isAbsentCode(code) {
+  return code === 'ENOENT' || code === 'ENOTDIR';
+}
+
+/**
+ * Record a level whose state could not be determined — ONE entry per DIRECTORY.
+ * **Table Y row Y1 is why `dir` is always a directory and never an entry path:**
+ * every `unreadable[].dir` is printed verbatim by the refusal and by
+ * `--dry-run`, and a shelf entry's basename is derived from the user's own note
+ * path, so a failing `lstat` on a quarantined FILE must be reported against the
+ * directory that holds it. De-duplicated for the same reason a directory listing
+ * is: one damaged permission should not print one line per file under it.
+ * @param {Array<{dir:string, code:string}>} unreadable
+ * @param {string} dir a DIRECTORY path — never an entry's path
+ * @param {string} code @returns {void}
+ */
+function pushUnreadable(unreadable, dir, code) {
+  if (unreadable.some((u) => u.dir === dir)) return;
+  unreadable.push({ dir, code });
+}
+
+/** Sorted child names of `dir`, or null when it is absent or could not be
+ *  enumerated (the latter recorded in `unreadable`). Sorted so the walk — and
+ *  therefore the refusal it feeds — is deterministic across platforms.
+ *  @param {string} dir @param {Array<{dir:string, code:string}>} unreadable
+ *  @returns {string[]|null} */
+function readShelfNames(dir, unreadable) {
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .map((d) => d.name)
+      .sort();
+  } catch (e) {
+    const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+    if (isAbsentCode(code)) return null; // ABSENT — not an error (K3)
+    pushUnreadable(unreadable, dir, code); // UNREADABLE — the state is UNKNOWN (K3/K4)
+    return null;
+  }
+}
+
+/**
+ * Count everything under one shelf directory into `row` (Table K row K2).
+ * `lstat` throughout, so a symlink is counted as one entry and NEVER followed —
+ * a planted link cannot make the walk leave the shelf or loop. A further
+ * directory at any depth counts one entry and is descended. The only entries
+ * that count nothing are the shelf roots themselves: at the top level of
+ * `<state>/quarantine`, a real directory whose name folds to `redacted` becomes
+ * its own row in `roots` instead.
+ * @param {string} dir @param {{dir:string, entries:number, bytes:number}} row
+ * @param {Array<{dir:string, code:string}>} unreadable
+ * @param {Array<{dir:string, entries:number, bytes:number}>} roots
+ * @param {boolean} top true only for `<state>/quarantine` itself
+ * @returns {void}
+ */
+function countShelfTree(dir, row, unreadable, roots, top) {
+  const names = readShelfNames(dir, unreadable);
+  if (names === null) return;
+  /** @type {string[]} */ const ownRoots = [];
+  for (const name of names) {
+    const full = path.join(dir, name);
+    let st;
+    try {
+      st = fs.lstatSync(full);
+    } catch (e) {
+      const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+      if (isAbsentCode(code)) continue; // vanished under the walk — absence again
+      // The CONTAINING directory, never `full`: `full` carries the note's
+      // basename and every unreadable entry is printed verbatim (Table Y row Y1).
+      pushUnreadable(unreadable, dir, code);
+      row.entries += 1; // something IS there; we merely could not classify it
+      continue;
+    }
+    if (top && st.isDirectory() && asciiFold(name) === QUARANTINE_REDACTED_DIRNAME) {
+      ownRoots.push(full); // a shelf root — zero entries, its own row (K2)
+      continue;
+    }
+    row.entries += 1;
+    if (st.isFile()) row.bytes += st.size;
+    else if (st.isDirectory()) countShelfTree(full, row, unreadable, roots, false);
+    // anything else (symlink, socket, fifo) — counted, never opened, never followed
+  }
+  for (const full of ownRoots) {
+    /** @type {{dir:string, entries:number, bytes:number}} */
+    const sub = { dir: full, entries: 0, bytes: 0 };
+    roots.push(sub);
+    countShelfTree(full, sub, unreadable, roots, false);
+  }
+}
+
+/**
+ * Inventory the secret quarantine under this core (Table K). READ-ONLY: a
+ * non-following walk (`readdirSync({withFileTypes:true})` + `lstatSync`) of
+ * <paths.state>/quarantine. It NEVER opens a file and never reads a byte of one
+ * (K6), and it NEVER follows a symlink. It never throws: any enumeration or stat
+ * failure is REPORTED in `unreadable` (K3/K4). The shelf directories are located
+ * by ASCII CASE FOLD of their names (K8), never by byte equality.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @returns {{roots: Array<{dir:string, entries:number, bytes:number}>,
+ *            blockers: string[], entries:number, bytes:number,
+ *            unreadable: Array<{dir:string, code:string}>}}
+ *   `roots` — the shelf directories that EXIST as directories, in the fixed
+ *     order [<state>/quarantine, <state>/quarantine/redacted], each with the
+ *     counts of what it holds; an absent root is omitted. **A root itself is
+ *     never counted** (K2).
+ *   `blockers` — the ACTUAL paths of non-directory objects occupying a shelf
+ *     root name (a file or symlink at `<state>/Quarantine`). Each is one entry
+ *     by K2 and is NOT a shelf directory, so it gets no `roots` row — but the
+ *     path is carried so the refusal can name the thing the user must actually
+ *     deal with. Added at PR round 1: without it the remedy named the canonical
+ *     lowercase path, which on a case-sensitive volume does not exist, so the
+ *     printed `rm -rf` succeeded silently and the uninstall refused forever.
+ *   `entries`/`bytes` — totals over the whole walk; `bytes` sums regular files'
+ *     `size` only. Two empty shelf directories give `entries: 0`.
+ *   `unreadable` — non-empty means the shelf's state is UNKNOWN, and at the gate
+ *     that ABORTS a non-dry-run uninstall (K4). Every `dir` is a DIRECTORY and
+ *     the list is de-duplicated (Table Y row **Y1**).
+ */
+function quarantineInventory(paths) {
+  /** @type {Array<{dir:string, entries:number, bytes:number}>} */ const roots = [];
+  /** @type {string[]} */ const blockers = [];
+  /** @type {Array<{dir:string, code:string}>} */ const unreadable = [];
+
+  const stateNames = readShelfNames(paths.state, unreadable);
+  for (const name of stateNames || []) {
+    if (asciiFold(name) !== QUARANTINE_DIRNAME) continue;
+    const qdir = path.join(paths.state, name);
+    let st;
+    try {
+      st = fs.lstatSync(qdir);
+    } catch (e) {
+      const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+      if (isAbsentCode(code)) continue;
+      // `qdir` is safe to name: its basename already matched the closed ASCII
+      // case-fold set, so it carries no user-derived text (Table Y rows Y1/Y4).
+      pushUnreadable(unreadable, qdir, code);
+      blockers.push(qdir);
+      continue;
+    }
+    if (!st.isDirectory()) {
+      // Not the product's directory — something else sitting where it should
+      // be. One entry, no row, and the path is carried so it can be named (K2).
+      blockers.push(qdir);
+      continue;
+    }
+    /** @type {{dir:string, entries:number, bytes:number}} */
+    const row = { dir: qdir, entries: 0, bytes: 0 };
+    roots.push(row);
+    countShelfTree(qdir, row, unreadable, roots, true);
+  }
+
+  let entries = blockers.length;
+  let bytes = 0;
+  for (const r of roots) {
+    entries += r.entries;
+    bytes += r.bytes;
+  }
+  return { roots, blockers, entries, bytes, unreadable };
+}
+
 /**
  * Dispose the canonical core's machine-generated-mechanics subdirs after a
  * manifest replay, then remove the now-empty core (ADR-0019). state/, logs/,
@@ -1508,4 +1696,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, discoverSchedulesOnDisk, DISCOVERED_DISPOSITION, R9_LOGIN_RELOAD_WARNING, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, linkIdentity, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, quarantineInventory, discoverSchedulesOnDisk, DISCOVERED_DISPOSITION, R9_LOGIN_RELOAD_WARNING, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, linkIdentity, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
