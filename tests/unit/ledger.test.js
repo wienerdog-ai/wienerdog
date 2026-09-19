@@ -808,3 +808,224 @@ test('ledger: malformed oversized evidence is omitted without invalidating exist
     assert.deepEqual(JSON.parse(fs.readFileSync(ledgerLib.ledgerPath(state), 'utf8')), base);
   }
 });
+
+// ── WP-ledger-retry-parse-threw-on-upgrade: the ONE-TIME `parse-threw` retry ──
+//
+// `parse-threw` is the one quarantine reason whose cause is OUR parser rather
+// than the file, so the fingerprint rule can never notice the parser was fixed.
+// Table A row A1 converts those records to DEFERRED ones — it does not delete
+// them, and it adds no `selectState` branch — and Table A row A4's one-shot
+// marker stops the sweep re-running. Every assertion below carries its
+// criterion's SIGNAL in its message: `tests/red-proofs/ledger-retry-parse-threw.proofs.json`
+// measures reds by that string.
+
+const LRP_KEY = ledgerLib.PARSE_THREW_RETRY_KEY;
+const LRP_MARKER = ledgerLib.PARSE_THREW_RETRY_MARKER;
+/** The baseline every LRP ledger carries, so "at or below it" is a real case. */
+const LRP_BASELINE = 2000;
+
+/** A codex discovery at `mtimeMs`. @param {string} name @param {number} mtimeMs */
+function lrpDisc(name, mtimeMs) {
+  return { harness: 'codex', path: `/tmp/wd-lrp-fixture/${name}.jsonl`, mtimeMs, size: 64, dev: 7, ino: 42 };
+}
+
+/** The record `recordQuarantined` writes for `d`, in its field order.
+ *  `reason === undefined` omits the field entirely. */
+function lrpQuarantine(d, reason) {
+  return {
+    fingerprint: ledgerLib.fingerprint(d),
+    outcome: 'quarantined',
+    ...(reason === undefined ? {} : { reason }),
+    updated_at: '2026-09-01T00:00:00.000Z',
+    harness: d.harness,
+  };
+}
+
+/**
+ * The fixed corpus: TWO `parse-threw` quarantines — one of them at or BELOW
+ * `baseline_mtime.codex`, which is the case a deletion-based retry silently
+ * loses (Table A row A9) — plus one record of every kind Table A row A2 says
+ * the sweep must leave alone, plus a baseline and an oversized memo.
+ * @returns {{ledger:object, retry:{below:object, above:object}, untouched:string[]}}
+ */
+function lrpCorpus() {
+  const below = lrpDisc('below-baseline', LRP_BASELINE - 1000);
+  const above = lrpDisc('above-baseline', LRP_BASELINE + 1000);
+  /** @type {Record<string, unknown>} */
+  const files = {};
+  const put = (d, rec) => { files[ledgerLib.foldKey(d.path)] = rec; return ledgerLib.foldKey(d.path); };
+  put(below, lrpQuarantine(below, 'parse-threw'));
+  put(above, lrpQuarantine(above, 'parse-threw'));
+
+  const untouched = [];
+  // every SIBLING quarantine reason, including the sticky one and the shapes
+  // a rejection list would have to enumerate: absent, non-string, later schema.
+  for (const reason of ['over-ceiling', 'too-many-lines', 'read-error', 'secret-revert-exhausted',
+    undefined, 42, 'a-reason-from-a-later-schema']) {
+    const d = lrpDisc(`q-${String(reason)}`, LRP_BASELINE + 1000);
+    untouched.push(put(d, lrpQuarantine(d, reason)));
+  }
+  // a secret-revert DEFERRAL carrying a live counter, and a PROCESSED record.
+  const def = lrpDisc('secret-deferred', LRP_BASELINE + 1000);
+  untouched.push(put(def, {
+    fingerprint: ledgerLib.fingerprint(def), outcome: 'deferred',
+    reason: 'secret-revert', deferrals: 2, updated_at: '2026-09-01T00:00:00.000Z', harness: 'codex',
+  }));
+  const done = lrpDisc('processed', LRP_BASELINE + 1000);
+  untouched.push(put(done, {
+    fingerprint: ledgerLib.fingerprint(done), outcome: 'processed',
+    updated_at: '2026-09-01T00:00:00.000Z', harness: 'codex',
+  }));
+  // a parse-threw record that is NOT a quarantine: the outcome half of row A2's
+  // positive test, which a reason-only match would convert.
+  const alreadyDeferred = lrpDisc('already-deferred-parse-threw', LRP_BASELINE + 1000);
+  untouched.push(put(alreadyDeferred, {
+    fingerprint: ledgerLib.fingerprint(alreadyDeferred), outcome: 'deferred',
+    reason: 'parse-threw', updated_at: '2026-09-01T00:00:00.000Z', harness: 'codex',
+  }));
+
+  return {
+    ledger: {
+      version: 1,
+      baseline_mtime: { claude: null, codex: LRP_BASELINE },
+      files,
+      oversizedExtracts: { '/tmp/wd-lrp-fixture/memo.jsonl': { fingerprint: '1:2:3:4', appVersion: '0.14.0', extractBytes: 9000000 } },
+    },
+    retry: { below, above },
+    untouched,
+  };
+}
+
+test('ledger: [LRP-1] the one-time retry makes a parse-threw quarantine selectable again — INCLUDING one at or below the baseline', () => {
+  const S = 'LRP-1-converted-record-must-select-even-at-or-below-baseline';
+  const { ledger, retry } = lrpCorpus();
+
+  // Before: both are skipped, and the file has NOT changed.
+  assert.equal(ledgerLib.selectState(ledger, retry.below), 'skip-quarantined', `${S}: the below-baseline parse-threw file must start out skipped`);
+  assert.equal(ledgerLib.selectState(ledger, retry.above), 'skip-quarantined', `${S}: the above-baseline parse-threw file must start out skipped`);
+  assert.ok(retry.below.mtimeMs <= ledger.baseline_mtime.codex, `${S}: the fixture is vacuous unless one retried file sits at or below baseline_mtime.codex`);
+
+  const swept = ledgerLib.retryParseThrewOnce(ledger);
+  assert.equal(swept.converted, 2, `${S}: both parse-threw quarantines must convert, got ${swept.converted}`);
+
+  // After: BOTH select, with no edit to the transcript and no change to its
+  // size:mtimeMs:dev:ino. The below-baseline one is the whole point — a
+  // DELETED record would land on the no-record path, which consults
+  // baseline_mtime first and answers 'skip-processed' for exactly this file.
+  assert.equal(ledgerLib.selectState(swept.ledger, retry.above), 'select', `${S}: the above-baseline parse-threw file must be reconsidered`);
+  assert.equal(
+    ledgerLib.selectState(swept.ledger, retry.below), 'select',
+    `${S}: the parse-threw file at or below baseline_mtime must be reconsidered too — a retry that removes the record answers 'skip-processed' here and loses the session silently`
+  );
+  // The fingerprint is carried through unchanged: that is what keeps the file
+  // off the baseline path at all.
+  assert.equal(
+    swept.ledger.files[ledgerLib.foldKey(retry.below.path)].fingerprint, ledgerLib.fingerprint(retry.below),
+    `${S}: the converted record must keep the fingerprint it had`
+  );
+  assert.notEqual(ledger, swept.ledger, `${S}: the sweep must return a NEW ledger`);
+  assert.equal(ledger.files[ledgerLib.foldKey(retry.below.path)].outcome, 'quarantined', `${S}: the sweep must not mutate its argument`);
+});
+
+test('ledger: [LRP-2] the one-time retry un-quarantines parse-threw and nothing else', () => {
+  const S = 'LRP-2-only-parse-threw-quarantines-convert';
+  const { ledger, untouched } = lrpCorpus();
+  const before = JSON.parse(JSON.stringify(ledger));
+
+  const swept = ledgerLib.retryParseThrewOnce(ledger);
+
+  for (const key of untouched) {
+    assert.equal(
+      JSON.stringify(swept.ledger.files[key]), JSON.stringify(before.files[key]),
+      `${S}: ${key} is not a parse-threw QUARANTINE and must be byte-identical afterwards`
+    );
+  }
+  assert.deepStrictEqual(swept.ledger.baseline_mtime, before.baseline_mtime, `${S}: baseline_mtime must be unchanged`);
+  assert.deepStrictEqual(swept.ledger.oversizedExtracts, before.oversizedExtracts, `${S}: oversizedExtracts must be unchanged`);
+  assert.deepStrictEqual(Object.keys(swept.ledger.files), Object.keys(before.files), `${S}: no record may be added or removed`);
+  assert.equal(swept.converted, 2, `${S}: exactly the two parse-threw quarantines convert, got ${swept.converted}`);
+});
+
+test('ledger: [LRP-3] the converted record is a well-formed deferral, and a file that still fails is re-quarantined', () => {
+  const S = 'LRP-3-converted-record-shape-and-secret-budget';
+  const { ledger, retry } = lrpCorpus();
+  const key = ledgerLib.foldKey(retry.above.path);
+
+  const swept = ledgerLib.retryParseThrewOnce(ledger);
+  const rec = swept.ledger.files[key];
+  assert.deepStrictEqual(
+    rec,
+    {
+      fingerprint: ledgerLib.fingerprint(retry.above),
+      outcome: 'deferred',
+      reason: 'parse-threw',
+      updated_at: rec && rec.updated_at,
+      harness: 'codex',
+    },
+    `${S}: the converted record must be exactly {fingerprint unchanged, outcome deferred, reason parse-threw, updated_at, harness}`
+  );
+  assert.ok(!Object.prototype.hasOwnProperty.call(rec, 'deferrals'), `${S}: the converted record must carry NO deferrals counter`);
+  assert.equal(typeof rec.updated_at, 'string', `${S}: the converted record must carry a fresh updated_at`);
+  assert.notEqual(rec.updated_at, ledger.files[key].updated_at, `${S}: updated_at must be refreshed by the conversion`);
+
+  // Table A row A10: a deferral whose reason is not secret-revert spends NO
+  // part of the secret-revert budget — the reason is what the guard keys on.
+  assert.equal(
+    ledgerLib.secretDeferralCount(swept.ledger, retry.above), 0,
+    `${S}: a deferred parse-threw record must count as 0 secret-revert deferrals — the full budget, not an invented exhaustion`
+  );
+
+  // Table A row A3: a file whose preparation still throws is re-quarantined by
+  // the dream's existing fault boundary, returns to the durable surfaces, and
+  // is skipped from the next run on — the sweep does not run again.
+  const requarantined = ledgerLib.recordQuarantined(swept.ledger, retry.above, 'parse-threw');
+  assert.equal(requarantined.files[key].outcome, 'quarantined', `${S}: a file that still fails must be recorded quarantined again`);
+  assert.ok(
+    ledgerLib.activeQuarantines(requarantined).some((q) => q.reason === 'parse-threw'),
+    `${S}: the re-quarantined file must be back among the active quarantines`
+  );
+  assert.equal(ledgerLib.selectState(requarantined, retry.above), 'skip-quarantined', `${S}: the next run must skip it`);
+  assert.equal(ledgerLib.retryParseThrewOnce(requarantined).converted, 0, `${S}: and the retry must not un-quarantine it a second time`);
+});
+
+test('ledger: [LRP-4] the one-shot marker survives a writeLedger round-trip, so the sweep never runs twice', () => {
+  const S = 'LRP-4-gate-is-one-shot-and-survives-a-write';
+  const state = tempState();
+  const { ledger } = lrpCorpus();
+
+  // A ledger that has never had the retry stays byte-compatible: no new key.
+  ledgerLib.writeLedger(state, ledger);
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(JSON.parse(fs.readFileSync(ledgerLib.ledgerPath(state), 'utf8')), LRP_KEY),
+    `${S}: a ledger that never had the retry must not gain the ${LRP_KEY} key`
+  );
+
+  // Run one: converts, and persists BOTH the conversions and the marker.
+  const first = ledgerLib.retryParseThrewOnce(ledgerLib.readLedger(state));
+  assert.equal(first.converted, 2, `${S}: the first sweep must convert the two parse-threw quarantines, got ${first.converted}`);
+  ledgerLib.writeLedger(state, first.ledger);
+  const onDisk = JSON.parse(fs.readFileSync(ledgerLib.ledgerPath(state), 'utf8'));
+  assert.equal(
+    onDisk[LRP_KEY], LRP_MARKER,
+    `${S}: writeLedger must serialize the one-shot marker — a marker set only in memory is dropped on the next write and the sweep re-runs forever`
+  );
+
+  // Run two, read back THROUGH THE FILE: zero, because the gate is set.
+  const reread = ledgerLib.readLedger(state);
+  assert.equal(reread[LRP_KEY], LRP_MARKER, `${S}: readLedger must carry the marker back`);
+  const second = ledgerLib.retryParseThrewOnce(reread);
+  assert.equal(
+    second.converted, 0,
+    `${S}: the second run must convert ZERO records, got ${second.converted} — without the gate the sweep re-arms the retry every night`
+  );
+  assert.equal(second.ledger, reread, `${S}: a gated sweep must return its argument untouched`);
+
+  // An unreadable marker is no marker: the sweep runs rather than trusting it.
+  for (const bad of [undefined, '', 1, null, {}]) {
+    fs.writeFileSync(ledgerLib.ledgerPath(state), JSON.stringify({ ...ledger, [LRP_KEY]: bad }));
+    assert.equal(
+      ledgerLib.retryParseThrewOnce(ledgerLib.readLedger(state)).converted, 2,
+      `${S}: an unreadable ${LRP_KEY} value (${JSON.stringify(bad)}) must not gate the sweep`
+    );
+  }
+});

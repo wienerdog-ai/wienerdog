@@ -1,0 +1,135 @@
+{
+  "suite": "tests/unit/ledger.test.js",
+  "proofs": [
+    {
+      "id": "rpt-deletion-instead-of-deferral",
+      "wp": "WP-ledger-retry-parse-threw-on-upgrade",
+      "criterion": "1",
+      "why": "the round-2 defect, declared so it cannot come back. Deleting the record instead of converting it puts the file on selectState's NO-RECORD path, which consults baseline_mtime FIRST and answers 'skip-processed' for any file at or below it. MEASURED: inside [LRP-1] the ABOVE-baseline file still selects under this mutation and only the at-or-below-baseline assertion reddens, which is the proof that criterion 1's corpus contains such a file; [LRP-2] and [LRP-3] also redden because they observe the record's continued EXISTENCE and its written shape, which a deletion destroys.",
+      "file": "src/core/dream/ledger.js",
+      "find": "      files[key] = {\n        fingerprint: rec.fingerprint,\n        outcome: 'deferred',\n        reason: 'parse-threw',\n        updated_at: updatedAt,\n        harness: rec.harness,\n      };",
+      "replace": "      delete files[key]; /* RP_MUT_LRP_DELETE — the round-1 design: remove the record instead of converting it */",
+      "marker": "RP_MUT_LRP_DELETE",
+      "occurrences": 1,
+      "testNamePattern": "\\[LRP-",
+      "expectRed": [
+        {
+          "test": [
+            "ledger: [LRP-1] the one-time retry makes a parse-threw quarantine selectable again — INCLUDING one at or below the baseline"
+          ],
+          "signal": "LRP-1-converted-record-must-select-even-at-or-below-baseline"
+        },
+        {
+          "test": [
+            "ledger: [LRP-2] the one-time retry un-quarantines parse-threw and nothing else"
+          ],
+          "signal": "LRP-2-only-parse-threw-quarantines-convert"
+        },
+        {
+          "test": [
+            "ledger: [LRP-3] the converted record is a well-formed deferral, and a file that still fails is re-quarantined"
+          ],
+          "signal": "LRP-3-converted-record-shape-and-secret-budget"
+        }
+      ]
+    },
+    {
+      "id": "rpt-reason-filter-widened",
+      "wp": "WP-ledger-retry-parse-threw-on-upgrade",
+      "criterion": "2",
+      "why": "the assertion observes WHICH records survive, not merely that something was dropped. With the reason equality widened to match any quarantined record the retry still 'works' for parse-threw and silently un-quarantines every sibling reason — including the sticky secret-revert-exhausted, which ADR-0023 Amendment 1 made sticky on purpose.",
+      "file": "src/core/dream/ledger.js",
+      "find": "    if (isPlainObject(rec) && rec.outcome === 'quarantined' && rec.reason === 'parse-threw') {",
+      "replace": "    if (isPlainObject(rec) && rec.outcome === 'quarantined') { /* RP_MUT_LRP_WIDEN */",
+      "marker": "RP_MUT_LRP_WIDEN",
+      "occurrences": 1,
+      "testNamePattern": "\\[LRP-",
+      "expectRed": [
+        {
+          "test": [
+            "ledger: [LRP-1] the one-time retry makes a parse-threw quarantine selectable again — INCLUDING one at or below the baseline"
+          ],
+          "signal": "LRP-1-converted-record-must-select-even-at-or-below-baseline"
+        },
+        {
+          "test": [
+            "ledger: [LRP-2] the one-time retry un-quarantines parse-threw and nothing else"
+          ],
+          "signal": "LRP-2-only-parse-threw-quarantines-convert"
+        },
+        {
+          "test": [
+            "ledger: [LRP-4] the one-shot marker survives a writeLedger round-trip, so the sweep never runs twice"
+          ],
+          "signal": "LRP-4-gate-is-one-shot-and-survives-a-write"
+        }
+      ]
+    },
+    {
+      "id": "rpt-gate-never-set",
+      "wp": "WP-ledger-retry-parse-threw-on-upgrade",
+      "criterion": "4",
+      "why": "the assertion observes the SECOND run, not just the first. Without the one-shot marker the sweep is correct once and then re-runs every night, re-arming a retry for a record the run itself just re-quarantined — the bounded-cost property ADR-0023 exists for.",
+      "file": "src/core/dream/ledger.js",
+      "find": "    ledger: { ...ledger, files, [PARSE_THREW_RETRY_KEY]: PARSE_THREW_RETRY_MARKER },",
+      "replace": "    ledger: { ...ledger, files }, /* RP_MUT_LRP_NO_GATE */",
+      "marker": "RP_MUT_LRP_NO_GATE",
+      "occurrences": 1,
+      "testNamePattern": "\\[LRP-",
+      "expectRed": [
+        {
+          "test": [
+            "ledger: [LRP-3] the converted record is a well-formed deferral, and a file that still fails is re-quarantined"
+          ],
+          "signal": "LRP-3-converted-record-shape-and-secret-budget"
+        },
+        {
+          "test": [
+            "ledger: [LRP-4] the one-shot marker survives a writeLedger round-trip, so the sweep never runs twice"
+          ],
+          "signal": "LRP-4-gate-is-one-shot-and-survives-a-write"
+        }
+      ]
+    },
+    {
+      "id": "rpt-gate-not-persisted",
+      "wp": "WP-ledger-retry-parse-threw-on-upgrade",
+      "criterion": "4",
+      "why": "the gate is set in memory and lost on write — a defect invisible to any single-process test that does not round-trip through the file. writeLedger serializes an explicit object literal, so a top-level key missing from it is dropped SILENTLY and the sweep re-runs forever.",
+      "file": "src/core/dream/ledger.js",
+      "find": "      ...optionalParseThrewRetry(ledger[PARSE_THREW_RETRY_KEY]),\n",
+      "replace": "      /* RP_MUT_LRP_NOT_PERSISTED */\n",
+      "marker": "RP_MUT_LRP_NOT_PERSISTED",
+      "occurrences": 1,
+      "testNamePattern": "\\[LRP-",
+      "expectRed": [
+        {
+          "test": [
+            "ledger: [LRP-4] the one-shot marker survives a writeLedger round-trip, so the sweep never runs twice"
+          ],
+          "signal": "LRP-4-gate-is-one-shot-and-survives-a-write"
+        }
+      ]
+    },
+    {
+      "id": "rpt-reason-dropped-on-conversion",
+      "wp": "WP-ledger-retry-parse-threw-on-upgrade",
+      "criterion": "3",
+      "why": "a deferred record with no reason still selects, so a test that only checks 'the file was read again' stays green — while secretDeferralCount's guard loses the value it keys on and the record stops saying why it is pending. The assertion observes the WRITTEN RECORD, not just the selection (Table A row A10).",
+      "file": "src/core/dream/ledger.js",
+      "find": "        reason: 'parse-threw',\n        updated_at: updatedAt,",
+      "replace": "        /* RP_MUT_LRP_NO_REASON */\n        updated_at: updatedAt,",
+      "marker": "RP_MUT_LRP_NO_REASON",
+      "occurrences": 1,
+      "testNamePattern": "\\[LRP-",
+      "expectRed": [
+        {
+          "test": [
+            "ledger: [LRP-3] the converted record is a well-formed deferral, and a file that still fails is re-quarantined"
+          ],
+          "signal": "LRP-3-converted-record-shape-and-secret-budget"
+        }
+      ]
+    }
+  ]
+}

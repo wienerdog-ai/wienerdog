@@ -1,7 +1,7 @@
 ---
 id: WP-ledger-retry-parse-threw-on-upgrade
 title: Give the hardened parser one bounded second look at transcripts quarantined parse-threw before it existed
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-transcript-parsers-harden-text-values]
@@ -205,6 +205,13 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       A rows A1–A5; `ledger.test.js` → the acceptance criteria; `dream.js` →
       Table A row A5; `dream-pipeline.test.js` → criterion 5; the proofs file →
       Table B; the ADR row → Table A row A7 and owner item 1
+- [ ] **ADR-0023 Amendment 4's prose** (registered in review, PR #307, round 1):
+      the amendment this package writes restates Table A rows A1, A2, A4, A5,
+      A6, A9 and A10 in sentences, so it is a mirror and defers to that table.
+      Judge it as whole paragraphs, never grep windows — two of its sentences
+      were measured false against the code in the commit that created them
+      (the key's byte-compatibility claim, and "the retry never runs on a
+      preview"), which is the drift owner item 1's overrule cost names
 - [ ] Acceptance criteria that assert its facts — criterion 1 asserts Table A
       rows A1, A5 and **A9** (its at-or-below-baseline file); criterion 2
       asserts Table A row A2; criterion 3 asserts Table A rows A3, A1 and

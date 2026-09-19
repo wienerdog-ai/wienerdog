@@ -709,6 +709,29 @@ async function run(argv, opts = {}) {
     const mig = ledgerLib.migrateFromWatermarks(paths.state, ledger);
     ledger = mig.ledger;
     if (mig.migrated && !dryRun) ledgerLib.writeLedger(paths.state, ledger);
+    // 4b. ONE-TIME retry (ADR-0023 Amendment 4), in the same shape as the
+    //     migration above and for the same reason: a transcript quarantined
+    //     `parse-threw` was refused because OUR parser threw, not because of
+    //     anything about the file, so the fingerprint rule can never notice the
+    //     parser was fixed. The sweep turns those records into deferred ones so
+    //     THIS run reconsiders them, and the marker it sets means it never runs
+    //     again on this install. The marker rides the in-memory ledger from
+    //     here on, so EVERY later write in this run persists it too; this write
+    //     exists for the case that has something to lose — records were
+    //     converted — and is guarded exactly like the migration's, so a run that
+    //     fails before it would have written anything still writes nothing.
+    //     Dry-run rule as above: the swept ledger is used in-memory only, the
+    //     file is left exactly as it was, and the next real run sweeps again
+    //     identically.
+    const retry = ledgerLib.retryParseThrewOnce(ledger);
+    ledger = retry.ledger;
+    if (retry.converted > 0 && !dryRun) ledgerLib.writeLedger(paths.state, ledger);
+    if (retry.converted > 0) {
+      const what = `${retry.converted} session transcript(s) that Wienerdog could not read before; its reader has since been fixed`;
+      console.log(dryRun
+        ? `wienerdog: dream plan (dry-run) — would try ${what}.`
+        : `wienerdog: dream — trying ${what}.`);
+    }
     const sel = collectExtracts(paths, ledger, cfg.maxInputBytes, {
       preprocessTimeoutMs: cfg.preprocessTimeoutMs,
     });
