@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const { WienerdogError } = require('../errors');
 const { defaultLayout, layoutPromptLines, resolveDailyPath } = require('../layout');
-const { redactOnly } = require('../secret-scan');
+const { createStreamRedactor } = require('../secret-scan');
 const { getProfile, composeClaudeArgs } = require('../runtime-profile');
 const { ensureSettingsProfile, loadVendoredSkill, settingsDigest } = require('../runtime-settings');
 const { getPaths } = require('../paths');
@@ -501,23 +501,41 @@ function spawnBrain(o) {
   // attacker-influenceable, so every chunk is redacted BEFORE it reaches the
   // durable log or the stderr tail. Per-chunk scanning is bounded (a chunk is
   // at most the OS pipe buffer; scanAndRedact self-bounds at SCAN_MAX_BYTES).
-  // Known limitation (OWNER-APPROVED 2026-07-17): a secret split across a
-  // chunk boundary may be only partially redacted — deliberately NOT buffered
-  // across chunks, because unbounded reassembly would reopen the WP-118
-  // OOM/DoS surface. The other A5 layers (EP2 whole-file scan, EP4 digest
-  // scan, WP-126 0600 log modes, no log content in email) cover the residual.
+  // The scan is no longer PER CHUNK, though. ADR-0043 withdrew per-chunk
+  // redaction because it was measured to leak outright: a secret split across a
+  // chunk boundary was redacted by NEITHER call and reached the durable log
+  // WHOLE and CONTIGUOUS — not "only partially redacted", which is what the
+  // withdrawn note claimed. Each stream below now buffers into its own redactor
+  // and cuts only where no detector rule can match across, bounded at
+  // ScanLimits.STREAM_REGION_MAX characters per stream; that BOUND, not the
+  // absence of buffering, is what answers the WP-118 OOM/DoS surface. Remaining
+  // residual: a FORCED cut inside a single logical line longer than that bound
+  // can still split a secret. The other A5 layers (EP2 whole-file scan, EP4
+  // digest scan, WP-126 0600 log modes, no log content in email) are untouched
+  // and still independent.
   //
   // Bounded rolling buffer of the brain's stderr so a failure is diagnosable
   // without opening the separate daily log (WP-039 surfaces this into the
   // "dream brain exited N" message). The tee does not close the caller's
   // stream — the caller owns it (the old pipe's { end:false } semantics).
+  //
+  // Set by the flush-and-latch step below: once it is true no handler writes to
+  // `logStream` or touches an accumulator again, so a child that outlives the
+  // run and still holds the inherited pipe cannot write into a stream the
+  // caller is closing.
+  let latched = false;
   let stderrTail = '';
+  const stderrRedactor = createStreamRedactor();
+  /** This stream's ONE emit step — the accounting is exactly what the per-chunk
+   *  body did, run on REGION text instead of chunk text. @param {string} text */
+  const emitStderr = (text) => {
+    if (text === '' || latched) return;
+    stderrTail = (stderrTail + text).slice(-STDERR_TAIL_MAX);
+    if (logStream) logStream.write(text);
+  };
   if (child.stderr) {
-    child.stderr.on('data', (chunk) => {
-      const redacted = redactOnly(chunk.toString('utf8'));
-      stderrTail = (stderrTail + redacted).slice(-STDERR_TAIL_MAX);
-      if (logStream) logStream.write(redacted);
-    });
+    child.stderr.on('data', (chunk) => emitStderr(stderrRedactor.push(chunk.toString('utf8'))));
+    child.stderr.on('end', () => emitStderr(stderrRedactor.end()));
   }
   // Bounded rolling HEAD of the brain's stdout + a cheap total-length counter
   // (WP-dream-plaintext-trigger, 2026-07-24 incident): a hermetic `claude -p`
@@ -540,21 +558,44 @@ function spawnBrain(o) {
   // pre-fix status quo (a vacuous run), not a new risk.
   let stdoutHead = '';
   let stdoutTotalLen = 0;
+  const stdoutRedactor = createStreamRedactor();
+  /** This stream's ONE emit step — the accounting is exactly what the per-chunk
+   *  body did, run on REGION text instead of chunk text, so `stdoutTotalLen`
+   *  still counts POST-REDACTION characters. @param {string} text */
+  const emitStdout = (text) => {
+    if (text === '' || latched) return;
+    stdoutTotalLen += text.length;
+    stdoutHead = (stdoutHead + text).slice(0, STDOUT_HEAD_MAX);
+    if (logStream) logStream.write(text);
+  };
   if (child.stdout) {
-    child.stdout.on('data', (chunk) => {
-      const redacted = redactOnly(chunk.toString('utf8'));
-      stdoutTotalLen += redacted.length;
-      stdoutHead = (stdoutHead + redacted).slice(0, STDOUT_HEAD_MAX);
-      if (logStream) logStream.write(redacted);
-    });
+    child.stdout.on('data', (chunk) => emitStdout(stdoutRedactor.push(chunk.toString('utf8'))));
+    child.stdout.on('end', () => emitStdout(stdoutRedactor.end()));
   }
+
+  /** The sink's flush-and-latch step, returned to the caller so it runs on EVERY
+   *  settle path — including the ones that throw before either pipe has emitted
+   *  `'end'`, which is why a pipe event alone is not sufficient. Synchronous,
+   *  idempotent, holds no descriptor, timer or process: it emits whatever each
+   *  redactor still holds through that stream's own emit step (so the write AND
+   *  the accounting both happen), then latches every later emit into a no-op. */
+  const flushAndLatch = () => {
+    if (latched) return;
+    emitStderr(stderrRedactor.end());
+    emitStdout(stdoutRedactor.end());
+    latched = true;
+  };
 
   // The facade re-emits only constructed events: `error` (a sanitized Error) and
   // `exit` ({code, signal}) — fired off the child's `close` so the stderr tail
   // is complete. No raw child/native emitter/event reaches this promise (R16).
   const done = new Promise((resolve, reject) => {
     child.on('error', reject);
-    child.on('exit', ({ code }) =>
+    child.on('exit', ({ code }) => {
+      // Both pipes are closed by now (the facade fires this off the child's
+      // `close`), so flushing here is what makes the three accumulators COMPLETE
+      // before the resolved object reads them.
+      flushAndLatch();
       resolve({
         code,
         durationMs: Date.now() - startedAt,
@@ -563,11 +604,11 @@ function spawnBrain(o) {
           stdoutTotalLen <= STDOUT_HEAD_MAX &&
           (isBareUnknownCommand(stdoutHead) ||
             (stdoutHead.replace(ANSI_RE, '').trim() === '' && isBareUnknownCommand(stderrTail))),
-      })
-    );
+      });
+    });
   });
 
-  return { child, done };
+  return { child, done, shutdown: flushAndLatch };
 }
 
 module.exports = {

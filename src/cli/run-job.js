@@ -10,7 +10,7 @@ const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { maybeRefresh } = require('../core/update-check');
 const { appendAlert, clearAlerts } = require('../core/alerts');
-const { redactOnly } = require('../core/secret-scan');
+const { redactOnly, createStreamRedactor } = require('../core/secret-scan');
 const { readDreamConfig } = require('../core/dream/config');
 const jobsLib = require('../scheduler/jobs');
 const gen = require('../scheduler/generators');
@@ -1015,6 +1015,11 @@ async function runJob(paths, job, opts = {}) {
   let logStream = null;
   let logStreamFailed = false;
   let logStreamErrCode = null;
+  /** The tee's flush-and-latch step, replaced once the stream handlers are
+   *  wired below. Declared out here because the `finally` that runs it is the
+   *  OUTER one; while the open threw before the handlers existed (R4-A) it stays
+   *  this no-op. @type {() => void} */
+  let shutdownTee = () => {};
   try {
     // Per-run log dir (0700) + stream (0600) — umask-independent and
     // fail-closed (WP-a9): mkdirPrivate defeats a permissive umask on the dir,
@@ -1045,20 +1050,37 @@ async function runJob(paths, job, opts = {}) {
       env,
       shell,
     });
-    // EP3 (audit A5 / ADR-0024 / WP-124): redact each chunk before it reaches
-    // the durable run log — the child (a routine brain too) is
-    // attacker-influenceable. Bounded per-chunk scan; a boundary-split secret
-    // may be partially redacted (accepted residual, see brain.js). The tee
+    // EP3 (audit A5 / ADR-0024 / WP-124): redact the child's output before it
+    // reaches the durable run log — the child (a routine brain too) is
+    // attacker-influenceable. NOT per chunk: ADR-0043 withdrew that, because a
+    // boundary-split secret was redacted by neither call and landed in the log
+    // whole (the measurement and the bound are written up in brain.js). Each
+    // stream buffers into its OWN redactor and cuts only where no detector rule
+    // can match across; the flush-and-latch step runs in the outer `finally`
+    // below, before the failure message and before the stream is ended. The tee
     // never closes the stream (the old pipe's { end:false } semantics).
+    let teeLatched = false;
+    /** The tee's ONE emit step, shared by both streams' `'data'` and `'end'`
+     *  handlers and by the flush below. @param {string} text */
+    const teeWrite = (text) => {
+      if (text === '' || teeLatched) return;
+      logStream.write(text);
+    };
+    const stdoutRedactor = createStreamRedactor();
+    const stderrRedactor = createStreamRedactor();
+    shutdownTee = () => {
+      if (teeLatched) return;
+      teeWrite(stdoutRedactor.end());
+      teeWrite(stderrRedactor.end());
+      teeLatched = true;
+    };
     if (child.stdout) {
-      child.stdout.on('data', (chunk) => {
-        logStream.write(redactOnly(chunk.toString('utf8')));
-      });
+      child.stdout.on('data', (chunk) => teeWrite(stdoutRedactor.push(chunk.toString('utf8'))));
+      child.stdout.on('end', () => teeWrite(stdoutRedactor.end()));
     }
     if (child.stderr) {
-      child.stderr.on('data', (chunk) => {
-        logStream.write(redactOnly(chunk.toString('utf8')));
-      });
+      child.stderr.on('data', (chunk) => teeWrite(stderrRedactor.push(chunk.toString('utf8'))));
+      child.stderr.on('end', () => teeWrite(stderrRedactor.end()));
     }
 
     const done = new Promise((resolve, reject) => {
@@ -1111,6 +1133,12 @@ async function runJob(paths, job, opts = {}) {
   } finally {
     // The open may have thrown before logStream was assigned (R4-A).
     if (logStream) {
+      // FIRST: flush every buffered region and latch the tee closed. Before the
+      // failure message, so the log's byte order is unchanged (teed output
+      // first, the failure line last); before `endStream`, so a child that
+      // outlives this run and still holds the inherited pipe writes nothing
+      // through the tee into a closing stream.
+      shutdownTee();
       // A13/WP-151: a non-Wienerdog error's raw message never reaches the durable
       // alert or the self-email. Preserve it for the user HERE — redacted, through
       // the SAME already-private fd, before it closes. Best-effort: a logging

@@ -3145,11 +3145,12 @@ const MARKER = '[REDACTED:anthropic-key]';
 // `artifact` is the file's text, read from disk after the sink ran.
 const safeOf = (artifact) => artifact.includes(MARKER) && !artifact.includes(PROBE_HEAD);
 
-const DEFECT_MSG = (id) =>
-  `${id}: this probe pins a KNOWN-OPEN defect and it now appears FIXED. ` +
-  'Do not delete this test to make the suite green. Convert it to the safe ' +
-  'form (assert.equal(safe, true, artifact)), move its row in Table P to ' +
-  'Status CORRECT, and say so in the PR.';
+// A FIXED failure message: a red probe must not print the probe value into CI
+// output. `artifact` is deliberately NOT interpolated here.
+const LEAK_MSG = (id) =>
+  `${id}: a secret split across two stream chunks must be redacted before it ` +
+  'reaches the durable log. See ADR-0043 and Table W of WP-secret-sink-chunk-fix; ' +
+  'do not weaken or delete this test.';
 
 /** Run the named job's fake script through runjob.run and return the one
  *  per-run job log's text on disk. @param {object} paths @param {string} script */
@@ -3174,7 +3175,7 @@ test('sink-probe: routine-log — a labelled secret in one stdout chunk is redac
 
 // Table S row S7 — src/cli/run-job.js
 test(
-  'sink-probe: routine-log — a labelled secret straddling two stdout chunks is NOT redacted in the job log (KNOWN DEFECT WD-SINK-CHUNK-RUNJOB-STDOUT)',
+  'sink-probe: routine-log — a labelled secret straddling two stdout chunks is redacted in the job log',
   async () => {
     const { root, env, paths } = setup();
     jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
@@ -3191,11 +3192,9 @@ test(
 
     const artifact = await readJobLog(env, paths, fake);
     const safe = safeOf(artifact);
-    assert.equal(safe, false, DEFECT_MSG('WD-SINK-CHUNK-RUNJOB-STDOUT'));
-    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
-    // exactly how a probe passes without the sink ever running. Assert the leak is
-    // POSITIVELY there.
-    assert.equal(artifact.includes(PROBE), true, DEFECT_MSG('WD-SINK-CHUNK-RUNJOB-STDOUT'));
+    // Non-vacuity rides on `safeOf`: it requires MARKER to be PRESENT, which an
+    // empty artifact cannot satisfy.
+    assert.equal(safe, true, LEAK_MSG('WD-SINK-CHUNK-RUNJOB-STDOUT'));
   }
 );
 
@@ -3212,7 +3211,7 @@ test('sink-probe: routine-log — a labelled secret in one stderr chunk is redac
 
 // Table S row S8 — src/cli/run-job.js
 test(
-  'sink-probe: routine-log — a labelled secret straddling two stderr chunks is NOT redacted in the job log (KNOWN DEFECT WD-SINK-CHUNK-RUNJOB-STDERR)',
+  'sink-probe: routine-log — a labelled secret straddling two stderr chunks is redacted in the job log',
   async () => {
     const { root, env, paths } = setup();
     jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
@@ -3227,11 +3226,9 @@ test(
 
     const artifact = await readJobLog(env, paths, fake);
     const safe = safeOf(artifact);
-    assert.equal(safe, false, DEFECT_MSG('WD-SINK-CHUNK-RUNJOB-STDERR'));
-    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
-    // exactly how a probe passes without the sink ever running. Assert the leak is
-    // POSITIVELY there.
-    assert.equal(artifact.includes(PROBE), true, DEFECT_MSG('WD-SINK-CHUNK-RUNJOB-STDERR'));
+    // Non-vacuity rides on `safeOf`: it requires MARKER to be PRESENT, which an
+    // empty artifact cannot satisfy.
+    assert.equal(safe, true, LEAK_MSG('WD-SINK-CHUNK-RUNJOB-STDERR'));
   }
 );
 
@@ -3259,4 +3256,84 @@ test('sink-probe: routine-log — a labelled secret in a job failure message is 
   const artifact = fs.readFileSync(path.join(logDir, logs[0]), 'utf8');
   const safe = safeOf(artifact);
   assert.equal(safe, true, artifact);
+});
+
+// -------------------------------------------------------------------------
+// ADR-0043 — the tee's flush-and-latch step (AC2a), driven through the REAL
+// watchdog timeout with a child that SURVIVES and still holds the pipe.
+// -------------------------------------------------------------------------
+
+test('sink-shutdown: routine-log — the watchdog teardown flushes the buffered partial line and latches the tee closed', {
+  skip: REAP_SKIP_WIN32,
+}, async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const go = path.join(root, 'go'); // the test creates this AFTER the teardown
+  const pidFile = path.join(root, 'survivor.pid');
+  const fake = writeScript(root, 'sink-shutdown-timeout.sh', [
+    '#!/bin/sh',
+    `echo $$ > ${JSON.stringify(pidFile)}`,
+    // A complete line (so the test can see the child reached the tee) followed
+    // by a PARTIAL line with NO trailing newline — the region that is buffered.
+    `printf 'ready-1\\nboom ${PROBE}'`,
+    `i=0; while [ ! -f ${JSON.stringify(go)} ] && [ $i -lt 400 ]; do sleep 0.05; i=$((i+1)); done`,
+    "printf ' trailer-after-teardown\\n'",
+  ]);
+  // Reap seams that DO NOT kill: the watchdog fires while the child lives on
+  // holding the inherited stdio, which is the state this criterion is about.
+  const { createLogStreamPrivate } = require('../../src/core/private-fs');
+  /** @type {Error[]} */ const streamErrors = [];
+
+  await assert.rejects(
+    withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      timeoutMs: 2000,
+      reapTree: () => {},
+      reapGroup: async () => ({ reaped: true }),
+      createLogStream: (p, o) => {
+        const s = createLogStreamPrivate(p, o);
+        s.on('error', (e) => streamErrors.push(e));
+        return s;
+      },
+      sendAlert: () => ({ status: 0 }),
+      loader: noopLoader,
+    }),
+    /timed out/
+  );
+
+  const logDir = path.join(paths.logs, 'dream');
+  const logs = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
+  assert.equal(logs.length, 1);
+  const logFile = path.join(logDir, logs[0]);
+  const afterTeardown = fs.readFileSync(logFile, 'utf8');
+  // (a) the partial line IS in the log, redacted. Before this WP it was written
+  // the moment it arrived, so losing it would be a REGRESSION, not a residual.
+  assert.ok(afterTeardown.includes('ready-1'), afterTeardown);
+  assert.ok(afterTeardown.includes('boom '), afterTeardown);
+  assert.ok(afterTeardown.includes(MARKER), afterTeardown);
+  assert.equal(afterTeardown.includes(PROBE_HEAD), false, 'no probe bytes survive the flush');
+
+  // (c) anything the surviving child writes after the teardown adds NOTHING.
+  fs.writeFileSync(go, '1');
+  const pid = Number(fs.readFileSync(pidFile, 'utf8').trim());
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      break; // the survivor finished its post-teardown write and exited
+    }
+    if (Date.now() >= deadline) break;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  assert.equal(fs.readFileSync(logFile, 'utf8'), afterTeardown, 'the latch swallowed the post-teardown write');
+  // (b) and it did so with no 'error' on the stream at all — never a
+  // write-after-end absorbed by run-job's listener.
+  assert.deepEqual(streamErrors, []);
+
+  try {
+    process.kill(-pid, 'SIGKILL'); // never strand the survivor this test created
+  } catch {
+    /* already gone */
+  }
 });

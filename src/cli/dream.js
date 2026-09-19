@@ -393,7 +393,7 @@ async function runBrainWithWatchdog(o) {
   // workspace before the spawn, promotes out of it afterwards, and tears it down
   // on every exit path. This is the line where the sibling's CLAIM 1 becomes
   // true of the running product.
-  const { child, done } = spawnBrain({
+  const { child, done, shutdown } = spawnBrain({
     // `vaultDir` is NOT a second write target — it is the run's real vault
     // (`cfg.vault`), passed so the brain's constructed environment can keep it
     // OUT. It must come from here: `wienerdog adopt` writes an arbitrary path
@@ -401,141 +401,150 @@ async function runBrainWithWatchdog(o) {
     // vault and sanitising against it would strip the wrong one.
     workspaceDir, vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
   });
-
-  // Hand the brain's identity UP to the outer supervisor, per-run token.
-  const pidfile =
-    o.runToken && o.paths && Number.isInteger(child.pid) && child.pid > 1
-      ? path.join(o.paths.state, `dream-brain.${o.runToken}.pid`)
-      : null;
-  if (pidfile) {
-    try {
-      // Atomic 0600 temp+rename, immediately post-spawn (sub-ms hand-up window).
-      writePrivate(pidfile, `${JSON.stringify({ pid: child.pid, pgid: child.pid })}\n`);
-    } catch (err) {
-      // R10-1: the hand-up write is FALLIBLE I/O (disk-full / permission /
-      // temp→final rename) and it failed AFTER the brain was spawned. No
-      // identity was handed up, so run-job's backstop (which reaps group B
-      // ONLY when the pidfile is present) can NEVER retry this group — this
-      // guard is the only reaper holding child.pid, and it must finish the job
-      // here: reap the just-spawned brain group NOW and FAIL the run (never
-      // proceed into the brain race as if supervised, never a silent exit).
-      // Distinct from the accepted sub-ms spawn→hand-up-window residual
-      // (there the write never runs; here the write itself failed).
-      let r = await reapGroupFn(child.pid, platform, seams);
-      if (!r || r.reaped !== true) {
-        // R11-3, unified with R8-1: on { reaped: false } do ONE bounded FINAL
-        // escalation while still holding child.pid (bounded — never an
-        // unbounded block-until-ESRCH; the unkillable D-state group is the
-        // ADR-0030 residual, surfaced loudly below).
-        r = await reapGroupFn(child.pid, platform, seams);
-        if (!r || r.reaped !== true) {
-          // Survivor-specific fail-loud: name the un-reaped brain group so
-          // run-job's alert + error watermark surface the surviving group.
-          throw new WienerdogError(
-            `dream failed: could not record the brain's process id for supervision ` +
-              `(${err.message}) AND the brain's process group ${child.pid} could not be reaped to ` +
-              'quiescence after a bounded escalation — a dream process may still be running ' +
-              '(ADR-0004; see ADR-0030).'
-          );
-        }
-      }
-      throw new WienerdogError(
-        `dream failed: could not record the brain's process id for supervision (${err.message}); ` +
-          'the brain was stopped and this run was aborted.'
-      );
-    }
-  }
-
-  let timer = null;
-  const watchdog = new Promise((_resolve, reject) => {
-    timer = setTimeout(() => {
-      // Reap the brain's REAL descendant tree from the authoritative process
-      // table (audit A10 — replaces the single inline group-kill): a brain
-      // child that re-detached into its own group is still a ppid-descendant
-      // and dies too. Best-effort; never throws.
-      reapTreeFn(child.pid, platform, seams);
-      reject(new WienerdogError(`dream timed out after ${Math.round(timeoutMs / 60000)} min`));
-    }, timeoutMs);
-  });
-
   try {
-    const result = await Promise.race([done, watchdog]);
-    if (result.code !== 0) {
-      const tail = (result.stderrTail || '').trim();
-      throw new WienerdogError(`dream brain exited ${result.code}${tail ? `: ${tail}` : ''}`);
-    }
-    sawUnknownCommand = result.sawUnknownCommand === true;
-    // THE COMPOUND GUARD'S SECOND HALF IS NOT KNOWN HERE (row G3). The text
-    // signal alone is attacker-influenceable — transcripts are untrusted, and a
-    // steered brain could END its output with the bare marker line — so the
-    // abort has always needed corroboration that the brain did NO WORK. That
-    // corroboration used to be vault-cleanliness, sound only because the tree
-    // was asserted clean immediately before the spawn: the premise
-    // the retired pre-commit supplied, and row G6 removes it.
-    //
-    // Under promotion the brain writes the WORKSPACE, so the evidence moves
-    // there: a genuine rejection produced an EMPTY workspace delta. That delta
-    // does not exist until the brain has settled AND the walk has run, which is
-    // the caller's ground — so the marker is SURFACED and the caller decides.
-    // The vault's cleanliness is no longer evidence of anything the brain did.
-  } finally {
-    if (timer) clearTimeout(timer);
-    {
-      // R6-2/R7-2 — PROVE group-B quiescence BEFORE releasing the hand-up, on
-      // EVERY settle where the brain leader has exited (not only on timeout:
-      // on a non-timeout brain-leader non-zero exit a same-PGID group-B child
-      // can survive the leader, and neither the inner watchdog — timeout-only
-      // — nor run-job — whose backstop reaps group B only while the pidfile is
-      // present — would reap it if this finally dropped the pidfile first).
-      // Order is load-bearing: FIRST the checked reapGroup(child.pid) — the
-      // negative-PGID kill that reaps surviving members even after the leader
-      // exited (brain pgid == child.pid) — THEN remove the pidfile ONLY on a
-      // verified { reaped: true }. On { reaped: false } (the bounded poll
-      // timed out with a member still present) RETAIN the pidfile so
-      // run-job's settle backstop can retry reapGroup(brain.pgid) — never
-      // delete a pidfile whose group is not yet verified empty. (reapGroup is
-      // idempotent: an already-empty group is a harmless ESRCH probe and
-      // returns { reaped: true } at once, so the clean path costs nothing.)
-      //
-      // ROW G2 MAKES THIS UNCONDITIONAL. It used to run inside `if (pidfile)`,
-      // and `pidfile` is null on a tokenless manual run — so on a standalone
-      // success the verdict was ABSENT, not merely discarded. The workspace walk
-      // that follows must not run while a member of the brain's group can still
-      // mutate the workspace, so the verdict is computed on EVERY run and
-      // surfaced to the caller, which refuses fail-closed on anything but a
-      // verified reap.
-      const r = await reapGroupFn(child.pid, platform, seams);
-      const reaped = !!(r && r.reaped === true);
-      if (pidfile && reaped) {
-        try {
-          fs.rmSync(pidfile, { force: true }); // unlink only after the verified reap
-        } catch {
-          /* best-effort */
-        }
-      }
-      // PLATFORM-SCOPED, and the scope is the repo's own (row G2).
-      // `src/core/reap.js:25-33` states that the leaderless-reparented-member
-      // guarantee is POSIX-only this release, and `:505-519` shows the win32
-      // branch returning `{reaped:false}` whenever `taskkill` cannot reach an
-      // already-exited leader — so a platform-blind fail-closed rule keyed on a
-      // verified group reap would refuse NORMAL Windows runs, which is the
-      // product not running. On win32 the precondition is satisfied instead by
-      // the brain leader's verified exit (we only reach this point on a settled,
-      // non-timeout leader) plus the tree-kill attempt above. The leaderless
-      // member is NAMED, not solved: it is `WP-a10-windows-reap`'s subject.
-      reap = platform === 'win32'
-        ? {
-            verified: true,
-            why: 'win32: the brain leader exited and the tree-kill ran; the leaderless-member '
-              + 'residual is WP-a10-windows-reap\'s subject',
+
+    // Hand the brain's identity UP to the outer supervisor, per-run token.
+    const pidfile =
+      o.runToken && o.paths && Number.isInteger(child.pid) && child.pid > 1
+        ? path.join(o.paths.state, `dream-brain.${o.runToken}.pid`)
+        : null;
+    if (pidfile) {
+      try {
+        // Atomic 0600 temp+rename, immediately post-spawn (sub-ms hand-up window).
+        writePrivate(pidfile, `${JSON.stringify({ pid: child.pid, pgid: child.pid })}\n`);
+      } catch (err) {
+        // R10-1: the hand-up write is FALLIBLE I/O (disk-full / permission /
+        // temp→final rename) and it failed AFTER the brain was spawned. No
+        // identity was handed up, so run-job's backstop (which reaps group B
+        // ONLY when the pidfile is present) can NEVER retry this group — this
+        // guard is the only reaper holding child.pid, and it must finish the job
+        // here: reap the just-spawned brain group NOW and FAIL the run (never
+        // proceed into the brain race as if supervised, never a silent exit).
+        // Distinct from the accepted sub-ms spawn→hand-up-window residual
+        // (there the write never runs; here the write itself failed).
+        let r = await reapGroupFn(child.pid, platform, seams);
+        if (!r || r.reaped !== true) {
+          // R11-3, unified with R8-1: on { reaped: false } do ONE bounded FINAL
+          // escalation while still holding child.pid (bounded — never an
+          // unbounded block-until-ESRCH; the unkillable D-state group is the
+          // ADR-0030 residual, surfaced loudly below).
+          r = await reapGroupFn(child.pid, platform, seams);
+          if (!r || r.reaped !== true) {
+            // Survivor-specific fail-loud: name the un-reaped brain group so
+            // run-job's alert + error watermark surface the surviving group.
+            throw new WienerdogError(
+              `dream failed: could not record the brain's process id for supervision ` +
+                `(${err.message}) AND the brain's process group ${child.pid} could not be reaped to ` +
+                'quiescence after a bounded escalation — a dream process may still be running ' +
+                '(ADR-0004; see ADR-0030).'
+            );
           }
-        : {
-            verified: reaped,
-            why: reaped
-              ? 'the brain process group was verified empty'
-              : 'the brain process group could not be verified empty',
-          };
+        }
+        throw new WienerdogError(
+          `dream failed: could not record the brain's process id for supervision (${err.message}); ` +
+            'the brain was stopped and this run was aborted.'
+        );
+      }
     }
+
+    let timer = null;
+    const watchdog = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => {
+        // Reap the brain's REAL descendant tree from the authoritative process
+        // table (audit A10 — replaces the single inline group-kill): a brain
+        // child that re-detached into its own group is still a ppid-descendant
+        // and dies too. Best-effort; never throws.
+        reapTreeFn(child.pid, platform, seams);
+        reject(new WienerdogError(`dream timed out after ${Math.round(timeoutMs / 60000)} min`));
+      }, timeoutMs);
+    });
+
+    try {
+      const result = await Promise.race([done, watchdog]);
+      if (result.code !== 0) {
+        const tail = (result.stderrTail || '').trim();
+        throw new WienerdogError(`dream brain exited ${result.code}${tail ? `: ${tail}` : ''}`);
+      }
+      sawUnknownCommand = result.sawUnknownCommand === true;
+      // THE COMPOUND GUARD'S SECOND HALF IS NOT KNOWN HERE (row G3). The text
+      // signal alone is attacker-influenceable — transcripts are untrusted, and a
+      // steered brain could END its output with the bare marker line — so the
+      // abort has always needed corroboration that the brain did NO WORK. That
+      // corroboration used to be vault-cleanliness, sound only because the tree
+      // was asserted clean immediately before the spawn: the premise
+      // the retired pre-commit supplied, and row G6 removes it.
+      //
+      // Under promotion the brain writes the WORKSPACE, so the evidence moves
+      // there: a genuine rejection produced an EMPTY workspace delta. That delta
+      // does not exist until the brain has settled AND the walk has run, which is
+      // the caller's ground — so the marker is SURFACED and the caller decides.
+      // The vault's cleanliness is no longer evidence of anything the brain did.
+    } finally {
+      if (timer) clearTimeout(timer);
+      {
+        // R6-2/R7-2 — PROVE group-B quiescence BEFORE releasing the hand-up, on
+        // EVERY settle where the brain leader has exited (not only on timeout:
+        // on a non-timeout brain-leader non-zero exit a same-PGID group-B child
+        // can survive the leader, and neither the inner watchdog — timeout-only
+        // — nor run-job — whose backstop reaps group B only while the pidfile is
+        // present — would reap it if this finally dropped the pidfile first).
+        // Order is load-bearing: FIRST the checked reapGroup(child.pid) — the
+        // negative-PGID kill that reaps surviving members even after the leader
+        // exited (brain pgid == child.pid) — THEN remove the pidfile ONLY on a
+        // verified { reaped: true }. On { reaped: false } (the bounded poll
+        // timed out with a member still present) RETAIN the pidfile so
+        // run-job's settle backstop can retry reapGroup(brain.pgid) — never
+        // delete a pidfile whose group is not yet verified empty. (reapGroup is
+        // idempotent: an already-empty group is a harmless ESRCH probe and
+        // returns { reaped: true } at once, so the clean path costs nothing.)
+        //
+        // ROW G2 MAKES THIS UNCONDITIONAL. It used to run inside `if (pidfile)`,
+        // and `pidfile` is null on a tokenless manual run — so on a standalone
+        // success the verdict was ABSENT, not merely discarded. The workspace walk
+        // that follows must not run while a member of the brain's group can still
+        // mutate the workspace, so the verdict is computed on EVERY run and
+        // surfaced to the caller, which refuses fail-closed on anything but a
+        // verified reap.
+        const r = await reapGroupFn(child.pid, platform, seams);
+        const reaped = !!(r && r.reaped === true);
+        if (pidfile && reaped) {
+          try {
+            fs.rmSync(pidfile, { force: true }); // unlink only after the verified reap
+          } catch {
+            /* best-effort */
+          }
+        }
+        // PLATFORM-SCOPED, and the scope is the repo's own (row G2).
+        // `src/core/reap.js:25-33` states that the leaderless-reparented-member
+        // guarantee is POSIX-only this release, and `:505-519` shows the win32
+        // branch returning `{reaped:false}` whenever `taskkill` cannot reach an
+        // already-exited leader — so a platform-blind fail-closed rule keyed on a
+        // verified group reap would refuse NORMAL Windows runs, which is the
+        // product not running. On win32 the precondition is satisfied instead by
+        // the brain leader's verified exit (we only reach this point on a settled,
+        // non-timeout leader) plus the tree-kill attempt above. The leaderless
+        // member is NAMED, not solved: it is `WP-a10-windows-reap`'s subject.
+        reap = platform === 'win32'
+          ? {
+              verified: true,
+              why: 'win32: the brain leader exited and the tree-kill ran; the leaderless-member '
+                + 'residual is WP-a10-windows-reap\'s subject',
+            }
+          : {
+              verified: reaped,
+              why: reaped
+                ? 'the brain process group was verified empty'
+                : 'the brain process group could not be verified empty',
+            };
+      }
+    }
+  } finally {
+    // ADR-0043 decision 7: flush every buffered region and latch the tee closed
+    // before the CALLER ends the log (the unawaited logStream.end() the caller
+    // runs after this returns, no 'error' listener). This finally must enclose
+    // the pidfile write and its failure reaping too — those throw before the
+    // watchdog try opens.
+    shutdown();
   }
 
   return { sawUnknownCommand, reap };

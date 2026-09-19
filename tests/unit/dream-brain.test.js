@@ -8,6 +8,9 @@ const path = require('node:path');
 
 const { buildClaudeArgs, spawnBrain, DREAM_PROMPT, ensureBrainStaging } = require('../../src/core/dream/brain');
 const { WienerdogError } = require('../../src/core/errors');
+// AC5 only: the ordering claim is "the log equals redactOnly over the whole
+// output". No probe uses this — they all read the artifact from disk.
+const { redactOnly } = require('../../src/core/secret-scan');
 
 const DREAM_SKILL_BODY = fs.readFileSync(
   path.join(__dirname, '..', '..', 'skills', 'wienerdog-dream', 'SKILL.md'),
@@ -514,11 +517,12 @@ const MARKER = '[REDACTED:anthropic-key]';
 // `artifact` is the file's text, read from disk after the sink ran.
 const safeOf = (artifact) => artifact.includes(MARKER) && !artifact.includes(PROBE_HEAD);
 
-const DEFECT_MSG = (id) =>
-  `${id}: this probe pins a KNOWN-OPEN defect and it now appears FIXED. ` +
-  'Do not delete this test to make the suite green. Convert it to the safe ' +
-  'form (assert.equal(safe, true, artifact)), move its row in Table P to ' +
-  'Status CORRECT, and say so in the PR.';
+// A FIXED failure message: a red probe must not print the probe value into CI
+// output. `artifact` is deliberately NOT interpolated here.
+const LEAK_MSG = (id) =>
+  `${id}: a secret split across two stream chunks must be redacted before it ` +
+  'reaches the durable log. See ADR-0043 and Table W of WP-secret-sink-chunk-fix; ' +
+  'do not weaken or delete this test.';
 
 /** Spawn a fake brain that writes `scriptLines` verbatim, teeing to a real
  *  on-disk logStream, and return { artifact } once the run + stream both
@@ -559,7 +563,7 @@ test('sink-probe: brain — a labelled secret in one stdout chunk is redacted in
 
 // Table S row S6 — src/core/dream/brain.js
 test(
-  'sink-probe: brain — a labelled secret straddling two stdout chunks is NOT redacted in the brain log (KNOWN DEFECT WD-SINK-CHUNK-BRAIN-STDOUT)',
+  'sink-probe: brain — a labelled secret straddling two stdout chunks is redacted in the brain log',
   async () => {
     // STRADDLE-CHUNK: two writes on the SAME stream, real chunk boundary forced
     // by a delay between them (measured sufficient on darwin/Node v25.9.0 —
@@ -571,11 +575,9 @@ test(
       `printf '%s\\n' '${PROBE_TAIL}'`,
     ]);
     const safe = safeOf(artifact);
-    assert.equal(safe, false, DEFECT_MSG('WD-SINK-CHUNK-BRAIN-STDOUT'));
-    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
-    // exactly how a probe passes without the sink ever running. Assert the leak is
-    // POSITIVELY there.
-    assert.equal(artifact.includes(PROBE), true, DEFECT_MSG('WD-SINK-CHUNK-BRAIN-STDOUT'));
+    // Non-vacuity rides on `safeOf`: it requires MARKER to be PRESENT, which an
+    // empty artifact cannot satisfy.
+    assert.equal(safe, true, LEAK_MSG('WD-SINK-CHUNK-BRAIN-STDOUT'));
   }
 );
 
@@ -588,7 +590,7 @@ test('sink-probe: brain — a labelled secret in one stderr chunk is redacted in
 
 // Table S row S5 — src/core/dream/brain.js
 test(
-  'sink-probe: brain — a labelled secret straddling two stderr chunks is NOT redacted in the brain log (KNOWN DEFECT WD-SINK-CHUNK-BRAIN-STDERR)',
+  'sink-probe: brain — a labelled secret straddling two stderr chunks is redacted in the brain log',
   async () => {
     // A SEPARATE handler from the stdout probe's — a stdout-only fix leaves this open.
     const artifact = await runProbeBrain([
@@ -597,10 +599,125 @@ test(
       `printf '%s\\n' '${PROBE_TAIL}' 1>&2`,
     ]);
     const safe = safeOf(artifact);
-    assert.equal(safe, false, DEFECT_MSG('WD-SINK-CHUNK-BRAIN-STDERR'));
-    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
-    // exactly how a probe passes without the sink ever running. Assert the leak is
-    // POSITIVELY there.
-    assert.equal(artifact.includes(PROBE), true, DEFECT_MSG('WD-SINK-CHUNK-BRAIN-STDERR'));
+    // Non-vacuity rides on `safeOf`: it requires MARKER to be PRESENT, which an
+    // empty artifact cannot satisfy.
+    assert.equal(safe, true, LEAK_MSG('WD-SINK-CHUNK-BRAIN-STDERR'));
   }
 );
+
+// -------------------------------------------------------------------------
+// ADR-0043 — the sink's flush-and-latch step (AC2a) and per-stream order (AC5)
+// -------------------------------------------------------------------------
+
+/** Spawn a fake brain teeing into a real on-disk stream and hand back the LIVE
+ *  handles, so a test can drive the shutdown step while the child is still
+ *  running and still holds the pipe. @param {string[]} scriptLines */
+function startProbeBrain(scriptLines) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-shutdown-'));
+  const fakeCmd = path.join(root, 'fake-brain.sh');
+  fs.writeFileSync(
+    fakeCmd,
+    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', ...scriptLines, 'exit 0', ''].join('\n')
+  );
+  fs.chmodSync(fakeCmd, 0o755);
+  const vaultDir = path.join(root, 'vault');
+  fs.mkdirSync(vaultDir);
+  const logFile = path.join(root, 'run.log');
+  const logStream = fs.createWriteStream(logFile);
+  // The dream path's logStream carries no 'error' listener in production; this
+  // recorder is the test's own, and it is what makes "no error was emitted"
+  // observable instead of a process-level crash.
+  /** @type {Error[]} */ const streamErrors = [];
+  logStream.on('error', (e) => streamErrors.push(e));
+  const spawned = spawnBrain({
+    workspaceDir: vaultDir,
+    vaultDir,
+    scratchDir: path.join(root, 'scratch'),
+    date: '2026-07-04',
+    model: null,
+    env: { ...process.env, ...pinFakeBrain(root, path.join(root, 'core'), fakeCmd) },
+    logStream,
+  });
+  return { ...spawned, root, logFile, logStream, streamErrors };
+}
+
+/** Poll `file` until it contains `needle` (or the deadline passes). */
+async function waitForLog(file, needle, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      if (fs.readFileSync(file, 'utf8').includes(needle)) return true;
+    } catch {
+      /* not created yet */
+    }
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  return false;
+}
+
+test('sink-shutdown: brain — shutdown() flushes the buffered partial line and latches the tee closed', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-gate-'));
+  const go = path.join(root, 'go'); // the test creates this AFTER the teardown
+  // STDERR, because `stderrTail` is this sink's OBSERVABLE accounting: "the
+  // latch stops the write" cannot be seen in the file alone (Node silently
+  // drops a write into an already-destroyed stream), but "the latch stops the
+  // ACCOUNTING" can, and the two are the same `emit` step.
+  const { done, shutdown, child, logFile, logStream, streamErrors } = startProbeBrain([
+    // A complete line (so the test can see the child reached the sink) followed
+    // by a PARTIAL line with NO trailing newline — the region that is buffered.
+    `printf 'ready-1\\nboom ${PROBE}' 1>&2`,
+    `i=0; while [ ! -f ${JSON.stringify(go)} ] && [ $i -lt 300 ]; do sleep 0.05; i=$((i+1)); done`,
+    `printf ' trailer-after-teardown\\n' 1>&2`,
+  ]);
+
+  assert.equal(await waitForLog(logFile, 'ready-1'), true, 'the child reached the sink');
+  // Teardown while the child SURVIVES and still holds the pipe.
+  shutdown();
+  shutdown(); // idempotent — a second call must do nothing
+  await new Promise((resolve) => logStream.end(resolve));
+
+  const afterTeardown = fs.readFileSync(logFile, 'utf8');
+  // (a) the partial line IS in the log, redacted. Before this WP it was written
+  // the moment it arrived, so losing it here would be a REGRESSION, not a
+  // residual.
+  assert.ok(afterTeardown.includes('boom '), afterTeardown);
+  assert.ok(afterTeardown.includes(MARKER), afterTeardown);
+  assert.equal(afterTeardown.includes(PROBE_HEAD), false, 'no probe bytes survive the flush');
+
+  // (c) anything the surviving child writes afterwards reaches NEITHER the log
+  // NOR the accumulator the flush had already completed.
+  fs.writeFileSync(go, '1');
+  const result = await done;
+  assert.equal(fs.readFileSync(logFile, 'utf8'), afterTeardown, 'the latch swallowed the post-teardown write');
+  assert.ok(result.stderrTail.includes(MARKER), 'the flush fed the accumulator too');
+  assert.equal(
+    result.stderrTail.includes('trailer-after-teardown'),
+    false,
+    'after the latch, every later emit is a no-op — no write AND no accounting'
+  );
+  // (b) and it did so without a write-after-end error on a stream that has no
+  // production 'error' listener.
+  assert.deepEqual(streamErrors, []);
+  child.kill('SIGKILL'); // belt and braces; the script has already exited
+});
+
+test('sink-order: brain — every region reaches the log in input order, nothing duplicated or dropped', async () => {
+  // ONE stream only: cross-stream interleaving is explicitly NOT a contract
+  // (Table W), so the ordering claim is made where it is actually promised.
+  const { done, logFile, logStream, streamErrors } = startProbeBrain([
+    `printf 'alpha line one\\nbeta-' 1>&2`, // the second line is SPLIT mid-line
+    'sleep 0.3',
+    `printf 'part two\\ngamma line three\\n' 1>&2`,
+    'sleep 0.3',
+    `printf 'delta tail\\n' 1>&2`,
+  ]);
+  const result = await done;
+  await new Promise((resolve) => logStream.end(resolve));
+
+  const expected = 'alpha line one\nbeta-part two\ngamma line three\ndelta tail\n';
+  assert.equal(redactOnly(expected), expected, 'the fixture output carries no secret');
+  assert.equal(fs.readFileSync(logFile, 'utf8'), redactOnly(expected));
+  assert.equal(result.stderrTail, expected, 'the tail is complete by the time `done` resolves');
+  assert.ok(result.stderrTail.endsWith('delta tail\n'), 'and it still ends with the last bytes written');
+  assert.deepEqual(streamErrors, []);
+});

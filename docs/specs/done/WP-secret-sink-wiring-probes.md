@@ -65,6 +65,43 @@ epic: secret-lifecycle
 > matching the existing helpers the spec mandates reusing, so the SYNTHETIC
 > probe value persists under the temp dir.
 
+<!-- a second, later errata block follows; the 2026-09-17 one ends above -->
+
+> **Post-fix record, 2026-09-18 — all seven KNOWN DEFECTS are CLOSED, and the
+> facts below are superseded.** Nothing in the spec text is edited; this block is
+> the pointer.
+>
+> - **The three truncation defects** — `WD-SINK-TRUNC-ALERTS`,
+>   `WD-SINK-TRUNC-RUNEV-ARGV`, `WD-SINK-TRUNC-RUNEV-FIELD` — were closed by
+>   `WP-secret-sink-redact-before-truncate`, which swapped the cut and the scan at
+>   Table S rows S1, S2 and S3. Probes P2, P4 and P6 are converted to the safe
+>   form and renamed; **that spec's Table B is canonical for their names**, and
+>   Table R's two declaration files were replaced by its Table C.
+> - **The four chunk defects** — `WD-SINK-CHUNK-BRAIN-STDOUT`,
+>   `WD-SINK-CHUNK-BRAIN-STDERR`, `WD-SINK-CHUNK-RUNJOB-STDOUT`,
+>   `WD-SINK-CHUNK-RUNJOB-STDERR` — were closed by `WP-secret-sink-chunk-fix` per
+>   **ADR-0043**, which withdrew per-chunk redaction in favour of a bounded
+>   transform that cuts only where no detector rule can match across. Probes P8,
+>   P11, P13 and P15 are converted and renamed; **that spec's Table X is
+>   canonical for their names.**
+> - **Superseded here:** Table P's `Status` column for P2, P4, P6, P8, P11, P13
+>   and P15 (all seven are now CORRECT); Table S's `Pattern` cells for rows
+>   S1–S3 (`truncate-then-redact`) and S5–S8 (`per-chunk`); the "nine CORRECT and
+>   seven DEFECT" count; "Accepted residuals" items 1 and 2; and owner item 2's
+>   open question, which ADR-0043 answers.
+> - **Also superseded, swept in this same block:** two further surfaces this
+>   record carries, both falsified by `WP-secret-sink-redact-before-truncate`
+>   (PR #303) before this package landed. (i) The count sentence at `:484-486`
+>   — "Sixteen probes across five files: nine CORRECT … and seven DEFECT (P2,
+>   P4, P6, P8, P11, P13, P15)" — became twelve CORRECT and four DEFECT at that
+>   merge and is **sixteen CORRECT and zero DEFECT** now. (ii) The verification
+>   script at `:892` hardcodes R1's `expectRed[0].test[0]` as P2's OLD name
+>   (the `… is NOT redacted in alerts.jsonl` form); Table R's declaration files
+>   were deleted and replaced by that spec's Table C, so the whole R1 check
+>   there is a record of what shipped, not a gate to re-run.
+> - **Not superseded:** Table S's inventory of nine call sites and its closure
+>   claim, the nine CORRECT probes' behaviour, and this spec's 2026-09-17 errata.
+
 <!-- errata above; the spec as it shipped follows -->
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
