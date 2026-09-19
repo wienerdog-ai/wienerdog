@@ -292,6 +292,10 @@ Canonical tables: **W** (the four sites and their wiring), **V** (the two commen
 corrections), **X** (the probe conversions), **Y** (the RED declarations), **Z**
 (the predecessor's errata block).
 
+### PR-gate round 1 ruling (PR #310 review, 2026-09-19)
+
+The literal `finally` block's cite `(dream.js:958, unawaited, no 'error' listener)` is replaced by the construct `(the unawaited logStream.end() the caller runs after this returns, no 'error' listener)` — the number went stale three times in three revisions. Architect ruling on a review gate; nothing here records the owner approving anything.
+
 ### Table W — canonical: the four per-chunk sites and their wiring
 
 | # | Old id | File | Stream | Current body | Accounting `emit(text)` must do, unchanged from today |

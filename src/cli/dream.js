@@ -540,9 +540,10 @@ async function runBrainWithWatchdog(o) {
     }
   } finally {
     // ADR-0043 decision 7: flush every buffered region and latch the tee closed
-    // before the CALLER ends the log (dream.js:981, unawaited, no 'error'
-    // listener). This finally must enclose the pidfile write and its failure
-    // reaping too — those throw before the watchdog try opens.
+    // before the CALLER ends the log (the unawaited logStream.end() the caller
+    // runs after this returns, no 'error' listener). This finally must enclose
+    // the pidfile write and its failure reaping too — those throw before the
+    // watchdog try opens.
     shutdown();
   }
 

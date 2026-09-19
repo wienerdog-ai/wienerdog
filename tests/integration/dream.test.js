@@ -1984,6 +1984,16 @@ test('dream-integration: R10-1 — a buffered partial line is flushed and the te
 
   assert.ok(thrown, 'the run FAILS — never a silent unsupervised continuation');
   assert.match(thrown.message, /could not record the brain's process id/);
+  // `dream.run` ends the log UNAWAITED (src/cli/dream.js, the `finally` around
+  // runBrainWithWatchdog), so the flushed region may still be in flight when
+  // this returns. Wait for it with a bound before snapshotting: a slow
+  // filesystem must not read as a lost partial line, and a genuinely lost one
+  // still fails here — the wait expires and the assertion goes red.
+  assert.equal(
+    await waitForLog(logFile, AC2B_MARKER, 5000),
+    true,
+    'the buffered partial line was flushed to the dream log before the caller closed it'
+  );
   const afterTeardown = fs.readFileSync(logFile, 'utf8');
   // (a) the partial line IS in the dream log, redacted.
   assert.ok(afterTeardown.includes('ready-1'), afterTeardown);
