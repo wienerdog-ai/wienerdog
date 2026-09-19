@@ -1,7 +1,7 @@
 ---
 id: WP-secret-sink-chunk-fix
 title: Close the whole-credential chunk-boundary leak at the four durable-log stream sinks
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-secret-sink-redact-before-truncate, WP-secret-stream-safe-cut-redactor]

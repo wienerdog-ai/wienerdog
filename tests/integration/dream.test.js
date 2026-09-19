@@ -1888,3 +1888,129 @@ test('dream-integration: a run that admits nothing writes no report at all, and 
   assert.ok(!/quarantin/i.test(r2.thrown.message), 'the failure message carries no quarantine count');
   assert.equal(fs.existsSync(path.join(excluded.vault, 'reports/dreams', `${DATE}.md`)), false);
 });
+
+// ── ADR-0043 AC2b — the CALLER-level flush: the pidfile-failure throw ───────
+//
+// The two throws at src/cli/dream.js:434/:442 unwind BEFORE the watchdog `try`
+// opens, so the existing reap `finally` never sees them. Only the outer
+// `finally` this WP added does — and it has to, because the caller ends the log
+// (unawaited, with no 'error' listener) the moment runBrainWithWatchdog throws.
+// AC2a cannot cover this: it drives spawnBrain directly and never runs the
+// caller path where the miss lives.
+
+/** The labelled `anthropic-key` rule (48 chars), split so neither half trips a
+ *  rule on its own — the same shape the sink probes use. */
+const AC2B_PROBE = 'sk-ant-api03-PROBE-aaaa-bbbb-cccc-dddd-eeee-ffff';
+const AC2B_MARKER = '[REDACTED:anthropic-key]';
+
+/** Poll `file` until it contains `needle` (or the deadline passes). Async, so
+ *  the parent's stream handlers keep running while we wait. */
+async function waitForLog(file, needle, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      if (fs.readFileSync(file, 'utf8').includes(needle)) return true;
+    } catch {
+      /* the log is not there yet */
+    }
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  return false;
+}
+
+test('dream-integration: R10-1 — a buffered partial line is flushed and the tee latched when the hand-up write throws and the brain survives (ADR-0043)', async () => {
+  const ctx = setup();
+  const logFile = path.join(ctx.core, 'logs', 'dream', `${DATE}.log`);
+  const go = path.join(ctx.root, 'go'); // created only AFTER the teardown
+  // A brain that writes one COMPLETE line (so the test can see it reached the
+  // tee) and then a PARTIAL line with no trailing newline — the buffered region
+  // — and then outlives the run still holding the inherited pipe.
+  const brain = path.join(ctx.root, 'partial-line-brain.sh');
+  fs.writeFileSync(
+    brain,
+    [
+      '#!/bin/sh',
+      'if [ "$1" = "--version" ]; then exit 0; fi',
+      `printf 'ready-1\\nboom ${AC2B_PROBE}'`,
+      `i=0; while [ ! -f ${JSON.stringify(go)} ] && [ $i -lt 400 ]; do sleep 0.05; i=$((i+1)); done`,
+      "printf ' trailer-after-teardown\\n'",
+      'exit 0',
+      '',
+    ].join('\n')
+  );
+  fs.chmodSync(brain, 0o755);
+
+  let survivorPid = 0;
+  const saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+  Object.assign(process.env, {
+    HOME: ctx.home,
+    WIENERDOG_HOME: ctx.core,
+    WIENERDOG_VAULT: ctx.vault,
+    CLAUDE_CONFIG_DIR: ctx.claude,
+    CODEX_HOME: ctx.codex,
+    WIENERDOG_FAKE_TODAY: DATE,
+    WIENERDOG_DREAM_RUN_TOKEN: TOKEN,
+    ...pinFakeBrain(ctx.root, ctx.core, brain, 'claude'),
+  });
+  delete process.env.WIENERDOG_FAKE_BRAIN_MODE;
+  let thrown = null;
+  try {
+    await dream.run(['--yes'], {
+      skipContainmentProbe: true,
+      now: NOW,
+      // The hand-up write fails AFTER the brain spawned (the R10-1 shape).
+      writeFilePrivate: () => {
+        throw new Error('disk full (injected write-fail)');
+      },
+      // Both attempts report { reaped: false } and NEITHER kills: the brain
+      // survives and keeps the pipe, which is the state this criterion is about.
+      // The first attempt also gives the brain time to reach the tee — the
+      // hand-up write races the spawn by design (a sub-ms window).
+      reapGroup: async (pgid) => {
+        survivorPid = pgid;
+        await waitForLog(logFile, 'ready-1');
+        return { reaped: false };
+      },
+    });
+  } catch (e) {
+    thrown = e;
+  } finally {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+
+  assert.ok(thrown, 'the run FAILS — never a silent unsupervised continuation');
+  assert.match(thrown.message, /could not record the brain's process id/);
+  const afterTeardown = fs.readFileSync(logFile, 'utf8');
+  // (a) the partial line IS in the dream log, redacted.
+  assert.ok(afterTeardown.includes('ready-1'), afterTeardown);
+  assert.ok(afterTeardown.includes('boom '), afterTeardown);
+  assert.ok(afterTeardown.includes(AC2B_MARKER), afterTeardown);
+  assert.equal(afterTeardown.includes(AC2B_PROBE.slice(0, 24)), false, 'no probe bytes survive the flush');
+
+  // (c) anything the surviving brain writes afterwards adds nothing to the log.
+  fs.writeFileSync(go, '1');
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    try {
+      process.kill(survivorPid, 0);
+    } catch {
+      break; // the survivor finished its post-teardown write and exited
+    }
+    if (Date.now() >= deadline) break;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  assert.equal(fs.readFileSync(logFile, 'utf8'), afterTeardown, 'the latch swallowed the post-teardown write');
+  // (b) that stream has NO 'error' listener in production, so a write into it
+  // after `logStream.end()` would be an unhandled 'error' — the test runner
+  // would report an uncaught exception and this run would not reach here.
+
+  try {
+    process.kill(-survivorPid, 'SIGKILL'); // never strand the survivor
+  } catch {
+    /* already gone */
+  }
+});
