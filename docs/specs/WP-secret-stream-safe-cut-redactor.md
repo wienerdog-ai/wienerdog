@@ -215,9 +215,9 @@ by S1 and needs nothing.
 | Value | `32 * 1024` **characters** |
 | Why this value, upper side | A region is scanned by one `redactOnly` call, and the detector does **not scan** an input over `SCAN_MAX_BYTES` (262144 bytes) — it replaces the whole input by its oversized marker, which would silently delete real log output. UTF-8 is at most 4 bytes per character, so `STREAM_REGION_MAX * 4 = 131072 < 262144` keeps every region scannable in the worst case |
 | Why this value, lower side | It must exceed one ordinary log line by a wide margin, so a forced cut is not the normal path. Larger values buy nothing: a cut is taken as soon as one is accepted, so the bound is reached only by a single logical line (or an open PEM block, an open quoted sensitive value, or an unbroken run of binder-terminated lines) longer than 32768 characters |
-| Memory ceiling | one buffer per redactor instance, at most `STREAM_REGION_MAX` characters held. `WP-secret-sink-chunk-fix` creates four instances (one per stream per sink), so at most 4 × 32768 characters are ever held |
+| Memory ceiling | one buffer per redactor instance, at most `STREAM_REGION_MAX` characters held BETWEEN calls, plus a transient: a `push` appends before it cuts, so during a call the buffer holds the appended chunk on top of that; plus per-instance prefix state bounded by the region — the non-whitespace index (at most `STREAM_REGION_MAX` entries), two per-position byte arrays of `STREAM_REGION_MAX + 1`, and four running maxima — measured at about 1.1 MiB for four instances in the worst case. The retained remainder is copied into independent storage after every cut, so an idle stream never keeps a larger previous chunk alive (PR gate round 4) |
 | Forced cut | the only unaccepted cut. It ends the region at exactly `STREAM_REGION_MAX` characters and is ADR-0043 decision 5's residual: a secret can still be split by it |
-| Adversarial case, priced | *Amended by round 4 — see the end of this section.* a child that emits `-----BEGIN RSA PRIVATE KEY-----` or `\"token\": \"` and then never closes it, or one long unbroken line, forces a cut every `STREAM_REGION_MAX` characters. That is bounded work and bounded memory, and it degrades to the pre-fix chunk behaviour for that stream — never worse, and never unbounded |
+| Adversarial case, priced | *Amended by round 4 — see the end of this section.* a child that emits `-----BEGIN RSA PRIVATE KEY-----` or `\"token\": \"` and then never closes it, or one long unbroken line, forces a cut every `STREAM_REGION_MAX` characters. That is bounded work and bounded memory, and it degrades to the pre-fix chunk behaviour for that stream — never worse, and never unbounded. Re-priced at PR gate round 4 (cold, fresh process, µs/char at chunk 1 / 64 / 4096): never-closed PEM opener 0.64 / 0.06 / 0.04; never-closed quoted value 0.58 / 0.06 / 0.02; open key binder 0.73 / 0.07 / 0.04; every line an open binder 0.56 / 0.38 / 0.41; keyword + whitespace 0.73 / 0.07 / 0.04; plain blank lines 2.07 / 0.05 / 0.02; one 16 MiB push 0.04. The ceiling is 24 µs/char |
 
 ### Table D — canonical: the declared RED proofs (ADR-0042)
 
@@ -334,12 +334,15 @@ review finding updates the table and all its mirrors **in the same commit**
       SCAN_MAX_BYTES` derivation, and that the ceiling is what survives a call).
 - [ ] **`isAcceptedCut`'s JSDoc in `src/core/secret-scan.js`** — mirrors Table S
       (the four rows, the incomplete-match preamble, and the new-rule obligation).
+- [ ] **`MAX_MICROS_PER_CHAR`, the six cost-row bait names, the chunk set
+      `[1, 64, 4096]` and the 16 MiB single-push test in
+      `tests/unit/secret-scan.test.js`** mirror the round-4 cost row.
 - [ ] **Frontmatter** — `adrs` (must list ADR-0043 and, while Table D is
       non-empty, ADR-0042).
 
 ### Design gate round 4 (PR #306 review, 2026-09-19) — Table B gains a cost row
 
-**Cost — bounded work, stated as a per-byte ceiling at a chunk-size envelope.** `push`/`end` perform work linear in the total input length: prefix-determined state (row S2's non-whitespace index, rows S3/S4's blocked ranges) is carried across pushes within a region and extended over the appended text only, and every regex subject is bounded to the current region, never the whole remaining input. The suite asserts a per-byte ceiling of at most `MAX_MICROS_PER_CHAR`, set at ≥ 8× the slowest shape measured on the tree that sets it, for each of: a never-closed PEM opener, a never-closed quoted sensitive value, an open key binder, every line an open binder, `keyword + whitespace run`, and plain blank lines — each in its candidate-dense form (opener followed by blank lines), at chunk sizes 1, 64 and 4096 characters, plus one single push of ≥ 16 MiB of inert text. The 'Adversarial case, priced' row's 'bounded work' means exactly this ceiling and nothing weaker.
+**Cost — bounded work, stated as a per-byte ceiling at a chunk-size envelope.** `push`/`end` perform work linear in the total input length: prefix-determined state (row S2's non-whitespace index, rows S3/S4's four running maxima (`lastQuote`, `jsonOpenEnd`, `pemOpenEnd`, `pemCloseStart`) and two per-position flags) is carried across pushes within a region and extended over the appended text only, and every regex subject is bounded to the current region, never the whole remaining input. The suite asserts a per-byte ceiling of at most `MAX_MICROS_PER_CHAR`, set at ≥ 8× the slowest shape measured on the tree that sets it, for each of: a never-closed PEM opener, a never-closed quoted sensitive value, an open key binder, every line an open binder, `keyword + whitespace run` (a run of spaces and tabs, no line breaks — distinct from the open-binder shape), and plain blank lines — each in its candidate-dense form (opener followed by blank lines), at chunk sizes 1, 64 and 4096 characters, plus one single push of ≥ 16 MiB of inert text. The 'Adversarial case, priced' row's 'bounded work' means exactly this ceiling and nothing weaker.
 
 ## Implementation notes & constraints
 
@@ -377,11 +380,14 @@ review finding updates the table and all its mirrors **in the same commit**
    a residual that fired at every chunk boundary.
 2. **This WP leaks nothing and fixes nothing.** It has no caller; the four
    `WD-SINK-CHUNK-*` defects are open at merge and their probes stay green.
-3. **A rule added later that spans a line break, without Table S being extended,
-   silently loses its cross-line coverage.** No mechanical check can detect it —
-   the obligation lives in ADR-0043 decision 3, in Table S, and in a comment at
-   the predicate. The failure mode is the pre-fix behaviour for that one rule,
-   not a new class of leak.
+3. **A rule added OR MODIFIED later that spans a line break, without Table S
+   being extended, silently loses its cross-line coverage.** The obligation
+   lives in ADR-0043 decision 3, in Table S, and in a comment at the predicate.
+   The cut constants derive from the rule shapes AS THEY STAND, so a later
+   change to a rule's separator group or filler class fails open until the cut
+   layer is updated in the same change; the suite's naive references derive from
+   `RULES`, so the exactness fuzz reddens on such a change. The failure mode is
+   the pre-fix behaviour for that one rule, not a new class of leak.
 
 ## Discovered issues / routed
 
@@ -632,6 +638,10 @@ acceptance.
    away; each round's raw reviewer output was committed **before** adjudication
    — `efd7d619` (r1), `c2490b4a` (r2), `dd6fb9e0` (r3) — and the dispositions
    table is `docs/specs/logbook/2026-09-18-secret-sink-fix-design-review.md`.
+   Rounds 4 and 5 are PR-gate rulings on PR #306 (2026-09-19), recorded in the
+   round-4 section above and in
+   `docs/specs/logbook/2026-09-19-secret-stream-safe-cut-pr306-gates.md`; the
+   design gate itself remains closed at round 3.
    **A closed design gate is a review gate, not owner approval**: the owner
    items below stay open in the standing form, and nothing in this repo records
    the owner approving, accepting or ratifying any of them or ADR-0043.

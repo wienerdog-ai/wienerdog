@@ -415,9 +415,28 @@ const CUT_JSON_KEY_SEP = new RegExp(`${CUT_JSON_VALUE_OPEN.source.slice(0, -1)}$
  *  patterns are `<head>[A-Z ]*PRIVATE KEY-----`, so a block can only open or
  *  close where that tail ends — which makes both detectable at a position
  *  rather than by a search. */
-const PEM_TAIL = CUT_PEM_OPEN.source.split('[A-Z ]*')[1];
-const PEM_OPEN_HEAD = CUT_PEM_OPEN.source.split('[A-Z ]*')[0];
-const PEM_CLOSE_HEAD = CUT_PEM_CLOSE.source.split('[A-Z ]*')[0];
+const PEM_FILLER = '[A-Z ]*';
+
+/** Split a private-key pattern at its filler class, or REFUSE TO LOAD. The
+ *  split is the one assumption the cut layer makes about these two rules, and a
+ *  change to the filler class would otherwise leave `PEM_TAIL` `undefined` and
+ *  throw out of `push`, which must never throw. Failing here names the rule and
+ *  fails at the right place. @param {RegExp} rule @param {string} name */
+function pemParts(rule, name) {
+  const parts = rule.source.split(PEM_FILLER);
+  if (parts.length !== 2) {
+    throw new Error(
+      `secret-scan: the ${name} rule no longer reads as <head>${PEM_FILLER}<tail> `
+        + `(source: ${rule.source}). Table S row S4's cut predicate is derived from that `
+        + 'shape — update it in the same change.',
+    );
+  }
+  return parts;
+}
+
+const PEM_TAIL = pemParts(CUT_PEM_OPEN, 'private-key opener')[1];
+const PEM_OPEN_HEAD = pemParts(CUT_PEM_OPEN, 'private-key opener')[0];
+const PEM_CLOSE_HEAD = pemParts(CUT_PEM_CLOSE, 'private-key closer')[0];
 
 /** `[A-Z ]` — the only thing either private-key pattern allows between its head
  *  and `PEM_TAIL`. @param {number} code @returns {boolean} */
@@ -670,6 +689,25 @@ function nextRegionEnd(buffer, rejected, state) {
 }
 
 /**
+ * A copy of `s` that shares nothing with the string it came from.
+ *
+ * `String.prototype.slice` does not copy in V8: it returns a view that keeps the
+ * WHOLE original alive. The buffer is re-based with `slice` after every cut, so
+ * without this a redactor idling on a 100-character remainder went on pinning
+ * the 32 MiB push it was cut out of — MEASURED at 32.1 MiB retained after
+ * `global.gc()`, which is the bounded-memory guarantee in Table B failing. The
+ * concatenation forces a flat result when it is sliced, so what comes back
+ * holds only its own characters.
+ *
+ * Only ever called on something already bounded by `STREAM_REGION_MAX`, so the
+ * copy is cheap; a test under `--expose-gc` is what holds the detachment.
+ * @param {string} s @returns {string}
+ */
+function detached(s) {
+  return s.length === 0 ? '' : ` ${s}`.slice(1);
+}
+
+/**
  * A bounded, stateful redactor for a text stream that arrives in arbitrary
  * chunks (ADR-0043). NOT a Node stream: plain synchronous calls, no events, no
  * file descriptor, no timer, no process (ADR-0004). Its state dies with the call
@@ -721,21 +759,28 @@ function createStreamRedactor() {
         return '';
       }
       let out = '';
+      let cutHere = false;
       for (;;) {
         const cut = nextRegionEnd(buffer, rejected, state);
         if (cut === 0) {
           rejected = Math.min(buffer.length, ScanLimits.STREAM_REGION_MAX);
           break;
         }
-        out += redactOnly(buffer.slice(0, cut));
+        // The region is detached too, so what this call HANDS BACK does not pin
+        // the push it was cut from either. One copy per region is linear.
+        out += redactOnly(detached(buffer.slice(0, cut)));
         buffer = buffer.slice(cut);
         rejected = 0;
+        cutHere = true;
         resetCutState(state);
       }
+      // Once, after the loop — where the remainder is below the ceiling, so the
+      // copy is bounded — and only when a cut actually re-based the buffer.
+      if (cutHere && buffer.length > 0) buffer = detached(buffer);
       return out;
     },
     end() {
-      const rest = buffer;
+      const rest = detached(buffer);
       buffer = '';
       rejected = 0;
       resetCutState(state);

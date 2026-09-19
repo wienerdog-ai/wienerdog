@@ -534,7 +534,9 @@ test('stream-redactor: two instances share no state (AC5)', () => {
  *  sampling was 2.69 (a private-key opener at chunk=1, on a loaded machine).
  *  This ceiling is 11x the former and 8.9x the latter. The spread across chunk
  *  sizes is wide on purpose — chunk=1 pays a `redactOnly` call per
- *  one-character region while chunk=4096 runs at 0.018-0.045 — and the ceiling
+ *  one-character region, while chunk=4096 runs at 0.017-0.45 (the open-binder
+ *  shape is the top of that range: every line ends in a binder, so no cut is
+ *  ever accepted and the ceiling forces one) — and the ceiling
  *  is a tripwire for a return to super-linear work, not a performance target:
  *  these same shapes measured 113-122 us/char at chunk=1 before the prefix
  *  state was carried across pushes, which is 45x over this ceiling. */
@@ -587,6 +589,41 @@ test('stream-redactor: every Table B shape holds the per-byte ceiling at every c
       );
     }
   }
+});
+
+test('stream-redactor: a bounded remainder does not pin the push it was cut from', () => {
+  // Table B's memory row. `String.prototype.slice` does not copy in V8 — it
+  // returns a view onto the WHOLE original — and the buffer is re-based with
+  // `slice` after every cut, so a redactor idling on a 100-character remainder
+  // went on pinning the 32 MiB push it came out of: MEASURED at 32.16 MiB still
+  // held after `global.gc()`, against 0.16 MiB once the remainder is copied into
+  // storage of its own.
+  //
+  // Run in a child process because the measurement needs `--expose-gc`, and in a
+  // function because a temporary created at the top level of a script stays
+  // rooted for the life of it — which hides exactly the thing being measured.
+  const { spawnSync } = require('node:child_process');
+  const probe = [
+    `const { createStreamRedactor } = require(${JSON.stringify(require.resolve('../../src/core/secret-scan'))});`,
+    'const MB = 1024 * 1024;',
+    'function feed(r) { r.push("a".repeat(32 * MB + 100)); }',
+    'const redactor = createStreamRedactor();',
+    'global.gc(); global.gc();',
+    'const before = process.memoryUsage().heapUsed;',
+    'feed(redactor);',
+    'global.gc(); global.gc();',
+    'const held = (process.memoryUsage().heapUsed - before) / MB;',
+    'if (typeof redactor.push !== "function") throw new Error("unreachable");',
+    'process.stdout.write(String(held));',
+  ].join('\n');
+  const run = spawnSync(process.execPath, ['--expose-gc', '-e', probe], { encoding: 'utf8' });
+  assert.equal(run.status, 0, `probe failed: ${run.stderr}`);
+  const heldMiB = Number(run.stdout);
+  assert.ok(Number.isFinite(heldMiB), `probe printed ${JSON.stringify(run.stdout)}`);
+  assert.ok(
+    heldMiB < 1,
+    `a 100-character remainder kept ${heldMiB.toFixed(2)} MiB of a 32 MiB push alive`,
+  );
 });
 
 test('stream-redactor: one enormous push costs the same per byte as the same bytes in chunks', () => {
@@ -675,23 +712,55 @@ test('stream-redactor: a completed sensitive value before the bound still offers
   assert.equal(out, whole, 'S2-no-open-key-binder-at-a-cut');
 });
 
+/** The detector's own source text, read once. EVERY naive reference in this
+ *  suite is derived from it — and, where the rule itself is the thing being
+ *  mirrored, from `RULES`'s own pattern rather than from the cut layer's
+ *  restatement of it, so the oracle cannot be wrong in the same direction as
+ *  the code it checks. A respelling makes an extraction fail loudly instead of
+ *  quietly narrowing the oracle. */
+let detectorSourceText = null;
+function detectorSource() {
+  if (detectorSourceText === null) {
+    detectorSourceText = require('node:fs')
+      .readFileSync(require.resolve('../../src/core/secret-scan'), 'utf8');
+  }
+  return detectorSourceText;
+}
+
+/** One captured group out of the detector's source, or a loud failure. */
+function detectorPiece(pattern, what) {
+  const m = pattern.exec(detectorSource());
+  assert.ok(m, `could not read ${what} out of the detector source`);
+  return m[1];
+}
+
+/** A template-literal body as the regex engine would see it: the source text
+ *  carries the escapes doubled, and `${SENSITIVE_KEYS}` still uninterpolated. */
+function asPatternSource(templateBody) {
+  const keys = detectorPiece(/^const SENSITIVE_KEYS =\s*\n\s*'([^']+)';$/m, 'SENSITIVE_KEYS');
+  return templateBody.split('${SENSITIVE_KEYS}').join(keys).replace(/\\\\/g, '\\');
+}
+
+/** THE one spelling of row S3's opener in this suite: the JSON value RULE's own
+ *  pattern with its value body removed, so what row S3 must detect is defined
+ *  by the rule it exists to keep whole. */
+function jsonOpenerSource() {
+  const rule = asPatternSource(detectorPiece(
+    /new RegExp\(`("\(\$\{SENSITIVE_KEYS\}\)"[^`]*)`, 'gi'\)/,
+    "the JSON value rule's pattern",
+  ));
+  const body = '([^"\\\\]{8,})"';
+  assert.ok(rule.endsWith(body), `the JSON value rule no longer ends with its value body: ${rule}`);
+  return rule.slice(0, -body.length);
+}
+
 /** Row S2's binder applied NAIVELY — to the whole prefix, with no window and no
- *  collapsing. Built from the detector's OWN source text so the two alternations
- *  cannot drift apart: a rename or respelling makes the extraction fail loudly
- *  instead of quietly narrowing the oracle. */
+ *  collapsing. */
 function naiveRowS2Reference() {
-  const fs = require('node:fs');
-  const src = fs.readFileSync(require.resolve('../../src/core/secret-scan'), 'utf8');
-  const keys = /^const SENSITIVE_KEYS =\s*\n\s*'([^']+)';$/m.exec(src);
-  const sep = /^const SEP = \/(.*)\/\.source;$/m.exec(src);
-  assert.ok(keys, 'could not read SENSITIVE_KEYS out of the detector source');
-  assert.ok(sep, 'could not read SEP out of the detector source');
+  const keys = detectorPiece(/^const SENSITIVE_KEYS =\s*\n\s*'([^']+)';$/m, 'SENSITIVE_KEYS');
+  const sep = detectorPiece(/^const SEP = \/(.*)\/\.source;$/m, 'SEP');
   return {
-    binder: new RegExp(
-      `(?:${keys[1]}|authorization)["'\`]?(?:\\s*(?:${sep[1]})\\s*|\\s*)["'\`]?$`,
-      'i',
-    ),
-    jsonOpen: new RegExp(`"(?:${keys[1]})"\\s*:\\s*"`),
+    binder: new RegExp(`(?:${keys}|authorization)["'\`]?(?:\\s*(?:${sep})\\s*|\\s*)["'\`]?$`, 'i'),
   };
 }
 
@@ -704,6 +773,7 @@ test('stream-redactor: row S2 agrees with the naive whole-prefix binder at every
   // used to carry — are generated on purpose, because that is precisely where a
   // windowed or bounded row S2 diverges from the naive one.
   const ref = naiveRowS2Reference();
+  const jsonOpenRe = new RegExp(jsonOpenerSource(), 'i');
   const PEM_OPEN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
   let seed = 0x5eed1;
   const rand = (n) => {
@@ -769,7 +839,7 @@ test('stream-redactor: row S2 agrees with the naive whole-prefix binder at every
     // Rows S1 and S2 alone must decide the cut, and a region's emitted length
     // must equal its input length: so no open quoted value, no private key, and
     // nothing the detector redacts.
-    if (ref.jsonOpen.test(text) || PEM_OPEN.test(text)) continue;
+    if (jsonOpenRe.test(text) || PEM_OPEN.test(text)) continue;
     if (redactOnly(text) !== text) continue;
     texts += 1;
     if (/\s{1025,}/.test(text)) longRuns += 1;
@@ -794,20 +864,19 @@ test('stream-redactor: row S2 agrees with the naive whole-prefix binder at every
   assert.ok(longRuns > 0, 'corpus must contain whitespace runs past the retired 1024 bound');
 });
 
-/** The row S3 and row S4 opener/closer shapes, read out of the detector's own
- *  source so a respelling cannot leave these oracles quietly behind. */
+/** Rows S3 and S4's opener/closer shapes — both taken from the RULES the rows
+ *  exist to keep whole, never from the cut layer's own constants: the
+ *  private-key rule split at its lazy body gives the opener and the closer. */
 function naiveRowS3S4Reference() {
-  const fs = require('node:fs');
-  const src = fs.readFileSync(require.resolve('../../src/core/secret-scan'), 'utf8');
-  const keys = /^const SENSITIVE_KEYS =\s*\n\s*'([^']+)';$/m.exec(src);
-  const pemOpen = /^const CUT_PEM_OPEN = \/(.*)\/\w*;$/m.exec(src);
-  const pemClose = /^const CUT_PEM_CLOSE = \/(.*)\/\w*;$/m.exec(src);
-  assert.ok(keys, 'could not read SENSITIVE_KEYS out of the detector source');
-  assert.ok(pemOpen && pemClose, 'could not read the private-key shapes out of the detector source');
+  const pem = detectorPiece(
+    /simpleRule\(\s*\/(-----BEGIN .*?)\/g,\s*\n\s*'private-key'/,
+    "the private-key rule's pattern",
+  ).split('[\\s\\S]*?');
+  assert.equal(pem.length, 2, `the private-key rule no longer reads as <open>[\\s\\S]*?<close>`);
   return {
-    jsonOpen: new RegExp(`"(?:${keys[1]})"\\s*:\\s*"`, 'iy'),
-    pemOpen: new RegExp(pemOpen[1], 'y'),
-    pemClose: new RegExp(pemClose[1], 'y'),
+    jsonOpen: new RegExp(jsonOpenerSource(), 'iy'),
+    pemOpen: new RegExp(pem[0], 'y'),
+    pemClose: new RegExp(pem[1], 'y'),
   };
 }
 
@@ -889,6 +958,9 @@ test('stream-redactor: rows S3 and S4 agree with naive whole-prefix predicates a
   const s3Tokens = [
     '"', '"token"', '"token":', '"token": "', '"client_secret"', ':', ' ', '\n', '\n\n',
     'abc', 'x', '"x"', 'defghijkl"', '\\', "'", '`', '": "', 'password',
+    // Separators the rule does NOT accept, so that widening the rule's own
+    // separator group shows up here as a divergence rather than silently.
+    '=', '"token"=', '"token"= "', '=>', '"token":=', '?=',
   ];
   // Row S4 corpus: whole and partial private-key delimiters, so openers and
   // closers land at every alignment, nested and overlapping included.
@@ -899,9 +971,40 @@ test('stream-redactor: rows S3 and S4 agree with naive whole-prefix predicates a
     'MIIBOgIBAAJBAKj', '\n', '\n\n', ' ', 'abc',
   ];
 
+  // Seeded shapes, so the separator/filler coverage below is guaranteed rather
+  // than left to the generator: each is an opener spelled the way its RULE
+  // spells it, left unclosed across a line break. Widening a rule's separator
+  // group or filler class moves the reference (it derives from `RULES`) without
+  // moving the cut layer, and these are where that shows up (Accepted residual 3).
+  const seeded = {
+    S3: [
+      '"token": "abc\ndefghijkl"\n',
+      '"token"= "abc\ndefghijkl"\n',
+      '"token":= "abc\ndefghijkl"\n',
+      '"token"=> "abc\ndefghijkl"\n',
+      '"token"\n: "abc\ndefghijkl"\n',
+      '"client_secret" : "abc\ndefghijkl"\n',
+    ],
+    S4: [
+      '-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKj\n-----END RSA PRIVATE KEY-----\n',
+      '-----BEGIN PRIVATE KEY-----\nMIIBOgIBAAJBAKj\n',
+      '-----BEGIN rsa PRIVATE KEY-----\nMIIBOgIBAAJBAKj\n-----END rsa PRIVATE KEY-----\n',
+      '-----BEGIN RSA PRIVATE KEY-----\n-----END OTHER PRIVATE KEY-----\n',
+      '-----BEGIN A-B PRIVATE KEY-----\nMIIBOgIBAAJBAKj\n',
+    ],
+  };
+
   for (const [row, tokens] of [['S3', s3Tokens], ['S4', s4Tokens]]) {
     let candidates = 0;
     let texts = 0;
+    for (const text of seeded[row]) {
+      for (let k = 0; k < text.length; k += 1) if (text.charCodeAt(k) === 10) candidates += 1;
+      assert.deepEqual(
+        observedCuts(text).cuts,
+        naiveCuts(text, binder, ref),
+        `row ${row} disagreed with the naive predicate on the seeded shape ${JSON.stringify(text)}`,
+      );
+    }
     for (let attempt = 0; attempt < 3000 && candidates < 6000; attempt += 1) {
       let text = '';
       for (let n = 4 + rand(12); n > 0; n -= 1) text += pick(tokens);
