@@ -1477,6 +1477,23 @@ function isAbsentCode(code) {
   return code === 'ENOENT' || code === 'ENOTDIR';
 }
 
+/**
+ * Record a level whose state could not be determined — ONE entry per DIRECTORY.
+ * **Table Y row Y1 is why `dir` is always a directory and never an entry path:**
+ * every `unreadable[].dir` is printed verbatim by the refusal and by
+ * `--dry-run`, and a shelf entry's basename is derived from the user's own note
+ * path, so a failing `lstat` on a quarantined FILE must be reported against the
+ * directory that holds it. De-duplicated for the same reason a directory listing
+ * is: one damaged permission should not print one line per file under it.
+ * @param {Array<{dir:string, code:string}>} unreadable
+ * @param {string} dir a DIRECTORY path — never an entry's path
+ * @param {string} code @returns {void}
+ */
+function pushUnreadable(unreadable, dir, code) {
+  if (unreadable.some((u) => u.dir === dir)) return;
+  unreadable.push({ dir, code });
+}
+
 /** Sorted child names of `dir`, or null when it is absent or could not be
  *  enumerated (the latter recorded in `unreadable`). Sorted so the walk — and
  *  therefore the refusal it feeds — is deterministic across platforms.
@@ -1491,7 +1508,7 @@ function readShelfNames(dir, unreadable) {
   } catch (e) {
     const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
     if (isAbsentCode(code)) return null; // ABSENT — not an error (K3)
-    unreadable.push({ dir, code }); // UNREADABLE — the state is UNKNOWN (K3/K4)
+    pushUnreadable(unreadable, dir, code); // UNREADABLE — the state is UNKNOWN (K3/K4)
     return null;
   }
 }
@@ -1522,7 +1539,9 @@ function countShelfTree(dir, row, unreadable, roots, top) {
     } catch (e) {
       const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
       if (isAbsentCode(code)) continue; // vanished under the walk — absence again
-      unreadable.push({ dir: full, code });
+      // The CONTAINING directory, never `full`: `full` carries the note's
+      // basename and every unreadable entry is printed verbatim (Table Y row Y1).
+      pushUnreadable(unreadable, dir, code);
       row.entries += 1; // something IS there; we merely could not classify it
       continue;
     }
@@ -1552,24 +1571,29 @@ function countShelfTree(dir, row, unreadable, roots, top) {
  * by ASCII CASE FOLD of their names (K8), never by byte equality.
  * @param {import('./paths').WienerdogPaths} paths
  * @returns {{roots: Array<{dir:string, entries:number, bytes:number}>,
- *            entries:number, bytes:number,
+ *            blockers: string[], entries:number, bytes:number,
  *            unreadable: Array<{dir:string, code:string}>}}
  *   `roots` — the shelf directories that EXIST as directories, in the fixed
  *     order [<state>/quarantine, <state>/quarantine/redacted], each with the
  *     counts of what it holds; an absent root is omitted. **A root itself is
  *     never counted** (K2).
+ *   `blockers` — the ACTUAL paths of non-directory objects occupying a shelf
+ *     root name (a file or symlink at `<state>/Quarantine`). Each is one entry
+ *     by K2 and is NOT a shelf directory, so it gets no `roots` row — but the
+ *     path is carried so the refusal can name the thing the user must actually
+ *     deal with. Added at PR round 1: without it the remedy named the canonical
+ *     lowercase path, which on a case-sensitive volume does not exist, so the
+ *     printed `rm -rf` succeeded silently and the uninstall refused forever.
  *   `entries`/`bytes` — totals over the whole walk; `bytes` sums regular files'
  *     `size` only. Two empty shelf directories give `entries: 0`.
  *   `unreadable` — non-empty means the shelf's state is UNKNOWN, and at the gate
- *     that ABORTS a non-dry-run uninstall (K4).
+ *     that ABORTS a non-dry-run uninstall (K4). Every `dir` is a DIRECTORY and
+ *     the list is de-duplicated (Table Y row **Y1**).
  */
 function quarantineInventory(paths) {
   /** @type {Array<{dir:string, entries:number, bytes:number}>} */ const roots = [];
+  /** @type {string[]} */ const blockers = [];
   /** @type {Array<{dir:string, code:string}>} */ const unreadable = [];
-  // Entries counted outside any root row: a non-directory sitting ON a shelf
-  // root path is not the product's directory, it is something else occupying
-  // the name, so it is one entry and gets no row of its own (K2).
-  let strays = 0;
 
   const stateNames = readShelfNames(paths.state, unreadable);
   for (const name of stateNames || []) {
@@ -1581,12 +1605,16 @@ function quarantineInventory(paths) {
     } catch (e) {
       const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
       if (isAbsentCode(code)) continue;
-      unreadable.push({ dir: qdir, code });
-      strays += 1;
+      // `qdir` is safe to name: its basename already matched the closed ASCII
+      // case-fold set, so it carries no user-derived text (Table Y rows Y1/Y4).
+      pushUnreadable(unreadable, qdir, code);
+      blockers.push(qdir);
       continue;
     }
     if (!st.isDirectory()) {
-      strays += 1;
+      // Not the product's directory — something else sitting where it should
+      // be. One entry, no row, and the path is carried so it can be named (K2).
+      blockers.push(qdir);
       continue;
     }
     /** @type {{dir:string, entries:number, bytes:number}} */
@@ -1595,13 +1623,13 @@ function quarantineInventory(paths) {
     countShelfTree(qdir, row, unreadable, roots, true);
   }
 
-  let entries = strays;
+  let entries = blockers.length;
   let bytes = 0;
   for (const r of roots) {
     entries += r.entries;
     bytes += r.bytes;
   }
-  return { roots, entries, bytes, unreadable };
+  return { roots, blockers, entries, bytes, unreadable };
 }
 
 /**

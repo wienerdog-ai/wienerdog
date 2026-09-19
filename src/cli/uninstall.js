@@ -313,30 +313,51 @@ const QUARANTINE_HEDGE =
   'Some or all of these may be the only copy of that text on this computer, and they hold the original, not a blanked-out version.';
 
 /**
+ * POSIX single-quote a path so the printed remedy lines are SAFE TO COPY.
+ * Double quotes were not: inside them a shell still expands `$`, `` ` `` and
+ * `\`, so a core under a home directory containing `$HOME`, a backtick or a
+ * quote character would produce an `rm -rf` line that addresses a DIFFERENT
+ * path, or that executes the embedded text — on a command whose whole purpose
+ * is to delete the user's only copy of their own notes. Inside single quotes
+ * nothing is special, and the one character that cannot appear is escaped the
+ * only way POSIX allows: end the quoting, emit a literal quote, resume.
+ * Table W row **W4** pins the CONTENT of the five items, not the quoting.
+ * @param {string} p @returns {string}
+ */
+function shQuote(p) {
+  return `'${String(p).split("'").join("'\\''")}'`;
+}
+
+/**
  * The secret-quarantine disclosure block (Table W row **W4**), printed
  * byte-for-byte by the refusal and by `--dry-run` (Table W row **W5**) so the
  * two can never disagree about what is on the shelf. It carries the total entry
  * count and the total size in bytes as a plain integer, one line per shelf
  * directory that HOLDS at least one entry (an existing-but-empty shelf
  * contributes no entry by Table K row **K2** and so no line — a refusal listing
- * an empty directory would tell the user to deal with nothing), the hedge, and
- * the remedy as two literal shell lines followed by the re-run and the runbook
- * pointer. When the shelf's state could not be determined it names each
- * directory and its `code` instead of a count.
+ * an empty directory would tell the user to deal with nothing), one line per
+ * `blockers` path, the hedge, and the remedy as two literal shell lines followed
+ * by the re-run and the runbook pointer. When the shelf's state could not be
+ * determined it names each directory and its `code` instead of a count.
  *
  * It NEVER prints a filename and never a byte of any file's content (Table Y row
- * **Y1**): the inventory opened no file (Table K row **K6**), and the user is
- * about to list the directory themselves, so printing names buys nothing and not
+ * **Y1**): the inventory opened no file (Table K row **K6**), every
+ * `unreadable[].dir` is a DIRECTORY rather than an entry, and the user is about
+ * to list the directory themselves, so printing names buys nothing and not
  * printing them is strictly safer.
- * @param {{roots:Array<{dir:string, entries:number, bytes:number}>, entries:number, bytes:number, unreadable:Array<{dir:string, code:string}>}} inv
+ * @param {{roots:Array<{dir:string, entries:number, bytes:number}>, blockers:string[], entries:number, bytes:number, unreadable:Array<{dir:string, code:string}>}} inv
  * @param {import('../core/paths').WienerdogPaths} paths
  * @returns {string}
  */
 function quarantineBlock(inv, paths) {
-  // The remedy names a directory that EXISTS wherever one does — `roots` reports
-  // each shelf by its actual on-disk path, so a capitalized shelf is named as it
-  // is stored (Table K rows K1/K8).
-  const target = inv.roots.length > 0 ? inv.roots[0].dir : path.join(paths.state, 'quarantine');
+  // The remedy names a path that EXISTS wherever one does — `roots` and
+  // `blockers` both report their ACTUAL on-disk path, so a capitalized shelf,
+  // or a file sitting where the shelf should be, is named as it is stored
+  // (Table K rows K1/K8). The canonical join is the last resort only.
+  const target =
+    (inv.roots.length > 0 && inv.roots[0].dir) ||
+    (inv.blockers.length > 0 && inv.blockers[0]) ||
+    path.join(paths.state, 'quarantine');
   /** @type {string[]} */ const lines = [];
   if (inv.unreadable.length > 0) {
     lines.push(
@@ -351,15 +372,18 @@ function quarantineBlock(inv, paths) {
       if (r.entries === 0) continue;
       lines.push(`  ${r.dir} — ${r.entries} file(s), ${r.bytes} bytes`);
     }
+    for (const b of inv.blockers) {
+      lines.push(`  ${b} — not a folder; something else is sitting where the quarantine folder goes`);
+    }
   }
   lines.push('', QUARANTINE_HEDGE, '');
   lines.push(
     inv.unreadable.length > 0
-      ? 'Fix the permission or disk problem so the folder can be read, then move it somewhere you keep, or delete it:'
-      : 'Move that folder somewhere you keep, or delete it:'
+      ? 'Fix the permission or disk problem so it can be read, then move it somewhere you keep, or delete it:'
+      : 'Move that somewhere you keep, or delete it:'
   );
-  lines.push(`  mv "${target}" ~/wienerdog-quarantine`);
-  lines.push(`  rm -rf "${target}"`);
+  lines.push(`  mv ${shQuote(target)} ~/wienerdog-quarantine`);
+  lines.push(`  rm -rf ${shQuote(target)}`);
   lines.push('then run `wienerdog uninstall` again.');
   lines.push('There is more about these copies in docs/runbooks/secret-incident.md.');
   return lines.join('\n');

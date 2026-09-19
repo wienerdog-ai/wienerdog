@@ -1656,6 +1656,28 @@ function withQuarantineReaddirFault(target, code, fn) {
   }
 }
 
+/** Make `fs.lstatSync` throw `code` for exactly `target`, leaving every other
+ *  path alone — the entry-level half of the Platform-scope injection.
+ *  @param {string} target @param {string} code @param {() => any} fn */
+function withQuarantineLstatFault(target, code, fn) {
+  const orig = fs.lstatSync;
+  /** @type {any} */
+  const patched = (p, ...rest) => {
+    if (p === target) {
+      const e = new Error(`injected ${code}`);
+      /** @type {any} */ (e).code = code;
+      throw e;
+    }
+    return orig(p, ...rest);
+  };
+  fs.lstatSync = patched;
+  try {
+    return fn();
+  } finally {
+    fs.lstatSync = orig;
+  }
+}
+
 test('[QU-1] AC1 (W3/W4): a non-empty shelf makes uninstall REFUSE — nothing removed, and the message carries all five things', () => {
   const S = 'QU1-non-empty-shelf-must-refuse';
   const { core, env, q, r } = shelfInstall();
@@ -1679,8 +1701,8 @@ test('[QU-1] AC1 (W3/W4): a non-empty shelf makes uninstall REFUSE — nothing r
     `${S}: (4) the Table O row O8 hedge, verbatim`
   );
   assert.doesNotMatch(msg, /\bis the only copy\b/, `${S}: (4) and never strengthened to "is"`);
-  assert.ok(msg.includes(`  mv "${q}"`), `${S}: (5) the move line`);
-  assert.ok(msg.includes(`  rm -rf "${q}"`), `${S}: (5) the delete line`);
+  assert.ok(msg.includes(`  mv '${q}' ~/wienerdog-quarantine`), `${S}: (5) the move line`);
+  assert.ok(msg.includes(`  rm -rf '${q}'`), `${S}: (5) the delete line`);
   assert.ok(msg.includes('then run `wienerdog uninstall` again'), `${S}: (5) and the retry`);
   assert.ok(msg.includes('docs/runbooks/secret-incident.md'), `${S}: (5) with the runbook pointer`);
 });
@@ -1883,4 +1905,76 @@ test('[QU-9] AC11(a) (K8/K1): a CAPITALIZED shelf still refuses, and the refusal
   assert.ok(res.stderr.includes(`${up} — 1 file(s), 77 bytes`), `${S}: named as STORED — ${res.stderr}`);
   assert.ok(res.stderr.includes('77 bytes in total'), `${S}: and counted`);
   assert.deepEqual(snapshot(core), before, `${S}: nothing removed`);
+});
+
+test('[QU-10] Y1 (PR round 1): an unreadable shelf FILE never puts its name on ANY surface — refusal or --dry-run', async () => {
+  const S = 'QU10-unreadable-entry-leaks-no-filename';
+  const { env, q } = shelfInstall();
+  const token = 'zzleakytokenzz';
+  const leaky = plantShelfFile(q, `2026-07-01-${token}.md`, 64);
+  assert.ok(fs.existsSync(leaky), `${S}: the fixture put the token on disk`);
+
+  const refused = await withQuarantineLstatFault(leaky, 'EACCES', () => uninstallInProcess(env, ['--yes']));
+  assert.ok(refused.err, `${S}: the run refused`);
+  const refusalSurface = refused.out + (refused.err ? refused.err.message : '');
+  assert.equal(refusalSurface.includes(token), false,
+    `${S}: the refusal names the CONTAINING directory, never the note — ${refusalSurface}`);
+  assert.ok(refusalSurface.includes(`${q} (EACCES)`), `${S}: and it does name the directory and the code`);
+
+  const dry = await withQuarantineLstatFault(leaky, 'EACCES', () => uninstallInProcess(env, ['--dry-run']));
+  assert.equal(dry.err, null, `${S}: --dry-run does not abort`);
+  assert.equal(dry.out.includes(token), false, `${S}: and --dry-run leaks no filename either — ${dry.out}`);
+  assert.ok(dry.out.includes(`${q} (EACCES)`), `${S}: while still reporting the directory`);
+});
+
+test('[QU-11] K2 (PR round 1): a FILE sitting where the shelf goes is named BY ITS ACTUAL PATH in the remedy', () => {
+  const S = 'QU11-blocker-remedy-names-a-path-that-exists';
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  // On a case-sensitive volume the canonical lowercase path does not exist, so
+  // a remedy naming it would `rm -rf` nothing and the refusal would never clear.
+  const up = path.join(core, 'state', 'Quarantine');
+  fs.mkdirSync(path.dirname(up), { recursive: true });
+  fs.writeFileSync(up, 'not our directory\n');
+  const before = snapshot(core);
+  const res = runUninstallCli(['uninstall', '--yes'], env);
+
+  assert.equal(res.status, 1, `${S}: it blocks the uninstall`);
+  assert.ok(res.stderr.includes(`  rm -rf '${up}'`), `${S}: the remedy names the ACTUAL path — ${res.stderr}`);
+  assert.ok(res.stderr.includes(`  mv '${up}' ~/wienerdog-quarantine`), `${S}: both remedy lines do`);
+  assert.ok(res.stderr.includes(`  ${up} — not a folder`), `${S}: and it is listed, so the user can see it`);
+  assert.ok(fs.existsSync(up), `${S}: the remedy names something that EXISTS`);
+  assert.deepEqual(snapshot(core), before, `${S}: nothing removed`);
+});
+
+test('[QU-12] (PR round 1): the remedy lines are POSIX-quoted — a hostile core path stays one literal argument', () => {
+  const S = 'QU12-remedy-lines-are-shell-safe';
+  const { root, env } = tempEnv();
+  // `$x` would expand, a backtick would run a command substitution and `"`
+  // would end the quoting — all three inside double quotes, none inside single.
+  const nasty = path.join(root, 'a $x b `id` c "d" e');
+  fs.mkdirSync(nasty, { recursive: true });
+  const core = path.join(nasty, 'wd');
+  const hostile = { ...env, WIENERDOG_HOME: core };
+  run(['init', '--yes'], hostile);
+  const q = path.join(core, 'state', 'quarantine');
+  plantShelfFile(q, '2026-07-01-tooling.md', 12);
+  const res = runUninstallCli(['uninstall', '--yes'], hostile);
+  assert.equal(res.status, 1, `${S}: it refused — ${res.stderr}`);
+
+  const rmLine = res.stderr.split('\n').find((l) => l.startsWith('  rm -rf '));
+  assert.ok(rmLine, `${S}: the delete line is present — ${res.stderr}`);
+  const token = rmLine.slice('  rm -rf '.length);
+  // Hand the printed token to a real shell: what it parses must be the path.
+  const parsed = execFileSync('/bin/sh', ['-c', `printf %s ${token}`], { encoding: 'utf8' });
+  assert.equal(parsed, q, `${S}: the shell parses the printed token back to the literal path`);
+  assert.ok(token.startsWith("'") && token.endsWith("'"),
+    `${S}: single-quoted, not double-quoted — inside "" the shell still expands $ and \` — ${token}`);
+
+  const mvLine = res.stderr.split('\n').find((l) => l.startsWith('  mv '));
+  const mvToken = mvLine.slice('  mv '.length, mvLine.lastIndexOf(' ~/wienerdog-quarantine'));
+  assert.equal(
+    execFileSync('/bin/sh', ['-c', `printf %s ${mvToken}`], { encoding: 'utf8' }), q,
+    `${S}: the move line parses back to the same literal path`
+  );
 });

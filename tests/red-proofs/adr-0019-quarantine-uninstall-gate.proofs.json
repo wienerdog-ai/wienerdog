@@ -54,6 +54,18 @@
             "[QU-9] AC11(a) (K8/K1): a CAPITALIZED shelf still refuses, and the refusal names it by its ACTUAL on-disk name"
           ],
           "signal": "QU9-shelf-identity-is-case-folded"
+        },
+        {
+          "test": [
+            "[QU-11] K2 (PR round 1): a FILE sitting where the shelf goes is named BY ITS ACTUAL PATH in the remedy"
+          ],
+          "signal": "QU11-blocker-remedy-names-a-path-that-exists"
+        },
+        {
+          "test": [
+            "[QU-12] (PR round 1): the remedy lines are POSIX-quoted — a hostile core path stays one literal argument"
+          ],
+          "signal": "QU12-remedy-lines-are-shell-safe"
         }
       ]
     },
@@ -104,6 +116,24 @@
             "[QU-9] AC11(a) (K8/K1): a CAPITALIZED shelf still refuses, and the refusal names it by its ACTUAL on-disk name"
           ],
           "signal": "QU9-shelf-identity-is-case-folded"
+        },
+        {
+          "test": [
+            "[QU-10] Y1 (PR round 1): an unreadable shelf FILE never puts its name on ANY surface — refusal or --dry-run"
+          ],
+          "signal": "QU10-unreadable-entry-leaks-no-filename"
+        },
+        {
+          "test": [
+            "[QU-11] K2 (PR round 1): a FILE sitting where the shelf goes is named BY ITS ACTUAL PATH in the remedy"
+          ],
+          "signal": "QU11-blocker-remedy-names-a-path-that-exists"
+        },
+        {
+          "test": [
+            "[QU-12] (PR round 1): the remedy lines are POSIX-quoted — a hostile core path stays one literal argument"
+          ],
+          "signal": "QU12-remedy-lines-are-shell-safe"
         }
       ]
     },
@@ -111,10 +141,10 @@
       "id": "quse-unreadable-shelf-read-as-empty",
       "wp": "WP-adr-0019-quarantine-uninstall-gate",
       "criterion": "6",
-      "why": "criterion 6 asserts an abort AND zero removals, and both halves go green on a fixture that never made the shelf unreadable. This is Table K row K4 and Table Y row Y5, and it is the one failure that silently destroys the data rather than merely failing to protect it: the mutation restores the fail-open shape exactly, swallowing the error so the walk returns unreadable: [] and rmSync({force:true}) takes a tree nothing could see.",
+      "why": "criterion 6 asserts an abort AND zero removals, and both halves go green on a fixture that never made the shelf unreadable. This is Table K row K4 and Table Y row Y5, and it is the one failure that silently destroys the data rather than merely failing to protect it: the mutation restores the fail-open shape exactly, swallowing the error so the walk returns unreadable: [] and rmSync({force:true}) takes a tree nothing could see. PR round 1 re-anchor: the mutation now empties `pushUnreadable` itself, the single site every unreadable level flows through, so BOTH the enumeration failure and the entry-level `lstat` failure fail open exactly as before the rule existed.",
       "file": "src/core/manifest.js",
-      "find": "    unreadable.push({ dir, code }); // UNREADABLE — the state is UNKNOWN (K3/K4)",
-      "replace": "    void code; /* RP_MUT_QUSE_UNREADABLE_SHELF_READ_AS_EMPTY */",
+      "find": "  if (unreadable.some((u) => u.dir === dir)) return;\n  unreadable.push({ dir, code });",
+      "replace": "  void unreadable; void dir; void code; /* RP_MUT_QUSE_UNREADABLE_SHELF_READ_AS_EMPTY */",
       "marker": "RP_MUT_QUSE_UNREADABLE_SHELF_READ_AS_EMPTY",
       "occurrences": 1,
       "testNamePattern": "\\[QU-",
@@ -124,6 +154,12 @@
             "[QU-6] AC6 (K4/Y5): an UNREADABLE shelf aborts a real run naming its code, does not abort --dry-run, and ENOENT does not abort"
           ],
           "signal": "QU6-unreadable-shelf-is-never-empty"
+        },
+        {
+          "test": [
+            "[QU-10] Y1 (PR round 1): an unreadable shelf FILE never puts its name on ANY surface — refusal or --dry-run"
+          ],
+          "signal": "QU10-unreadable-entry-leaks-no-filename"
         }
       ]
     },
@@ -170,6 +206,12 @@
             "[QU-6] AC6 (K4/Y5): an UNREADABLE shelf aborts a real run naming its code, does not abort --dry-run, and ENOENT does not abort"
           ],
           "signal": "QU6-unreadable-shelf-is-never-empty"
+        },
+        {
+          "test": [
+            "[QU-10] Y1 (PR round 1): an unreadable shelf FILE never puts its name on ANY surface — refusal or --dry-run"
+          ],
+          "signal": "QU10-unreadable-entry-leaks-no-filename"
         }
       ]
     },
@@ -177,7 +219,7 @@
       "id": "quse-shelf-name-case-sensitive",
       "wp": "WP-adr-0019-quarantine-uninstall-gate",
       "criterion": "11",
-      "why": "Round 4. Criterion 11 asserts that a capitalized shelf and the bytes inside it SURVIVE. It is a survival assertion, and it goes green on any fixture that never created the capitalized directory, created it on the wrong volume, or left it empty. The defect is invisible to every other assertion in this package: the rest classify types, codes and counts, not names, so nothing else already declared reddens under this mutation. The mutation replaces Table X row X12+s ASCII fold in the inventory+s name test with byte equality (name === +quarantine+), restoring the round-4 defect exactly.",
+      "why": "Round 4. Criterion 11 asserts that a capitalized shelf and the bytes inside it SURVIVE. It is a survival assertion, and it goes green on any fixture that never created the capitalized directory, created it on the wrong volume, or left it empty. The defect is invisible to every other assertion in this package: the rest classify types, codes and counts, not names, so nothing else already declared reddens under this mutation. The mutation replaces Table X row X12+s ASCII fold in the inventory+s name test with byte equality (name === +quarantine+), restoring the round-4 defect exactly. PR round 1: it now also reddens the blocker case, where a FILE named `Quarantine` stops being recognised at all and the uninstall proceeds to delete the shelf it could not see.",
       "file": "src/core/manifest.js",
       "find": "    if (asciiFold(name) !== QUARANTINE_DIRNAME) continue;",
       "replace": "    if (name !== QUARANTINE_DIRNAME) continue; /* RP_MUT_QUSE_SHELF_NAME_CASE_SENSITIVE */",
@@ -190,6 +232,12 @@
             "[QU-9] AC11(a) (K8/K1): a CAPITALIZED shelf still refuses, and the refusal names it by its ACTUAL on-disk name"
           ],
           "signal": "QU9-shelf-identity-is-case-folded"
+        },
+        {
+          "test": [
+            "[QU-11] K2 (PR round 1): a FILE sitting where the shelf goes is named BY ITS ACTUAL PATH in the remedy"
+          ],
+          "signal": "QU11-blocker-remedy-names-a-path-that-exists"
         }
       ]
     }
