@@ -638,9 +638,12 @@ function cutS4NoOpenPrivateKey(state, i) {
  * to `password\n:\n` and to a quoted JSON value left open several lines back,
  * and all three were measured to leak across a cut such a predicate permits.
  *
- * A RULE ADDED TO `RULES` ABOVE THAT CAN MATCH ACROSS A LINE BREAK MUST EXTEND
- * THIS PREDICATE AND TABLE S IN THE SAME CHANGE (ADR-0043 decision 3). A rule
- * whose alphabet excludes `\n` is kept whole by S1 and needs nothing.
+ * A RULE ADDED TO OR MODIFIED IN `RULES` ABOVE THAT CAN MATCH ACROSS A LINE
+ * BREAK MUST EXTEND THIS PREDICATE AND TABLE S IN THE SAME CHANGE (ADR-0043
+ * decision 3). A rule whose alphabet excludes `\n` is kept whole by S1 and
+ * needs nothing. The cut constants restate the rule shapes AS THEY STAND, so a
+ * rule MODIFIED without this layer fails open — Accepted residual 3, and the
+ * suite's exactness fuzz derives its oracles from `RULES` to catch it.
  *
  * Every row is answered from prefix state the redactor carries across pushes,
  * so a candidate costs O(CUT_BINDER_LOOKBACK) and never a prefix copy.

@@ -567,21 +567,31 @@ test('stream-redactor: every Table B shape holds the per-byte ceiling at every c
   // time when prefix state is rebuilt per call, and a 4096-only bait cannot see
   // it. Each bait must also put its named shape AT a candidate — a never-closed
   // quoted value with no line breaks never reaches row S3 at all — so every one
-  // is an opener followed by blank lines, and each cell is timed alone.
+  // is its opener followed by its NAMED filler, newline-terminated, and each
+  // cell is timed alone. The named filler matters: `keyword + whitespace run` is
+  // spaces and tabs, which is a different walk from the blank lines of
+  // `open key binder`, and while the two fixtures were byte-identical only five
+  // shapes were being priced.
   const blanks = (n) => '\n'.repeat(n);
   const dense = (size) => ({
     'never-closed PEM opener + blank lines': `-----BEGIN RSA PRIVATE KEY-----\n${blanks(size)}`,
     'never-closed quoted sensitive value + blank lines': `"token": "abc\n${blanks(size)}`,
     'open key binder + blank lines': `password:${blanks(size)}`,
     'every line ends in an open binder': 'token:\n'.repeat(Math.ceil(size / 7)),
-    'keyword + whitespace run': `password:${blanks(size)}`,
+    'keyword + whitespace run': `password:${' \t'.repeat(Math.ceil(size / 2))}\n`,
     'plain blank lines': blanks(size),
   });
   for (const chunk of [1, 64, 4096]) {
     // One full region at chunk=1 (32 KiB is the reproduction the review
     // measured), a wider run once a push is cheap enough to afford it.
     const size = chunk === 1 ? 32 * 1024 : 256 * 1024;
-    for (const [name, bait] of Object.entries(dense(size))) {
+    const fixtures = dense(size);
+    assert.equal(
+      new Set(Object.values(fixtures)).size,
+      Object.keys(fixtures).length,
+      'the cost-row baits must be pairwise distinct — a duplicate prices one shape twice',
+    );
+    for (const [name, bait] of Object.entries(fixtures)) {
       const rate = microsPerChar(bait, chunk);
       assert.ok(
         rate < MAX_MICROS_PER_CHAR,

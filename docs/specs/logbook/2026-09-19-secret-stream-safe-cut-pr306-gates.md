@@ -112,3 +112,32 @@ Product changes in round 5:
   RULE split at its lazy body. Both rule-modification mutations (separator group
   widened, filler class widened) now redden the exactness fuzz, which is what
   Accepted residual 3 claims.
+
+## Round 5b — the LIGHT mechanical fix
+
+Round 5's external gates, on tip `4512b736`:
+
+**Codex plugin `review`, `gpt-6-astra`, verbatim:** *"No actionable defects were
+found. All 49 targeted tests passed, and an additional 30,000-case differential
+check found no mismatches between chunked and whole-input redaction."*
+
+**wd-reviewer (spec fidelity, round 5): REQUEST-CHANGES on one item**; no leak,
+no behaviour defect, no boundary or owner-claim violation. The blocker was
+mechanical and self-inflicted by the round-5 architect pass: the cost row was
+changed to define `keyword + whitespace run` as "a run of spaces and tabs, no
+line breaks", but the bait it pins was left as `password:${blanks(size)}`, which
+is byte-identical to the open-binder bait — so five shapes were priced rather
+than six, and Table B's triple for that shape was the duplicate's numbers.
+
+Fixed in round 5b, adjudicated LIGHT (verified mechanically, no fresh external
+round, then merge):
+
+- the fixture is now a spaces-and-tabs run, newline-terminated so the predicate
+  is reached, and a one-line assertion holds the six baits pairwise distinct;
+- Table B's triple for that shape re-priced from a cold measurement of the new
+  fixture: **0.12 / 0.02 / 0.02** µs/char at chunk 1 / 64 / 4096 (it was
+  carrying 0.73 / 0.07 / 0.04, the duplicate's);
+- the cost row's "candidate-dense form" clause reworded so "no line breaks" and
+  "newline-terminated" are no longer incompatible for that shape;
+- Table S's obligation sentence and `isAcceptedCut`'s JSDoc gain "or modified in"
+  to match Accepted residual 3; AC4's prose gains "between calls".

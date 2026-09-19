@@ -202,7 +202,7 @@ argument.** A rule can be split by a cut only if its pattern can match a `\n`.
 Reading `RULES` (`src/core/secret-scan.js:79-156`) rule by rule, exactly six can:
 `private-key` (S4), the JSON value rule (S3 for its body, S2 for its key half),
 the legacy assignment, the extended assignment and `Bearer` (S2). Every other
-rule's alphabet excludes `\n`, so S1 alone keeps it whole. **A rule added to
+rule's alphabet excludes `\n`, so S1 alone keeps it whole. **A rule added to or modified in
 `RULES` later that can match across a line break must extend this table and the
 predicate in the same change** (ADR-0043 decision 3); one that cannot is covered
 by S1 and needs nothing.
@@ -217,7 +217,7 @@ by S1 and needs nothing.
 | Why this value, lower side | It must exceed one ordinary log line by a wide margin, so a forced cut is not the normal path. Larger values buy nothing: a cut is taken as soon as one is accepted, so the bound is reached only by a single logical line (or an open PEM block, an open quoted sensitive value, or an unbroken run of binder-terminated lines) longer than 32768 characters |
 | Memory ceiling | one buffer per redactor instance, at most `STREAM_REGION_MAX` characters held BETWEEN calls, plus a transient: a `push` appends before it cuts, so during a call the buffer holds the appended chunk on top of that; plus per-instance prefix state bounded by the region — the non-whitespace index (at most `STREAM_REGION_MAX` entries), two per-position byte arrays of `STREAM_REGION_MAX + 1`, and four running maxima — measured at about 1.1 MiB for four instances in the worst case. The retained remainder is copied into independent storage after every cut, so an idle stream never keeps a larger previous chunk alive (PR gate round 4) |
 | Forced cut | the only unaccepted cut. It ends the region at exactly `STREAM_REGION_MAX` characters and is ADR-0043 decision 5's residual: a secret can still be split by it |
-| Adversarial case, priced | *Amended by round 4 — see the end of this section.* a child that emits `-----BEGIN RSA PRIVATE KEY-----` or `\"token\": \"` and then never closes it, or one long unbroken line, forces a cut every `STREAM_REGION_MAX` characters. That is bounded work and bounded memory, and it degrades to the pre-fix chunk behaviour for that stream — never worse, and never unbounded. Re-priced at PR gate round 4 (cold, fresh process, µs/char at chunk 1 / 64 / 4096): never-closed PEM opener 0.64 / 0.06 / 0.04; never-closed quoted value 0.58 / 0.06 / 0.02; open key binder 0.73 / 0.07 / 0.04; every line an open binder 0.56 / 0.38 / 0.41; keyword + whitespace 0.73 / 0.07 / 0.04; plain blank lines 2.07 / 0.05 / 0.02; one 16 MiB push 0.04. The ceiling is 24 µs/char |
+| Adversarial case, priced | *Amended by round 4 — see the end of this section.* a child that emits `-----BEGIN RSA PRIVATE KEY-----` or `\"token\": \"` and then never closes it, or one long unbroken line, forces a cut every `STREAM_REGION_MAX` characters. That is bounded work and bounded memory, and it degrades to the pre-fix chunk behaviour for that stream — never worse, and never unbounded. Re-priced at PR gate round 4 (cold, fresh process, µs/char at chunk 1 / 64 / 4096): never-closed PEM opener 0.64 / 0.06 / 0.04; never-closed quoted value 0.58 / 0.06 / 0.02; open key binder 0.73 / 0.07 / 0.04; every line an open binder 0.56 / 0.38 / 0.41; keyword + whitespace 0.12 / 0.02 / 0.02; plain blank lines 2.07 / 0.05 / 0.02; one 16 MiB push 0.04. The ceiling is 24 µs/char |
 
 ### Table D — canonical: the declared RED proofs (ADR-0042)
 
@@ -342,7 +342,7 @@ review finding updates the table and all its mirrors **in the same commit**
 
 ### Design gate round 4 (PR #306 review, 2026-09-19) — Table B gains a cost row
 
-**Cost — bounded work, stated as a per-byte ceiling at a chunk-size envelope.** `push`/`end` perform work linear in the total input length: prefix-determined state (row S2's non-whitespace index, rows S3/S4's four running maxima (`lastQuote`, `jsonOpenEnd`, `pemOpenEnd`, `pemCloseStart`) and two per-position flags) is carried across pushes within a region and extended over the appended text only, and every regex subject is bounded to the current region, never the whole remaining input. The suite asserts a per-byte ceiling of at most `MAX_MICROS_PER_CHAR`, set at ≥ 8× the slowest shape measured on the tree that sets it, for each of: a never-closed PEM opener, a never-closed quoted sensitive value, an open key binder, every line an open binder, `keyword + whitespace run` (a run of spaces and tabs, no line breaks — distinct from the open-binder shape), and plain blank lines — each in its candidate-dense form (opener followed by blank lines), at chunk sizes 1, 64 and 4096 characters, plus one single push of ≥ 16 MiB of inert text. The 'Adversarial case, priced' row's 'bounded work' means exactly this ceiling and nothing weaker.
+**Cost — bounded work, stated as a per-byte ceiling at a chunk-size envelope.** `push`/`end` perform work linear in the total input length: prefix-determined state (row S2's non-whitespace index, rows S3/S4's four running maxima (`lastQuote`, `jsonOpenEnd`, `pemOpenEnd`, `pemCloseStart`) and two per-position flags) is carried across pushes within a region and extended over the appended text only, and every regex subject is bounded to the current region, never the whole remaining input. The suite asserts a per-byte ceiling of at most `MAX_MICROS_PER_CHAR`, set at ≥ 8× the slowest shape measured on the tree that sets it, for each of: a never-closed PEM opener, a never-closed quoted sensitive value, an open key binder, every line an open binder, `keyword + whitespace run` (a run of spaces and tabs, no line breaks — distinct from the open-binder shape), and plain blank lines — each in its candidate-dense form — its opener followed by its named filler, newline-terminated so the predicate is reached, at chunk sizes 1, 64 and 4096 characters, plus one single push of ≥ 16 MiB of inert text. The 'Adversarial case, priced' row's 'bounded work' means exactly this ceiling and nothing weaker.
 
 ## Implementation notes & constraints
 
@@ -449,7 +449,8 @@ review finding updates the table and all its mirrors **in the same commit**
 - [ ] **AC4** — `ScanLimits.STREAM_REGION_MAX` is `32 * 1024`; a test asserts
       `STREAM_REGION_MAX * 4 < SCAN_MAX_BYTES`; an input with no accepted cut
       point is emitted in regions of exactly `STREAM_REGION_MAX` characters and
-      the buffer never exceeds that; and the input is still reconstructed exactly
+      the buffer never exceeds that between calls (Table B: during a call it
+      also holds the appended chunk); and the input is still reconstructed exactly
       (AC2 holds through forced cuts).
 - [ ] **AC5** — `push` and `end` never throw for a non-string, `undefined`, an
       empty string, a `push` after `end`, or a lone `end` on an untouched
