@@ -1488,3 +1488,73 @@ test('WP-scheduler-replay AC15/AC16: an XDG root outside this run\'s HOME contri
   assert.ok(inside.out.includes(insideTimer), `${S}: an in-home XDG root IS a discovery root — ${inside.out}`);
   assert.equal(fs.existsSync(core), true, `${S}: --dry-run removed nothing`);
 });
+
+/** The pre-confirm plan, captured by declining at the prompt. Nothing is deleted.
+ *  @param {NodeJS.ProcessEnv} env @returns {string} */
+function planText(env) {
+  try {
+    return execFileSync('node', [bin, 'uninstall'], { env, encoding: 'utf8', input: 'n\n' });
+  } catch (e) {
+    return `${e.stdout || ''}${e.stderr || ''}`;
+  }
+}
+
+test('WP-scheduler-replay AC10: a plist owned by a NON-scheduler record is disclosed as `keep` WITH R9\'s warning', (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-10-keep-line-carries-the-login-warning';
+  const manifestLib = require('../../src/core/manifest');
+  const { env, la, addEntries } = schedInstall();
+  const [plist] = plantSchedules(la, ['ai.wienerdog.dream.plist']);
+  addEntries([{ kind: 'file', path: plist }]);
+  const out = planText(env);
+  assert.ok(out.includes(`keep ${plist} (another manifest entry owns this file)`), `${S}: the plan carries the keep line — ${out}`);
+  assert.ok(out.includes(manifestLib.R9_LOGIN_RELOAD_WARNING), `${S}: and R9's plain-language login warning`);
+  assert.ok(out.includes(`would run: ${bootout('ai.wienerdog.dream').join(' ')}`), `${S}: and still discloses the unload`);
+  assert.equal(fs.existsSync(plist), true, `${S}: declining deletes nothing`);
+});
+
+test('WP-scheduler-replay AC10 / round-11 R-A: a plist owned by a SCHEDULER-ENTRY is `keep` with NO warning', (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-10b-scheduler-entry-keep-has-no-warning';
+  const manifestLib = require('../../src/core/manifest');
+  const { env, la, addEntries } = schedInstall();
+  const [plist] = plantSchedules(la, ['ai.wienerdog.dream.plist']);
+  addEntries([{ kind: 'scheduler-entry', path: plist }]);
+  const out = planText(env);
+  assert.ok(out.includes(`keep ${plist} (another manifest entry owns this file)`), `${S}: the plan carries the keep line — ${out}`);
+  assert.ok(!out.includes(manifestLib.R9_LOGIN_RELOAD_WARNING),
+    `${S}: R9 does not apply: the scheduler-entry's own reverser removes the file, so the warning would be false`);
+});
+
+test('WP-scheduler-replay AC11 disclosure: a vault-resident candidate gets its own line naming the vault', (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-11b-vault-skip-is-disclosed-by-name';
+  const { core, env } = schedInstall();
+  const vault = path.join(core, 'schedules');
+  const [notes] = plantSchedules(vault, ['wienerdog-notes.xml']);
+  fs.writeFileSync(path.join(core, 'config.yaml'), `version: 1\nvault: ${vault}\n`);
+  const out = planText(env);
+  assert.ok(out.includes(`keep ${notes} (it sits inside your memory vault at ${vault} — your notes are yours)`),
+    `${S}: the vault-skipped candidate is disclosed by name — ${out}`);
+  assert.equal(fs.existsSync(notes), true, `${S}: and is not deleted`);
+});
+
+test('WP-scheduler-replay round-11 R-B: a discovered path is disclosed EXACTLY once, and the headline excludes it', (t) => {
+  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+  const S = 'SRM-RB-disclosed-exactly-once';
+  const { env, la } = schedInstall();
+  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+  const out = planText(env);
+  const removeLines = out.split('\n').filter((l) => l.trim() === `remove ${orphan}`);
+  assert.equal(removeLines.length, 1, `${S}: exactly one remove line for the discovered path — ${out}`);
+  const blockAt = out.indexOf('Scheduled jobs found on disk:');
+  assert.ok(blockAt >= 0 && out.indexOf(`remove ${orphan}`) > blockAt, `${S}: and it is the one inside the block`);
+
+  const dry = run(['uninstall', '--dry-run'], env);
+  assert.equal(dry.status, 0, `${S}: --dry-run exits 0 — ${dry.stderr}`);
+  const withOrphan = Number(/--dry-run: (\d+) item\(s\)/.exec(dry.stdout)[1]);
+  fs.rmSync(orphan);
+  const dry2 = run(['uninstall', '--dry-run'], env);
+  const without = Number(/--dry-run: (\d+) item\(s\)/.exec(dry2.stdout)[1]);
+  assert.equal(withOrphan, without, `${S}: the headline count is independent of the discovered set (R4-cell independent)`);
+});

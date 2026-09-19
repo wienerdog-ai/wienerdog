@@ -283,7 +283,12 @@ function printDiscoveredSchedules(discovery, platform, vaultPath) {
       console.log(`  remove ${item.path}`);
     } else if (!item.remove) {
       console.log(`  keep ${item.path} (another manifest entry owns this file)`);
-      if (gen.recognizeScheduleBasename(path.basename(item.path)) === 'launchd') {
+      // Round 11 ruling R-A: R9's residual exists only when the owning record is
+      // NOT a `scheduler-entry`. A scheduler-entry's own reverser removes the
+      // file, so for such a plist the warning would be false — and on a normal
+      // macOS install every job has one.
+      if (!item.ownedByScheduler
+        && gen.recognizeScheduleBasename(path.basename(item.path)) === 'launchd') {
         console.log(`    ${manifestLib.R9_LOGIN_RELOAD_WARNING}`);
       }
     }
@@ -354,6 +359,13 @@ async function run(argv, opts = {}) {
   //    into both reverse() calls (D4/D7), so the post-confirm run cannot widen
   //    past what was disclosed.
   const discovery = manifestLib.discoverSchedulesOnDisk(paths, manifest, { vaultPath });
+  // Round 11 ruling R-B: `reverse().removed` is the POST-ACTION record and
+  // includes every phase-D5b deletion, but the plan and --dry-run are
+  // DISCLOSURE, where a discovered path is disclosed exactly once — inside the
+  // `Scheduled jobs found on disk:` block. Subtract it from the manifest-derived
+  // `remove` lines and from the --dry-run headline count, which also keeps that
+  // count independent of Table R row R4's cell, as Table D row D3 requires.
+  const discoveredPaths = new Set(discovery.schedules.map((s) => s.path));
   // Table D rows D9/D15: an unreadable root is NOT an empty root. With scheduler
   // authority present the live probe is short-circuited, so a silently empty
   // result would let the core be disposed without anything ever having LOOKED at
@@ -386,7 +398,7 @@ async function run(argv, opts = {}) {
     // removed" count — otherwise it is silently dropped from the plan. The
     // mechanics dirs and the core stay separate disclosure lines (ADR-0019), so
     // this headline is NOT claimed to equal the live `Removed N` total.
-    const headline = removed.length + (deferredConfig ? 1 : 0);
+    const headline = removed.filter((p) => !discoveredPaths.has(p)).length + (deferredConfig ? 1 : 0);
     console.log(`\n--dry-run: ${headline} item(s) would be removed, ${skipped.length} skipped.`);
     if (preserved.length > 0) {
       const vaultFiles = manifest.entries.filter((e) => e.kind === 'vault-file').length;
@@ -422,7 +434,10 @@ async function run(argv, opts = {}) {
       discoveredSchedules: discovery.schedules,
     });
     const mechPlan = manifestLib.disposeCoreMechanics(paths, { dryRun: true, vaultPath });
-    for (const p of plan.removed) console.log(`  remove ${p}`);
+    for (const p of plan.removed) {
+      if (discoveredPaths.has(p)) continue; // R-B — disclosed once, in the block below
+      console.log(`  remove ${p}`);
+    }
     if (plan.deferredConfig) console.log(`  remove ${plan.deferredConfig} (unmodified config — deleted last)`);
     for (const d of mechPlan.removed) console.log(`  remove ${d} (machine-generated state, recursive)`);
     console.log(`  remove ${paths.core} (the canonical core — removed once empty)`);

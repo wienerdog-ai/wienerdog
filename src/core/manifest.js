@@ -616,6 +616,48 @@ function resolvedContains(outerReal, innerReal) {
 }
 
 /**
+ * Table D row D14, resolved through Table D row D15: which of `roots` are
+ * DISCOVERY roots for this run — the ones that resolve inside `paths.home` or
+ * `paths.core`. `reverse()`'s three roots are correct for replaying a RECORDED
+ * entry, but the systemd user dir derives from the ambient `$XDG_CONFIG_HOME`,
+ * which a redirected-`HOME` run does not move; without this bound a sandbox
+ * could discover — and delete — a real developer's timers.
+ *
+ * Shared by `discoverSchedulesOnDisk` and by phase D5b's act-time re-check, so a
+ * path is classified against the SAME bound at both sites rather than against
+ * two rules that can drift.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {string[]} roots
+ * @returns {{accepted: Array<{root:string, real:string}>,
+ *            unreadable: Array<{root:string, code:string}>, anchorFailed: boolean}}
+ *   An ANCHOR (`paths.home` / `paths.core`) that cannot be resolved makes EVERY
+ *   root unreadable — never a silent exclusion of all of them.
+ */
+function discoveryRoots(paths, roots) {
+  /** @type {Array<{root:string, code:string}>} */ const unreadable = [];
+  /** @type {string[]} */ const bounds = [];
+  for (const anchor of [paths.home, paths.core]) {
+    const res = resolveOrReport(anchor);
+    if (res.state === 'unreadable') {
+      return { accepted: [], unreadable: roots.map((root) => ({ root, code: res.code })), anchorFailed: true };
+    }
+    if (res.state === 'resolved') bounds.push(res.real);
+  }
+  /** @type {Array<{root:string, real:string}>} */ const accepted = [];
+  for (const root of roots) {
+    const res = resolveOrReport(root);
+    if (res.state === 'unreadable') {
+      unreadable.push({ root, code: res.code });
+      continue;
+    }
+    if (res.state === 'absent') continue; // a root we never wrote to is genuinely empty
+    if (!bounds.some((b) => resolvedContains(b, res.real))) continue; // D14
+    accepted.push({ root, real: res.real });
+  }
+  return { accepted, unreadable, anchorFailed: false };
+}
+
+/**
  * Schedule files present in this install's own scheduler roots (Table D rows D1,
  * D12). It reads NO manifest entry to decide what to unload (D10); it reads them
  * only to set each item's `remove` permission (D11). Read-only: a non-recursive
@@ -625,12 +667,14 @@ function resolvedContains(outerReal, innerReal) {
  * @param {Manifest} manifest
  * @param {{platform?:NodeJS.Platform, schedulerRoots?:string[],
  *          vaultPath?:string|null}} [opts]
- * @returns {{schedules: Array<{path:string, remove:boolean}>,
+ * @returns {{schedules: Array<{path:string, remove:boolean, ownedByScheduler:boolean}>,
  *            unreadable: Array<{root:string, code:string}>,
  *            skippedForVault: string[]}}
  *   `schedules` — absolute paths, sorted lexicographically, deduplicated, each
  *     carrying the deletion permission D11 decided HERE so `reverse()` never
- *     re-decides it.
+ *     re-decides it, plus `ownedByScheduler` (round 11 ruling R-A) — true iff the
+ *     record naming it is a `scheduler-entry`, whose own reverser removes the
+ *     file, which is what makes Table R row R9's warning false for it.
  *   `unreadable` — roots that exist but could not be enumerated (D9); a
  *     non-empty array MUST abort a non-dry-run uninstall before any disclosure.
  *   `skippedForVault` — candidates excluded by D12, disclosed not deleted.
@@ -648,24 +692,6 @@ function discoverSchedulesOnDisk(paths, manifest, opts = {}) {
   /** @type {Array<{root:string, code:string}>} */ const unreadable = [];
   /** @type {string[]} */ const skippedForVault = [];
 
-  // ── Table D row D14: the DISCOVERY root set, bounded to THIS run's own home
-  //    and core. `reverse()`'s three roots are correct for replaying a RECORDED
-  //    entry, but the systemd user dir derives from the ambient
-  //    $XDG_CONFIG_HOME, which a redirected-HOME run does not move — so without
-  //    this bound a sandbox could discover (and delete) a real developer's
-  //    timers. Resolved through D15, never through `contains`: failing to
-  //    resolve home or core is UNREADABLE for every root, not a silent
-  //    exclusion of all of them.
-  /** @type {string[]} */ const bounds = [];
-  for (const anchor of [paths.home, paths.core]) {
-    const res = resolveOrReport(anchor);
-    if (res.state === 'unreadable') {
-      for (const root of roots) unreadable.push({ root, code: res.code });
-      return { schedules: [], unreadable, skippedForVault };
-    }
-    if (res.state === 'resolved') bounds.push(res.real);
-  }
-
   // ── Table D row D12: the accepted vault path, resolved on the same D15 rule.
   //    An UNRESOLVABLE vault is unreadable — never "nothing to exclude".
   let vaultReal = null;
@@ -678,32 +704,42 @@ function discoverSchedulesOnDisk(paths, manifest, opts = {}) {
     if (res.state === 'resolved') vaultReal = res.real;
   }
 
+  // ── Table D row D14: the DISCOVERY root set, bounded to THIS run's own home
+  //    and core, resolved through D15 and never through `contains`.
+  const rootSet = discoveryRoots(paths, roots);
+  unreadable.push(...rootSet.unreadable);
+  if (rootSet.anchorFailed) return { schedules: [], unreadable, skippedForVault };
+
   // ── Table D row D11: the manifest's ONLY remaining influence — it NARROWS a
   //    removal, never an unload (D10/S7). Any entry `validateEntry` accepts that
   //    names a discovered path withholds that file's deletion for its own
   //    reverser, which may hold a proof-before-delete this pass cannot evaluate.
   //    Read here, used ONLY to set `remove` below — never to admit or exclude a
   //    candidate, which is the suppression channel D10 closed.
+  //    Design gate round 11, ruling R-A: the SAME equality also answers a second,
+  //    narrower question — is the owning record a `scheduler-entry`? Its own
+  //    reverser removes the file (`:543`), so Table R row R9's login warning
+  //    would be FALSE for such a plist, and on a normal macOS install every job
+  //    has one.
   const entries = manifest && Array.isArray(manifest.entries) ? manifest.entries : [];
   /** @type {Set<string>} */ const ownedLexical = new Set();
   /** @type {Set<string>} */ const ownedReal = new Set();
+  /** @type {Set<string>} */ const schedulerLexical = new Set();
+  /** @type {Set<string>} */ const schedulerReal = new Set();
   for (const entry of entries) {
     if (!validateEntry(entry).ok) continue;
     ownedLexical.add(entry.path);
     const res = resolveOrReport(entry.path);
     if (res.state === 'resolved') ownedReal.add(res.real);
+    if (entry.kind === 'scheduler-entry') {
+      schedulerLexical.add(entry.path);
+      if (res.state === 'resolved') schedulerReal.add(res.real);
+    }
   }
 
   /** @type {Map<string, string>} candidate path -> its resolved canonical path */
   const candidates = new Map();
-  for (const root of roots) {
-    const rootRes = resolveOrReport(root);
-    if (rootRes.state === 'unreadable') {
-      unreadable.push({ root, code: rootRes.code });
-      continue;
-    }
-    if (rootRes.state === 'absent') continue; // a root we never wrote to is genuinely empty
-    if (!bounds.some((b) => resolvedContains(b, rootRes.real))) continue; // D14
+  for (const { root, real: rootReal } of rootSet.accepted) {
     /** @type {string[]} */ let names;
     try {
       names = fs.readdirSync(root); // NON-recursive (D1)
@@ -733,7 +769,7 @@ function discoverSchedulesOnDisk(paths, manifest, opts = {}) {
         continue;
       }
       if (cRes.state === 'absent') continue;
-      if (!resolvedContains(rootRes.real, cRes.real)) continue;
+      if (!resolvedContains(rootReal, cRes.real)) continue;
       if (vaultReal && resolvedContains(vaultReal, cRes.real)) {
         skippedForVault.push(full); // D12 / S8 — disclosed, never deleted
         continue;
@@ -742,10 +778,14 @@ function discoverSchedulesOnDisk(paths, manifest, opts = {}) {
     }
   }
 
-  const schedules = [...candidates.keys()].sort().map((p) => ({
-    path: p,
-    remove: !(ownedLexical.has(p) || ownedReal.has(/** @type {string} */(candidates.get(p)))),
-  }));
+  const schedules = [...candidates.keys()].sort().map((p) => {
+    const real = /** @type {string} */ (candidates.get(p));
+    return {
+      path: p,
+      remove: !(ownedLexical.has(p) || ownedReal.has(real)),
+      ownedByScheduler: schedulerLexical.has(p) || schedulerReal.has(real),
+    };
+  });
   return { schedules, unreadable, skippedForVault };
 }
 
@@ -902,7 +942,8 @@ function save(paths, manifest) {
  * delete. Both are null when there is no deferred (unmodified) config.
  * @param {import('./paths').WienerdogPaths} paths
  * @param {Manifest} manifest
- * @param {{dryRun?: boolean, discoveredSchedules?: Array<{path:string, remove:boolean}>}} [opts]
+ * @param {{dryRun?: boolean,
+ *           discoveredSchedules?: Array<{path:string, remove:boolean, ownedByScheduler:boolean}>}} [opts]
  *  `discoveredSchedules` defaults to `[]` — every caller that does not pass it
  *  behaves exactly as today. Each item carries the path AND the deletion
  *  permission Table D row D11 decided at discovery time, so `reverse()` never
@@ -1245,22 +1286,53 @@ function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } =
   // deletion. A skip here forgoes a DELETION only: the unload already happened
   // unconditionally above, which is why absence and unreadability are both safe
   // to skip on (D6).
+  //
+  // THE RE-CHECK APPLIES DISCOVERY'S OWN CLASSIFICATION, not a weaker one. The
+  // disclosed path is an untrusted name by act time: the prompt has been open,
+  // and a same-user process can replace the regular file it named with a symlink
+  // pointing anywhere. So the item must STILL be a regular file (S2), must STILL
+  // resolve successfully (D15), and must STILL resolve inside one of THIS run's
+  // discovery roots (D14/S1) — and the deletion is then aimed at the DISCLOSED
+  // path, never at the resolved one, so `rmSync` unlinks the name the user
+  // consented to rather than following a link planted under it.
+  /** @type {string[]} */
+  const removalRoots = discoveryRoots(paths, schedulerOpts.schedulerRoots).accepted.map((r) => r.real);
+  /** Table D row D6 + Table R row R9: a skipped REMOVAL says so, and a preserved
+   *  launchd plist carries the login-reload warning. @param {string} p @param {string} why */
+  const keepDiscovered = (p, why) => {
+    process.stderr.write(`wienerdog: keeping ${p} — ${why}\n`);
+    if (gen.recognizeScheduleBasename(path.basename(p)) === 'launchd') {
+      process.stderr.write(`wienerdog: ${R9_LOGIN_RELOAD_WARNING}\n`);
+    }
+  };
   for (const item of discoveredSchedules) {
     if (DISCOVERED_DISPOSITION !== 'unload-and-remove') continue; // Table R row R4
     if (!item.remove) continue; // D11 — another manifest record owns this file
     if (removedSet.has(item.path)) continue; // a reverser already disposed of it
+    let st;
+    try {
+      st = fs.lstatSync(item.path);
+    } catch (err) {
+      const code = (err && err.code) || 'UNKNOWN';
+      if (code === 'ENOENT' || code === 'ENOTDIR') continue; // absent — nothing to remove
+      keepDiscovered(item.path, `it could not be checked before removal (${code})`);
+      continue;
+    }
+    if (!st.isFile()) {
+      keepDiscovered(item.path, 'it is no longer a regular file (refusing to follow it)');
+      continue;
+    }
     const res = resolveOrReport(item.path); // D15, at the act-time site
     if (res.state === 'absent') continue; // nothing to remove
     if (res.state === 'unreadable') {
-      process.stderr.write(
-        `wienerdog: keeping ${item.path} — it could not be checked before removal (${res.code})\n`
-      );
-      if (gen.recognizeScheduleBasename(path.basename(item.path)) === 'launchd') {
-        process.stderr.write(`wienerdog: ${R9_LOGIN_RELOAD_WARNING}\n`);
-      }
+      keepDiscovered(item.path, `it could not be checked before removal (${res.code})`);
       continue;
     }
-    if (!dryRun) fs.rmSync(res.real, { force: true });
+    if (!removalRoots.some((r) => resolvedContains(r, res.real))) {
+      keepDiscovered(item.path, 'it now resolves outside every Wienerdog scheduler folder');
+      continue;
+    }
+    if (!dryRun) fs.rmSync(item.path, { force: true });
     removedSet.add(item.path);
     removed.push(item.path);
   }

@@ -12,26 +12,85 @@
       "marker": "RP_MUT_SRM_WIDENED_SET_NEVER_PASSED",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of"], "signal": "SRM-1-orphan-unloaded-and-disposed" },
-        { "test": ["WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"], "signal": "SRM-2-loose-basename-is-not-evidence" },
-        { "test": ["WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"], "signal": "SRM-3b-act-time-recheck-narrows-removal-only" },
-        { "test": ["WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded"], "signal": "SRM-4-disposition-unload-and-remove" },
-        { "test": ["WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first"], "signal": "SRM-12-unload-precedes-the-entry-loop" },
-        { "test": ["WP-scheduler-replay AC13: no manifest record of any shape prevents an unload"], "signal": "SRM-13-no-record-suppresses-an-unload" }
+        {
+          "test": [
+            "WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of"
+          ],
+          "signal": "SRM-1-orphan-unloaded-and-disposed"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"
+          ],
+          "signal": "SRM-2-loose-basename-is-not-evidence"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"
+          ],
+          "signal": "SRM-3b-act-time-recheck-narrows-removal-only"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded"
+          ],
+          "signal": "SRM-4-disposition-unload-and-remove"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first"
+          ],
+          "signal": "SRM-12-unload-precedes-the-entry-loop"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC13: no manifest record of any shape prevents an unload"
+          ],
+          "signal": "SRM-13-no-record-suppresses-an-unload"
+        }
       ]
     },
     {
       "id": "srm-not-disclosed",
       "wp": "WP-scheduler-replay-manifest-independent",
       "criterion": "3",
-      "why": "criterion 3 observes DISCLOSURE, not just deletion, and this is the exact shape that would delete undisclosed. Table D row D3 puts the disk-derived block in uninstall.js rather than in reverse() (the spec's anchor assumed reverse() printed the plan lines), so the mutation site is the pre-confirm print: the live call keeps the accepted snapshot and still acts on it, while the user is never shown the labeled block or the re-derived unregister command before being asked to consent",
+      "why": "criterion 3 observes DISCLOSURE, not just deletion, and this is the exact shape that would delete undisclosed. Table D row D3 puts the disk-derived block in uninstall.js rather than in reverse() (the spec's anchor assumed reverse() printed the plan lines), so the mutation site is the pre-confirm print: the live call keeps the accepted snapshot and still acts on it, while the user is never shown the labeled block or the re-derived unregister command before being asked to consent. Round 11 ruling R-B makes this sharper still: the discovered set's `remove` lines are subtracted from the manifest-derived plan, so suppressing the block leaves the file undisclosed entirely rather than merely unlabelled",
       "file": "src/cli/uninstall.js",
       "find": "    printDiscoveredSchedules(discovery, process.platform, vaultPath);\n    const ok = await confirm('\\nProceed with removal? [y/N] ');",
       "replace": "    /* RP_MUT_SRM_NOT_DISCLOSED */\n    const ok = await confirm('\\nProceed with removal? [y/N] ');",
       "marker": "RP_MUT_SRM_NOT_DISCLOSED",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC3: the disk-derived block is disclosed BEFORE consent, and again in --dry-run"], "signal": "SRM-3-disclosed-before-consent" }
+        {
+          "test": [
+            "WP-scheduler-replay AC3: the disk-derived block is disclosed BEFORE consent, and again in --dry-run"
+          ],
+          "signal": "SRM-3-disclosed-before-consent"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC10: a plist owned by a NON-scheduler record is disclosed as `keep` WITH R9's warning"
+          ],
+          "signal": "SRM-10-keep-line-carries-the-login-warning"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC10 / round-11 R-A: a plist owned by a SCHEDULER-ENTRY is `keep` with NO warning"
+          ],
+          "signal": "SRM-10b-scheduler-entry-keep-has-no-warning"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC11 disclosure: a vault-resident candidate gets its own line naming the vault"
+          ],
+          "signal": "SRM-11b-vault-skip-is-disclosed-by-name"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay round-11 R-B: a discovered path is disclosed EXACTLY once, and the headline excludes it"
+          ],
+          "signal": "SRM-RB-disclosed-exactly-once"
+        }
       ]
     },
     {
@@ -45,22 +104,37 @@
       "marker": "RP_MUT_SRM_RECOGNITION_WIDENED",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"], "signal": "SRM-2-loose-basename-is-not-evidence" },
-        { "test": ["WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"], "signal": "SRM-3b-act-time-recheck-narrows-removal-only" }
+        {
+          "test": [
+            "WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"
+          ],
+          "signal": "SRM-2-loose-basename-is-not-evidence"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"
+          ],
+          "signal": "SRM-3b-act-time-recheck-narrows-removal-only"
+        }
       ]
     },
     {
       "id": "srm-act-time-recheck-dropped",
       "wp": "WP-scheduler-replay-manifest-independent",
       "criterion": "3",
-      "why": "criterion 3 observes the REMOVAL set's narrowing direction, not just the happy path. Scoped to removal since round 9: the unload is unconditional by contract (Table D row D6), so a mutation that made IT unconditional would change nothing and prove nothing. Dropping phase D5b's re-check makes every disclosed item removable whatever the filesystem says, so a path that cannot be canonicalized is deleted instead of kept with a notice",
+      "why": "criterion 3 observes the REMOVAL set's narrowing direction, not just the happy path. Scoped to removal since round 9: the unload is unconditional by contract (Table D row D6), so a mutation that made IT unconditional would change nothing and prove nothing. Dropping phase D5b's re-check makes every disclosed item removable whatever the filesystem says, so a path that cannot be canonicalized is deleted instead of kept with a notice. Round 11 ruling R-C rewrote that re-check into three ordered checks (regular file, successful D15 resolution, containment in a discovery root), so the mutation now removes all three at once",
       "file": "src/core/manifest.js",
-      "find": "    const res = resolveOrReport(item.path); // D15, at the act-time site\n    if (res.state === 'absent') continue; // nothing to remove",
-      "replace": "    const res = { state: 'resolved', real: item.path }; /* RP_MUT_SRM_ACT_TIME_RECHECK_DROPPED */",
+      "find": "    let st;\n    try {\n      st = fs.lstatSync(item.path);\n    } catch (err) {\n      const code = (err && err.code) || 'UNKNOWN';\n      if (code === 'ENOENT' || code === 'ENOTDIR') continue; // absent — nothing to remove\n      keepDiscovered(item.path, `it could not be checked before removal (${code})`);\n      continue;\n    }\n    if (!st.isFile()) {\n      keepDiscovered(item.path, 'it is no longer a regular file (refusing to follow it)');\n      continue;\n    }\n    const res = resolveOrReport(item.path); // D15, at the act-time site\n    if (res.state === 'absent') continue; // nothing to remove\n    if (res.state === 'unreadable') {\n      keepDiscovered(item.path, `it could not be checked before removal (${res.code})`);\n      continue;\n    }\n    if (!removalRoots.some((r) => resolvedContains(r, res.real))) {\n      keepDiscovered(item.path, 'it now resolves outside every Wienerdog scheduler folder');\n      continue;\n    }\n",
+      "replace": "    /* RP_MUT_SRM_ACT_TIME_RECHECK_DROPPED */\n",
       "marker": "RP_MUT_SRM_ACT_TIME_RECHECK_DROPPED",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"], "signal": "SRM-3b-act-time-recheck-narrows-removal-only" }
+        {
+          "test": [
+            "WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"
+          ],
+          "signal": "SRM-3b-act-time-recheck-narrows-removal-only"
+        }
       ]
     },
     {
@@ -74,9 +148,24 @@
       "marker": "RP_MUT_SRM_DISPOSITION_FLIPPED",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of"], "signal": "SRM-1-orphan-unloaded-and-disposed" },
-        { "test": ["WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"], "signal": "SRM-2-loose-basename-is-not-evidence" },
-        { "test": ["WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded"], "signal": "SRM-4-disposition-unload-and-remove" }
+        {
+          "test": [
+            "WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of"
+          ],
+          "signal": "SRM-1-orphan-unloaded-and-disposed"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"
+          ],
+          "signal": "SRM-2-loose-basename-is-not-evidence"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded"
+          ],
+          "signal": "SRM-4-disposition-unload-and-remove"
+        }
       ]
     },
     {
@@ -90,7 +179,12 @@
       "marker": "RP_MUT_SRM_UNREADABLE_ROOT_READ_AS_EMPTY",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC9: an unreadable scheduler root aborts a real uninstall and only warns in --dry-run"], "signal": "SRM-9-unreadable-root-aborts" }
+        {
+          "test": [
+            "WP-scheduler-replay AC9: an unreadable scheduler root aborts a real uninstall and only warns in --dry-run"
+          ],
+          "signal": "SRM-9-unreadable-root-aborts"
+        }
       ]
     },
     {
@@ -104,7 +198,18 @@
       "marker": "RP_MUT_SRM_VAULT_EXCLUSION_REMOVED",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC11: a user file inside a vault at <core>/schedules survives the widened pass"], "signal": "SRM-11-vault-resident-candidate-survives" }
+        {
+          "test": [
+            "WP-scheduler-replay AC11: a user file inside a vault at <core>/schedules survives the widened pass"
+          ],
+          "signal": "SRM-11-vault-resident-candidate-survives"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC11 disclosure: a vault-resident candidate gets its own line naming the vault"
+          ],
+          "signal": "SRM-11b-vault-skip-is-disclosed-by-name"
+        }
       ]
     },
     {
@@ -118,12 +223,42 @@
       "marker": "RP_MUT_SRM_UNLOAD_MOVED_AFTER_LOOP",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of"], "signal": "SRM-1-orphan-unloaded-and-disposed" },
-        { "test": ["WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"], "signal": "SRM-2-loose-basename-is-not-evidence" },
-        { "test": ["WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"], "signal": "SRM-3b-act-time-recheck-narrows-removal-only" },
-        { "test": ["WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded"], "signal": "SRM-4-disposition-unload-and-remove" },
-        { "test": ["WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first"], "signal": "SRM-12-unload-precedes-the-entry-loop" },
-        { "test": ["WP-scheduler-replay AC13: no manifest record of any shape prevents an unload"], "signal": "SRM-13-no-record-suppresses-an-unload" }
+        {
+          "test": [
+            "WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of"
+          ],
+          "signal": "SRM-1-orphan-unloaded-and-disposed"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"
+          ],
+          "signal": "SRM-2-loose-basename-is-not-evidence"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"
+          ],
+          "signal": "SRM-3b-act-time-recheck-narrows-removal-only"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded"
+          ],
+          "signal": "SRM-4-disposition-unload-and-remove"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first"
+          ],
+          "signal": "SRM-12-unload-precedes-the-entry-loop"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC13: no manifest record of any shape prevents an unload"
+          ],
+          "signal": "SRM-13-no-record-suppresses-an-unload"
+        }
       ]
     },
     {
@@ -137,8 +272,30 @@
       "marker": "RP_MUT_SRM_RECORD_SUPPRESSES_UNLOAD",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first"], "signal": "SRM-12-unload-precedes-the-entry-loop" },
-        { "test": ["WP-scheduler-replay AC13: no manifest record of any shape prevents an unload"], "signal": "SRM-13-no-record-suppresses-an-unload" }
+        {
+          "test": [
+            "WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first"
+          ],
+          "signal": "SRM-12-unload-precedes-the-entry-loop"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC13: no manifest record of any shape prevents an unload"
+          ],
+          "signal": "SRM-13-no-record-suppresses-an-unload"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC10: a plist owned by a NON-scheduler record is disclosed as `keep` WITH R9's warning"
+          ],
+          "signal": "SRM-10-keep-line-carries-the-login-warning"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC10 / round-11 R-A: a plist owned by a SCHEDULER-ENTRY is `keep` with NO warning"
+          ],
+          "signal": "SRM-10b-scheduler-entry-keep-has-no-warning"
+        }
       ]
     },
     {
@@ -147,12 +304,17 @@
       "criterion": "15",
       "why": "design gate round 4. Criterion 15 asserts that files under an external XDG root SURVIVE. A survival assertion goes green whenever the fixture's external root was never populated, never reached, or silently mis-pathed — and the thing it guards against is `npm test` deleting a developer's real timer, which is the one failure nobody gets to discover twice. Removing Table D row D14's containment filter makes discovery enumerate every root reverse() computes, including a $XDG_CONFIG_HOME that points outside the home this run is reversing",
       "file": "src/core/manifest.js",
-      "find": "    if (!bounds.some((b) => resolvedContains(b, rootRes.real))) continue; // D14",
+      "find": "    if (!bounds.some((b) => resolvedContains(b, res.real))) continue; // D14",
       "replace": "    if (!roots.includes(root)) continue; /* RP_MUT_SRM_EXTERNAL_ROOT_DISCOVERED */",
       "marker": "RP_MUT_SRM_EXTERNAL_ROOT_DISCOVERED",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC15/AC16: an XDG root outside this run's HOME contributes nothing; the same files inside it are discovered"], "signal": "SRM-15-external-xdg-root-is-not-a-discovery-root" }
+        {
+          "test": [
+            "WP-scheduler-replay AC15/AC16: an XDG root outside this run's HOME contributes nothing; the same files inside it are discovered"
+          ],
+          "signal": "SRM-15-external-xdg-root-is-not-a-discovery-root"
+        }
       ]
     },
     {
@@ -166,7 +328,12 @@
       "marker": "RP_MUT_SRM_RESOLUTION_FAILURE_READ_AS_EXTERNAL",
       "occurrences": 1,
       "expectRed": [
-        { "test": ["WP-scheduler-replay AC17: a root that cannot be CANONICALIZED aborts with zero removals and zero chokepoint calls"], "signal": "SRM-17-resolution-failure-is-not-external" }
+        {
+          "test": [
+            "WP-scheduler-replay AC17: a root that cannot be CANONICALIZED aborts with zero removals and zero chokepoint calls"
+          ],
+          "signal": "SRM-17-resolution-failure-is-not-external"
+        }
       ]
     }
   ]
