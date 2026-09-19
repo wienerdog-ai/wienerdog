@@ -1,7 +1,7 @@
 ---
 id: WP-adr-0019-quarantine-uninstall-gate
 title: Stop `wienerdog uninstall` destroying the secret quarantine — the ADR-0019 amendment and the pre-deletion gate
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-secret-fence-ep2-redact-arm, WP-scheduler-replay-manifest-independent, WP-quarantine-only-copy-shelf]
