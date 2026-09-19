@@ -3279,3 +3279,30 @@ test('K2 (PR round 1): a blocker keeps its ACTUAL matched path, capitalization i
   assert.deepEqual(inv.blockers, [up], 'the case-sensitive path the user must actually remove');
   assert.equal(inv.entries, 1);
 });
+
+test('R-Y1 (PR round 2): an unreadable object BELOW a shelf root is reported by the ROOT, at any depth', () => {
+  for (const depth of [1, 2]) {
+    const paths = qPaths();
+    const { q, r } = shelves(paths);
+    fs.mkdirSync(r, { recursive: true, mode: 0o700 });
+    const parent = depth === 1 ? q : path.join(q, 'outer');
+    const nested = path.join(parent, 'zzNESTEDTOKENzz');
+    fs.mkdirSync(nested, { recursive: true, mode: 0o700 });
+    const inv = withReaddirFault(nested, 'EACCES', () => manifestLib.quarantineInventory(paths));
+    assert.deepEqual(inv.unreadable, [{ dir: q, code: 'EACCES' }],
+      `depth ${depth}: the shelf ROOT, never the nested directory's own path`);
+    assert.equal(JSON.stringify(inv).includes('zzNESTEDTOKENzz'), false,
+      `depth ${depth}: the whole returned value carries no path below the root`);
+  }
+});
+
+test('R-Y1 (PR round 2): an unreadable level under redacted/ is reported by REDACTED, its own shelf root', () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  const nested = path.join(r, 'zzREDTOKENzz');
+  fs.mkdirSync(nested, { recursive: true, mode: 0o700 });
+  const inv = withReaddirFault(nested, 'EIO', () => manifestLib.quarantineInventory(paths));
+  assert.deepEqual(inv.unreadable, [{ dir: r, code: 'EIO' }], 'the redacted shelf is a root in its own right');
+  assert.equal(JSON.stringify(inv).includes('zzREDTOKENzz'), false, 'and nothing below it is named');
+  assert.notEqual(inv.unreadable[0].dir, q, 'not attributed to the outer shelf');
+});

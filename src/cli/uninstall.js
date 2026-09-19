@@ -321,11 +321,37 @@ const QUARANTINE_HEDGE =
  * is to delete the user's only copy of their own notes. Inside single quotes
  * nothing is special, and the one character that cannot appear is escaped the
  * only way POSIX allows: end the quoting, emit a literal quote, resume.
- * Table W row **W4** pins the CONTENT of the five items, not the quoting.
  * @param {string} p @returns {string}
  */
 function shQuote(p) {
   return `'${String(p).split("'").join("'\\''")}'`;
+}
+
+/** PowerShell single-quote a path. Same reasoning as `shQuote`, different
+ *  escape: in PowerShell a literal single quote inside a single-quoted string
+ *  is written by DOUBLING it, and `-LiteralPath` then also stops `[` and `]`
+ *  being read as wildcards. @param {string} p @returns {string} */
+function psQuote(p) {
+  return `'${String(p).split("'").join("''")}'`;
+}
+
+/**
+ * The two remedy lines of Table W row **W4** item (5), in the HOST SHELL —
+ * ruling **R-W4-win32**. A user on Windows has no `mv` and no `rm -rf`, so a
+ * POSIX-only remedy is not a remedy at all on a third of the supported
+ * platforms; and a `--dry-run` that prints a command the user cannot run is
+ * exactly the disclosure failure W5 exists to prevent. The platform is a
+ * parameter, not a read, so both branches are unit-testable on any host.
+ * @param {string} target @param {NodeJS.Platform} platform @returns {string[]}
+ */
+function remedyLines(target, platform) {
+  if (platform === 'win32') {
+    return [
+      `  Move-Item -LiteralPath ${psQuote(target)} -Destination "$HOME\\wienerdog-quarantine"`,
+      `  Remove-Item -LiteralPath ${psQuote(target)} -Recurse -Force`,
+    ];
+  }
+  return [`  mv ${shQuote(target)} ~/wienerdog-quarantine`, `  rm -rf ${shQuote(target)}`];
 }
 
 /**
@@ -345,11 +371,14 @@ function shQuote(p) {
  * `unreadable[].dir` is a DIRECTORY rather than an entry, and the user is about
  * to list the directory themselves, so printing names buys nothing and not
  * printing them is strictly safer.
- * @param {{roots:Array<{dir:string, entries:number, bytes:number}>, blockers:string[], entries:number, bytes:number, unreadable:Array<{dir:string, code:string}>}} inv
+ * @param {{roots:Array<{dir:string, entries:number, bytes:number}>, entries:number, bytes:number, unreadable:Array<{dir:string, code:string}>, blockers:string[]}} inv
  * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {NodeJS.Platform} [platform] the host whose shell the remedy is
+ *   written for (**R-W4-win32**); a parameter so both branches are testable
+ *   without a Windows host
  * @returns {string}
  */
-function quarantineBlock(inv, paths) {
+function quarantineBlock(inv, paths, platform = process.platform) {
   // The remedy names a path that EXISTS wherever one does — `roots` and
   // `blockers` both report their ACTUAL on-disk path, so a capitalized shelf,
   // or a file sitting where the shelf should be, is named as it is stored
@@ -372,6 +401,7 @@ function quarantineBlock(inv, paths) {
       if (r.entries === 0) continue;
       lines.push(`  ${r.dir} — ${r.entries} file(s), ${r.bytes} bytes`);
     }
+    // W4 item (3b) — one line per blocker (ruling R-K).
     for (const b of inv.blockers) {
       lines.push(`  ${b} — not a folder; something else is sitting where the quarantine folder goes`);
     }
@@ -382,8 +412,7 @@ function quarantineBlock(inv, paths) {
       ? 'Fix the permission or disk problem so it can be read, then move it somewhere you keep, or delete it:'
       : 'Move that somewhere you keep, or delete it:'
   );
-  lines.push(`  mv ${shQuote(target)} ~/wienerdog-quarantine`);
-  lines.push(`  rm -rf ${shQuote(target)}`);
+  lines.push(...remedyLines(target, platform));
   lines.push('then run `wienerdog uninstall` again.');
   lines.push('There is more about these copies in docs/runbooks/secret-incident.md.');
   return lines.join('\n');
@@ -723,4 +752,8 @@ async function run(argv, opts = {}) {
 // three scheduler output formats it parses cannot otherwise be exercised off
 // their native platform. It is not a seam into the gate — `run` remains the only
 // entry point, still reached from exactly one production require.
-module.exports = { run, ownIdentifiersIn };
+// `quarantineBlock` is exported for its PLATFORM SEAM only (ruling R-W4-win32):
+// the win32 remedy branch has to be assertable on a POSIX host, and a block
+// builder that reads `process.platform` internally cannot be. No production
+// caller imports it.
+module.exports = { run, ownIdentifiersIn, quarantineBlock };

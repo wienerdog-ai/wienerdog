@@ -988,6 +988,9 @@ test('Table U accepted snapshot: a post-confirm rewrite REVERTED to the disclose
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { ownIdentifiersIn } = require('../../src/cli/uninstall');
+/** The CLI module itself — `quarantineBlock` is exported for its PLATFORM SEAM
+ *  (ruling R-W4-win32) and for deriving `gateStrings()` from the product. */
+const uninstallMod = require('../../src/cli/uninstall');
 
 /** `launchctl print gui/<uid>` — captured on darwin (tabs between columns). */
 const LAUNCHCTL_PRINT = [
@@ -1622,15 +1625,41 @@ function normalizeRun(out, root, core) {
   return out.split(core).join('<CORE>').split(root).join('<ROOT>');
 }
 
-/** Every string the gate adds to any surface. Criterion 5 asserts against a
- *  captured expectation AND that none of these ever appears on an empty shelf. */
-const GATE_STRINGS = [
-  'wienerdog uninstall stopped',
-  'may be the only copy of that text on this computer',
-  'Move that folder somewhere you keep',
-  'A real `wienerdog uninstall` stops at this point',
-  'because they looked like they held a password or a key',
-];
+/**
+ * Every string the gate can put on a surface, DERIVED FROM THE BUILDER ITSELF
+ * rather than transcribed. A hand-written list silently rots: PR round 1
+ * reworded the remedy heading and this list kept asserting the absence of a
+ * string the product no longer emitted, which is an absence assertion that can
+ * never fail. Rendering both message shapes on both platform branches over a
+ * synthetic core, then dropping every line that carries the synthetic path,
+ * leaves exactly the wording — and nothing can drift out of it.
+ * @returns {string[]}
+ */
+function gateStrings() {
+  const SYNTH = '/zzsynthzz';
+  const fakePaths = /** @type {any} */ ({ state: `${SYNTH}/state` });
+  const nonEmpty = {
+    roots: [{ dir: `${SYNTH}/state/quarantine`, entries: 1, bytes: 7 }],
+    entries: 2, bytes: 7, unreadable: [], blockers: [`${SYNTH}/state/Quarantine`],
+  };
+  const unreadable = {
+    roots: [], entries: 0, bytes: 0,
+    unreadable: [{ dir: `${SYNTH}/state/quarantine`, code: 'EACCES' }], blockers: [],
+  };
+  /** @type {Set<string>} */ const out = new Set();
+  for (const platform of ['darwin', 'win32']) {
+    for (const inv of [nonEmpty, unreadable]) {
+      for (const line of uninstallMod.quarantineBlock(inv, fakePaths, platform).split('\n')) {
+        const t = line.trim();
+        if (t && !t.includes(SYNTH)) out.add(t);
+      }
+    }
+  }
+  // The two lines the CLI adds around the block.
+  out.add('wienerdog uninstall stopped');
+  out.add('A real `wienerdog uninstall` stops at this point');
+  return [...out];
+}
 
 /** Make `fs.readdirSync` throw `code` for exactly `target`. Platform scope: a
  *  real `chmod 0000` is not EACCES for a privileged user and does not exist on
@@ -1816,7 +1845,7 @@ test('[QU-5] AC5 (W6): with no shelf ENTRIES the complete output is byte-identic
   assert.match(baseYes.stdout, /Removed \d+ item\(s\)/, `${S}: and that line was actually in the compared text`);
   assert.equal(fs.existsSync(empty.core), false, `${S}: the empty-shelf install uninstalled completely`);
 
-  for (const s of GATE_STRINGS) {
+  for (const s of gateStrings()) {
     for (const out of [baseDry.stdout, emptyDry.stdout, baseYes.stdout, emptyYes.stdout]) {
       assert.equal(out.includes(s), false, `${S}: no shelf wording anywhere — ${s}`);
     }
@@ -1849,18 +1878,37 @@ test('[QU-6] AC6 (K4/Y5): an UNREADABLE shelf aborts a real run naming its code,
   assert.equal(fs.existsSync(core), false, `${S}: it uninstalled`);
 });
 
-test('[QU-7] AC7 (W7): the shelf gate runs FIRST — with BOTH a non-empty shelf and an unreadable scheduler root, the SHELF refusal is what is printed', async (t) => {
-  if (process.platform !== 'darwin') return t.skip('the launchd arm is executable on darwin only');
+test('[QU-7] AC7 (W7): the shelf gate runs FIRST — with BOTH a non-empty shelf and an unreadable scheduler root, the SHELF refusal is what is printed', async () => {
   const S = 'QU7-shelf-gate-runs-before-D9';
-  const { root, core, env } = tempEnv();
+  // Ruling R-QU7: PLATFORM-INDEPENDENT. `<core>/schedules` is a discovery root
+  // on darwin, linux AND win32 (`discoverSchedulesOnDisk`'s third root), and the
+  // failure is INJECTED as a code rather than arranged with a real permission —
+  // so this ordering assertion, and the two RED declarations that cite it, are
+  // provable on every host instead of on darwin alone.
+  const { core, env } = tempEnv();
   run(['init', '--yes'], env);
-  const la = path.join(root, 'Library', 'LaunchAgents');
-  const [orphan] = plantSchedules(la, ['ai.wienerdog.orphan.plist']);
+  const schedRoot = path.join(core, 'schedules');
+  fs.mkdirSync(schedRoot, { recursive: true });
+  const orphan = path.join(schedRoot, 'wienerdog-orphan.xml');
+  fs.writeFileSync(orphan, 'x');
   const q = path.join(core, 'state', 'quarantine');
   plantShelfFile(q, '2026-07-01-tooling.md', 812);
   const before = snapshot(core);
 
-  const res = await withRealpathFault(la, 'EACCES', () => uninstallInProcess(env, ['--yes']));
+  // Control on its OWN install, so the fixture under test is never disturbed:
+  // with an EMPTY shelf the same injection reaches D9, which is what makes the
+  // ordering assertion below about precedence rather than a dead fixture.
+  const ctl = tempEnv();
+  run(['init', '--yes'], ctl.env);
+  const ctlSched = path.join(ctl.core, 'schedules');
+  fs.mkdirSync(ctlSched, { recursive: true });
+  fs.writeFileSync(path.join(ctlSched, 'wienerdog-orphan.xml'), 'x');
+  const control = await withRealpathFault(ctlSched, 'EACCES', () => uninstallInProcess(ctl.env, ['--yes']));
+  assert.ok(control.err, `${S}: the injected scheduler-root failure DOES abort on its own`);
+  assert.ok(control.err.message.includes('a folder that can hold scheduled jobs'),
+    `${S}: and it is D9 that speaks then — ${control.err.message}`);
+
+  const res = await withRealpathFault(schedRoot, 'EACCES', () => uninstallInProcess(env, ['--yes']));
   assert.ok(res.err, `${S}: the run refused`);
   assert.ok(res.err.message.includes(q), `${S}: the SHELF refusal is the message — ${res.err.message}`);
   assert.equal(res.err.message.includes('a folder that can hold scheduled jobs'), false,
@@ -1947,7 +1995,12 @@ test('[QU-11] K2 (PR round 1): a FILE sitting where the shelf goes is named BY I
   assert.deepEqual(snapshot(core), before, `${S}: nothing removed`);
 });
 
-test('[QU-12] (PR round 1): the remedy lines are POSIX-quoted — a hostile core path stays one literal argument', () => {
+test('[QU-12] (PR round 1): the remedy lines are POSIX-quoted — a hostile core path stays one literal argument', (t) => {
+  // The only host-shaped test in this package, and it is the FIXTURE that is
+  // host-shaped, not the rule: a Windows filename cannot contain `"`, and there
+  // is no `/bin/sh` to parse the token with. The win32 remedy branch is asserted
+  // by injection in [QU-14] instead, which runs everywhere.
+  if (process.platform === 'win32') return t.skip('the fixture needs a POSIX filename and /bin/sh');
   const S = 'QU12-remedy-lines-are-shell-safe';
   const { root, env } = tempEnv();
   // `$x` would expand, a backtick would run a command substitution and `"`
@@ -1977,4 +2030,69 @@ test('[QU-12] (PR round 1): the remedy lines are POSIX-quoted — a hostile core
     execFileSync('/bin/sh', ['-c', `printf %s ${mvToken}`], { encoding: 'utf8' }), q,
     `${S}: the move line parses back to the same literal path`
   );
+});
+
+test('[QU-13] R-Y1 (PR round 2): an unreadable NESTED DIRECTORY is reported by its shelf ROOT — its own name never reaches a surface', async () => {
+  const S = 'QU13-nested-unreadable-reports-the-shelf-root';
+  const token = 'zzNESTEDTOKENzz';
+  for (const depth of [1, 2]) {
+    const { env, q } = shelfInstall();
+    // depth 1: <q>/zzTOKENzz     depth 2: <q>/outer/zzTOKENzz
+    const parent = depth === 1 ? q : path.join(q, 'outer');
+    const nested = path.join(parent, token);
+    fs.mkdirSync(nested, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(path.join(nested, 'note.md'), 'x'.repeat(5), { mode: 0o600 });
+
+    const refused = await withQuarantineReaddirFault(nested, 'EACCES', () =>
+      uninstallInProcess(env, ['--yes'])
+    );
+    assert.ok(refused.err, `${S}: depth ${depth} — the run refused`);
+    const surface = refused.out + refused.err.message;
+    assert.equal(surface.includes(token), false,
+      `${S}: depth ${depth} — the nested directory's own name is the user's text and never reaches a surface — ${surface}`);
+    assert.ok(surface.includes(`${q} (EACCES)`),
+      `${S}: depth ${depth} — the SHELF ROOT and the code are what is reported`);
+
+    const dry = await withQuarantineReaddirFault(nested, 'EACCES', () =>
+      uninstallInProcess(env, ['--dry-run'])
+    );
+    assert.equal(dry.err, null, `${S}: depth ${depth} — --dry-run does not abort`);
+    assert.equal(dry.out.includes(token), false, `${S}: depth ${depth} — nor does --dry-run leak it — ${dry.out}`);
+    assert.ok(dry.out.includes(`${q} (EACCES)`), `${S}: depth ${depth} — while still reporting the root`);
+  }
+});
+
+test('[QU-14] R-W4-win32 (PR round 2): the remedy lines are the HOST shell’s, and both branches escape their own quotes', () => {
+  const S = 'QU14-remedy-lines-follow-the-host-shell';
+  const target = "/h/it's a $x `id` \"d\" dir/state/quarantine";
+  const paths = /** @type {any} */ ({ state: '/h/state' });
+  const inv = {
+    roots: [{ dir: target, entries: 1, bytes: 9 }],
+    entries: 1, bytes: 9, unreadable: [], blockers: [],
+  };
+  const lines = (platform) =>
+    uninstallMod.quarantineBlock(inv, paths, platform)
+      .split('\n')
+      .filter((l) => l.startsWith('  mv ') || l.startsWith('  rm -rf ') || l.startsWith('  Move-Item ') || l.startsWith('  Remove-Item '));
+
+  for (const posix of ['darwin', 'linux']) {
+    const [mv, rm] = lines(posix);
+    assert.equal(mv, `  mv '/h/it'\\''s a $x \`id\` "d" dir/state/quarantine' ~/wienerdog-quarantine`,
+      `${S}: ${posix} — POSIX single-quote escaping, ' -> '\\''`);
+    assert.equal(rm, `  rm -rf '/h/it'\\''s a $x \`id\` "d" dir/state/quarantine'`, `${S}: ${posix} — and the delete line`);
+    // A real shell must parse the token back to the literal path.
+    const token = rm.slice('  rm -rf '.length);
+    assert.equal(execFileSync('/bin/sh', ['-c', `printf %s ${token}`], { encoding: 'utf8' }), target,
+      `${S}: ${posix} — /bin/sh parses it back to the literal path`);
+  }
+
+  const [move, remove] = lines('win32');
+  assert.equal(move, `  Move-Item -LiteralPath '/h/it''s a $x \`id\` "d" dir/state/quarantine' -Destination "$HOME\\wienerdog-quarantine"`,
+    `${S}: win32 — PowerShell single-quote escaping, ' -> ''`);
+  assert.equal(remove, `  Remove-Item -LiteralPath '/h/it''s a $x \`id\` "d" dir/state/quarantine' -Recurse -Force`,
+    `${S}: win32 — and the delete line`);
+  assert.equal(move.includes('mv '), false, `${S}: win32 gets no POSIX command`);
+  assert.equal(lines('darwin').join('\n').includes('Remove-Item'), false, `${S}: and darwin gets no PowerShell one`);
+  // Both branches quote the SAME path, so neither can silently target another.
+  assert.ok(move.includes('/state/quarantine') && lines('darwin')[0].includes('/state/quarantine'), `${S}: same target`);
 });
