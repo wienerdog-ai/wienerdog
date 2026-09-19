@@ -217,7 +217,7 @@ by S1 and needs nothing.
 | Why this value, lower side | It must exceed one ordinary log line by a wide margin, so a forced cut is not the normal path. Larger values buy nothing: a cut is taken as soon as one is accepted, so the bound is reached only by a single logical line (or an open PEM block, an open quoted sensitive value, or an unbroken run of binder-terminated lines) longer than 32768 characters |
 | Memory ceiling | one buffer per redactor instance, at most `STREAM_REGION_MAX` characters held. `WP-secret-sink-chunk-fix` creates four instances (one per stream per sink), so at most 4 × 32768 characters are ever held |
 | Forced cut | the only unaccepted cut. It ends the region at exactly `STREAM_REGION_MAX` characters and is ADR-0043 decision 5's residual: a secret can still be split by it |
-| Adversarial case, priced | a child that emits `-----BEGIN RSA PRIVATE KEY-----` or `\"token\": \"` and then never closes it, or one long unbroken line, forces a cut every `STREAM_REGION_MAX` characters. That is bounded work and bounded memory, and it degrades to the pre-fix chunk behaviour for that stream — never worse, and never unbounded |
+| Adversarial case, priced | *Amended by round 4 — see the end of this section.* a child that emits `-----BEGIN RSA PRIVATE KEY-----` or `\"token\": \"` and then never closes it, or one long unbroken line, forces a cut every `STREAM_REGION_MAX` characters. That is bounded work and bounded memory, and it degrades to the pre-fix chunk behaviour for that stream — never worse, and never unbounded |
 
 ### Table D — canonical: the declared RED proofs (ADR-0042)
 
@@ -329,8 +329,17 @@ review finding updates the table and all its mirrors **in the same commit**
       contract, `push`, `end`, totality); Table S's conservatism note and its
       new-rule obligation; Table B's adversarial row; "Accepted residuals"; the
       "Out of scope" list.
+- [ ] **`ScanLimits` comment in `src/core/secret-scan.js`** — the comment on
+      `STREAM_REGION_MAX` mirrors Table B (its value, the `* 4 <
+      SCAN_MAX_BYTES` derivation, and that the ceiling is what survives a call).
+- [ ] **`isAcceptedCut`'s JSDoc in `src/core/secret-scan.js`** — mirrors Table S
+      (the four rows, the incomplete-match preamble, and the new-rule obligation).
 - [ ] **Frontmatter** — `adrs` (must list ADR-0043 and, while Table D is
       non-empty, ADR-0042).
+
+### Design gate round 4 (PR #306 review, 2026-09-19) — Table B gains a cost row
+
+**Cost — bounded work, stated as a per-byte ceiling at a chunk-size envelope.** `push`/`end` perform work linear in the total input length: prefix-determined state (row S2's non-whitespace index, rows S3/S4's blocked ranges) is carried across pushes within a region and extended over the appended text only, and every regex subject is bounded to the current region, never the whole remaining input. The suite asserts a per-byte ceiling of at most `MAX_MICROS_PER_CHAR`, set at ≥ 8× the slowest shape measured on the tree that sets it, for each of: a never-closed PEM opener, a never-closed quoted sensitive value, an open key binder, every line an open binder, `keyword + whitespace run`, and plain blank lines — each in its candidate-dense form (opener followed by blank lines), at chunk sizes 1, 64 and 4096 characters, plus one single push of ≥ 16 MiB of inert text. The 'Adversarial case, priced' row's 'bounded work' means exactly this ceiling and nothing weaker.
 
 ## Implementation notes & constraints
 

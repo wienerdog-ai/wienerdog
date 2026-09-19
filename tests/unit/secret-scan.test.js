@@ -527,23 +527,26 @@ test('stream-redactor: two instances share no state (AC5)', () => {
   assert.equal(a.end(), '');
 });
 
-/** The per-byte ceiling every timing assertion below uses. Measured on this
- *  tree, the slowest bait is `every line ends in an open binder, 1 MiB` at
- *  0.481 us/char, so this ceiling is about 10x the slowest measured rate; the
- *  32 KiB baits run 0.15-0.22 us/char warm and up to ~0.61 on a cold module,
- *  which is still 8x under. The margin is deliberate — this is a regression
- *  tripwire for a return to per-candidate or per-push rescanning (the shapes
- *  below measured 3.35 s and 4.36 us/char before that was fixed), not a
- *  performance target, and it has to survive a loaded CI runner. */
-const MAX_MICROS_PER_CHAR = 5;
+/** The per-byte ceiling Table B's cost row (design gate round 4) asserts.
+ *  MEASURED COLD on the tree that sets it, one fresh process per cell, five
+ *  samples per chunk=1 cell: the slowest shape is plain blank lines at chunk=1
+ *  at 2.07-2.11 us/char, and the slowest single reading seen anywhere in that
+ *  sampling was 2.69 (a private-key opener at chunk=1, on a loaded machine).
+ *  This ceiling is 11x the former and 8.9x the latter. The spread across chunk
+ *  sizes is wide on purpose — chunk=1 pays a `redactOnly` call per
+ *  one-character region while chunk=4096 runs at 0.018-0.045 — and the ceiling
+ *  is a tripwire for a return to super-linear work, not a performance target:
+ *  these same shapes measured 113-122 us/char at chunk=1 before the prefix
+ *  state was carried across pushes, which is 45x over this ceiling. */
+const MAX_MICROS_PER_CHAR = 24;
 
 /** Drive `bait` through a redactor in `chunk`-sized pushes and return us/char.
- *  Every bait below carries an UNFINISHED secret shape, so nothing in it is
- *  redactable and the stream must give the bait back byte for byte — which is
- *  also what makes the rate comparable across baits. (The whole bait cannot be
- *  compared against `redactOnly(bait)`: the 1 MiB baits are past
- *  `SCAN_MAX_BYTES`, where the detector withholds rather than scans. Staying
- *  under that per REGION is exactly what `STREAM_REGION_MAX` is for.) */
+ *  Every bait carries an UNFINISHED secret shape, so nothing in it is redactable
+ *  and the stream must give it back byte for byte — which is also what makes the
+ *  rate comparable across baits. (A whole bait cannot be compared against
+ *  `redactOnly(bait)`: these run past `SCAN_MAX_BYTES`, where the detector
+ *  withholds rather than scans. Staying under it per REGION is what
+ *  `STREAM_REGION_MAX` is for.) */
 function microsPerChar(bait, chunk) {
   const started = process.hrtime.bigint();
   const redactor = createStreamRedactor();
@@ -555,37 +558,55 @@ function microsPerChar(bait, chunk) {
   return micros / bait.length;
 }
 
-test('stream-redactor: adversarial chunk shapes cost a bounded time PER BYTE', () => {
-  // Table B prices the adversarial shapes as bounded work. The RATE is what has
-  // to be asserted, not a total. Each bait must also put its named shape at a
-  // CANDIDATE: a never-closed quoted value with no line breaks never reaches
-  // row S3 at all, and a private key whose lines are 16 characters long dilutes
-  // the candidates 16:1 — both were measured green while the predicate was
-  // quadratic. So every bait below is blank-line dense, and each is timed alone.
-  const max = ScanLimits.STREAM_REGION_MAX;
+test('stream-redactor: every Table B shape holds the per-byte ceiling at every chunk size', () => {
+  // Table B's cost row (design gate round 4). The RATE is what has to be
+  // asserted, not a total, and the CHUNK SIZE is half the test: the same bytes
+  // that cost 0.01 us/char in 4 KiB chunks cost 113 us/char one character at a
+  // time when prefix state is rebuilt per call, and a 4096-only bait cannot see
+  // it. Each bait must also put its named shape AT a candidate — a never-closed
+  // quoted value with no line breaks never reaches row S3 at all — so every one
+  // is an opener followed by blank lines, and each cell is timed alone.
   const blanks = (n) => '\n'.repeat(n);
-  const baits = {
-    // One region that never offers a cut, at full candidate density. This is
-    // the shape that measured 4.36 us/char while rows S3 and S4 were evaluated
-    // per candidate over a fresh prefix slice.
-    'private-key opener + blank lines, one 32 KiB region':
-      `-----BEGIN RSA PRIVATE KEY-----\n${blanks(max - 32)}`,
-    'private-key opener re-opened every region, 1 MiB':
-      `-----BEGIN RSA PRIVATE KEY-----\n${blanks(max - 32)}`.repeat(32),
-    'never-closed quoted value + blank lines, 1 MiB':
-      `"token": "abc\n${blanks(max - 14)}`.repeat(32),
-    'every line ends in an open binder, 1 MiB': 'token:\n'.repeat(Math.ceil((1024 * 1024) / 7)),
-    'keyword + 1 MiB whitespace run': `password:${blanks(1024 * 1024)}`,
-    'plain blank lines, 1 MiB': blanks(1024 * 1024),
-    'one unbroken line, 1 MiB': 'a'.repeat(1024 * 1024),
-  };
-  for (const [name, bait] of Object.entries(baits)) {
-    const rate = microsPerChar(bait, 4096);
-    assert.ok(
-      rate < MAX_MICROS_PER_CHAR,
-      `${name}: ${rate.toFixed(3)} us/char exceeds ${MAX_MICROS_PER_CHAR} us/char`,
-    );
+  const dense = (size) => ({
+    'never-closed PEM opener + blank lines': `-----BEGIN RSA PRIVATE KEY-----\n${blanks(size)}`,
+    'never-closed quoted sensitive value + blank lines': `"token": "abc\n${blanks(size)}`,
+    'open key binder + blank lines': `password:${blanks(size)}`,
+    'every line ends in an open binder': 'token:\n'.repeat(Math.ceil(size / 7)),
+    'keyword + whitespace run': `password:${blanks(size)}`,
+    'plain blank lines': blanks(size),
+  });
+  for (const chunk of [1, 64, 4096]) {
+    // One full region at chunk=1 (32 KiB is the reproduction the review
+    // measured), a wider run once a push is cheap enough to afford it.
+    const size = chunk === 1 ? 32 * 1024 : 256 * 1024;
+    for (const [name, bait] of Object.entries(dense(size))) {
+      const rate = microsPerChar(bait, chunk);
+      assert.ok(
+        rate < MAX_MICROS_PER_CHAR,
+        `${name} at chunk=${chunk}: ${rate.toFixed(3)} us/char exceeds ${MAX_MICROS_PER_CHAR}`,
+      );
+    }
   }
+});
+
+test('stream-redactor: one enormous push costs the same per byte as the same bytes in chunks', () => {
+  // Table B's cost row, the other half of the envelope. A regex handed the whole
+  // buffer walks all of it before anything bounds it to the region, so 16 MiB in
+  // ONE push measured 3.3 s against 0.78 s for the same bytes in 4 KiB chunks.
+  // A cut at or below the region ceiling depends on the prefix alone, so looking
+  // no further than that ceiling is exact, not an approximation.
+  const huge = 'a'.repeat(16 * 1024 * 1024);
+  const single = microsPerChar(huge, huge.length);
+  const chunked = microsPerChar(huge, 4096);
+  assert.ok(
+    single < MAX_MICROS_PER_CHAR,
+    `one 16 MiB push: ${single.toFixed(3)} us/char exceeds ${MAX_MICROS_PER_CHAR}`,
+  );
+  assert.ok(
+    single < chunked * 8 + 1,
+    `one 16 MiB push (${single.toFixed(3)}) must not cost far more per byte `
+      + `than the same bytes in 4 KiB chunks (${chunked.toFixed(3)})`,
+  );
 });
 
 test('stream-redactor: a long line delivered one character at a time stays linear', () => {
@@ -779,8 +800,8 @@ function naiveRowS3S4Reference() {
   const fs = require('node:fs');
   const src = fs.readFileSync(require.resolve('../../src/core/secret-scan'), 'utf8');
   const keys = /^const SENSITIVE_KEYS =\s*\n\s*'([^']+)';$/m.exec(src);
-  const pemOpen = /^const CUT_PEM_OPEN = \/(.*)\/g;$/m.exec(src);
-  const pemClose = /^const CUT_PEM_CLOSE = \/(.*)\/g;$/m.exec(src);
+  const pemOpen = /^const CUT_PEM_OPEN = \/(.*)\/\w*;$/m.exec(src);
+  const pemClose = /^const CUT_PEM_CLOSE = \/(.*)\/\w*;$/m.exec(src);
   assert.ok(keys, 'could not read SENSITIVE_KEYS out of the detector source');
   assert.ok(pemOpen && pemClose, 'could not read the private-key shapes out of the detector source');
   return {
