@@ -1,0 +1,334 @@
+{
+  "suite": "tests/unit/uninstall.test.js",
+  "proofs": [
+    {
+      "id": "srm-widened-set-never-passed",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "1",
+      "why": "criterion 1 must observe the orphan actually being UNLOADED and disposed of, not merely that discovery returned something. Passing the empty list to the LIVE reverse() leaves every disclosure intact — the plan and --dry-run still name the file and its command — while the run that follows unloads and removes nothing. Without this declaration a suite that only inspected the printed plan would stay green over an uninstall that acts on nothing at all",
+      "file": "src/cli/uninstall.js",
+      "find": "    { dryRun: false, discoveredSchedules: discovery.schedules }",
+      "replace": "    { dryRun: false, discoveredSchedules: [] } /* RP_MUT_SRM_WIDENED_SET_NEVER_PASSED */",
+      "marker": "RP_MUT_SRM_WIDENED_SET_NEVER_PASSED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of"
+          ],
+          "signal": "SRM-1-orphan-unloaded-and-disposed"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"
+          ],
+          "signal": "SRM-2-loose-basename-is-not-evidence"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"
+          ],
+          "signal": "SRM-3b-act-time-recheck-narrows-removal-only"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded"
+          ],
+          "signal": "SRM-4-disposition-unload-and-remove"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first"
+          ],
+          "signal": "SRM-12-unload-precedes-the-entry-loop"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC13: no manifest record of any shape prevents an unload"
+          ],
+          "signal": "SRM-13-no-record-suppresses-an-unload"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC10 / round-2 R-B′: every discovered path is disclosed ONCE, in the vocabulary its fate warrants"
+          ],
+          "signal": "SRM-10-plan-vocabulary-matches-the-fate"
+        }
+      ]
+    },
+    {
+      "id": "srm-not-disclosed",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "3",
+      "why": "criterion 3 observes DISCLOSURE, not just deletion, and this is the exact shape that would delete undisclosed. Table D row D3 puts the disk-derived block in uninstall.js rather than in reverse() (the spec's anchor assumed reverse() printed the plan lines), so the mutation site is the pre-confirm print: the live call keeps the accepted snapshot and still acts on it, while the user is never shown the labeled block or the re-derived unregister command before being asked to consent. Ruling R-B′ (round 2) makes the block the ONLY place a phase-D5b removal is disclosed, so suppressing it leaves that deletion entirely unannounced",
+      "file": "src/cli/uninstall.js",
+      "find": "    printDiscoveredSchedules(discovery, process.platform, vaultPath, new Set(plan.removed));\n    const ok = await confirm('\\nProceed with removal? [y/N] ');",
+      "replace": "    /* RP_MUT_SRM_NOT_DISCLOSED */\n    const ok = await confirm('\\nProceed with removal? [y/N] ');",
+      "marker": "RP_MUT_SRM_NOT_DISCLOSED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC3: the disk-derived block is disclosed BEFORE consent, and again in --dry-run"
+          ],
+          "signal": "SRM-3-disclosed-before-consent"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC11 disclosure: a vault-resident candidate gets its own line naming the vault"
+          ],
+          "signal": "SRM-11b-vault-skip-is-disclosed-by-name"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC10 / round-2 R-B′: every discovered path is disclosed ONCE, in the vocabulary its fate warrants"
+          ],
+          "signal": "SRM-10-plan-vocabulary-matches-the-fate"
+        }
+      ]
+    },
+    {
+      "id": "srm-recognition-widened",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "2",
+      "why": "criterion 2's corpus contains basenames that PASS withinSchedulerRoot and FAIL R2 (Table R row R3 — `ai.wienerdog...plist`, `ai.wienerdog. .plist`), so replacing the strict recognizer with the loose containment gate is what tells the strict rule apart from the loose one. For a recorded path the looseness is harmless because the record is the evidence; for an unrecorded file the basename is the ONLY evidence, and under the mutation a file no generator could ever have written is unloaded and deleted",
+      "file": "src/core/manifest.js",
+      "find": "      if (!gen.recognizeScheduleBasename(name)) continue;",
+      "replace": "      if (!withinSchedulerRoot(path.join(root, name), [root])) continue; /* RP_MUT_SRM_RECOGNITION_WIDENED */",
+      "marker": "RP_MUT_SRM_RECOGNITION_WIDENED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"
+          ],
+          "signal": "SRM-2-loose-basename-is-not-evidence"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"
+          ],
+          "signal": "SRM-3b-act-time-recheck-narrows-removal-only"
+        }
+      ]
+    },
+    {
+      "id": "srm-act-time-recheck-dropped",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "3",
+      "why": "criterion 3 observes the REMOVAL set's narrowing direction, not just the happy path. Scoped to removal since round 9: the unload is unconditional by contract (Table D row D6), so a mutation that made IT unconditional would change nothing and prove nothing. Dropping phase D5b's re-check makes every disclosed item removable whatever the filesystem says, so a path that cannot be canonicalized is deleted instead of kept with a notice. Round 2 of the PR gate replaced that re-check again (ruling R-C′): it now asserts IDENTITY with the disclosed file — regular file, successful D15 resolution, and `res.real === item.real` — so the mutation removes all three checks at once",
+      "file": "src/core/manifest.js",
+      "find": "    let st;\n    try {\n      st = fs.lstatSync(item.path);\n    } catch (err) {\n      const code = (err && err.code) || 'UNKNOWN';\n      if (code === 'ENOENT' || code === 'ENOTDIR') continue; // absent — nothing to remove\n      keepDiscovered(item.path, `it is no longer the file that was shown to you (${code})`);\n      continue;\n    }\n    if (!st.isFile()) {\n      keepDiscovered(item.path, 'it is no longer the file that was shown to you (not a regular file)');\n      continue;\n    }\n    const res = resolveOrReport(item.path); // D15, at the act-time site\n    if (res.state === 'absent') continue; // nothing to remove\n    if (res.state === 'unreadable') {\n      keepDiscovered(item.path, `it is no longer the file that was shown to you (${res.code})`);\n      continue;\n    }\n    if (res.real !== item.real) {\n      keepDiscovered(item.path, 'it is no longer the file that was shown to you');\n      continue;\n    }\n",
+      "replace": "    /* RP_MUT_SRM_ACT_TIME_RECHECK_DROPPED */\n",
+      "marker": "RP_MUT_SRM_ACT_TIME_RECHECK_DROPPED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"
+          ],
+          "signal": "SRM-3b-act-time-recheck-narrows-removal-only"
+        }
+      ]
+    },
+    {
+      "id": "srm-disposition-flipped",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "4",
+      "why": "criterion 4 observes the DISPOSITION itself rather than the unload, and this proof is what keeps Table R row R4 a measurable cell under either owner ruling. The mutation applies the opposite arm at the single D5b site: every discovered file is still unloaded, and every one of them survives on disk. A suite that only counted chokepoint calls would stay green",
+      "file": "src/core/manifest.js",
+      "find": "    if (DISCOVERED_DISPOSITION !== 'unload-and-remove') continue; // Table R row R4",
+      "replace": "    if (DISCOVERED_DISPOSITION === 'unload-and-remove') continue; /* RP_MUT_SRM_DISPOSITION_FLIPPED */",
+      "marker": "RP_MUT_SRM_DISPOSITION_FLIPPED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of"
+          ],
+          "signal": "SRM-1-orphan-unloaded-and-disposed"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"
+          ],
+          "signal": "SRM-2-loose-basename-is-not-evidence"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded"
+          ],
+          "signal": "SRM-4-disposition-unload-and-remove"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC10 / round-2 R-B′: every discovered path is disclosed ONCE, in the vocabulary its fate warrants"
+          ],
+          "signal": "SRM-10-plan-vocabulary-matches-the-fate"
+        }
+      ]
+    },
+    {
+      "id": "srm-unreadable-root-read-as-empty",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "9",
+      "why": "design gate round 1, finding 1. Criterion 9 asserts an ABORT, and an abort assertion goes green whenever the run fails for any reason — or red-free whenever the mechanism never ran. Restoring the round-1 defect exactly (the enumeration catch reports no `unreadable` entry) makes an EACCES directory read as an empty one, so the uninstall proceeds and disposes of the core having never looked at the folder that may hold a live job. Without this declaration nothing distinguishes 'aborted because a root was unreadable' from 'the fixture never made a root unreadable'",
+      "file": "src/core/manifest.js",
+      "find": "      if (code !== 'ENOENT' && code !== 'ENOTDIR') unreadable.push({ root, code });\n      continue;\n    }\n    for (const name of names) {",
+      "replace": "      continue; /* RP_MUT_SRM_UNREADABLE_ROOT_READ_AS_EMPTY */\n    }\n    for (const name of names) {",
+      "marker": "RP_MUT_SRM_UNREADABLE_ROOT_READ_AS_EMPTY",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC9: an unreadable scheduler root aborts a real uninstall and only warns in --dry-run"
+          ],
+          "signal": "SRM-9-unreadable-root-aborts"
+        }
+      ]
+    },
+    {
+      "id": "srm-vault-exclusion-removed",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "11",
+      "why": "design gate round 1, finding 3. Criterion 11 asserts a user file SURVIVES, which is the most vacuity-prone shape in the repo's measured catalogue: a file also survives when discovery never found it, when the fixture's vault path was wrong, and when the widened pass never ran at all. Dropping the D12 test from the candidate gate puts a user-authored `wienerdog-notes.xml` in a vault at <core>/schedules inside the blast radius, where it is deleted before disposeCoreMechanics' own nested-vault protection ever runs",
+      "file": "src/core/manifest.js",
+      "find": "      if (vaultReal && resolvedContains(vaultReal, cRes.real)) {\n        skippedForVault.push(full); // D12 / S8 — disclosed, never deleted\n        continue;\n      }",
+      "replace": "      /* RP_MUT_SRM_VAULT_EXCLUSION_REMOVED */",
+      "marker": "RP_MUT_SRM_VAULT_EXCLUSION_REMOVED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC11: a user file inside a vault at <core>/schedules survives the widened pass"
+          ],
+          "signal": "SRM-11-vault-resident-candidate-survives"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC11 disclosure: a vault-resident candidate gets its own line naming the vault"
+          ],
+          "signal": "SRM-11b-vault-skip-is-disclosed-by-name"
+        }
+      ]
+    },
+    {
+      "id": "srm-unload-moved-after-loop",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "12",
+      "why": "design gate round 2, finding 1. Criterion 12 asserts an unload HAPPENED for a file another reverser deletes during the manifest entry loop, and the ordering is unobservable unless the corpus contains the overlapping win32 case. MEASURED DIFFERENCE FROM THE SPEC'S PREDICTION: after round 9 made phase D5a filesystem-free (Table D row D6), literally relocating the phase to after the loop changes nothing observable — the argv is derived from the basename either way — so the mutation instead removes the pre-loop phase's input, restoring the single-pass world in which the entry loop is the only thing that can unload. In criterion 12's corpus the XML's only record is a `file` record, which unloads nothing, so the Task Scheduler entry stays registered while the core is swept",
+      "file": "src/core/manifest.js",
+      "find": "  /** @type {string[]} */ const discoveredUnloaded = [];\n  for (const item of discoveredSchedules) {",
+      "replace": "  /** @type {string[]} */ const discoveredUnloaded = []; /* RP_MUT_SRM_UNLOAD_MOVED_AFTER_LOOP */\n  for (const item of []) {",
+      "marker": "RP_MUT_SRM_UNLOAD_MOVED_AFTER_LOOP",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC1: an orphaned schedule file no manifest entry records is UNLOADED and disposed of"
+          ],
+          "signal": "SRM-1-orphan-unloaded-and-disposed"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC2: a basename withinSchedulerRoot accepts but R2 rejects is never acted on"
+          ],
+          "signal": "SRM-2-loose-basename-is-not-evidence"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC3/AC17: a removal re-check that cannot resolve SKIPS the deletion, keeps the file, and does not abort"
+          ],
+          "signal": "SRM-3b-act-time-recheck-narrows-removal-only"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC4: the disposition is exclusive — the unrecorded file is gone, not merely unloaded"
+          ],
+          "signal": "SRM-4-disposition-unload-and-remove"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first"
+          ],
+          "signal": "SRM-12-unload-precedes-the-entry-loop"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC13: no manifest record of any shape prevents an unload"
+          ],
+          "signal": "SRM-13-no-record-suppresses-an-unload"
+        }
+      ]
+    },
+    {
+      "id": "srm-record-suppresses-unload",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "13",
+      "why": "design gate round 3, the convergence move. Criterion 13 asserts that a candidate COVERED by a record — including the round-3 shape, a same-basename in-root symlink scheduler-entry whose own file a later `file` record deletes — is still unloaded. The mutation re-introduces a coverage exclusion into discovery: any candidate a validated manifest entry names is silently dropped, and nothing unloads it, which is what three review rounds each measured. This declaration replaces `srm-alias-counts-as-coverage`, which pinned the old five-condition predicate that no longer exists",
+      "file": "src/core/manifest.js",
+      "find": "      if (!candidates.has(full)) candidates.set(full, cRes.real);",
+      "replace": "      if (ownedLexical.has(full) || ownedReal.has(cRes.real)) continue; /* RP_MUT_SRM_RECORD_SUPPRESSES_UNLOAD */\n      if (!candidates.has(full)) candidates.set(full, cRes.real);",
+      "marker": "RP_MUT_SRM_RECORD_SUPPRESSES_UNLOAD",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC12: a win32 XML another record deletes mid-loop is still unloaded — phase D5a runs first"
+          ],
+          "signal": "SRM-12-unload-precedes-the-entry-loop"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC13: no manifest record of any shape prevents an unload"
+          ],
+          "signal": "SRM-13-no-record-suppresses-an-unload"
+        },
+        {
+          "test": [
+            "WP-scheduler-replay AC10 / round-2 R-B′: every discovered path is disclosed ONCE, in the vocabulary its fate warrants"
+          ],
+          "signal": "SRM-10-plan-vocabulary-matches-the-fate"
+        }
+      ]
+    },
+    {
+      "id": "srm-external-root-discovered",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "15",
+      "why": "design gate round 4. Criterion 15 asserts that files under an external XDG root SURVIVE. A survival assertion goes green whenever the fixture's external root was never populated, never reached, or silently mis-pathed — and the thing it guards against is `npm test` deleting a developer's real timer, which is the one failure nobody gets to discover twice. Removing Table D row D14's containment filter makes discovery enumerate every root reverse() computes, including a $XDG_CONFIG_HOME that points outside the home this run is reversing",
+      "file": "src/core/manifest.js",
+      "find": "    if (!bounds.some((b) => resolvedContains(b, res.real))) continue; // D14",
+      "replace": "    if (!roots.includes(root)) continue; /* RP_MUT_SRM_EXTERNAL_ROOT_DISCOVERED */",
+      "marker": "RP_MUT_SRM_EXTERNAL_ROOT_DISCOVERED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC15/AC16: an XDG root outside this run's HOME contributes nothing; the same files inside it are discovered"
+          ],
+          "signal": "SRM-15-external-xdg-root-is-not-a-discovery-root"
+        }
+      ]
+    },
+    {
+      "id": "srm-resolution-failure-read-as-external",
+      "wp": "WP-scheduler-replay-manifest-independent",
+      "criterion": "17",
+      "why": "design gate round 5. Criterion 17 asserts an ABORT WITH ZERO FILES REMOVED when a root cannot be canonicalized. The mutation collapses Table D row D15's three outcomes to two at the single site the rule is stated — a resolution error becomes `absent`, which is exactly what `contains`'s bare boolean already does — so the root is dropped silently and the run completes 'successfully' having unloaded nothing. That is green for any suite whose corpus never makes a root unresolvable, which is what the gate measured by injecting EACCES",
+      "file": "src/core/manifest.js",
+      "find": "    if (code === 'ENOENT' || code === 'ENOTDIR') return { state: 'absent' };\n    return { state: 'unreadable', code };",
+      "replace": "    return { state: 'absent', code }; /* RP_MUT_SRM_RESOLUTION_FAILURE_READ_AS_EXTERNAL */",
+      "marker": "RP_MUT_SRM_RESOLUTION_FAILURE_READ_AS_EXTERNAL",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "WP-scheduler-replay AC17: a root that cannot be CANONICALIZED aborts with zero removals and zero chokepoint calls"
+          ],
+          "signal": "SRM-17-resolution-failure-is-not-external"
+        }
+      ]
+    }
+  ]
+}

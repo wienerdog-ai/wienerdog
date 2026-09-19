@@ -558,6 +558,230 @@ function withinSchedulerRoot(p, roots) {
   return /^ai\.wienerdog\..*\.plist$/.test(base) || /^wienerdog-.*\.(timer|service|xml)$/.test(base);
 }
 
+/**
+ * Table R row R4 (WP-scheduler-replay-manifest-independent, owner item 1): what
+ * happens to a recognized schedule file on disk that NO manifest entry records.
+ * `'unload-and-remove'` unloads it and then deletes it; `'unload-only'` unloads
+ * it and leaves the file. The cell is applied at exactly ONE site — phase D5b in
+ * `reverse()` — plus the disclosure that mirrors it, so reversing the owner
+ * recommendation is a one-token edit. It is a CEILING, not a floor: Table D row
+ * D11 (another manifest record owns the file) and Table D row D12 (the file is
+ * vault-resident) both override it toward preservation whatever it says.
+ * @type {'unload-and-remove'|'unload-only'}
+ */
+const DISCOVERED_DISPOSITION = 'unload-and-remove';
+
+/**
+ * Table R row R9 — `R-preserved-reloadable-plist`, the residual the removal
+ * narrowing leaves behind. macOS loads `~/Library/LaunchAgents` at every GUI
+ * login, so a plist that was unloaded but PRESERVED comes back at the next login
+ * and then fails forever against a core that is gone. The mitigation is
+ * mandatory rather than optional: the user is told, in plain language and BEFORE
+ * consenting, what will happen and what to do about it.
+ * @type {string}
+ */
+const R9_LOGIN_RELOAD_WARNING =
+  'This scheduled job will start again the next time you log in, until you delete that file yourself.';
+
+/**
+ * Table D row D15 — THE one resolution rule, over every path this package
+ * resolves: each discovery root, each candidate, D12's vault path, and phase
+ * D5b's removal re-check. `contains` (below) catches every realpath error and
+ * returns `false`, which for a RECORDED entry means *preserve* (correct) but for
+ * discovery would mean *silently drop a live job* — the opposite direction. So
+ * discovery does not use it, and this resolver keeps the three outcomes apart:
+ * `ENOENT`/`ENOTDIR` is ABSENT (contributes nothing, excludes nothing, not an
+ * error); every other code is UNREADABLE and is REPORTED, aborting a non-dry-run
+ * uninstall through Table D row D9 before anything is mutated; and only a
+ * SUCCESSFUL resolution may classify a path as contained or external.
+ * @param {string} p
+ * @returns {{state:'resolved', real:string}|{state:'absent'}|{state:'unreadable', code:string}}
+ */
+function resolveOrReport(p) {
+  try {
+    return { state: 'resolved', real: fs.realpathSync(p) };
+  } catch (err) {
+    const code = (err && err.code) || 'UNKNOWN';
+    if (code === 'ENOENT' || code === 'ENOTDIR') return { state: 'absent' };
+    return { state: 'unreadable', code };
+  }
+}
+
+/** Containment over two ALREADY-RESOLVED (canonical) paths — the comparison half
+ *  of `contains`, without its error swallowing (Table D row D15).
+ *  @param {string} outerReal @param {string} innerReal @returns {boolean} */
+function resolvedContains(outerReal, innerReal) {
+  const rel = path.relative(outerReal, innerReal);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
+ * Table D row D14, resolved through Table D row D15: which of `roots` are
+ * DISCOVERY roots for this run — the ones that resolve inside `paths.home` or
+ * `paths.core`. `reverse()`'s three roots are correct for replaying a RECORDED
+ * entry, but the systemd user dir derives from the ambient `$XDG_CONFIG_HOME`,
+ * which a redirected-`HOME` run does not move; without this bound a sandbox
+ * could discover — and delete — a real developer's timers.
+ *
+ * Shared by `discoverSchedulesOnDisk` and by phase D5b's act-time re-check, so a
+ * path is classified against the SAME bound at both sites rather than against
+ * two rules that can drift.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {string[]} roots
+ * @returns {{accepted: Array<{root:string, real:string}>,
+ *            unreadable: Array<{root:string, code:string}>, anchorFailed: boolean}}
+ *   An ANCHOR (`paths.home` / `paths.core`) that cannot be resolved makes EVERY
+ *   root unreadable — never a silent exclusion of all of them.
+ */
+function discoveryRoots(paths, roots) {
+  /** @type {Array<{root:string, code:string}>} */ const unreadable = [];
+  /** @type {string[]} */ const bounds = [];
+  for (const anchor of [paths.home, paths.core]) {
+    const res = resolveOrReport(anchor);
+    if (res.state === 'unreadable') {
+      return { accepted: [], unreadable: roots.map((root) => ({ root, code: res.code })), anchorFailed: true };
+    }
+    if (res.state === 'resolved') bounds.push(res.real);
+  }
+  /** @type {Array<{root:string, real:string}>} */ const accepted = [];
+  for (const root of roots) {
+    const res = resolveOrReport(root);
+    if (res.state === 'unreadable') {
+      unreadable.push({ root, code: res.code });
+      continue;
+    }
+    if (res.state === 'absent') continue; // a root we never wrote to is genuinely empty
+    if (!bounds.some((b) => resolvedContains(b, res.real))) continue; // D14
+    accepted.push({ root, real: res.real });
+  }
+  return { accepted, unreadable, anchorFailed: false };
+}
+
+/**
+ * Schedule files present in this install's own scheduler roots (Table D rows D1,
+ * D12). It reads NO manifest entry to decide what to unload (D10); it reads them
+ * only to set each item's `remove` permission (D11). Read-only: a non-recursive
+ * listing of each root plus one lstat per candidate. It never throws; an
+ * enumeration failure is REPORTED in `unreadable` rather than swallowed (D9).
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {Manifest} manifest
+ * @param {{platform?:NodeJS.Platform, schedulerRoots?:string[],
+ *          vaultPath?:string|null}} [opts]
+ * @returns {{schedules: Array<{path:string, real:string, remove:boolean}>,
+ *            unreadable: Array<{root:string, code:string}>,
+ *            skippedForVault: string[]}}
+ *   `schedules` — absolute paths, sorted lexicographically, deduplicated, each
+ *     carrying `real` (ruling R-C′ — the D15-resolved path AS AT DISCOVERY TIME,
+ *     which phase D5b compares against instead of re-deriving containment) and
+ *     the deletion permission D11 decided HERE so `reverse()` never re-decides
+ *     it. Ruling R-B′: nothing here records WHICH record owns a `remove:false`
+ *     item — the plan reads that off the plan itself.
+ *   `unreadable` — roots that exist but could not be enumerated (D9); a
+ *     non-empty array MUST abort a non-dry-run uninstall before any disclosure.
+ *   `skippedForVault` — candidates excluded by D12, disclosed not deleted.
+ */
+function discoverSchedulesOnDisk(paths, manifest, opts = {}) {
+  // generators.js statically requires this module — a top-level import would
+  // cycle (same lazy pattern as reverse() and reverseSchedulerEntry).
+  const gen = require('../scheduler/generators');
+  const roots = opts.schedulerRoots || [
+    gen.launchAgentsDir(paths.home), // ~/Library/LaunchAgents
+    gen.systemdUserDir(paths.home, process.env), // $XDG_CONFIG_HOME||~/.config + /systemd/user
+    path.join(paths.core, 'schedules'), // Windows task XML
+  ];
+  const vaultPath = opts.vaultPath || null;
+  /** @type {Array<{root:string, code:string}>} */ const unreadable = [];
+  /** @type {string[]} */ const skippedForVault = [];
+
+  // ── Table D row D12: the accepted vault path, resolved on the same D15 rule.
+  //    An UNRESOLVABLE vault is unreadable — never "nothing to exclude".
+  let vaultReal = null;
+  if (vaultPath) {
+    const res = resolveOrReport(vaultPath);
+    if (res.state === 'unreadable') {
+      unreadable.push({ root: vaultPath, code: res.code });
+      return { schedules: [], unreadable, skippedForVault };
+    }
+    if (res.state === 'resolved') vaultReal = res.real;
+  }
+
+  // ── Table D row D14: the DISCOVERY root set, bounded to THIS run's own home
+  //    and core, resolved through D15 and never through `contains`.
+  const rootSet = discoveryRoots(paths, roots);
+  unreadable.push(...rootSet.unreadable);
+  if (rootSet.anchorFailed) return { schedules: [], unreadable, skippedForVault };
+
+  // ── Table D row D11: the manifest's ONLY remaining influence — it NARROWS a
+  //    removal, never an unload (D10/S7). Any entry `validateEntry` accepts that
+  //    names a discovered path withholds that file's deletion for its own
+  //    reverser, which may hold a proof-before-delete this pass cannot evaluate.
+  //    Read here, used ONLY to set `remove` below — never to admit or exclude a
+  //    candidate, which is the suppression channel D10 closed.
+  const entries = manifest && Array.isArray(manifest.entries) ? manifest.entries : [];
+  /** @type {Set<string>} */ const ownedLexical = new Set();
+  /** @type {Set<string>} */ const ownedReal = new Set();
+  for (const entry of entries) {
+    if (!validateEntry(entry).ok) continue;
+    ownedLexical.add(entry.path);
+    const res = resolveOrReport(entry.path);
+    if (res.state === 'resolved') ownedReal.add(res.real);
+  }
+
+  /** @type {Map<string, string>} candidate path -> its resolved canonical path */
+  const candidates = new Map();
+  for (const { root, real: rootReal } of rootSet.accepted) {
+    /** @type {string[]} */ let names;
+    try {
+      names = fs.readdirSync(root); // NON-recursive (D1)
+    } catch (err) {
+      const code = (err && err.code) || 'UNKNOWN';
+      // D9: a root that does not exist contributes nothing; ANY other failure is
+      // an unreadable root, never an empty one.
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') unreadable.push({ root, code });
+      continue;
+    }
+    for (const name of names) {
+      // R2 — an enumeration of our OWN good, stricter than withinSchedulerRoot.
+      if (!gen.recognizeScheduleBasename(name)) continue;
+      const full = path.join(root, name);
+      let st;
+      try {
+        st = fs.lstatSync(full);
+      } catch (err) {
+        const code = (err && err.code) || 'UNKNOWN';
+        if (code !== 'ENOENT' && code !== 'ENOTDIR') unreadable.push({ root, code });
+        continue;
+      }
+      if (!st.isFile()) continue; // S2: a symlink or directory is never a candidate
+      const cRes = resolveOrReport(full); // D15, at the candidate site too
+      if (cRes.state === 'unreadable') {
+        unreadable.push({ root, code: cRes.code });
+        continue;
+      }
+      if (cRes.state === 'absent') continue;
+      if (!resolvedContains(rootReal, cRes.real)) continue;
+      if (vaultReal && resolvedContains(vaultReal, cRes.real)) {
+        skippedForVault.push(full); // D12 / S8 — disclosed, never deleted
+        continue;
+      }
+      if (!candidates.has(full)) candidates.set(full, cRes.real);
+    }
+  }
+
+  const schedules = [...candidates.keys()].sort().map((p) => {
+    const real = /** @type {string} */ (candidates.get(p));
+    return {
+      path: p,
+      // Ruling R-C′: the D15-resolved path AS AT DISCOVERY TIME. Phase D5b
+      // compares against it rather than re-deriving containment, because
+      // re-deriving re-asks a question an attacker can move the answer to.
+      real,
+      remove: !(ownedLexical.has(p) || ownedReal.has(real)),
+    };
+  });
+  return { schedules, unreadable, skippedForVault };
+}
+
 /** True iff `a` and `b` resolve (via realpath) to the SAME directory. Fail-closed
  *  when either side is unresolvable. @param {string} a @param {string} b
  *  @returns {boolean} */
@@ -711,10 +935,20 @@ function save(paths, manifest) {
  * delete. Both are null when there is no deferred (unmodified) config.
  * @param {import('./paths').WienerdogPaths} paths
  * @param {Manifest} manifest
- * @param {{dryRun?: boolean}} [opts]
- * @returns {{removed: string[], skipped: string[], preserved: string[], deferredConfig: string|null, deferredConfigHash: string|null}}
+ * @param {{dryRun?: boolean,
+ *           discoveredSchedules?: Array<{path:string, real:string, remove:boolean}>}} [opts]
+ *  `discoveredSchedules` defaults to `[]` — every caller that does not pass it
+ *  behaves exactly as today. Each item carries the path AND the deletion
+ *  permission Table D row D11 decided at discovery time, so `reverse()` never
+ *  re-decides it.
+ * @returns {{removed: string[], skipped: string[], preserved: string[],
+ *            deferredConfig: string|null, deferredConfigHash: string|null,
+ *            discoveredSchedules: string[]}} the new field is the subset of the
+ *            passed list's paths whose UNLOAD this call performed in phase D5a
+ *            (Table D row D6). Anything phase D5b deleted also appears in
+ *            `removed`.
  */
-function reverse(paths, manifest, { dryRun = false } = {}) {
+function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } = {}) {
   /** @type {string[]} */ const removed = [];
   /** @type {string[]} */ const skipped = [];
   /** @type {string[]} */ const preserved = [];
@@ -761,6 +995,35 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
   const MUTATING_KINDS = new Set([
     'file', 'dir', 'symlink', 'managed-block', 'settings-entry', 'vendored-tree', 'copied-skill',
   ]);
+
+  // ── PHASE D5a — THE WIDENED UNLOAD, BEFORE THE ENTRY LOOP ────────────────
+  // WP-scheduler-replay-manifest-independent, Table D rows D5/D6/D10/D13.
+  // Every DISCLOSED item's unregister command is attempted UNCONDITIONALLY, and
+  // this phase touches the filesystem NOT AT ALL: the argv comes from
+  // `path.basename(item.path)` alone (deriveUnloadArgv reads no fs), so no file
+  // state, race or error can starve an unload the user consented to (S13). It
+  // runs FIRST because a manifest reverser may delete a discovered file during
+  // the loop below — on win32 `<core>/schedules` is inside withinAllowedRoot's
+  // root set, so a `{kind:'file'}` record for `wienerdog-dream.xml` really is
+  // deletable, and a single post-loop pass would find nothing to unload while
+  // the Task Scheduler entry stayed registered (S9). Recorded paths are NOT
+  // excluded (D10), so a normal install's jobs are unloaded twice; the second
+  // attempt's result is discarded at :532-536 exactly as it already is (D13).
+  /** @type {string[]} */ const discoveredUnloaded = [];
+  for (const item of discoveredSchedules) {
+    const argv = gen.deriveUnloadArgv(item.path, schedulerOpts.platform);
+    // In dry-run nothing is spawned; the disclosed plan carries the
+    // `would run:` line for this item (uninstall.js, Table D row D3) rather than
+    // this phase printing a second copy of it.
+    if (argv && !dryRun) {
+      try {
+        require('../scheduler/spawn').schedulerSpawn(argv);
+      } catch {
+        /* ignore — unregistration is best-effort, exactly as at :532-536 */
+      }
+    }
+    discoveredUnloaded.push(item.path);
+  }
 
   for (const entry of [...manifest.entries].reverse()) {
     // ── SCHEMA VALIDATION (audit A8, WP-144) — the manifest is UNTRUSTED ────
@@ -1008,7 +1271,81 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
     }
   }
 
-  return { removed, skipped, preserved, deferredConfig, deferredConfigHash };
+  // ── PHASE D5b — THE WIDENED REMOVAL, AFTER THE ENTRY LOOP ────────────────
+  // Table D rows D5/D6/D11/D15 + Table R row R4. It acts ONLY on items phase
+  // D5a processed — never re-admitting one by a check of its own — so the acted
+  // set is a SUBSET of the disclosed set and never a superset (D7). It runs
+  // after the loop so a recorded entry keeps priority over the widened
+  // deletion. A skip here forgoes a DELETION only: the unload already happened
+  // unconditionally above, which is why absence and unreadability are both safe
+  // to skip on (D6).
+  //
+  // THE RE-CHECK ASSERTS IDENTITY WITH WHAT WAS DISCLOSED — ruling R-C′, which
+  // replaced an act-time CONTAINMENT re-check at round 2 of the PR gate. The
+  // disclosed path is an untrusted name by act time: the prompt has been open,
+  // and a same-user process can replace the file, its parent, or the scheduler
+  // root itself. Re-deriving containment re-asks a question the attacker can
+  // move the answer to — a root swapped for a symlink INTO THE VAULT re-derives
+  // as contained, because the vault is inside HOME, and the vault's same-named
+  // file is then deleted. So the item must STILL be a regular file (S2), must
+  // STILL resolve (D15), and must resolve to THE SAME canonical path discovery
+  // recorded. That single comparison implies discovery-time containment AND
+  // discovery-time vault exclusion, and closes every swap class — final
+  // component, parent, root — without re-deriving anything. The deletion is then
+  // aimed at the DISCLOSED path, never the resolved one.
+  /** Table D row D6 + Table R row R9: a skipped REMOVAL says so, and a preserved
+   *  launchd plist carries the login-reload warning. @param {string} p @param {string} why */
+  const keepDiscovered = (p, why) => {
+    if (dryRun) return; // D8 / ruling R-D: a plan pass prints nothing — D3 owns the disclosure
+    process.stderr.write(`wienerdog: keeping ${p} — ${why}\n`);
+    if (gen.recognizeScheduleBasename(path.basename(p)) === 'launchd') {
+      process.stderr.write(`wienerdog: ${R9_LOGIN_RELOAD_WARNING}\n`);
+    }
+  };
+  for (const item of discoveredSchedules) {
+    if (DISCOVERED_DISPOSITION !== 'unload-and-remove') continue; // Table R row R4
+    if (!item.remove) continue; // D11 — another manifest record owns this file
+    if (removedSet.has(item.path)) continue; // a reverser already disposed of it
+    let st;
+    try {
+      st = fs.lstatSync(item.path);
+    } catch (err) {
+      const code = (err && err.code) || 'UNKNOWN';
+      if (code === 'ENOENT' || code === 'ENOTDIR') continue; // absent — nothing to remove
+      keepDiscovered(item.path, `it is no longer the file that was shown to you (${code})`);
+      continue;
+    }
+    if (!st.isFile()) {
+      keepDiscovered(item.path, 'it is no longer the file that was shown to you (not a regular file)');
+      continue;
+    }
+    const res = resolveOrReport(item.path); // D15, at the act-time site
+    if (res.state === 'absent') continue; // nothing to remove
+    if (res.state === 'unreadable') {
+      keepDiscovered(item.path, `it is no longer the file that was shown to you (${res.code})`);
+      continue;
+    }
+    if (res.real !== item.real) {
+      keepDiscovered(item.path, 'it is no longer the file that was shown to you');
+      continue;
+    }
+    try {
+      if (!dryRun) fs.rmSync(item.path, { force: true });
+    } catch (err) {
+      // A swap landing between the checks above and this line still reaches
+      // `rmSync` (a directory there throws ERR_FS_EISDIR). A widened REMOVAL
+      // must never fail the uninstall — the unload already happened.
+      keepDiscovered(item.path, `it could not be removed (${(err && err.code) || 'unknown error'})`);
+      continue;
+    }
+    removedSet.add(item.path);
+    removed.push(item.path);
+  }
+
+  return {
+    removed, skipped, preserved, deferredConfig, deferredConfigHash,
+    discoveredSchedules: discoveredUnloaded,
+  };
 }
 
 /** Required/optional field types per manifest kind (audit A8, WP-144). Keys
@@ -1171,4 +1508,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, linkIdentity, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, discoverSchedulesOnDisk, DISCOVERED_DISPOSITION, R9_LOGIN_RELOAD_WARNING, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, linkIdentity, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };

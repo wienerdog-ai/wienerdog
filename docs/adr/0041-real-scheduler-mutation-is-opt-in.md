@@ -193,7 +193,7 @@ Two more residuals are named and accepted, so the full set lives in one place:
 |---|---|---|
 | **R-namespace-bridge** | a sandbox presenting its own filesystem at the passwd home's pathname, or a platform whose `os.userInfo().homedir` follows the environment, satisfies the coherence arm | scoping, not detection (above) |
 | **R-failed-unload** | a *failed* or *suppressed* unload during `uninstall` still proceeds to delete, leaving an orphan. Pre-existing on `main`, unchanged by this ADR | transactional uninstall is its own work package; `wienerdog doctor` surfaces the orphan |
-| **R-stripped-manifest-orphan** — owner-ruled 2026-09-01 | Decision 2's clearance short-circuits on scheduler authority without probing, so an authority-present `uninstall` (through the coherence arm, every normal default-home user) replays only what the manifest holds. A live job whose `scheduler-entry` is missing — stripped, hand-edited, older-format, or lost to a partial earlier run — gets **no unload attempted at all**, and the core is removed around it. Sibling to R-failed-unload and the **same end state**: a live registration outlives an uninstall because the manifest drove no effective unload. The two differ only in whether an unload was *attempted*, which is why accepting one and building machinery for the other would be incoherent | the two closures proposed at round 6 were both measured to fail — probing on every uninstall breaks the subprocess-test hermeticity Decision 2b depends on, and coverage-by-identifier is namespace-blind (rejected options below). Mitigations are real and measured: the schedule file survives (`disposeCoreMechanics` is scoped to the core and never touches `~/Library/LaunchAgents`), so recovery is by hand, and `wienerdog doctor` probes live registrations and surfaces it. `WP-scheduler-replay-manifest-independent` is filed as the follow-up that closes the class |
+| **R-stripped-manifest-orphan** — owner-ruled 2026-09-01; **CLOSED 2026-09-19**, see the amendment at the end of this file | Decision 2's clearance short-circuits on scheduler authority without probing, so an authority-present `uninstall` (through the coherence arm, every normal default-home user) replays only what the manifest holds. A live job whose `scheduler-entry` is missing — stripped, hand-edited, older-format, or lost to a partial earlier run — gets **no unload attempted at all**, and the core is removed around it. Sibling to R-failed-unload and the **same end state**: a live registration outlives an uninstall because the manifest drove no effective unload. The two differ only in whether an unload was *attempted*, which is why accepting one and building machinery for the other would be incoherent | the two closures proposed at round 6 were both measured to fail — probing on every uninstall breaks the subprocess-test hermeticity Decision 2b depends on, and coverage-by-identifier is namespace-blind (rejected options below). Mitigations are real and measured: the schedule file survives (`disposeCoreMechanics` is scoped to the core and never touches `~/Library/LaunchAgents`), so recovery is by hand, and `wienerdog doctor` probes live registrations and surfaces it. `WP-scheduler-replay-manifest-independent` is filed as the follow-up that closes the class |
 | **R-probe-race** | a probe answers for the instant it ran, and a process that registers real jobs afterwards is not seen by whatever that answer already licensed. **Two windows, one residual:** Decision 3's smoke preflight, whose answer licenses the lifecycle that follows; and Decision 2's uninstall clearance, whose answer licenses the deletion that follows. The second is deliberately kept to the milliseconds between the probe and `reverse()` — the clearance is established *after* the interactive confirm, never before it, so a prompt left open for minutes cannot stretch it | a per-user lock across all mutators is machinery neither a maintainer-run smoke script nor a single uninstall justifies, and it was weighed and rejected above. The promise both windows make is "the domain answered this way at that instant", and no more |
 
 ### The owner's rulings this Decision carries
@@ -330,3 +330,34 @@ review:
 - **ADR-0037** (a register that cannot verify what the OS holds must not report
   success) composes cleanly: a refusal returns non-zero, which is already the
   "not loaded" input that postcondition consumes.
+
+## Amendment (2026-09-19) — R-stripped-manifest-orphan is closed
+
+Status: **ACCEPTED under standing authorization 2026-09-18 — owner signature pending.**
+
+`WP-scheduler-replay-manifest-independent` has shipped Option C. `uninstall`'s
+scheduler reversal no longer derives solely from the manifest's entry list: it
+also derives, from the schedule files present in this install's own scheduler
+roots, the jobs whose `scheduler-entry` record is missing, and disposes of them
+before the core is disposed. The residual **R-stripped-manifest-orphan** in the
+table above is therefore **CLOSED except for `R-preserved-reloadable-plist`**,
+which is added to that table as its own row below. Its row is kept and marked
+closed rather than removed, so the record of what was accepted between
+2026-09-01 and this date survives.
+
+| Residual | What stays open | Why it is not closed here |
+|---|---|---|
+| **R-preserved-reloadable-plist** | a recognized launchd plist named by a manifest entry of a **non-scheduler** kind is unloaded but preserved — the widened pass defers to that record and the file reverser does not remove it either, `~/Library/LaunchAgents` being outside its allowed roots — so the next GUI login re-registers it against a deleted core. The unload **succeeded**, so this is not `R-failed-unload` | reachable only through a hand-edited or corrupted manifest, and **strictly narrower than the behaviour it replaces**: the same install previously got no unload at all and the same surviving file. Removing it anyway would override another record's lifecycle, which is the deletion-widening question the work package already carries as an owner item. The uninstall plan warns the user in plain language, before consent, that the job returns at the next login until the named file is removed by hand |
+
+Ruling **D4** is unchanged and is not reopened: Option A was the interim
+posture and Option C was filed alongside it as the closure. The two designs
+refuted at round 6 stay refuted and this amendment adopts neither. The
+derivation reads **files inside roots this install owns**, recognized by the
+basename shapes our own generators write, and never reasons over the
+per-user-global identifier namespace — which is exactly the distinction that
+separates it from "code-recognized self-unload of live identifiers the manifest
+does not cover".
+
+**R-failed-unload is NOT closed by this amendment.** A widened unload whose
+result is ignored is still a possible orphan; transactional uninstall remains
+its own work package.

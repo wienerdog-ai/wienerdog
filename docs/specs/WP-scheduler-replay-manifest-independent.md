@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-replay-manifest-independent
 title: Derive uninstall's scheduler reversal from the schedule files on disk, not from the manifest alone
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-scheduler-mutation-home-authority]
@@ -210,9 +210,12 @@ function recognizeScheduleBasename(basename)
  * @param {Manifest} manifest
  * @param {{platform?:NodeJS.Platform, schedulerRoots?:string[],
  *          vaultPath?:string|null}} [opts]
- * @returns {{schedules: string[], unreadable: Array<{root:string, code:string}>,
+ * @returns {{schedules: Array<{path:string, real:string, remove:boolean}>,
+ *            unreadable: Array<{root:string, code:string}>,
  *            skippedForVault: string[]}}
- *   `schedules` — absolute paths, sorted lexicographically, deduplicated.
+ *   `schedules` — absolute paths, sorted lexicographically, deduplicated, each
+ *     carrying D11's `remove` permission and ruling R-C′'s `real` (the
+ *     D15-resolved path as at discovery time).
  *   `unreadable` — roots that exist but could not be enumerated (D9); a
  *     non-empty array MUST abort a non-dry-run uninstall before any disclosure.
  *   `skippedForVault` — candidates excluded by D12, disclosed not deleted.
@@ -220,7 +223,8 @@ function recognizeScheduleBasename(basename)
 function discoverSchedulesOnDisk(paths, manifest, opts)
 
 // src/core/manifest.js — CHANGED.
-/** @param {{dryRun?: boolean, discoveredSchedules?: Array<{path:string, remove:boolean}>}} [opts]
+/** @param {{dryRun?: boolean,
+ *            discoveredSchedules?: Array<{path:string, real:string, remove:boolean}>}} [opts]
  *  `discoveredSchedules` defaults to `[]` — every caller that does not pass it
  *  behaves exactly as today. Each item carries the path AND the deletion
  *  permission Table D row D11 decided at discovery time, so `reverse()` never
@@ -244,13 +248,17 @@ schema-valid `{kind:'file'}` entry for `ai.wienerdog.digest.plist`, with
 ```
 discoverSchedulesOnDisk(...)  →  {
   schedules: [
-    { path: '/tmp/h/Library/LaunchAgents/ai.wienerdog.catchup.plist', remove: true  },
-    { path: '/tmp/h/Library/LaunchAgents/ai.wienerdog.digest.plist',  remove: false },
-    { path: '/tmp/h/Library/LaunchAgents/ai.wienerdog.dream.plist',   remove: false },
+    { path: '…/ai.wienerdog.catchup.plist', real: '…', remove: true  },
+    { path: '…/ai.wienerdog.digest.plist',  real: '…', remove: false },
+    { path: '…/ai.wienerdog.dream.plist',   real: '…', remove: false },
   ],
   unreadable: [], skippedForVault: [],
 }
 ```
+
+The record kinds this example assumes are the ones stated above: `dream` is a
+`scheduler-entry`, `digest` is a `{kind:'file'}` entry, `catchup` is recorded
+nowhere.
 
 All three recognized files are discovered — **discovery reads no manifest**
 (D10). `catchup` is unowned, so `remove: true`. `digest` and `dream` are each
@@ -265,9 +273,19 @@ Scheduled jobs found on disk:
   remove /tmp/h/Library/LaunchAgents/ai.wienerdog.catchup.plist
   would run: launchctl bootout gui/501/ai.wienerdog.digest
   keep /tmp/h/Library/LaunchAgents/ai.wienerdog.digest.plist (another manifest entry owns this file)
+    This scheduled job will start again the next time you log in, until you delete that file yourself.
   would run: launchctl bootout gui/501/ai.wienerdog.dream
-  keep /tmp/h/Library/LaunchAgents/ai.wienerdog.dream.plist (another manifest entry owns this file)
+  removed by its own manifest entry (listed above)
 ```
+
+Under ruling **R-B′** each line is decided from the plan itself, not from an
+ownership flag. `dream`'s `scheduler-entry` reverser deletes the plist, so the
+plan already lists it above and the block points at that line. `digest`'s
+`{kind:'file'}` record does **not** delete it — `~/Library/LaunchAgents` is
+outside `withinAllowedRoot`'s root set — so it is kept and carries R9's warning.
+`catchup`'s `remove` line appears **only** here: it is phase D5b's own deletion,
+and it is the one class subtracted from the manifest-derived `remove` lines and
+from the `--dry-run` headline count.
 
 `dream`'s `would run:` line appears **twice** in the whole plan — once here and
 once from its `scheduler-entry` — which D3 and D13 cover.
@@ -304,15 +322,15 @@ Every fact about *what we accept* and *what happens to it* is decided here.
 |---|---|---|
 | **D1** | **The candidate gate** | Each **discovery root** (**D14** — not every root `reverse()` computes) listed **non-recursively**. A candidate is kept only when **all** of: its basename is recognized (R2); it resolves **inside one of those roots**, established by **D15**'s resolver rather than by `withinSchedulerRoot`; `fs.lstatSync` reports a **regular file** (not a symlink, not a directory); and it is not vault-resident (**D12**). **The gate consults the manifest for nothing** — see **D10**. Enumeration failure is not part of it either — see **D9** |
 | **D2** | **When discovery runs** | **Exactly once per `uninstall` invocation, before anything is printed** — and therefore before D9's abort, which is the first thing the result is examined for. The returned `schedules` array is the *accepted snapshot* of the disk-derived set, and it is the only such list the run ever uses. It is built with the vault path already read (`uninstall.js:309`) so D12 can apply |
-| **D3** | **How it is disclosed** | As its own labeled block in **both** the `--dry-run` output and the pre-confirm plan (`uninstall.js:353-358`), after the manifest-derived lines: a header line naming the block, then per item the re-derived `would run: <argv>` line (omitted when R6 yields `null`) and **one** of — a `remove <path>` line when R4's cell is `unload-and-remove` **and** the item's `remove` is true, or a `keep <path> (another manifest entry owns this file)` line when D11 withheld it, or nothing when R4's cell is `unload-only`. **Every `keep` line for a launchd plist is followed by a plain-language warning** that the job will start again at the next login until the named file is removed by hand (Table R row **R9**) — plain language for knowledge workers, per CLAUDE.md, not a code or a residual id. D12's `skippedForVault` entries get their own line naming the vault, in the shape `disposeCoreMechanics`'s caller already uses for `skippedForVault` (`uninstall.js:332`). **The `--dry-run` headline count at `:328` is left unchanged** — it already disclaims equality with the live total (`:324-326`), and leaving it alone keeps the headline independent of R4's cell. **The plan may show the same unregister command twice** — once from the ledger's `scheduler-entry` and once from this block — because since round 3 discovery no longer excludes recorded paths (D10). The block's header says these were **found on disk**, so the two lines are distinguishable, and D13 is why the duplicate is harmless. Deduplicating them would mean consulting the manifest to decide what to print, which is the channel D10 closed |
+| **D3** | **How it is disclosed** | *Amended by round 11 — see the end of this section.* As its own labeled block in **both** the `--dry-run` output and the pre-confirm plan (`uninstall.js:353-358`), after the manifest-derived lines: a header line naming the block, then per item the re-derived `would run: <argv>` line (omitted when R6 yields `null`) and **one** of — a `remove <path>` line when R4's cell is `unload-and-remove` **and** the item's `remove` is true, or a `keep <path> (another manifest entry owns this file)` line when D11 withheld it, or nothing when R4's cell is `unload-only`. **Every `keep` line for a launchd plist is followed by a plain-language warning** that the job will start again at the next login until the named file is removed by hand (Table R row **R9**) — plain language for knowledge workers, per CLAUDE.md, not a code or a residual id. D12's `skippedForVault` entries get their own line naming the vault, in the shape `disposeCoreMechanics`'s caller already uses for `skippedForVault` (`uninstall.js:332`). **The `--dry-run` headline count at `:328` is left unchanged** — it already disclaims equality with the live total (`:324-326`), and leaving it alone keeps the headline independent of R4's cell. **The plan may show the same unregister command twice** — once from the ledger's `scheduler-entry` and once from this block — because since round 3 discovery no longer excludes recorded paths (D10). The block's header says these were **found on disk**, so the two lines are distinguishable, and D13 is why the duplicate is harmless. Deduplicating them would mean consulting the manifest to decide what to print, which is the channel D10 closed |
 | **D4** | **How it reaches `reverse()`** | Passed as `opts.discoveredSchedules` — the `{path, remove}` items of the Exact contracts — to **both** the plan call and the live call. The default is `[]`: `reverse()` **never discovers on its own**, so every other caller and every existing test is unchanged, and the post-confirm run cannot widen past what was disclosed. Carrying `remove` on the item is what keeps D11's decision at discovery time: `reverse()` applies it, never re-derives it |
 | **D5** | **Where in `reverse()` — TWO phases, and the unload one goes FIRST** | *Design gate round 2, finding 1.* **D5a, the unload phase, runs BEFORE the manifest entry loop** (`manifest.js:765`) and attempts **every disclosed item's** unload (R6/R7) **unconditionally** — no existence test, no containment re-check, no filesystem contact of any kind (**D6**). **D5b, the removal phase, runs after the loop and before the return**, so recorded entries keep priority over the widened deletion; it acts **only on the items phase D5a passed** (**D6**), never re-admitting one by its own check; it skips any path in `removedSet` and applies R4's cell — removing an item only when the cell is `unload-and-remove` **and** that item's `remove` is true. **Why the split is not cosmetic:** on win32 the XML lives at `<core>/schedules/…`, which **is** inside `withinAllowedRoot`'s root set (`manifest.js:742`), so a schema-valid `{kind:'file'}` record for `wienerdog-dream.xml` is *discovered* under D10 but is **deleted by the file reverser during the loop**. A single post-loop pass then finds nothing to act on — D6 rejects the now-missing file — and the Task Scheduler entry stays registered while the core is swept. One pass cannot be both "after the trusted entries" and "before they destroy the evidence"; two phases can. **Since round 3 D5a runs over every candidate D1 yields, recorded or not** (D10), which is what makes the phase order sufficient rather than merely necessary: no reverser can starve an unload, because no reverser's record was ever consulted |
-| **D6** | **Act-time re-check — it governs REMOVAL only; the unload phase touches the filesystem not at all** | *Rewritten at design gate round 9, which removed the last act-time exception rather than adding one.* **Phase D5a performs NO filesystem check.** Its whole input is the disclosed list; for each item it re-derives the unregister argv purely from `path.basename(item.path)` via `deriveUnloadArgv` (`generators.js:140`, which reads no filesystem — verified, zero `fs.` uses in its body) and spawns it through the chokepoint. A spawn failure is discarded exactly as **D13** describes. **Why the file's presence was never the right precondition:** the registration does not live in the file. On **win32** the XML is an *import source* — `schtasks /create /tn <task> /xml <path> /f` (`schedule.js:416`) copies it into the Task Scheduler store, so deleting the XML leaves the task registered. On **launchd** a booted job stays loaded in the domain until it is booted out or the session ends, plist or no plist. On **systemd** the enablement is a symlink in `timers.target.wants/` plus the manager's loaded state, neither of which is the unit file. So a vanished file proved nothing, and dropping the unload on `ENOENT` recreated the orphan with **no spawn attempted** — outside `R-failed-unload` again. **Phase D5b** is where the act-time re-check now lives, and it governs **removal** only: it acts solely on items D5a processed, never re-admitting or adding one, and applies **D15**'s uniform rule with **absence = skip** (nothing to remove) and any other failure = **skip, with a notice**. **Skipping is now genuinely safe, and for a different reason than the one round 7 falsified:** a D5b skip forgoes a *deletion*, never an *unload*, because the unload already happened unconditionally. What it can leave behind is a STANDALONE artifact — and where that artifact is a launchd plist, it is exactly Table R row **R9**'s class, so D5b prints R9's plain-language warning at that moment |
+| **D6** | **Act-time re-check — it governs REMOVAL only; the unload phase touches the filesystem not at all** | *Amended by round 11 — see the end of this section.* *Rewritten at design gate round 9, which removed the last act-time exception rather than adding one.* **Phase D5a performs NO filesystem check.** Its whole input is the disclosed list; for each item it re-derives the unregister argv purely from `path.basename(item.path)` via `deriveUnloadArgv` (`generators.js:140`, which reads no filesystem — verified, zero `fs.` uses in its body) and spawns it through the chokepoint. A spawn failure is discarded exactly as **D13** describes. **Why the file's presence was never the right precondition:** the registration does not live in the file. On **win32** the XML is an *import source* — `schtasks /create /tn <task> /xml <path> /f` (`schedule.js:416`) copies it into the Task Scheduler store, so deleting the XML leaves the task registered. On **launchd** a booted job stays loaded in the domain until it is booted out or the session ends, plist or no plist. On **systemd** the enablement is a symlink in `timers.target.wants/` plus the manager's loaded state, neither of which is the unit file. So a vanished file proved nothing, and dropping the unload on `ENOENT` recreated the orphan with **no spawn attempted** — outside `R-failed-unload` again. **Phase D5b** is where the act-time re-check now lives, and it governs **removal** only: it acts solely on items D5a processed, never re-admitting or adding one, and applies **D15**'s uniform rule with **absence = skip** (nothing to remove) and any other failure = **skip, with a notice**. **Skipping is now genuinely safe, and for a different reason than the one round 7 falsified:** a D5b skip forgoes a *deletion*, never an *unload*, because the unload already happened unconditionally. What it can leave behind is a STANDALONE artifact — and where that artifact is a launchd plist, it is exactly Table R row **R9**'s class, so D5b prints R9's plain-language warning at that moment |
 | **D7** | **Consent integrity** | The existing byte-exact manifest comparison (`uninstall.js:379-391`) is **unchanged and insufficient on its own** for this set — it compares the manifest, and the disk-derived set is not in the manifest. What makes that set consent-safe is D2 + D4 + D6 together: discovered once before disclosure, passed by value into both `reverse()` calls, and only ever shrunk at act time. **Round 3 did not weaken this and slightly strengthens it:** the set no longer depends on the manifest's contents at all, so a concurrent manifest edit during the prompt cannot change which files are acted on. **Round 9 strengthens it again, and the two halves are now stated separately:** for the **unload**, the acted set **equals** the disclosed set exactly — D5a acts on the disclosed list and nothing else, in either direction; for the **removal**, the acted set is a **subset** of the disclosed set, because D5b can only skip. Nothing outside the disclosed list is ever unloaded or deleted — only the byte-compare's own abort, and D11's already-fixed `remove` flags, depend on the ledger. This is the property acceptance criterion 3 asserts |
 | **D8** | **Dry-run** | In dry-run the widened pass prints and removes nothing, exactly as `reverseSchedulerEntry:526-527` behaves |
 | **D9** | **An unreadable root is NOT an empty root** | *Design gate round 1, finding 1.* A root that **does not exist** (`ENOENT`/`ENOTDIR` from `readdir`) contributes nothing and is not an error — a root Wienerdog never wrote to is genuinely empty. **Any other enumeration failure** (`EACCES`, `EPERM`, `EIO`, `ELOOP`, `EMFILE`, …), any candidate `lstat` that fails for a reason other than `ENOENT`, and **any resolution failure anywhere in discovery** — root, candidate or vault path (**D15**) — marks the relevant **root** unreadable. The act-time sibling of this abort is **D6**'s, on the same rule. Discovery therefore returns `{schedules, unreadable}` (Exact contracts), and `uninstall` **aborts before printing the plan, having deleted nothing**, when `unreadable` is non-empty; the message names each directory and its `code`. `--dry-run` does not abort — it prints the unreadable roots as a warning block and continues, because it deletes nothing. **Why this is not the deferred residual:** with scheduler authority present the live probe is short-circuited (`uninstall.js:208`), so a silent empty result would let `reverse()` and then `disposeCoreMechanics` run **without anything ever having looked** at the directory holding an unrecorded live job — no unload *attempted*, which is R-stripped-manifest-orphan itself, not `R-failed-unload`'s *attempted-and-failed* |
 | **D10** | **Coverage never suppresses an unload — discovery does not read the manifest at all** | *Design gate round 3, the convergence move.* Three rounds found three distinct ways for a record to look like coverage while no unload ever ran: a record of the **wrong kind** (round 1 — `validateEntry`, `manifest.js:1044`, checks shape, and a `{kind:'file'}` entry under `~/Library/LaunchAgents` is preserved untouched because `withinAllowedRoot`'s roots are `[core, claudeDir, codexDir, ~/.local/bin]`, `:742`, gate `:872-883`); an **in-root symlink alias** whose lexical basename derives no argv (round 2 — `reverseSchedulerEntry` resolves at `:512` but derives from the lexical basename at `:524`, while `withinSchedulerRoot`'s basename test is loose, `:558`); and — round 3, executed against mocked I/O — an alias record satisfying **every** condition the first two rounds added, whose own filesystem evidence a **later** `file` record deletes during replay, after which its reverser fails realpath containment and `schedulerSpawn` receives **zero** calls. **The predicate is not refined again.** `docs/runbooks/codex-review.md`'s convergence rule is that the loop converges by freezing surface, not by patience, and a suppression rule that must anticipate what the rest of the replay will do to its own evidence has no closed form. **So there is no coverage predicate:** phase D5a unloads every candidate D1 yields, recorded or not, before any manifest reverser runs. The manifest's only remaining influence on this package is **D11**, which narrows a removal. **The names follow the design:** the discovery function is `discoverSchedulesOnDisk` and `reverse()`'s option is `discoveredSchedules`, because after round 3 neither is about what the ledger does or does not record |
-| **D11** | **What a manifest record still does: narrow the REMOVAL** | When **any** entry accepted by `validateEntry` (`manifest.js:1044`) names a discovered path after realpath resolution, that item carries `remove: false`: phase D5a still unloads it and phase D5b prints `keep <path> (another manifest entry owns this file)` instead of removing it, whatever Table R row R4's cell says. That entry's own reverser owns the file's lifecycle — a `scheduler-entry` removes it itself (`:543`), and a `file` entry may hold a proof-before-delete this pass cannot evaluate (its `hash` gate, `:890`). **This rule is safe in a way a coverage rule is not:** it only ever makes uninstall delete *less*, so a forged, stale or evidence-losing record cannot use it to leave a job running — the unload has already happened. Unload and removal were always separate questions; three rounds are what established that only the removal side may be answered from the ledger. **Where this narrowing has a cost, it is named:** Table R row **R9**, `R-preserved-reloadable-plist` |
+| **D11** | **What a manifest record still does: narrow the REMOVAL** | *Amended by round 11 — see the end of this section.* When **any** entry accepted by `validateEntry` (`manifest.js:1044`) names a discovered path after realpath resolution, that item carries `remove: false`: phase D5a still unloads it and phase D5b prints `keep <path> (another manifest entry owns this file)` instead of removing it, whatever Table R row R4's cell says. That entry's own reverser owns the file's lifecycle — a `scheduler-entry` removes it itself (`:543`), and a `file` entry may hold a proof-before-delete this pass cannot evaluate (its `hash` gate, `:890`). **This rule is safe in a way a coverage rule is not:** it only ever makes uninstall delete *less*, so a forged, stale or evidence-losing record cannot use it to leave a job running — the unload has already happened. Unload and removal were always separate questions; three rounds are what established that only the removal side may be answered from the ledger. **Where this narrowing has a cost, it is named:** Table R row **R9**, `R-preserved-reloadable-plist` |
 | **D12** | **Vault exclusion** | *Design gate round 1, finding 3.* Discovery takes the **accepted vault path** — the same value `uninstall.js:309` reads from `config.yaml` before the confirm and already hands to `disposeCoreMechanics` (`:320`, `:410`) — as `opts.vaultPath`, and excludes any candidate that equals or resolves inside it — resolved through **D15**'s rule, **not** `contains`, so an unresolvable vault path is *unreadable* and aborts rather than quietly excluding nothing — reporting each exclusion in a `skippedForVault` list the caller discloses. **Why this is load-bearing:** `disposeCoreMechanics` deliberately protects a legacy or hand-edited install whose vault sits inside a mechanics dir (`manifest.js:1123-1127`, `:1144-1147`). With the vault at `<core>/schedules`, a user-authored `wienerdog-notes.xml` satisfies every other D1 clause, and the widened pass would delete it **before** the protected sweep ever ran — a user file that survives today. **The act-time re-check does not re-derive it**, and does not need to: the value is read once pre-confirm and is the same value `disposeCoreMechanics` acts on, so re-deriving it could only disagree with the disclosed plan |
 | **D13** | **The DOUBLE UNLOAD D10 buys, and why it is tolerated** | Because D5a no longer excludes recorded paths, a normal install's every job is unloaded twice: once in D5a, once by its own `scheduler-entry` reverser. **The second attempt cannot fail the uninstall, and this is a property of the shipped code rather than of the tools:** `reverseSchedulerEntry` wraps the spawn in `try/catch` and **discards the result** (`manifest.js:532-536`), under a comment that already anticipates exactly this — *"Best-effort: the entry may already be unloaded. Ignore non-zero/errors"* (`:529`). Nothing reads the status, so no exit code reaches a decision; this package adds no propagation, which is `R-failed-unload`'s work package, not this one. Per platform, the second attempt's expected outcome — and in every case it is discarded at the same line: **launchd** `launchctl bootout gui/<uid>/<label>` on an already-booted-out label exits **non-zero** (no such process); **systemd** `systemctl --user disable --now <unit>.timer` on an already-disabled unit exits **0**, and non-zero only if the unit file is gone; **schtasks** `/delete /tn \Wienerdog\<name> /f` on a missing task exits **non-zero**. **Two costs, stated rather than hidden:** one extra `schedulerSpawn` per recorded scheduler entry, and — on a run without scheduler authority — one extra refusal line per entry on stderr (ADR-0041 Decision 1). Neither changes an outcome. **What this rules out:** any design in which D5a's unload is skipped because a record exists. Recording what D5a unloaded in order to suppress the *recorded* reverser's attempt was weighed and **not taken** — it re-introduces a suppression channel to save a spawn whose result is already discarded |
 | **D14** | **The DISCOVERY root set — narrower than `reverse()`'s, and derived from this run's own paths** | *Design gate round 4; the classification below is round 5.* `reverse()` computes three roots at `manifest.js:753-757`; **discovery accepts only those resolving inside `paths.home` or `paths.core`** — see **D15** for how that resolution is performed, because doing it with `contains`'s bare boolean is itself a defect. Per root: **LaunchAgents** is `path.join(home,'Library','LaunchAgents')` (`generators.js:89`) — inside `paths.home` by construction, always accepted. **The Windows XML root** is `path.join(paths.core,'schedules')` (`manifest.js:756`, matching `windowsTasksDir`, `generators.js:546`) — inside `paths.core` by construction, **never `APPDATA`-derived or otherwise ambient**, always accepted. **The systemd user dir** is `(env.XDG_CONFIG_HOME \|\| home/.config) + /systemd/user` (`generators.js:99-103`) — the one root an **ambient environment variable can move outside the home this run is reversing**, and the one this rule exists for. **Why a test fix alone is not the fix:** the escape is a property of the root derivation, not of any caller. `realSchedulerAuthority` (`spawn.js`, ADR-0041 Decision 1) does **not** cover it — it compares `getPaths().core` to `<os.userInfo().homedir>/.wienerdog` and gates the **mutation chokepoint**, whereas the damage here is an `fs.rmSync` on a file outside the sandbox, which no spawn guard can reach. **Named residual — `R-external-xdg-root-undiscovered`:** on an install whose `XDG_CONFIG_HOME` genuinely points outside `$HOME`, unrecorded systemd units there are **not discovered**. Recorded ones still reverse normally, because `reverse()`'s own `schedulerRoots` and `withinSchedulerRoot` are unchanged. That is strictly narrower than today's behaviour and is the direction ADR-0038 permits |
@@ -415,6 +433,52 @@ new mirror found in review is added here on the spot (register-new-mirrors):
 - [ ] **Operative prose steps that apply it** — the Context paragraph naming the
       two refuted designs mirrors Table R row R1; the worked example under Exact
       contracts mirrors Table D rows D1/D3
+
+### Design gate round 11 (PR #308 review, 2026-09-19) — amendments to Tables D and R
+
+These are **architect rulings** made on the PR-#308 review round. Nothing here
+records the owner approving, accepting, ratifying or signing anything.
+
+**R-B′ (amended at round 2 of the PR gate — REPLACES R-A and R-B).** The
+manifest-derived `remove` lines and the `--dry-run` headline exclude only the
+paths the disk block itself discloses with a `remove` line — items with
+`remove === true` under `unload-and-remove` (phase D5b's own deletions). A
+`remove:false` item's fate belongs to its owning record's reverser, and that
+reverser's own line stays. For a `remove:false` item the disk block prints, after
+`would run:`, ONE of: `removed by its own manifest entry (listed above)` when the
+dry-run `reverse()` reports the path in `removed`; otherwise
+`keep <path> (another manifest entry owns this file)` followed by R9's
+plain-language warning when the basename recognizes as launchd. Decided from the
+same plan the user is shown, so a record naming a symlink alias (alias unlinked,
+target survives) warns correctly without any ownership flag. Every discovered
+path appears in the plan exactly once, and the sum of what the plan says will be
+removed equals what the run removes.
+
+*Why R-A and R-B were withdrawn:* R-B as first written excluded EVERY discovered
+path from the manifest-derived `remove` lines, including a `remove:false` plist
+whose owning `scheduler-entry` reverser deletes it — measured, one
+`scheduler-entry` with its plist present gave `--dry-run: 0 item(s) would be
+removed` plus a `keep …dream.plist` line, while `--yes` removed it. The plan
+under-stated a deletion on every normal macOS install. R-A's `ownedByScheduler`
+flag is gone with it: ownership for the warning is read off the plan, not from a
+flag.
+
+**R-C′ (amended at round 2 of the PR gate — REPLACES R-C's containment
+re-check with identity).** Re-asserting *containment* at act time re-derives the
+roots, and a root swapped for a symlink into the vault re-derives as contained
+(the vault is inside HOME). The act-time check must instead assert **identity
+with what was disclosed**: each discovery item carries `real` — its D15-resolved
+path at discovery time — and phase D5b removes only when `lstat` reports a
+regular file, D15 resolution succeeds, and `res.real === item.real`. Any other
+outcome skips with the notice (+R9 where launchd). Identity implies
+discovery-time containment and discovery-time vault exclusion in one comparison,
+and closes every swap class (final-component symlink, parent or root swapped,
+hardlink to elsewhere) without re-deriving anything. Item shape becomes
+`{path, real, remove}`.
+
+**R-D (D8 wording).** D8's "prints and removes nothing, exactly as
+`reverseSchedulerEntry:526-527` behaves" reads: "prints nothing (D3 owns the
+disclosure) and removes nothing".
 
 ## Dispatch precondition — owner items
 

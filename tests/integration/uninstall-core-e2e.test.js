@@ -30,6 +30,12 @@ function tempEnv() {
       WIENERDOG_VAULT: vault,
       CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
       CODEX_HOME: path.join(root, 'absent-codex'),
+      // Table D row D14 (WP-scheduler-replay-manifest-independent): the systemd
+      // user dir derives from $XDG_CONFIG_HOME, which a HOME redirect does NOT
+      // move — so spreading `...process.env` above would point it at the
+      // DEVELOPER'S OWN ~/.config/systemd/user while this run holds
+      // WIENERDOG_ALLOW_REAL_SCHEDULER=1. Pin it inside `root`.
+      XDG_CONFIG_HOME: path.join(root, '.config'),
       WIENERDOG_LOADER_NOOP: '1',
       // Table T's subprocess channel (ADR-0041): a subprocess has only the
       // environment, so the one non-dry-run uninstall below is granted the real
@@ -103,4 +109,34 @@ test('uninstall-core-e2e: init --fresh-vault → sync → uninstall leaves ONLY 
   assert.equal(fs.existsSync(vault), true, 'vault preserved');
   const after = shaTree(vault);
   assert.deepEqual(after, before, 'vault tree is byte-identical before and after uninstall');
+});
+
+test('uninstall-core-e2e AC15/AC16: XDG_CONFIG_HOME is sandboxed, and an EXTERNAL one contributes no discovery root', () => {
+  const { root, core, env } = tempEnv();
+
+  // AC16, asserted by the test's OWN environment rather than by inspection: the
+  // value tempEnv() passes resolves under its root (Table D row D14).
+  assert.equal(env.XDG_CONFIG_HOME, path.join(root, '.config'), 'XDG_CONFIG_HOME is inside the temp HOME');
+  fs.mkdirSync(env.XDG_CONFIG_HOME, { recursive: true });
+  const rel = path.relative(fs.realpathSync(root), fs.realpathSync(env.XDG_CONFIG_HOME));
+  assert.ok(rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel),
+    `XDG_CONFIG_HOME resolves under root (relative path was ${JSON.stringify(rel)})`);
+
+  assert.equal(run(['init', '--fresh-vault', '--yes'], env).status, 0);
+
+  // AC15: a systemd unit under an XDG root OUTSIDE this run's HOME is left on
+  // disk, untouched — this is the `npm test` deletes-a-developer's-timer case.
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-xdg-external-'));
+  const externalUnits = path.join(external, 'systemd', 'user');
+  fs.mkdirSync(externalUnits, { recursive: true });
+  const externalTimer = path.join(externalUnits, 'wienerdog-dream.timer');
+  fs.writeFileSync(externalTimer, '[Timer]\n');
+  const externalBytes = fs.readFileSync(externalTimer);
+
+  const r = run(['uninstall', '--yes'], { ...env, XDG_CONFIG_HOME: external });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fs.existsSync(externalTimer), true, 'the external timer survives');
+  assert.deepEqual(fs.readFileSync(externalTimer), externalBytes, 'byte-identical');
+  assert.ok(!r.stdout.includes(externalTimer), 'and it appeared in no disclosed plan');
+  assert.equal(fs.existsSync(core), false, 'the uninstall itself completed');
 });

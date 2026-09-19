@@ -122,6 +122,35 @@ function systemdUnitBase(name) {
 }
 
 /**
+ * Recognize a schedule-file basename as one OUR OWN generators write. Fully
+ * anchored, host-agnostic (the three shapes are disjoint across schedulers), and
+ * enumerating only shapes we produce — never shapes we reject.
+ *
+ * WP-scheduler-replay-manifest-independent Table R rows R1/R2. A denylist over
+ * launchd/systemd/schtasks naming cannot be closed — we do not own those
+ * grammars — so the accepted set is exactly what `registerPlatformEntries`
+ * writes, over the generators' own job-name charset (`windowsTaskName`,
+ * `src/cli/schedule.js`'s job-name gate). This is DELIBERATELY STRICTER than
+ * `withinSchedulerRoot`'s `.*` patterns (Table R row R3): for a manifest-recorded
+ * path the record is the evidence that we created the file, while for an
+ * UNRECORDED file on disk the basename is the only evidence there is, so it must
+ * be a name a generator can actually produce.
+ *
+ * `$` without the `m` flag is end-of-string, and the input is a BASENAME rather
+ * than a path, so `/`, `\`, `..` and whitespace cannot appear in a match.
+ * @param {string} basename  a basename, never a path
+ * @returns {'launchd'|'systemd-timer'|'systemd-service'|'schtasks'|null}
+ */
+function recognizeScheduleBasename(basename) {
+  if (typeof basename !== 'string') return null;
+  if (/^ai\.wienerdog\.[a-z0-9][a-z0-9-]*\.plist$/.test(basename)) return 'launchd';
+  if (/^wienerdog-[a-z0-9][a-z0-9-]*\.timer$/.test(basename)) return 'systemd-timer';
+  if (/^wienerdog-[a-z0-9][a-z0-9-]*\.service$/.test(basename)) return 'systemd-service';
+  if (/^wienerdog-[a-z0-9][a-z0-9-]*\.xml$/.test(basename)) return 'schtasks';
+  return null;
+}
+
+/**
  * Re-derive a schedule file's unregister argv from its basename identity +
  * platform (audit A8, ADR-0027, WP-145). The install manifest is an editable
  * plaintext file, so a stored `entry.unload` argv is UNTRUSTED and is never
@@ -1169,6 +1198,7 @@ module.exports = {
   systemdUserDir,
   launchdLabel,
   systemdUnitBase,
+  recognizeScheduleBasename,
   deriveUnloadArgv,
   deriveProbeArgv,
   deriveIdentityArgv,

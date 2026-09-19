@@ -824,3 +824,94 @@ test('node-path-durability: nodePath() vs entryNodePath() under a fabricated Hom
     fs.rmSync(TMP, { recursive: true, force: true });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WP-scheduler-replay-manifest-independent — `recognizeScheduleBasename`.
+// Table R rows R1–R3: an enumeration of OUR OWN good, over the generators' own
+// job-name charset, matched against a BASENAME and therefore host-agnostic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Every basename the rule must ACCEPT, with the kind it must report. */
+const R2_ACCEPTED = [
+  ['ai.wienerdog.dream.plist', 'launchd'],
+  ['ai.wienerdog.catchup.plist', 'launchd'],
+  ['ai.wienerdog.daily-digest.plist', 'launchd'],
+  ['ai.wienerdog.0.plist', 'launchd'],
+  ['wienerdog-dream.timer', 'systemd-timer'],
+  ['wienerdog-daily-digest.timer', 'systemd-timer'],
+  ['wienerdog-dream.service', 'systemd-service'],
+  ['wienerdog-daily-digest.service', 'systemd-service'],
+  ['wienerdog-dream.xml', 'schtasks'],
+  ['wienerdog-daily-digest.xml', 'schtasks'],
+];
+
+/** Every basename the rule must REJECT. The first five are the Table R row R3
+ *  shapes: `withinSchedulerRoot`'s `.*` patterns accept them, R2 does not. */
+const R2_REJECTED = [
+  'ai.wienerdog...plist',
+  'ai.wienerdog. .plist',
+  'ai.wienerdog.-dream.plist',
+  'wienerdog-.timer',
+  'wienerdog-../x.timer',
+  'ai.wienerdog.Dream.plist',
+  'ai.wienerdog.dream.plist.bak',
+  'com.apple.something.plist',
+  'wienerdog-dream.txt',
+  'wienerdog.timer',
+  'xai.wienerdog.dream.plist',
+  'ai.wienerdog.dream.plist\nai.wienerdog.evil.plist',
+  '',
+];
+
+test('WP-scheduler-replay R2: recognizeScheduleBasename accepts exactly the four shapes our generators write', () => {
+  for (const [base, kind] of R2_ACCEPTED) {
+    assert.equal(gen.recognizeScheduleBasename(base), kind, `accepted: ${JSON.stringify(base)}`);
+  }
+  for (const base of R2_REJECTED) {
+    assert.equal(gen.recognizeScheduleBasename(base), null, `rejected: ${JSON.stringify(base)}`);
+  }
+  assert.equal(gen.recognizeScheduleBasename(undefined), null, 'a non-string is not a basename');
+  assert.equal(gen.recognizeScheduleBasename(null), null);
+});
+
+test('WP-scheduler-replay R3: the rejected corpus includes shapes withinSchedulerRoot DOES accept', () => {
+  const { withinSchedulerRoot } = require('../../src/core/manifest');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-recognize-'));
+  const looser = ['ai.wienerdog...plist', 'ai.wienerdog. .plist', 'wienerdog-.timer'];
+  for (const base of looser) {
+    const p = path.join(root, base);
+    fs.writeFileSync(p, 'x');
+    assert.equal(withinSchedulerRoot(p, [root]), true, `the loose gate accepts ${base}`);
+    assert.equal(gen.recognizeScheduleBasename(base), null, `the strict rule rejects ${base}`);
+  }
+});
+
+test('WP-scheduler-replay AC2: recognizeScheduleBasename AGREES with the three derive functions on a shared corpus', () => {
+  const corpus = [...R2_ACCEPTED.map(([b]) => b), ...R2_REJECTED];
+  for (const base of corpus) {
+    const kind = gen.recognizeScheduleBasename(base);
+    // deriveUnloadArgv: per platform, non-null exactly for the kind that platform
+    // unregisters. `.service` deliberately has no unload argv (generators.js:136).
+    const darwin = gen.deriveUnloadArgv(base, 'darwin');
+    const linux = gen.deriveUnloadArgv(base, 'linux');
+    const win = gen.deriveUnloadArgv(base, 'win32');
+    assert.equal(darwin !== null, kind === 'launchd' && typeof process.getuid === 'function', `deriveUnloadArgv darwin: ${base}`);
+    assert.equal(linux !== null, kind === 'systemd-timer', `deriveUnloadArgv linux: ${base}`);
+    assert.equal(win !== null, kind === 'schtasks', `deriveUnloadArgv win32: ${base}`);
+    // deriveProbeArgv / deriveIdentityArgv are host-agnostic by basename SHAPE:
+    // they recognize the three schedulers and, like the recognizer, nothing else.
+    const probe = gen.deriveProbeArgv(base, 'linux');
+    const identity = gen.deriveIdentityArgv(base, 'linux');
+    const shapeRecognized = kind === 'launchd' || kind === 'systemd-timer' || kind === 'schtasks';
+    assert.equal(probe !== null, shapeRecognized, `deriveProbeArgv: ${base}`);
+    assert.equal(identity !== null, shapeRecognized, `deriveIdentityArgv: ${base}`);
+    if (kind === 'systemd-service') {
+      assert.equal(darwin, null, `a .service unit unregisters nothing anywhere: ${base}`);
+      assert.equal(linux, null);
+      assert.equal(win, null);
+    }
+  }
+});
