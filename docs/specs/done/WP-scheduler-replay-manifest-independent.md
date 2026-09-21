@@ -636,7 +636,7 @@ printed only when `discovery.schedules` or `discovery.skippedForVault` is
 non-empty, under the header `Scheduled jobs found on disk:`, in **both** the
 `--dry-run` output and the pre-confirm plan.
 
-| # | recorded? / record kind | R4 cell | `remove` | manifest-derived `remove` line | disk-block line (after `would run:`) | R9 warning | `--dry-run` headline | ACTUAL FATE |
+| # | recorded? / record kind | R4 cell | `remove` | manifest-derived `remove` line | disk-block line (after `would run:`) | R9 warning | `--dry-run` headline | REPLAY FATE — before the mechanics sweep (see below) |
 |---|---|---|---|---|---|---|---|---|
 | **P1** | **not recorded** — no validated entry names the path lexically or after resolution | `unload-and-remove` | `true` | none exists | `remove <path>` | no | **excluded** — the path is in `discoveredRemovals`, which the headline subtracts | **deleted by phase D5b** |
 | **P2** | **not recorded** | `unload-only` | `true` | none exists | **no line at all** beyond `would run:` | no | contributes nothing | **left on disk**, unload attempted |
@@ -644,9 +644,32 @@ non-empty, under the header `Scheduled jobs found on disk:`, in **both** the
 | **P4** | recorded by a **`scheduler-entry` naming a symlink ALIAS** to this path (the record's reverser unlinks the alias, not the target) | either | `false` | the alias's own `remove` line; **none for this path** | `keep <path> (another manifest entry owns this file)` | **yes**, when the basename recognizes as `launchd` | contributes nothing for this path | **left on disk** — Table R row **R9**'s residual, reached by the alias route |
 | **P5** | recorded by a **non-scheduler kind** (`file`, …) whose reverser does **not** delete it — e.g. `~/Library/LaunchAgents` is outside `withinAllowedRoot`'s root set (`manifest.js:742`) | either | `false` | that record's own line, if its reverser produces one; **none for this path** | `keep <path> (another manifest entry owns this file)` | **yes**, when `launchd` | contributes nothing for this path | **left on disk** — Table R row **R9**'s residual, the hand-edited-manifest route |
 | **P6** | recorded by a **non-scheduler kind whose reverser DOES delete it** — e.g. win32 `<core>/schedules/*.xml`, which **is** inside `withinAllowedRoot` | either | `false` | **`remove <path>` — it stays** | `removed by its own manifest entry (listed above)` | no | **+1** | **deleted by the file reverser during the entry loop**; phase D5a already unloaded it (criterion 12) |
-| **P7** | **vault-resident** (**D12**) — never a member of `schedules` at all | n/a | n/a | none | `keep <path> (it sits inside your memory vault at <vaultPath> — your notes are yours)`, from the `skippedForVault` loop | no | contributes nothing | **left on disk, never unloaded** |
+| **P7** | **vault-resident** (**D12**) — never a member of `schedules` at all | n/a | n/a | none | `keep <path> (it sits inside your memory vault at <vaultPath> — your notes are yours)`, from the `skippedForVault` loop | no | contributes nothing | **left on disk, never unloaded — and this is the one row whose fate also survives the mechanics sweep**, because `disposeCoreMechanics` applies the same vault guard (`contains(dir, vaultPath)`, true when they are the same path) and reports the directory in its own `skippedForVault` instead of removing it. This is what acceptance criterion 11 asserts end to end |
 | **P8** | **not recognized** (fails R2), or outside **D14**'s discovery roots | n/a | n/a | whatever its own record produces, unchanged | **absent from the block entirely** | no | whatever its own record contributes | untouched by this package |
 | **P9** | any P1 row whose **act-time re-check fails** — `lstat` is not a regular file, D15 resolution fails, or `res.real !== item.real` (**R-C′**) | `unload-and-remove` | `true` | none exists | disclosed as `remove <path>` in the plan; at act time phase **D5b prints a notice** instead of removing (+ R9's warning where `launchd`) | at act time only | excluded, as P1 | **left on disk**, unload already attempted in D5a — the one class where the fate is narrower than the plan (**D7**: removal ⊆ disclosed) |
+
+**THE FATE COLUMN IS THE REPLAY'S FATE, AND `reverse()` IS NOT THE LAST THING
+THAT TOUCHES THESE PATHS** *(scoped at the PR-#311 review, 2026-09-21, after the
+independent gate reproduced the gap with the shipped functions).* `uninstall()`
+calls `disposeCoreMechanics` immediately after `reverse()` returns, and that
+function **recursively removes** `paths.state`, `paths.logs`,
+`path.join(paths.core, 'schedules')` and `paths.secrets`
+(`src/core/manifest.js`, the `mechanics` array and its `fs.rmSync(dir,
+{recursive: true, force: true})` loop). **One of `discoverSchedulesOnDisk`'s
+three roots — the Windows task-XML root `<core>/schedules` (**D14**) — is one of
+those four directories.** So for a discovered path under that root, **whatever
+this column says, the sweep removes it afterwards** unless the sweep's vault
+guard preserves the directory (row **P7**). The reproduced case is a `kind:'file'`
+record naming `<core>/schedules/wienerdog-dream.xml` whose recorded hash no
+longer matches: the file reverser's hash gate preserves it, so the replay's fate
+is "left on disk" — and the mechanics sweep then deletes the whole directory.
+**Neither the plan nor this table is wrong about that**, because the sweep has
+its own disclosure line in the plan (*"Machine-generated state (removed
+recursively, not manifest-tracked)"*) and `<core>/schedules` appears there; what
+was wrong was reading this column as the end-to-end outcome. The other two
+discovery roots — `~/Library/LaunchAgents` and the systemd user dir — are
+**outside** the mechanics array, so for every path under them the replay fate
+**is** the end-to-end fate.
 
 **Invariants this table carries, and they are what a future ruling is checked
 against:**
@@ -654,17 +677,22 @@ against:**
 1. **Every discovered path appears in the plan exactly once** — as one of
    `remove`, `removed by its own manifest entry (listed above)`, `keep …`, or
    (row P2) no line at all.
-2. **What the plan says will be removed equals what the run removes**, with row
-   **P9** as the only exception, which is D7's stated subset direction and is
-   announced by a notice at the moment it happens. Measured at round 3: headline
-   `2 item(s)`, equal to base `c73676bf`, and the plan's removal statements
-   summed to the five files the run removed.
+2. **What the plan says will be removed equals what the run removes** — **over
+   the replay layer**, which is what this table scopes; the mechanics sweep's
+   removals are disclosed by their own plan line and counted separately
+   (ADR-0019; the `--dry-run` headline explicitly disclaims equality with the
+   live `Removed N` total). Row **P9** is the only exception inside the replay
+   layer, which is D7's stated subset direction and is announced by a notice at
+   the moment it happens. Measured at round 3: headline `2 item(s)`, equal to
+   base `c73676bf`, and the plan's removal statements summed to the five files
+   the run removed.
 3. **The headline is independent of Table R row R4's cell**, because the only
    paths it subtracts are exactly the ones the block discloses with a `remove`
    line — which under `unload-only` is none (row P2) and under
    `unload-and-remove` is rows P1/P9.
-4. **A ruling that changes any column of this table is checked against the FATE
-   column for every row before it is written.** Ruling R-B was true in the
+4. **A ruling that changes any column of this table is checked against the
+   REPLAY FATE column for every row before it is written — and, for any row that
+   can sit under `<core>/schedules`, against the mechanics sweep as well.** Ruling R-B was true in the
    manifest-derived layer and false in the rendered plan for rows P3 and P6, and
    that is how it under-stated a deletion on every normal macOS install.
 
