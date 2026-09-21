@@ -277,13 +277,13 @@
         },
         {
           "test": [
-            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+            "[SG-31] round 4 P1 #1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
           ],
           "signal": "SG31-relative-target-traversed-raw"
         },
         {
           "test": [
-            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+            "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
         }
@@ -407,13 +407,13 @@
         },
         {
           "test": [
-            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+            "[SG-31] round 4 P1 #1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
           ],
           "signal": "SG31-relative-target-traversed-raw"
         },
         {
           "test": [
-            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+            "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
         }
@@ -547,13 +547,13 @@
         },
         {
           "test": [
-            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+            "[SG-31] round 4 P1 #1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
           ],
           "signal": "SG31-relative-target-traversed-raw"
         },
         {
           "test": [
-            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+            "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
         }
@@ -603,13 +603,13 @@
         },
         {
           "test": [
-            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+            "[SG-31] round 4 P1 #1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
           ],
           "signal": "SG31-relative-target-traversed-raw"
         },
         {
           "test": [
-            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+            "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
         }
@@ -737,13 +737,13 @@
         },
         {
           "test": [
-            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+            "[SG-31] round 4 P1 #1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
           ],
           "signal": "SG31-relative-target-traversed-raw"
         },
         {
           "test": [
-            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+            "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
         }
@@ -849,7 +849,7 @@
       "expectRed": [
         {
           "test": [
-            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+            "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
         }
@@ -869,7 +869,7 @@
       "expectRed": [
         {
           "test": [
-            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+            "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
         }
