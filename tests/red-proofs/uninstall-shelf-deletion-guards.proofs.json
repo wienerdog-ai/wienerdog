@@ -51,12 +51,6 @@
         },
         {
           "test": [
-            "[SG-16] AC9 round 10 (X17): ABSENCE is not a failure — an ordinary install skips nothing new, and a late shelf is still protected"
-          ],
-          "signal": "SG16-absence-is-not-a-failure"
-        },
-        {
-          "test": [
             "[SG-17] AC9 round 17 (X17 (1a)): a HYPOTHETICAL shelf root keeps FULL class (i) reach — the physical path is covered too"
           ],
           "signal": "SG17-hypothetical-root-keeps-subtree-reach"
@@ -171,6 +165,18 @@
         },
         {
           "test": [
+            "[SG-44] round 6b (X17‴ sweep clause): an UNANSWERABLE set forbids every recursive delete the sweep would do"
+          ],
+          "signal": "SG44-unanswerable-set-forbids-the-sweep"
+        },
+        {
+          "test": [
+            "[SG-46] round 6b (X15′ per level): a preserved SIBLING does not stop prediction at descendant levels"
+          ],
+          "signal": "SG46-prediction-state-is-per-level"
+        },
+        {
+          "test": [
             "[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes"
           ],
           "signal": "SG4-chain-closure-protects-the-intermediate-link"
@@ -275,8 +281,8 @@
       "criterion": "9",
       "why": "Round 8. Criterion 9 asserts that a shelf file's BYTES survive a replay that was trying to delete them — a survival assertion, and the most easily faked one in this package: it also passes when the forged entry was never added, when the fixture's path did not land under the shelf, when the preserve never completed before the replay, and when reverse() was never reached at all. This is the one mutation that restores shipped main behaviour, so a suite that stays green under it is asserting nothing this package adds.",
       "file": "src/core/manifest.js",
-      "find": "      let guarded = false;\n      if (shelfGuardBound(admitPath)) {",
-      "replace": "      let guarded = false; /* RP_MUT_QUSE_REVERSE_SHELF_GUARD_DROPPED */\n      if (false) {",
+      "find": "      let guarded = false;\n      if (admitPaths.some((p) => shelfGuardBound(p, entry.kind))) {",
+      "replace": "      let guarded = false;\n      if (false && admitPaths.some((p) => shelfGuardBound(p, entry.kind))) { /* RP_MUT_QUSE_REVERSE_SHELF_GUARD_DROPPED */",
       "marker": "RP_MUT_QUSE_REVERSE_SHELF_GUARD_DROPPED",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -340,6 +346,18 @@
             "[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resolves, not only the kernel’s"
           ],
           "signal": "SG40-deleter-target-is-guarded"
+        },
+        {
+          "test": [
+            "[SG-43] round 6b (X17⁗ at ADMISSION): an entry is admitted for guarding if EITHER resolver puts it in bounds"
+          ],
+          "signal": "SG43-admission-tests-both-resolvers"
+        },
+        {
+          "test": [
+            "[SG-45] round 6b (X16⁗): the guard admits a scheduler-entry by ITS reverser’s boundary"
+          ],
+          "signal": "SG45-admission-uses-the-entrys-own-boundary"
         }
       ]
     },
@@ -377,6 +395,18 @@
       "expectRed": [
         {
           "test": [
+            "[SG-12] AC7 (X13/Y10): an ordinary mechanics failure still PROPAGATES while a shelf ENOTEMPTY does not"
+          ],
+          "signal": "SG12-mechanics-failure-propagates"
+        },
+        {
+          "test": [
+            "[SG-13] AC8 (X15): --dry-run PLANS BY READING, and performs ZERO mutating filesystem calls"
+          ],
+          "signal": "SG13-dry-run-plans-by-reading-only"
+        },
+        {
+          "test": [
             "[SG-14] AC9 (X16/Y6): a forged hash-less {kind:file} entry cannot reach the shelf, interleaved and through a `..` alias"
           ],
           "signal": "SG14-forged-file-entry-cannot-reach-the-shelf"
@@ -404,6 +434,12 @@
             "[SG-19] AC4 round 18/19 (X19 clause (b)): an alias whose target OVERLAPS an allowed root is retained, across a full retry"
           ],
           "signal": "SG19-alias-into-an-allowed-root-is-retained"
+        },
+        {
+          "test": [
+            "[SG-1] AC1 (X1/X4): a shelf entry SURVIVES the live sweep, on each shelf in turn, while every mechanics dir still goes"
+          ],
+          "signal": "SG1-shelf-entries-survive-the-sweep"
         },
         {
           "test": [
@@ -473,6 +509,18 @@
         },
         {
           "test": [
+            "[SG-5] AC2 (X1/X4): ABSENT, EMPTY and BOTH-EMPTY all end with <state> gone, reported ONCE, and nothing preserved"
+          ],
+          "signal": "SG5-empty-and-absent-shelves-still-remove-state"
+        },
+        {
+          "test": [
+            "[SG-6] AC2 round 15 (X17 (1a) class split): on a SYMLINKED CORE the credentials are still removed"
+          ],
+          "signal": "SG6-chain-node-does-not-protect-its-descendants"
+        },
+        {
+          "test": [
             "[SG-7] AC3 (W6/X4): on an install with no shelf ENTRIES the complete stdout is byte-identical, both plans compared in full"
           ],
           "signal": "SG7-empty-shelf-output-is-byte-identical"
@@ -508,12 +556,6 @@
             "[SG-2] AC1 round 11 (X18): no recursive delete reaches the shelf THROUGH AN ALIAS, and the target is asserted before the link"
           ],
           "signal": "SG2-no-recursive-delete-through-an-alias"
-        },
-        {
-          "test": [
-            "[SG-35] round 4 P1 (X17‴): a hop budget that expires is UNANSWERABLE, never a completed walk"
-          ],
-          "signal": "SG35-budget-exhaustion-fails-closed"
         },
         {
           "test": [
@@ -634,12 +676,6 @@
             "[SG-33] round 4 P1 #3 (X17″): each shelf root gets its OWN hop budget"
           ],
           "signal": "SG33-hop-budget-is-per-root"
-        },
-        {
-          "test": [
-            "[SG-35] round 4 P1 (X17‴): a hop budget that expires is UNANSWERABLE, never a completed walk"
-          ],
-          "signal": "SG35-budget-exhaustion-fails-closed"
         },
         {
           "test": [
@@ -925,12 +961,6 @@
       "expectRed": [
         {
           "test": [
-            "[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded"
-          ],
-          "signal": "SG28-relative-entry-path-is-anchored"
-        },
-        {
-          "test": [
             "[SG-FUZZ] X17′ exactness: walkChain agrees with the kernel over randomised layouts"
           ],
           "signal": "SGFUZZ-walkchain-equals-realpath-native"
@@ -1021,8 +1051,8 @@
       "criterion": "9",
       "why": "PR-gate round 3, X16″. Every other guard assertion measures something being PRESERVED; this is the one direction where over-guarding is the defect — an entry whose SPELLING is in-root but whose TARGET is not enters `shelfGuarded` and blocks the uninstall forever over a path no deleter reaches. The mutation restores the literal-boundary admission.",
       "file": "src/core/manifest.js",
-      "find": "      if (shelfGuardBound(admitPath)) {",
-      "replace": "      if (shelfGuardBound(admitPath) || shelfGuardBound(entry.path)) { /* RP_MUT_QUSE_OUT_OF_ROOT_TARGET_GUARDED */",
+      "find": "      if (admitPaths.some((p) => shelfGuardBound(p, entry.kind))) {",
+      "replace": "      if (shelfGuardBound(entry.path, entry.kind)) { /* RP_MUT_QUSE_OUT_OF_ROOT_TARGET_GUARDED */",
       "marker": "RP_MUT_QUSE_OUT_OF_ROOT_TARGET_GUARDED",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -1041,8 +1071,8 @@
       "criterion": "10",
       "why": "PR-gate round 3, X4′. A report naming a directory the sweep ALREADY REMOVED makes Table W row W10 block on a path the user cannot clear — a permanent refusal, which every 'something was preserved' assertion in this package reads as success. Only an arm that asserts the uninstall COMPLETES can see it.",
       "file": "src/core/manifest.js",
-      "find": "  return { removed, skippedForVault, preservedQuarantine: stillThere };",
-      "replace": "  return { removed, skippedForVault, preservedQuarantine }; /* RP_MUT_QUSE_PRESERVED_REPORT_NOT_RECONCILED */",
+      "find": "  return { removed, skippedForVault, preservedQuarantine: reconcilePreserved(preservedQuarantine) };\n}\n\nmodule.exports",
+      "replace": "  return { removed, skippedForVault, preservedQuarantine }; /* RP_MUT_QUSE_PRESERVED_REPORT_NOT_RECONCILED */\n}\n\nmodule.exports",
       "marker": "RP_MUT_QUSE_PRESERVED_REPORT_NOT_RECONCILED",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -1052,6 +1082,12 @@
             "[SG-30] round 3 P2 (X4′): a preserved report is RECONCILED, so an emptied case alias never blocks"
           ],
           "signal": "SG30-preserved-report-is-reconciled"
+        },
+        {
+          "test": [
+            "[SG-46] round 6b (X15′ per level): a preserved SIBLING does not stop prediction at descendant levels"
+          ],
+          "signal": "SG46-prediction-state-is-per-level"
         }
       ]
     },
@@ -1178,6 +1214,12 @@
             "[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resolves, not only the kernel’s"
           ],
           "signal": "SG40-deleter-target-is-guarded"
+        },
+        {
+          "test": [
+            "[SG-43] round 6b (X17⁗ at ADMISSION): an entry is admitted for guarding if EITHER resolver puts it in bounds"
+          ],
+          "signal": "SG43-admission-tests-both-resolvers"
         }
       ]
     },
@@ -1198,6 +1240,12 @@
             "[SG-41] round 5b P1: a chain that cannot be READ to the end is UNANSWERABLE, not a shorter chain"
           ],
           "signal": "SG41-unreadable-chain-fails-closed"
+        },
+        {
+          "test": [
+            "[SG-44] round 6b (X17‴ sweep clause): an UNANSWERABLE set forbids every recursive delete the sweep would do"
+          ],
+          "signal": "SG44-unanswerable-set-forbids-the-sweep"
         }
       ]
     },
@@ -1218,6 +1266,92 @@
             "[SG-42] round 5b P2 (X15′): the planner matches its predicted child by filesystem IDENTITY"
           ],
           "signal": "SG42-predicted-child-matched-by-identity"
+        },
+        {
+          "test": [
+            "[SG-46] round 6b (X15′ per level): a preserved SIBLING does not stop prediction at descendant levels"
+          ],
+          "signal": "SG46-prediction-state-is-per-level"
+        }
+      ]
+    },
+    {
+      "id": "quse-admission-by-kernel-target-only",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "9",
+      "why": "PR-gate round 6b, X17⁗ at the ADMISSION site. The both-target guard added at round 5b only runs on entries the admission test lets through, and that test still asked the kernel alone. An entry the kernel places OUT of every allowed root — while `fs.realpathSync`, the resolver the reverser calls, places it inside the shelf — was therefore not guarded at all, and no fixture in this package could see it, because every other one is admitted on either answer.",
+      "file": "src/core/manifest.js",
+      "find": "      const admitPaths = res.state === 'unanswerable'\n        ? [entry.path]\n        : [/** @type {string} */ (res.real), deleterTarget(entry.path)];",
+      "replace": "      const admitPaths = res.state === 'unanswerable'\n        ? [entry.path]\n        : [/** @type {string} */ (res.real)]; /* RP_MUT_QUSE_ADMISSION_BY_KERNEL_TARGET_ONLY */",
+      "marker": "RP_MUT_QUSE_ADMISSION_BY_KERNEL_TARGET_ONLY",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-43] round 6b (X17⁗ at ADMISSION): an entry is admitted for guarding if EITHER resolver puts it in bounds"
+          ],
+          "signal": "SG43-admission-tests-both-resolvers"
+        }
+      ]
+    },
+    {
+      "id": "quse-unanswerable-set-still-sweeps",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "1",
+      "why": "PR-gate round 6b, X17‴ at the SWEEP. Every other unanswerable arm in this package is about a single ENTRY or a single LEVEL; this one is about the whole sweep. With the protected set unanswerable the chain is unknown, so `logs/`, `schedules/`, `secrets/` and every child of `<state>` may each be the node the shelf stands on — and the sweep deleted all of them recursively while reporting success.",
+      "file": "src/core/manifest.js",
+      "find": "    if (prot.unanswerable) {\n      preservedQuarantine.push(dir);\n      continue;\n    }",
+      "replace": "    /* RP_MUT_QUSE_UNANSWERABLE_SET_STILL_SWEEPS */",
+      "marker": "RP_MUT_QUSE_UNANSWERABLE_SET_STILL_SWEEPS",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-44] round 6b (X17‴ sweep clause): an UNANSWERABLE set forbids every recursive delete the sweep would do"
+          ],
+          "signal": "SG44-unanswerable-set-forbids-the-sweep"
+        }
+      ]
+    },
+    {
+      "id": "quse-admission-ignores-the-entrys-reverser",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "9",
+      "why": "PR-gate round 6b, X16⁗. `scheduler-entry` is the one kind reversed under `withinSchedulerRoot` rather than the four allowed roots, so testing admission against the allowed roots REJECTED a schedule file living inside a protected shelf — and its own reverser then deleted it there. Only a fixture whose shelf sits under the launchd directory can see it.",
+      "file": "src/core/manifest.js",
+      "find": "    const roots = kind === 'scheduler-entry' ? schedulerOpts.schedulerRoots : allowedRoots;",
+      "replace": "    const roots = allowedRoots; void kind; /* RP_MUT_QUSE_ADMISSION_IGNORES_THE_ENTRYS_REVERSER */",
+      "marker": "RP_MUT_QUSE_ADMISSION_IGNORES_THE_ENTRYS_REVERSER",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-45] round 6b (X16⁗): the guard admits a scheduler-entry by ITS reverser’s boundary"
+          ],
+          "signal": "SG45-admission-uses-the-entrys-own-boundary"
+        }
+      ]
+    },
+    {
+      "id": "quse-prediction-state-is-global",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "8",
+      "why": "PR-gate round 6b, X15′ per level. One process-wide `preservedSoFar` flag meant a preserved SIBLING — or the same directory under an alternate spelling, which step 2 preserves by name — stopped prediction at every descendant level too. The plan then reported both shelf directories kept and never predicted `<state>`, while the live sweep removed all three: a plan wrong in the one direction a plan must never be wrong.",
+      "file": "src/core/manifest.js",
+      "find": "      if (preservedInside(level, predictedChild) || leftovers.length > 0) {",
+      "replace": "      if (preservedQuarantine.length > before || leftovers.length > 0) { /* RP_MUT_QUSE_PREDICTION_STATE_IS_GLOBAL */",
+      "marker": "RP_MUT_QUSE_PREDICTION_STATE_IS_GLOBAL",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-46] round 6b (X15′ per level): a preserved SIBLING does not stop prediction at descendant levels"
+          ],
+          "signal": "SG46-prediction-state-is-per-level"
         }
       ]
     }

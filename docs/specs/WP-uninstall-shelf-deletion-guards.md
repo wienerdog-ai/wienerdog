@@ -161,7 +161,7 @@ that constraint binds this package too.
 | modify | src/core/manifest.js | **plus the two test-only hooks the contract rows are asserted through, `__shelfProtectionForTest` (Table X row **X17**’s protected set) and `__walkChainForTest` (the resolver of Table X rows **X17′**/**X17‴**), exported beside the product surface and used by no product code.** The carve-out inside `disposeCoreMechanics` and its `preservedQuarantine` return field (**X1**/**X2**/**X4**); `lstat` classification (**X10**) in the top-down-then-bottom-up order of **X11**; the ASCII fold at the deleters (**X12**, whose inventory half is package A's Table K row **K8**); non-shelf deletion failures still propagating (**X13**); the `dryRun: true` read-only planner (**X15**); the single resolution rule and the two-class protected SET (**X17**, including **(1a)**'s chain closure); the protected set computed **before any mutation** and every recursive deletion gated on it (**X18**, Table **V**); the `<state>`-alias retention rule (**X19**); the resolution-chain rule for `reverse()`'s `symlink` kind (**X20**); the pre-dispatch shelf guard in `reverse()` (**X16**, all three clauses) with its `shelfGuarded` return field and the guard-initialisation abort (**X22**); and that function's doc comment (**X9**). **`quarantineInventory` is package A's and is not re-implemented here.** `contains`, `withinSchedulerRoot`, `withinAllowedRoot`, `validateEntry`, `isDir` and **every reverser body inside `reverse()`** stay byte-unchanged — `reverse()` itself is edited **only** in its pre-dispatch region |
 | modify | src/cli/uninstall.js | render the preserved-quarantine arm of the closing summary (**W8**); stop immediately before the manifest delete when any sweep preserved something, a fresh `quarantineInventory` read reports anything, or `reverse()` returned a still-OUTSTANDING `shelfGuarded` entry (**W10**, **X22**); the `--dry-run` planner's half of package A's **W5**. Package A's refusal, its inventory call site, `requireDeletionClearance`, the byte-exact manifest compare and everything `WP-scheduler-replay-manifest-independent` adds stay byte-unchanged |
 | modify | tests/unit/manifest.test.js | the SIX unit-level contracts of the two functions: `preservedQuarantine` and `removed`'s mechanics-directory granularity (**X4**), the `ENOTEMPTY` climb and its ancestor preservation (**X1** step 3), the `lstat` classification of a non-directory `<state>` (**X10**), the read-only `dryRun` planner (**X15**), the vault guard's precedence (**X8**), and `reverse()`'s `shelfGuarded` field (**X16**/**X22**). **Every DECLARED RED identity lives in `tests/unit/uninstall.test.js`** — see that row |
-| modify | tests/unit/uninstall.test.js | **owns every declared RED identity — the tags run `[SG-1]`–`[SG-42]` plus `[SG-FUZZ]` and **Table B enumerates exactly which of them are DECLARED**, which is the only authority on that set**, one per acceptance criterion arm: the carve-out and its alias/`<state>`-alias/two-hop arms (**X1**/**X18**/**X19**/**X17 (1a)**), the absent-and-empty and symlinked-core arms (**X4**, the class split), **W6**'s byte-identity, the interleavings (**X3**/**X12**), the never-descended symlink and top-down validation (**X10**/**X11**), the fold ambiguity (**X12**), the propagation boundary (**X13**), the read-only planner (**X15**), the forged-entry from-below/from-above/absence/hypothetical/chain arms (**X16**/**X17**/**X20**, Table **V**), and **W10**/**W11**/**X22**'s stop, replay-guard, set-level abort and remedy-terminates arms. **Plus the PR-gate round 2 regressions `[SG-23]`–`[SG-26]`, the round 3 regressions `[SG-27]`–`[SG-30]`, the round 4 regressions `[SG-31]`–`[SG-38]` and the resolver exactness fuzz `[SG-FUZZ]`.** Package A's `[QU-6]` ENOENT arm is re-fixtured here (see the round 1 ruling) |
+| modify | tests/unit/uninstall.test.js | **owns every declared RED identity — the tags run `[SG-1]`–`[SG-46]` plus `[SG-FUZZ]` and **Table B enumerates exactly which of them are DECLARED**, which is the only authority on that set**, one per acceptance criterion arm: the carve-out and its alias/`<state>`-alias/two-hop arms (**X1**/**X18**/**X19**/**X17 (1a)**), the absent-and-empty and symlinked-core arms (**X4**, the class split), **W6**'s byte-identity, the interleavings (**X3**/**X12**), the never-descended symlink and top-down validation (**X10**/**X11**), the fold ambiguity (**X12**), the propagation boundary (**X13**), the read-only planner (**X15**), the forged-entry from-below/from-above/absence/hypothetical/chain arms (**X16**/**X17**/**X20**, Table **V**), and **W10**/**W11**/**X22**'s stop, replay-guard, set-level abort and remedy-terminates arms. **Plus the PR-gate round 2 regressions `[SG-23]`–`[SG-26]`, the round 3 regressions `[SG-27]`–`[SG-30]`, the round 4 regressions `[SG-31]`–`[SG-38]` and the resolver exactness fuzz `[SG-FUZZ]`.** Package A's `[QU-6]` ENOENT arm is re-fixtured here (see the round 1 ruling) |
 | create | tests/red-proofs/uninstall-shelf-deletion-guards.proofs.json | the declared RED proofs of Table B (ADR-0042) |
 | modify | tests/red-proofs/adr-0019-quarantine-uninstall-gate.proofs.json | drop the `[QU-3]` entry from the `expectRed` arrays of `quse-refusal-not-raised` and `quse-yes-skips-the-refusal`, and nothing else — the change must land in the SAME COMMIT as the carve-out, because on the tree before it `[QU-3]` still reddens. Added by the PR-gate round 1 ruling at the end of Contract reference |
 
@@ -339,7 +339,7 @@ built around it is unique. **Every anchor below is shown without its leading
 indentation**; the declaration's own `find` string must include the line's real
 indentation, and the count is the same either way.
 
-**THE COUNT IS THE TABLE: 34 declarations ship, and every one of them has a row below.**
+**THE COUNT IS THE TABLE: 38 declarations ship, and every one of them has a row below.**
 Twenty were designed here; the rest were added by the PR-gate rounds, each with its own row
 naming the round that found it. A row and a shipped declaration are the same thing — if the
 JSON and this table ever disagree, the JSON is what `scripts/red-proofs.js` runs and this
@@ -403,6 +403,10 @@ not exist before a review round measured the hole they close.
 | `quse-deleter-target-not-guarded` | 9 | `src/core/manifest.js` | test the pre-dispatch guard on the KERNEL's target only, dropping the deleter's own `fs.realpathSync` answer (**X17⁗**) | PR-gate round 5b (no pre-existing anchor) | that the guard covers the path the replay actually unlinks — `reverse()` deletes `fs.realpathSync(entry.path)`, which collapses a `..` lexically and can land where the kernel never does |
 | `quse-unreadable-chain-carried-on` | 1 | `src/core/manifest.js` | carry on with a PARTIAL chain when a component cannot be read, instead of answering UNANSWERABLE (**X17‴**, as round 5b widens it) | PR-gate round 5b (no pre-existing anchor) | that a chain we cannot finish reading is never handed back as a complete one — the kernel resolves such a path happily, so nothing else in the run would notice |
 | `quse-predicted-child-matched-by-name` | 8 | `src/core/manifest.js` | match the planner's predicted child by NAME rather than by filesystem identity (**X15′**) | PR-gate round 5b (no pre-existing anchor) | that the plan discounts the child it really removed: on a case-insensitive volume the stored spelling need not be the predicted one, and a byte comparison promises preservation where the live sweep removes |
+| `quse-admission-by-kernel-target-only` | 9 | `src/core/manifest.js` | decide ADMISSION on the kernel's target alone, dropping the deleter's own resolver from the test (**X17⁗**) | PR-gate round 6b (no pre-existing anchor) | that the both-target guard is actually REACHED: an entry the kernel places out of every allowed root, and `fs.realpathSync` places in the shelf, was not guarded at all |
+| `quse-unanswerable-set-still-sweeps` | 1 | `src/core/manifest.js` | let the sweep perform its recursive deletions although the protected set is UNANSWERABLE (**X17‴** sweep clause) | PR-gate round 6b (no pre-existing anchor) | that an unknown chain withholds EVERY recursive deletion — `logs/`, `schedules/`, `secrets/` and each child of `<state>` may be the node the shelf stands on |
+| `quse-admission-ignores-the-entrys-reverser` | 9 | `src/core/manifest.js` | admit every kind against the four allowed roots, ignoring that `scheduler-entry` is reversed under `withinSchedulerRoot` (**X16⁗**) | PR-gate round 6b (no pre-existing anchor) | that the guard's bound is THAT entry's reverser's bound — otherwise a schedule file inside a protected shelf is rejected by the guard and deleted by its own reverser |
+| `quse-prediction-state-is-global` | 8 | `src/core/manifest.js` | make the planner's predicted-preservation state one process-wide flag instead of a per-level test (**X15′**) | PR-gate round 6b (no pre-existing anchor) | that a preserved SIBLING, or an alternate spelling of the same directory, does not stop prediction at descendant levels — the plan reported both shelf dirs kept while the live sweep removed all three |
 
 **Criterion numbers in the table above are the UNSPLIT document's** and are mapped to
 this spec's numbering by the closing section of
@@ -537,7 +541,7 @@ anything. **The resolver design is FROZEN by this ruling** — a later finding o
 the resolution family is answered by pointing at X17′, not by a sixth
 hand-derivation.
 
-### PR-gate round 4 rulings (PR #312 review, 2026-09-21) — chain collection is the full traversal; the planner applies retention
+### PR-gate rounds 4–6 rulings (PR #312 review, 2026-09-21/22) — chain collection is the full traversal; the planner applies retention
 
 **X17″** (amends X17 (1a) class (ii)): the chain nodes of a shelf root are EVERY
 node the raw-segment traversal visits while resolving it — each link location,
@@ -549,17 +553,33 @@ its components. Each root's walk has its own hop budget; the node set is shared
 across roots. Class (ii) semantics are unchanged: the node and its ancestors may
 not be recursively deleted; its unrelated descendants may.
 
-**X15′** (amends X15): the read-only planner applies the same retention
-decisions as the live sweep — it computes the protected set and reports as
+**X15′** (amends X15; round 6b scopes it PER LEVEL): the read-only planner applies the
+same retention decisions as the live sweep — and its predicted-preservation state belongs
+to the climb level it was computed for. A preserved SIBLING, or the same directory under
+an alternate spelling, does not stop prediction at descendant levels; and a level the plan
+predicted removing is dropped from the plan's own report, which is the planner's half of
+X4′'s reconciliation. It computes the protected set and reports as
 preserved exactly what the live run would preserve — so the plan never lists a
 directory the live command cannot remove. It still performs no mutation.
+
+**X16⁗** (amends X16″): the shelf guard admits an entry by the boundary of THAT
+entry's own reverser — `withinSchedulerRoot` for `scheduler-entry`, the four allowed
+roots for every other kind — resolved by either resolver's target when resolution
+succeeds, literal only when unanswerable.
+
+**X17‴ (sweep clause)**: an unanswerable protected set forbids every recursive deletion
+the sweep would perform; each target is preserved and reported with the code. Fail closed
+toward preservation; the stop terminates once the fault is fixed.
 
 **X17⁗** (amends X17′): every deletion guard tests BOTH the kernel-canonical target
 (`fs.realpathSync.native`) AND the target the deleter's own resolver computes (Node's
 `fs.realpathSync`, which collapses `..` lexically before following links) — a hit on
 either preserves. The two resolvers agree on every layout without `..` after a link;
 where they disagree the deleter's answer is the one that would delete, so it must be
-guarded too.
+guarded too. **This governs the ADMISSION test as well as the guard itself** (round 6b):
+an entry is admitted for guarding when EITHER resolver's target is in bounds, because
+admitting on the kernel's alone left an entry the kernel places out of root — and the
+reverser places in the shelf — unguarded entirely, so the both-target test never ran.
 
 **X17‴** (amends X17 (4)): a chain collection whose hop budget expires before the
 walk completes is UNANSWERABLE for that root — the entry or sweep target is
@@ -596,8 +616,8 @@ Two further round-4 rulings, on the same gate:
   on a case-sensitive volume — took `ENOTEMPTY` and stopped.
 
 Architect rulings on a review gate; nothing here records the owner approving
-anything. **Round 4 is the last product round**; a later finding of prose goes to
-errata.
+anything. **Rounds 4b–6b applied the round-4/5 rulings at further sites; round 6 was
+the last external gate.** A later finding of prose goes to errata.
 
 ## Dispatch precondition — owner items
 

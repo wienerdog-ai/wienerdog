@@ -3805,7 +3805,11 @@ test('[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resol
       `${S}: and the entry is REPORTED as shelf-guarded (${JSON.stringify(res.shelfGuarded)})`);
     assert.equal(res.removed.includes(shadow), false, `${S}: never removed`);
   } else {
-    assert.ok(err, `${S}: the replay aborted before any mutation, which preserves too`);
+    // Not `assert.ok(err)` — that is true of any throw at all. The abort must be
+    // the X22 set-level one, and the shelf must still be on disk.
+    assert.match(String(err && err.message), /could not be read|quarantine/i,
+      `${S}: the replay aborted at the set-level check (${err && err.message})`);
+    assert.equal(fs.existsSync(q), true, `${S}: and the shelf is still on disk`);
   }
 });
 
@@ -3869,5 +3873,145 @@ test('[SG-42] round 5b P2 (X15′): the planner matches its predicted child by f
   } else {
     assert.equal(live.removed.includes(paths.state), false,
       `${S}: on a case-SENSITIVE volume they are two directories and the climb stops at the leftover`);
+  }
+});
+
+// ─── PR-gate round 6b regressions (PR #312 review, 2026-09-22) ──────────────
+// Four rulings already recorded, each applied at ONE MORE SITE: X17⁗ at the
+// ADMISSION test, X17‴ at the SWEEP, X16⁗'s per-reverser boundary, and X15′'s
+// per-level prediction state.
+
+test('[SG-43] round 6b (X17⁗ at ADMISSION): an entry is admitted for guarding if EITHER resolver puts it in bounds', () => {
+  const S = 'SG43-admission-tests-both-resolvers';
+  const { core, env, q, addEntries } = shelfManifestInstall();
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  // The kernel places the alias OUT of every allowed root; Node's own resolver
+  // — the one the file reverser calls — places it in the shelf. Admitting on
+  // the kernel's answer alone left the entry unguarded ENTIRELY, so the
+  // both-target test inside the guard never ran at all.
+  const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-out-')));
+  fs.mkdirSync(path.join(outside, 'deep'), { recursive: true });
+  fs.mkdirSync(path.join(outside, 'state', 'quarantine'), { recursive: true });
+  fs.symlinkSync(path.join(outside, 'deep'), path.join(core, 'jump'));
+  const alias = path.join(core, 'alias');
+  fs.symlinkSync(['jump', '..', 'state', 'quarantine'].join(path.sep), alias);
+  const native = (() => { try { return fs.realpathSync.native(alias); } catch { return null; } })();
+  assert.equal(native !== null && native.startsWith(outside), true,
+    `${S}: the KERNEL puts the alias outside every allowed root (${native})`);
+  assert.equal(fs.realpathSync(alias), fs.realpathSync(q),
+    `${S}: while the deleter's own resolver puts it in the shelf`);
+  const note = shelfFile(q, '2026-note.md', 'out of root to the kernel only\n');
+  const shadow = path.join(alias, '2026-note.md');
+  addEntries([{ kind: 'file', path: shadow }], true);
+  const paths = require('../../src/core/paths').getPaths({ ...env });
+  const m = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  let res = null;
+  let err = null;
+  try {
+    res = manifestMod.reverse(paths, m, { dryRun: false });
+  } catch (e) {
+    err = e;
+  }
+  assert.equal(readOrNull(note), 'out of root to the kernel only\n',
+    `${S}: the copy's BYTES survive the replay`);
+  if (res) {
+    assert.equal(res.shelfGuarded.includes(shadow), true,
+      `${S}: and the entry is ADMITTED and guarded (${JSON.stringify(res.shelfGuarded)})`);
+  } else {
+    assert.equal(fs.existsSync(q), true, `${S}: the replay aborted and the shelf is still on disk (${err && err.message.slice(0, 80)})`);
+  }
+});
+
+test('[SG-44] round 6b (X17‴ sweep clause): an UNANSWERABLE set forbids every recursive delete the sweep would do', () => {
+  const S = 'SG44-unanswerable-set-forbids-the-sweep';
+  const { paths, core, sched } = sweepCore();
+  const store = path.join(paths.state, 'store');
+  const note = shelfFile(store, '2026-note.md', 'reachable only through the unreadable shelf\n');
+  fs.symlinkSync(store, path.join(paths.state, 'quarantine'));
+  const q = path.join(paths.state, 'quarantine');
+  const origLstat = fs.lstatSync;
+  fs.lstatSync = (p, ...rest) => {
+    if (String(p) === q) {
+      const e = new Error('injected'); /** @type {any} */ (e).code = 'EIO'; throw e;
+    }
+    return origLstat(p, ...rest);
+  };
+  let res;
+  try {
+    res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  } finally {
+    fs.lstatSync = origLstat;
+  }
+  assert.equal(readOrNull(note), 'reachable only through the unreadable shelf\n',
+    `${S}: the copy behind the unreadable shelf still has its bytes`);
+  assert.equal(fs.existsSync(store), true, `${S}: and the directory holding it survives`);
+  assert.equal(fs.existsSync(paths.logs), true,
+    `${S}: NO mechanics directory is recursively deleted either — the chain is unknown`);
+  assert.equal(fs.existsSync(sched), true, `${S}: schedules/ too`);
+  assert.equal(fs.existsSync(paths.secrets), true, `${S}: and secrets/`);
+  assert.equal(res.removed.length, 0, `${S}: nothing is reported removed (${JSON.stringify(res.removed)})`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: and every withheld target is REPORTED (${JSON.stringify(res.preservedQuarantine)})`);
+  assert.equal(manifestMod.spellResolutionCode('EIO'), 'EIO',
+    `${S}: a kernel code is reported as itself; only our own EBUDGET is spelled out`);
+  void core;
+});
+
+test('[SG-45] round 6b (X16⁗): the guard admits a scheduler-entry by ITS reverser’s boundary', () => {
+  const S = 'SG45-admission-uses-the-entrys-own-boundary';
+  const { core, env, addEntries } = shelfManifestInstall();
+  const paths = require('../../src/core/paths').getPaths({ ...env });
+  // `<state>` points at the launchd directory, so the shelf lives inside a root
+  // that `withinAllowedRoot` does not know about — but `withinSchedulerRoot`,
+  // which is what the scheduler reverser uses, does.
+  const agents = path.join(paths.home, 'Library', 'LaunchAgents');
+  fs.mkdirSync(agents, { recursive: true });
+  fs.rmSync(paths.state, { recursive: true, force: true });
+  fs.symlinkSync(agents, paths.state);
+  const plist = shelfFile(path.join(agents, 'quarantine'), 'ai.wienerdog.dream.plist', '<plist/>\n');
+  addEntries([{ kind: 'scheduler-entry', path: plist, unload: [] }], true);
+  const m = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  let res = null;
+  let err = null;
+  try {
+    res = manifestMod.reverse(paths, m, { dryRun: false });
+  } catch (e) {
+    err = e;
+  }
+  assert.equal(readOrNull(plist), '<plist/>\n',
+    `${S}: the schedule file INSIDE the shelf keeps its bytes (${err && err.message.slice(0, 80)})`);
+  if (res) {
+    assert.equal(res.shelfGuarded.includes(plist), true,
+      `${S}: and it is admitted and guarded (${JSON.stringify(res.shelfGuarded)})`);
+    assert.equal(res.removed.includes(plist), false, `${S}: never removed`);
+  }
+});
+
+test('[SG-46] round 6b (X15′ per level): a preserved SIBLING does not stop prediction at descendant levels', () => {
+  const S = 'SG46-prediction-state-is-per-level';
+  const build = () => {
+    const { paths } = sweepCore();
+    // An ALTERNATE SPELLING of the shelf: on a case-insensitive volume this is
+    // the same directory the climb predicts removing, and step 2 preserves it
+    // by name — which used to set one flag that stopped prediction everywhere.
+    fs.mkdirSync(path.join(paths.state, 'Quarantine', 'redacted'), { recursive: true });
+    return paths;
+  };
+  const planPaths = build();
+  const livePaths = build();
+  const caseInsensitive = fs.existsSync(path.join(planPaths.state, 'quarantine'));
+  const plan = manifestMod.disposeCoreMechanics(planPaths, { dryRun: true, vaultPath: null });
+  const live = manifestMod.disposeCoreMechanics(livePaths, { dryRun: false, vaultPath: null });
+  // The core ITSELF is compared out: the live run empties it and the pre-existing
+  // empty-core step then removes it, which a plan that mutates nothing can never
+  // predict. Everything BENEATH the core is what X15′ is about.
+  const strip = (a, root) => a.map((p) => p.replace(root, '<core>')).filter((p) => p !== '<core>').sort();
+  assert.deepEqual(strip(plan.removed, planPaths.core), strip(live.removed, livePaths.core),
+    `${S}: the plan predicts exactly what the live sweep removes`);
+  assert.deepEqual(strip(plan.preservedQuarantine, planPaths.core), strip(live.preservedQuarantine, livePaths.core),
+    `${S}: and reports exactly what it preserves`);
+  if (caseInsensitive) {
+    assert.equal(live.removed.includes(livePaths.state), true,
+      `${S}: on this volume the alternate spelling IS the shelf, both are empty, and <state> goes`);
   }
 });
