@@ -1,0 +1,263 @@
+{
+  "suite": "tests/unit/uninstall.test.js",
+  "proofs": [
+    {
+      "id": "quse-refusal-not-raised",
+      "wp": "WP-adr-0019-quarantine-uninstall-gate",
+      "criterion": "1",
+      "why": "criterion 1 asserts an ABORT, and an abort assertion goes green whenever the run fails for any reason at all — a bad fixture, a missing manifest, a throw in unrelated setup. Same shape, same reason as WP-scheduler-replay-manifest-independent+s srm-unreadable-root-read-as-empty. The mutation makes the gate read every NON-EMPTY shelf as EMPTY while leaving UNREADABLE alone, so the run proceeds past the shelf and deletes it.",
+      "file": "src/cli/uninstall.js",
+      "find": "  const vaultPath = readVaultPath(paths.config) || paths.vault;",
+      "replace": "  const vaultPath = readVaultPath(paths.config) || paths.vault;\n  /* RP_MUT_QUSE_REFUSAL_NOT_RAISED */ manifestLib.quarantineInventory = ((o) => (p) => { const r = o(p); return { roots: r.roots, entries: 0, bytes: 0, unreadable: r.unreadable }; })(manifestLib.quarantineInventory);",
+      "marker": "RP_MUT_QUSE_REFUSAL_NOT_RAISED",
+      "occurrences": 1,
+      "testNamePattern": "\\[QU-",
+      "expectRed": [
+        {
+          "test": [
+            "[QU-1] AC1 (W3/W4): a non-empty shelf makes uninstall REFUSE — nothing removed, and the message carries all five things"
+          ],
+          "signal": "QU1-non-empty-shelf-must-refuse"
+        },
+        {
+          "test": [
+            "[QU-2] AC2 (W2/Y7): --yes refuses IDENTICALLY — a refusal is not a prompt"
+          ],
+          "signal": "QU2-yes-refuses-identically"
+        },
+        {
+          "test": [
+            "[QU-3] AC3 (K6/Y1): the refusal prints no shelf FILENAME and no shelf BYTE"
+          ],
+          "signal": "QU3-no-shelf-name-or-byte-on-any-surface"
+        },
+        {
+          "test": [
+            "[QU-4] AC4 (W5): --dry-run does not abort — it prints the same block, says a real run stops there, and still prints the plan"
+          ],
+          "signal": "QU4-dry-run-discloses-the-shelf"
+        },
+        {
+          "test": [
+            "[QU-7] AC7 (W7): the shelf gate runs FIRST — with BOTH a non-empty shelf and an unreadable scheduler root, the SHELF refusal is what is printed"
+          ],
+          "signal": "QU7-shelf-gate-runs-before-D9"
+        },
+        {
+          "test": [
+            "[QU-8] AC10: the REFUSAL is idempotent — same status, same message, zero filesystem change in either run"
+          ],
+          "signal": "QU8-refusal-is-idempotent"
+        },
+        {
+          "test": [
+            "[QU-9] AC11(a) (K8/K1): a CAPITALIZED shelf still refuses, and the refusal names it by its ACTUAL on-disk name"
+          ],
+          "signal": "QU9-shelf-identity-is-case-folded"
+        },
+        {
+          "test": [
+            "[QU-11] K2 (PR round 1): a FILE sitting where the shelf goes is named BY ITS ACTUAL PATH in the remedy"
+          ],
+          "signal": "QU11-blocker-remedy-names-a-path-that-exists"
+        },
+        {
+          "test": [
+            "[QU-12] (PR round 1): the remedy lines are POSIX-quoted — a hostile core path stays one literal argument"
+          ],
+          "signal": "QU12-remedy-lines-are-shell-safe"
+        }
+      ]
+    },
+    {
+      "id": "quse-yes-skips-the-refusal",
+      "wp": "WP-adr-0019-quarantine-uninstall-gate",
+      "criterion": "2",
+      "why": "criterion 2 is the one the whole of Table W row W2 rests on, and it is invisible to any suite that only ever drives the interactive path. A --yes suite that asserts \"the run refused\" passes under the mutation if it never actually passed --yes. The mutation gates the refusal on !yes, so a --yes run proceeds; note that [QU-1] (no --yes) and [QU-5] (empty shelf) stay green, which is what makes the declaration a measurement of the --yes arm specifically. PR round 2: [QU-7] is now platform-independent (ruling R-QU7 — the scheduler-root failure is an injected CODE on <core>/schedules, a root on every platform), so this declaration and quse-refusal-not-raised are provable on linux as well as darwin.",
+      "file": "src/cli/uninstall.js",
+      "find": "  const yes = argv.includes('--yes');",
+      "replace": "  const yes = argv.includes('--yes');\n  /* RP_MUT_QUSE_YES_SKIPS_THE_REFUSAL */ if (yes) manifestLib.quarantineInventory = () => ({ roots: [], entries: 0, bytes: 0, unreadable: [] });",
+      "marker": "RP_MUT_QUSE_YES_SKIPS_THE_REFUSAL",
+      "occurrences": 1,
+      "testNamePattern": "\\[QU-",
+      "expectRed": [
+        {
+          "test": [
+            "[QU-2] AC2 (W2/Y7): --yes refuses IDENTICALLY — a refusal is not a prompt"
+          ],
+          "signal": "QU2-yes-refuses-identically"
+        },
+        {
+          "test": [
+            "[QU-3] AC3 (K6/Y1): the refusal prints no shelf FILENAME and no shelf BYTE"
+          ],
+          "signal": "QU3-no-shelf-name-or-byte-on-any-surface"
+        },
+        {
+          "test": [
+            "[QU-6] AC6 (K4/Y5): an UNREADABLE shelf aborts a real run naming its code, does not abort --dry-run, and ENOENT does not abort"
+          ],
+          "signal": "QU6-unreadable-shelf-is-never-empty"
+        },
+        {
+          "test": [
+            "[QU-7] AC7 (W7): the shelf gate runs FIRST — with BOTH a non-empty shelf and an unreadable scheduler root, the SHELF refusal is what is printed"
+          ],
+          "signal": "QU7-shelf-gate-runs-before-D9"
+        },
+        {
+          "test": [
+            "[QU-8] AC10: the REFUSAL is idempotent — same status, same message, zero filesystem change in either run"
+          ],
+          "signal": "QU8-refusal-is-idempotent"
+        },
+        {
+          "test": [
+            "[QU-9] AC11(a) (K8/K1): a CAPITALIZED shelf still refuses, and the refusal names it by its ACTUAL on-disk name"
+          ],
+          "signal": "QU9-shelf-identity-is-case-folded"
+        },
+        {
+          "test": [
+            "[QU-10] Y1 (PR round 1): an unreadable shelf FILE never puts its name on ANY surface — refusal or --dry-run"
+          ],
+          "signal": "QU10-unreadable-entry-leaks-no-filename"
+        },
+        {
+          "test": [
+            "[QU-11] K2 (PR round 1): a FILE sitting where the shelf goes is named BY ITS ACTUAL PATH in the remedy"
+          ],
+          "signal": "QU11-blocker-remedy-names-a-path-that-exists"
+        },
+        {
+          "test": [
+            "[QU-12] (PR round 1): the remedy lines are POSIX-quoted — a hostile core path stays one literal argument"
+          ],
+          "signal": "QU12-remedy-lines-are-shell-safe"
+        },
+        {
+          "test": [
+            "[QU-13] R-Y1 (PR round 2): an unreadable NESTED DIRECTORY is reported by its shelf ROOT — its own name never reaches a surface"
+          ],
+          "signal": "QU13-nested-unreadable-reports-the-shelf-root"
+        }
+      ]
+    },
+    {
+      "id": "quse-unreadable-shelf-read-as-empty",
+      "wp": "WP-adr-0019-quarantine-uninstall-gate",
+      "criterion": "6",
+      "why": "criterion 6 asserts an abort AND zero removals, and both halves go green on a fixture that never made the shelf unreadable. This is Table K row K4 and Table Y row Y5, and it is the one failure that silently destroys the data rather than merely failing to protect it: the mutation restores the fail-open shape exactly, swallowing the error so the walk returns unreadable: [] and rmSync({force:true}) takes a tree nothing could see. PR round 1 re-anchor: the mutation now empties `pushUnreadable` itself, the single site every unreadable level flows through, so BOTH the enumeration failure and the entry-level `lstat` failure fail open exactly as before the rule existed. PR round 2 (ruling R-Y1): the reporting path moved to the shelf ROOT, so the mutation re-anchors on the same single site and now also reddens the nested-directory arm.",
+      "file": "src/core/manifest.js",
+      "find": "  if (unreadable.some((u) => u.dir === reportAs)) return;\n  unreadable.push({ dir: reportAs, code });",
+      "replace": "  void unreadable; void reportAs; void code; /* RP_MUT_QUSE_UNREADABLE_SHELF_READ_AS_EMPTY */",
+      "marker": "RP_MUT_QUSE_UNREADABLE_SHELF_READ_AS_EMPTY",
+      "occurrences": 1,
+      "testNamePattern": "\\[QU-",
+      "expectRed": [
+        {
+          "test": [
+            "[QU-6] AC6 (K4/Y5): an UNREADABLE shelf aborts a real run naming its code, does not abort --dry-run, and ENOENT does not abort"
+          ],
+          "signal": "QU6-unreadable-shelf-is-never-empty"
+        },
+        {
+          "test": [
+            "[QU-10] Y1 (PR round 1): an unreadable shelf FILE never puts its name on ANY surface — refusal or --dry-run"
+          ],
+          "signal": "QU10-unreadable-entry-leaks-no-filename"
+        },
+        {
+          "test": [
+            "[QU-13] R-Y1 (PR round 2): an unreadable NESTED DIRECTORY is reported by its shelf ROOT — its own name never reaches a surface"
+          ],
+          "signal": "QU13-nested-unreadable-reports-the-shelf-root"
+        }
+      ]
+    },
+    {
+      "id": "quse-block-printed-on-an-empty-shelf",
+      "wp": "WP-adr-0019-quarantine-uninstall-gate",
+      "criterion": "5",
+      "why": "criterion 5 asserts BYTE-IDENTITY with the pre-gate output for an install with no shelf. It is the criterion that keeps this package from changing every existing uninstall+s output, and a byte-identity assertion is trivially satisfiable by a fixture that compares the wrong stream or an empty one. The mutation prints the block unconditionally, so an install with no shelf gets a 0 file(s), 0 bytes block.",
+      "file": "src/cli/uninstall.js",
+      "find": "  console.log('wienerdog uninstall — the following will be removed:\\n');",
+      "replace": "  console.log(quarantineBlock(quarantine, paths)); /* RP_MUT_QUSE_BLOCK_PRINTED_ON_AN_EMPTY_SHELF */\n  console.log('wienerdog uninstall — the following will be removed:\\n');",
+      "marker": "RP_MUT_QUSE_BLOCK_PRINTED_ON_AN_EMPTY_SHELF",
+      "occurrences": 1,
+      "testNamePattern": "\\[QU-",
+      "expectRed": [
+        {
+          "test": [
+            "[QU-5] AC5 (W6): with no shelf ENTRIES the complete output is byte-identical — both the absent and the round-6 empty fixture"
+          ],
+          "signal": "QU5-empty-shelf-output-is-byte-identical"
+        }
+      ]
+    },
+    {
+      "id": "quse-dry-run-block-suppressed",
+      "wp": "WP-adr-0019-quarantine-uninstall-gate",
+      "criterion": "4",
+      "why": "criterion 4 observes DISCLOSURE, not the refusal. Without this declaration a suite can assert the refusal (which is loud) and never notice that --dry-run — the surface a user consults precisely to find out what an uninstall will do — says nothing about the shelf at all. The mutation drops the block from the --dry-run arm while leaving the refusal intact.",
+      "file": "src/cli/uninstall.js",
+      "find": "      console.log(quarantineBlock(quarantine, paths));",
+      "replace": "      void quarantineBlock; /* RP_MUT_QUSE_DRY_RUN_BLOCK_SUPPRESSED */",
+      "marker": "RP_MUT_QUSE_DRY_RUN_BLOCK_SUPPRESSED",
+      "occurrences": 1,
+      "testNamePattern": "\\[QU-",
+      "expectRed": [
+        {
+          "test": [
+            "[QU-4] AC4 (W5): --dry-run does not abort — it prints the same block, says a real run stops there, and still prints the plan"
+          ],
+          "signal": "QU4-dry-run-discloses-the-shelf"
+        },
+        {
+          "test": [
+            "[QU-6] AC6 (K4/Y5): an UNREADABLE shelf aborts a real run naming its code, does not abort --dry-run, and ENOENT does not abort"
+          ],
+          "signal": "QU6-unreadable-shelf-is-never-empty"
+        },
+        {
+          "test": [
+            "[QU-10] Y1 (PR round 1): an unreadable shelf FILE never puts its name on ANY surface — refusal or --dry-run"
+          ],
+          "signal": "QU10-unreadable-entry-leaks-no-filename"
+        },
+        {
+          "test": [
+            "[QU-13] R-Y1 (PR round 2): an unreadable NESTED DIRECTORY is reported by its shelf ROOT — its own name never reaches a surface"
+          ],
+          "signal": "QU13-nested-unreadable-reports-the-shelf-root"
+        }
+      ]
+    },
+    {
+      "id": "quse-shelf-name-case-sensitive",
+      "wp": "WP-adr-0019-quarantine-uninstall-gate",
+      "criterion": "11",
+      "why": "Round 4. Criterion 11 asserts that a capitalized shelf and the bytes inside it SURVIVE. It is a survival assertion, and it goes green on any fixture that never created the capitalized directory, created it on the wrong volume, or left it empty. The defect is invisible to every other assertion in this package: the rest classify types, codes and counts, not names, so nothing else already declared reddens under this mutation. The mutation replaces Table X row X12+s ASCII fold in the inventory+s name test with byte equality (name === +quarantine+), restoring the round-4 defect exactly. PR round 1: it now also reddens the blocker case, where a FILE named `Quarantine` stops being recognised at all and the uninstall proceeds to delete the shelf it could not see.",
+      "file": "src/core/manifest.js",
+      "find": "    if (asciiFold(name) !== QUARANTINE_DIRNAME) continue;",
+      "replace": "    if (name !== QUARANTINE_DIRNAME) continue; /* RP_MUT_QUSE_SHELF_NAME_CASE_SENSITIVE */",
+      "marker": "RP_MUT_QUSE_SHELF_NAME_CASE_SENSITIVE",
+      "occurrences": 1,
+      "testNamePattern": "\\[QU-",
+      "expectRed": [
+        {
+          "test": [
+            "[QU-9] AC11(a) (K8/K1): a CAPITALIZED shelf still refuses, and the refusal names it by its ACTUAL on-disk name"
+          ],
+          "signal": "QU9-shelf-identity-is-case-folded"
+        },
+        {
+          "test": [
+            "[QU-11] K2 (PR round 1): a FILE sitting where the shelf goes is named BY ITS ACTUAL PATH in the remedy"
+          ],
+          "signal": "QU11-blocker-remedy-names-a-path-that-exists"
+        }
+      ]
+    }
+  ]
+}

@@ -147,7 +147,8 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
   there is usually the only surviving copy of that note's pre-scrub text, so
   dropping the oldest to stay inside the bound is generally an irreversible
   loss rather than the removal of a spare, and
-  `wienerdog uninstall` removes it with everything else Wienerdog keeps. Both
+  `wienerdog uninstall` stops while either quarantine directory still holds a
+  file and asks you to move or delete those files first. Both
   are 0700 dirs holding 0600 files with the raw bytes intact, outside the vault
   and never committed. A digest section with a finding is omitted rather than
   injected redacted. See `docs/runbooks/secret-incident.md` for recovery.

@@ -2985,3 +2985,337 @@ test('R-B\u2032 (round 2): discovery carries NO ownership flag — only `path`, 
   assert.equal(byPath[lexical].remove, false, 'and on the lexical one');
 });
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// quarantineInventory — Table K (WP-adr-0019-quarantine-uninstall-gate)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A core with `state/` but nothing on either shelf. */
+function qPaths() {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.state, { recursive: true });
+  return paths;
+}
+
+/** The two canonical shelf paths under `paths`. */
+function shelves(paths) {
+  const q = path.join(paths.state, 'quarantine');
+  return { q, r: path.join(q, 'redacted') };
+}
+
+/** Make `fs.readdirSync` throw `code` for exactly `target`, leaving every other
+ *  path alone. Platform scope: `quarantineInventory` classifies by `code`, so an
+ *  injected code is the WHOLE of what the rule reads — a real `chmod 0000` is
+ *  not EACCES for a privileged user and does not exist on Windows.
+ *  @param {string} target @param {string} code @param {() => any} fn */
+function withReaddirFault(target, code, fn) {
+  const orig = fs.readdirSync;
+  /** @type {any} */
+  const patched = (p, ...rest) => {
+    if (p === target) {
+      const e = new Error(`injected ${code}`);
+      /** @type {any} */ (e).code = code;
+      throw e;
+    }
+    return orig(p, ...rest);
+  };
+  fs.readdirSync = patched;
+  try {
+    return fn();
+  } finally {
+    fs.readdirSync = orig;
+  }
+}
+
+/** Make `fs.lstatSync` throw `code` for exactly `target`. @param {string} target
+ *  @param {string} code @param {() => any} fn */
+function withLstatFault(target, code, fn) {
+  const orig = fs.lstatSync;
+  /** @type {any} */
+  const patched = (p, ...rest) => {
+    if (p === target) {
+      const e = new Error(`injected ${code}`);
+      /** @type {any} */ (e).code = code;
+      throw e;
+    }
+    return orig(p, ...rest);
+  };
+  fs.lstatSync = patched;
+  try {
+    return fn();
+  } finally {
+    fs.lstatSync = orig;
+  }
+}
+
+test('K3 ABSENT: a core with no state/ at all is not an error and reports nothing', () => {
+  const paths = tempPaths();
+  assert.deepEqual(manifestLib.quarantineInventory(paths), {
+    roots: [], blockers: [], entries: 0, bytes: 0, unreadable: [],
+  });
+});
+
+test('K3 ABSENT: a state/ with no quarantine child is ABSENT — a root we never wrote is genuinely empty', () => {
+  const paths = qPaths();
+  fs.writeFileSync(path.join(paths.state, 'digest.md'), 'not a shelf\n');
+  fs.mkdirSync(path.join(paths.state, 'scratch'));
+  assert.deepEqual(manifestLib.quarantineInventory(paths), {
+    roots: [], blockers: [], entries: 0, bytes: 0, unreadable: [],
+  });
+});
+
+test('K2/K3 EMPTY: BOTH shelf directories present and holding nothing give entries: 0 — the roots are never counted', () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(r, { recursive: true, mode: 0o700 });
+  const inv = manifestLib.quarantineInventory(paths);
+  assert.deepEqual(inv.roots, [
+    { dir: q, entries: 0, bytes: 0 },
+    { dir: r, entries: 0, bytes: 0 },
+  ], 'both roots are reported, in the fixed order, each holding nothing');
+  assert.equal(inv.entries, 0, 'K2: a root directory contributes ZERO entries');
+  assert.equal(inv.bytes, 0);
+  assert.deepEqual(inv.unreadable, []);
+});
+
+test("K3 NON-EMPTY: the spec's worked example, entry for entry and byte for byte", () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(r, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(q, '2026-07-01-tooling.md'), 'x'.repeat(812));
+  fs.writeFileSync(path.join(r, '2026-07-02-fp.md'), 'y'.repeat(1240));
+  fs.writeFileSync(path.join(r, '2026-07-03-fp.md'), 'z'.repeat(990));
+  assert.deepEqual(manifestLib.quarantineInventory(paths), {
+    roots: [
+      { dir: q, entries: 1, bytes: 812 },
+      { dir: r, entries: 2, bytes: 2230 },
+    ],
+    blockers: [],
+    entries: 3,
+    bytes: 3042,
+    unreadable: [],
+  });
+});
+
+test('K2: everything that is not a shelf root counts — a nested directory counts ONE entry and is descended', () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(r, { recursive: true, mode: 0o700 });
+  const nested = path.join(q, 'deep');
+  fs.mkdirSync(nested);
+  fs.writeFileSync(path.join(nested, 'buried.md'), 'abcde'); // 5 bytes, depth 2
+  const inv = manifestLib.quarantineInventory(paths);
+  assert.deepEqual(inv.roots[0], { dir: q, entries: 2, bytes: 5 },
+    'the directory is 1 entry with 0 bytes, the file inside it 1 entry with 5');
+  assert.equal(inv.entries, 2);
+  assert.equal(inv.bytes, 5);
+});
+
+test('K2/K6: a symlink on the shelf counts ONE entry, contributes no bytes, and is NEVER followed', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = qPaths();
+  const { q } = shelves(paths);
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  // A link pointing at a tree OUTSIDE the shelf. Following it would count the
+  // decoy file and could walk out of the core entirely.
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-q-outside-'));
+  fs.writeFileSync(path.join(outside, 'decoy.md'), 'D'.repeat(4096));
+  fs.symlinkSync(outside, path.join(q, 'escape'));
+  const inv = manifestLib.quarantineInventory(paths);
+  assert.deepEqual(inv.roots, [{ dir: q, entries: 1, bytes: 0 }]);
+  assert.equal(inv.entries, 1, 'the link itself is one entry');
+  assert.equal(inv.bytes, 0, 'and the walk never descended into its target');
+});
+
+test('K2: a NON-DIRECTORY occupying a shelf root path counts one entry and gets no row', () => {
+  const paths = qPaths();
+  const { q } = shelves(paths);
+  fs.writeFileSync(q, 'not our directory\n');
+  const inv = manifestLib.quarantineInventory(paths);
+  assert.deepEqual(inv.roots, [], 'roots holds only directories that EXIST as directories');
+  assert.deepEqual(inv.blockers, [q], 'but its ACTUAL path is carried, so the refusal can name it');
+  assert.equal(inv.entries, 1, 'and it is something sitting where our directory should be');
+  assert.equal(inv.bytes, 0);
+});
+
+test('K4/Y5: an injected EACCES on the shelf is UNREADABLE — never EMPTY', () => {
+  const paths = qPaths();
+  const { q } = shelves(paths);
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(q, '2026-07-01-note.md'), 'secret bytes');
+  const inv = withReaddirFault(q, 'EACCES', () => manifestLib.quarantineInventory(paths));
+  assert.deepEqual(inv.unreadable, [{ dir: q, code: 'EACCES' }]);
+  assert.equal(inv.entries, 0, 'nothing could be counted — which is exactly why it is not EMPTY');
+});
+
+test('K4: an injected EIO ANYWHERE in the walk is UNREADABLE (state/, the shelf, or one entry)', () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(r, { recursive: true, mode: 0o700 });
+  const note = path.join(q, '2026-07-01-note.md');
+  fs.writeFileSync(note, 'secret bytes');
+
+  const atState = withReaddirFault(paths.state, 'EIO', () => manifestLib.quarantineInventory(paths));
+  assert.deepEqual(atState.unreadable, [{ dir: paths.state, code: 'EIO' }]);
+
+  const atRedacted = withReaddirFault(r, 'EIO', () => manifestLib.quarantineInventory(paths));
+  assert.deepEqual(atRedacted.unreadable, [{ dir: r, code: 'EIO' }]);
+
+  const atEntry = withLstatFault(note, 'EIO', () => manifestLib.quarantineInventory(paths));
+  assert.deepEqual(atEntry.unreadable, [{ dir: q, code: 'EIO' }],
+    'Y1: the CONTAINING directory, never the note\'s own path');
+  assert.equal(atEntry.entries, 1, 'something IS there — it merely could not be classified');
+});
+
+test('K3: ENOENT/ENOTDIR on the shelf is ABSENT, not unreadable — the ONE special case', () => {
+  const paths = qPaths();
+  const { q } = shelves(paths);
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  for (const code of ['ENOENT', 'ENOTDIR']) {
+    const inv = withReaddirFault(q, code, () => manifestLib.quarantineInventory(paths));
+    assert.deepEqual(inv.unreadable, [], `${code} is absence`);
+    assert.equal(inv.entries, 0);
+  }
+});
+
+test('K6/Y1: the inventory NEVER opens a file — no shelf byte can reach any surface', () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(r, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(q, '2026-07-01-note.md'), 'sk-live-DO-NOT-READ-ME');
+  fs.writeFileSync(path.join(r, '2026-07-02-note.md'), 'sk-live-DO-NOT-READ-ME');
+  const origRead = fs.readFileSync;
+  const origOpen = fs.openSync;
+  /** @type {string[]} */ const opened = [];
+  /** @type {any} */ (fs).readFileSync = (p, ...rest) => { opened.push(String(p)); return origRead(p, ...rest); };
+  /** @type {any} */ (fs).openSync = (p, ...rest) => { opened.push(String(p)); return origOpen(p, ...rest); };
+  try {
+    const inv = manifestLib.quarantineInventory(paths);
+    assert.equal(inv.entries, 2, 'it still counted both');
+    assert.equal(inv.bytes, 44, 'and sized them from lstat metadata');
+  } finally {
+    /** @type {any} */ (fs).readFileSync = origRead;
+    /** @type {any} */ (fs).openSync = origOpen;
+  }
+  assert.deepEqual(opened, [], 'not one file was opened');
+});
+
+test('K8: a CAPITALIZED shelf is OUR shelf — counted, and reported by its ACTUAL on-disk path', () => {
+  const paths = qPaths();
+  const up = path.join(paths.state, 'Quarantine');
+  const upRed = path.join(up, 'ReDaCtEd');
+  fs.mkdirSync(upRed, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(up, '2026-07-01-note.md'), 'x'.repeat(10));
+  fs.writeFileSync(path.join(upRed, '2026-07-02-note.md'), 'y'.repeat(20));
+  const inv = manifestLib.quarantineInventory(paths);
+  assert.deepEqual(inv.roots, [
+    { dir: up, entries: 1, bytes: 10 },
+    { dir: upRed, entries: 1, bytes: 20 },
+  ], 'each root is named as it is STORED, so the refusal names what exists');
+  assert.equal(inv.entries, 2, 'a byte-equality test would have reported this shelf EMPTY');
+  assert.equal(inv.bytes, 30);
+});
+
+test('K8/Y4: the accepted set is CLOSED — a name that is not an ASCII case variant is not a shelf', () => {
+  const paths = qPaths();
+  for (const name of ['quarantine-old', 'quarantinex', 'qu arantine', 'quarantiňe']) {
+    fs.mkdirSync(path.join(paths.state, name), { recursive: true });
+    fs.writeFileSync(path.join(paths.state, name, 'a.md'), 'zzz');
+  }
+  assert.deepEqual(manifestLib.quarantineInventory(paths), {
+    roots: [], blockers: [], entries: 0, bytes: 0, unreadable: [],
+  });
+});
+
+test('Y1 (PR round 1): a failing lstat on a shelf FILE reports the CONTAINING directory, never the note name', () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(r, { recursive: true, mode: 0o700 });
+  const leaky = path.join(q, '2026-07-01-zzleakytokenzz.md');
+  fs.writeFileSync(leaky, 'x'.repeat(10));
+  const inv = withLstatFault(leaky, 'EACCES', () => manifestLib.quarantineInventory(paths));
+  assert.deepEqual(inv.unreadable, [{ dir: q, code: 'EACCES' }]);
+  assert.equal(
+    JSON.stringify(inv).includes('zzleakytokenzz'), false,
+    'the whole returned value carries no shelf filename — it is printed verbatim by the refusal'
+  );
+});
+
+test('Y1 (PR round 1): several unreadable entries in ONE directory produce ONE line, not one per file', () => {
+  const paths = qPaths();
+  const { q } = shelves(paths);
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  const a = path.join(q, '2026-07-01-a.md');
+  const b = path.join(q, '2026-07-02-b.md');
+  fs.writeFileSync(a, 'aa');
+  fs.writeFileSync(b, 'bb');
+  const origLstat = fs.lstatSync;
+  /** @type {any} */
+  const patched = (p2, ...rest) => {
+    if (p2 === a || p2 === b) {
+      const e = new Error('injected EACCES');
+      /** @type {any} */ (e).code = 'EACCES';
+      throw e;
+    }
+    return origLstat(p2, ...rest);
+  };
+  fs.lstatSync = patched;
+  let inv;
+  try {
+    inv = manifestLib.quarantineInventory(paths);
+  } finally {
+    fs.lstatSync = origLstat;
+  }
+  assert.deepEqual(inv.unreadable, [{ dir: q, code: 'EACCES' }], 'de-duplicated by directory');
+  assert.equal(inv.entries, 2, 'both entries still count — the shelf is not empty');
+});
+
+test('K2 (PR round 1): a blocker keeps its ACTUAL matched path, capitalization included', () => {
+  const paths = qPaths();
+  const up = path.join(paths.state, 'Quarantine');
+  fs.writeFileSync(up, 'not our directory\n');
+  const inv = manifestLib.quarantineInventory(paths);
+  assert.deepEqual(inv.roots, []);
+  assert.deepEqual(inv.blockers, [up], 'the case-sensitive path the user must actually remove');
+  assert.equal(inv.entries, 1);
+});
+
+test('R-Y1 (PR round 2): an unreadable object BELOW a shelf root is reported by the ROOT, at any depth', () => {
+  for (const depth of [1, 2]) {
+    const paths = qPaths();
+    const { q, r } = shelves(paths);
+    fs.mkdirSync(r, { recursive: true, mode: 0o700 });
+    const parent = depth === 1 ? q : path.join(q, 'outer');
+    const nested = path.join(parent, 'zzNESTEDTOKENzz');
+    fs.mkdirSync(nested, { recursive: true, mode: 0o700 });
+    const inv = withReaddirFault(nested, 'EACCES', () => manifestLib.quarantineInventory(paths));
+    assert.deepEqual(inv.unreadable, [{ dir: q, code: 'EACCES' }],
+      `depth ${depth}: the shelf ROOT, never the nested directory's own path`);
+    assert.equal(JSON.stringify(inv).includes('zzNESTEDTOKENzz'), false,
+      `depth ${depth}: the whole returned value carries no path below the root`);
+  }
+});
+
+test('R-Y1 (PR round 2): an unreadable level under redacted/ is reported by REDACTED, its own shelf root', () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  const nested = path.join(r, 'zzREDTOKENzz');
+  fs.mkdirSync(nested, { recursive: true, mode: 0o700 });
+  const inv = withReaddirFault(nested, 'EIO', () => manifestLib.quarantineInventory(paths));
+  assert.deepEqual(inv.unreadable, [{ dir: r, code: 'EIO' }], 'the redacted shelf is a root in its own right');
+  assert.equal(JSON.stringify(inv).includes('zzREDTOKENzz'), false, 'and nothing below it is named');
+  assert.notEqual(inv.unreadable[0].dir, q, 'not attributed to the outer shelf');
+});
+
+test("R-K′ (round 3b): a non-directory at the REDACTED position is an ordinary K2 entry, not a blocker", () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(r, 'x'.repeat(31)); // a FILE where redacted/ would be
+  const inv = manifestLib.quarantineInventory(paths);
+  assert.deepEqual(inv.blockers, [], 'the blocker rule is the <state>/<quarantine> position only');
+  assert.deepEqual(inv.roots, [{ dir: q, entries: 1, bytes: 31 }],
+    'it is one entry under quarantine, and a regular file contributes its size');
+  assert.equal(inv.entries, 1);
+  assert.equal(inv.bytes, 31);
+});
