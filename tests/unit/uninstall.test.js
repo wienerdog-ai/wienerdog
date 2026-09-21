@@ -2997,18 +2997,23 @@ test('[SG-21] AC10 round 20 (X22): a replay-only resolution failure reaches W10,
   const origReverse = manifestMod.reverse;
   manifestMod.reverse = (...a) => {
     const origLstat = fs.lstatSync;
-    fs.lstatSync = (p, ...rest) => {
-      if (p === appDir || p === appDirReal) {
-        const e = new Error('injected EIO');
-        /** @type {any} */ (e).code = 'EIO';
-        throw e;
-      }
-      return origLstat(p, ...rest);
+    const origNative = fs.realpathSync.native;
+    const boom = () => {
+      const e = new Error('injected EIO');
+      /** @type {any} */ (e).code = 'EIO';
+      throw e;
     };
+    // Under X17′ the RESOLUTION is `realpathSync.native`, so the injection has
+    // to answer there as well as at the `lstat` that classifies the component.
+    fs.lstatSync = (p, ...rest) => ((p === appDir || p === appDirReal) ? boom() : origLstat(p, ...rest));
+    fs.realpathSync.native = (p, ...rest) => (
+      (p === appDir || p === appDirReal) ? boom() : origNative(p, ...rest)
+    );
     try {
       return origReverse(...a);
     } finally {
       fs.lstatSync = origLstat;
+      fs.realpathSync.native = origNative;
     }
   };
   let res;
@@ -3202,4 +3207,192 @@ test('[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long vali
   const second = await uninstallInProcess(env, ['--yes']);
   assert.equal(second.err, null,
     `${S}: once the chain and the copy are gone the run COMPLETES (${second.err && second.err.message})`);
+});
+
+// ─── PR-gate round 3 regressions (PR #312 review, 2026-09-21) ───────────────
+// Two more P1 bypasses and two P2 false blocks. The resolver is now the
+// kernel's (X17′), so each of these is a property of `realpathSync.native`
+// rather than of a hand-rolled rule — which is what the freeze buys.
+
+test('[SG-27] round 3 P1 (X17′): a NON-ASCII case alias resolves to the same object and is preserved', () => {
+  const S = 'SG27-non-ascii-case-alias-is-the-kernels';
+  const { paths } = sweepCore();
+  const stored = path.join(paths.logs, 'Ω'); // capital omega, as stored
+  fs.mkdirSync(path.join(stored, 'recovery'), { recursive: true });
+  const note = shelfFile(path.join(stored, 'recovery'), '2026-note.md', 'behind an omega\n');
+  // The link spells the parent with the LOWERCASE omega. On a case-insensitive
+  // volume that is the same directory; the ASCII fold this package used to run
+  // could never see it.
+  fs.symlinkSync(path.join(paths.logs, 'ω', 'recovery'), path.join(paths.state, 'quarantine'));
+  const sameObject = fs.existsSync(path.join(paths.logs, 'ω', 'recovery'));
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  if (sameObject) {
+    assert.equal(readOrNull(note), 'behind an omega\n',
+      `${S}: the original's bytes survive — the kernel resolves the alias to the stored spelling`);
+    assert.equal(fs.existsSync(paths.logs), true, `${S}: and <core>/logs was not recursively deleted`);
+    assert.ok(res.preservedQuarantine.length > 0,
+      `${S}: the sweep reports what it kept (${JSON.stringify(res.preservedQuarantine)})`);
+  } else {
+    assert.equal(readOrNull(note), 'behind an omega\n',
+      `${S}: on a case-SENSITIVE volume the alias names nothing, so nothing reaches the original`);
+  }
+});
+
+test('[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded', async () => {
+  const S = 'SG28-relative-entry-path-is-anchored';
+  const { core, env, q, addEntries } = shelfManifestInstall();
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  fs.symlinkSync(q, path.join(core, 'cache'));
+  // `../cache/n.md` means nothing until it is anchored; walked from an empty
+  // root it used to resolve to `/cache/n.md` and miss every anchor.
+  addEntries([{ kind: 'file', path: path.join('..', 'cache', '2026-note.md') }], true);
+  // The cwd must OUTLIVE the sweep: a directory the uninstall removes would
+  // leave the process without one and break every later test in the file.
+  const here = path.join(core, 'cwd-anchor');
+  fs.mkdirSync(here, { recursive: true });
+  const cwd = process.cwd();
+  const seamFs = fs.rmSync;
+  let note = null;
+  fs.rmSync = (p, ...rest) => {
+    if (!note) note = shelfFile(q, '2026-note.md', 'reached by a relative path\n');
+    return seamFs(p, ...rest);
+  };
+  let res;
+  try {
+    process.chdir(here);
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmSync = seamFs;
+    process.chdir(cwd);
+  }
+  assert.ok(note, `${S}: the fixture completed a preserve before the replay`);
+  assert.equal(readOrNull(note), 'reached by a relative path\n',
+    `${S}: the original's BYTES survive — the relative entry resolves into the shelf`);
+  assert.ok(res.err, `${S}: and the run stops rather than deleting the ledger`);
+});
+
+test('[SG-29] round 3 P2 (X16″): an out-of-root TARGET is not admitted by an in-root SPELLING', async () => {
+  const S = 'SG29-out-of-root-target-is-not-guarded';
+  const { root, core, env, addEntries } = shelfManifestInstall();
+  const outside = path.join(root, 'elsewhere');
+  fs.mkdirSync(outside, { recursive: true });
+  fs.writeFileSync(path.join(outside, 'keep.md'), 'not ours\n');
+  const skills = path.join(core, 'skills');
+  fs.mkdirSync(skills, { recursive: true });
+  const link = path.join(skills, 'wienerdog-retargeted');
+  fs.symlinkSync(outside, link);
+  addEntries([{ kind: 'copied-skill', path: link, hash: 'deadbeef' }]);
+  // The ruling is about `shelfGuarded`, so that is what is pinned directly.
+  const paths = require('../../src/core/paths').getPaths({ ...env });
+  const m = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  const dry = manifestMod.reverse(paths, m, { dryRun: true });
+  assert.equal(dry.shelfGuarded.includes(link), false,
+    `${S}: the entry does NOT enter shelfGuarded — its TARGET is outside every allowed root, so no deleter reaches it (${JSON.stringify(dry.shelfGuarded)})`);
+  const res = await uninstallInProcess(env, ['--yes']);
+  assert.equal(res.err, null,
+    `${S}: and the uninstall COMPLETES — an entry the allowed-root bound rejects must never block it (${res.err && res.err.message})`);
+  assert.equal(readOrNull(path.join(outside, 'keep.md')), 'not ours\n',
+    `${S}: while the out-of-root target is untouched`);
+});
+
+test('[SG-30] round 3 P2 (X4′): a preserved report is RECONCILED, so an emptied case alias never blocks', async () => {
+  const S = 'SG30-preserved-report-is-reconciled';
+  const { core, env } = shelfManifestInstall();
+  const state = path.join(core, 'state');
+  const capital = path.join(state, 'Quarantine');
+  fs.mkdirSync(capital, { recursive: true, mode: 0o700 });
+  const caseInsensitive = fs.existsSync(path.join(state, 'quarantine'));
+  const res = await uninstallInProcess(env, ['--yes']);
+  if (caseInsensitive) {
+    assert.equal(res.err, null,
+      `${S}: an EMPTY shelf under either spelling lets the uninstall COMPLETE — the report must not name a directory the sweep already removed (${res.err && res.err.message})`);
+    assert.equal(fs.existsSync(core), false, `${S}: and the core is gone`);
+  } else {
+    assert.ok(res.err, `${S}: on a case-SENSITIVE volume the fold-ambiguous name is preserved by X12, as designed`);
+    assert.ok(/quarantined copies are still here/.test(res.err.message),
+      `${S}: with the shelf-derived stop — ${res.err.message}`);
+  }
+});
+
+test('[SG-FUZZ] X17′ exactness: walkChain agrees with the kernel over randomised layouts', () => {
+  const S = 'SGFUZZ-walkchain-equals-realpath-native';
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-fuzz-')));
+  // Unicode case pairs, an ASCII pair and a caseless letter, so the fold this
+  // package no longer runs cannot come back by accident.
+  const NAMES = ['a', 'B', 'b', 'ω', 'Ω', 'é', 'É', 'ß', 'x.y', '..z', 'z..'];
+  const dirs = [root];
+  const files = [];
+  const links = [];
+  let seed = 20260921;
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  for (let i = 0; i < 700; i += 1) {
+    const parent = dirs[rnd(dirs.length)];
+    const name = NAMES[rnd(NAMES.length)] + (rnd(4) === 0 ? '' : String(i));
+    const full = path.join(parent, name);
+    if (fs.existsSync(full)) continue;
+    const kind = rnd(10);
+    try {
+      if (kind < 4) { fs.mkdirSync(full); dirs.push(full); }
+      else if (kind < 6) { fs.writeFileSync(full, 'x'); files.push(full); }
+      else {
+        // Targets: absolute, relative, and relative with `..` AFTER a link.
+        const pick = [...dirs, ...files, ...links][rnd(dirs.length + files.length + links.length)];
+        const t = rnd(3) === 0 ? pick
+          : rnd(2) === 0 ? path.relative(parent, pick) || '.'
+            : path.join(path.relative(parent, pick) || '.', '..', path.basename(pick));
+        fs.symlinkSync(t, full); links.push(full);
+      }
+    } catch { /* name clash on a case-insensitive volume — skip */ }
+  }
+  // A deliberate cycle, so the ELOOP arm is exercised rather than merely declared.
+  const c1 = path.join(root, 'cycle-a');
+  const c2 = path.join(root, 'cycle-b');
+  fs.symlinkSync(c2, c1);
+  fs.symlinkSync(c1, c2);
+  links.push(c1, c2);
+  const cwd = process.cwd();
+  const cwds = [root, dirs[1] || root, dirs[2] || root, dirs[3] || root,
+    dirs[4] || root, dirs[5] || root, dirs[6] || root, cwd];
+  const all = [...dirs, ...files, ...links];
+  let probes = 0; let okAgree = 0; let absent = 0; let eloop = 0;
+  try {
+    for (const from of cwds) {
+      process.chdir(from);
+      for (const target of all) {
+        for (const suffix of ['', '/nope', '/..', '/./x', '/../..', '/nope/../also-nope']) {
+          for (const rel of [false, true]) {
+            let p = target + suffix;
+            if (rel) {
+              const r = path.relative(from, target);
+              if (r === '' || r.startsWith('..')) continue;
+              p = r + suffix;
+            }
+            probes += 1;
+            const mine = manifestMod.__walkChainForTest(p);
+            let kernel = null; let kcode = null;
+            try { kernel = fs.realpathSync.native(p); } catch (e) { kcode = e.code; }
+            if (kernel !== null) {
+              assert.equal(mine.state, 'ok', `${S}: the kernel resolved ${p} but walkChain said ${mine.state}`);
+              assert.equal(mine.real, kernel, `${S}: walkChain must equal realpathSync.native for ${p}`);
+              okAgree += 1;
+            } else if (kcode === 'ELOOP') {
+              assert.equal(mine.state, 'unanswerable', `${S}: ELOOP must be UNANSWERABLE for ${p}`);
+              assert.equal(mine.code, 'ELOOP', `${S}: and carry the code for ${p}`);
+              eloop += 1;
+            } else if (kcode === 'ENOENT' || kcode === 'ENOTDIR') {
+              assert.equal(mine.state, 'absent', `${S}: absence is not a failure for ${p}`);
+              absent += 1;
+            }
+          }
+        }
+      }
+    }
+  } finally {
+    process.chdir(cwd);
+  }
+  assert.ok(probes >= 3000, `${S}: at least 3000 probes (ran ${probes})`);
+  assert.ok(okAgree >= 500, `${S}: and a real population of RESOLVING probes (${okAgree})`);
+  assert.ok(absent >= 100, `${S}: and of absent ones (${absent})`);
+  assert.ok(eloop >= 1, `${S}: and the ELOOP arm really fired (${eloop})`);
+  process.stderr.write(`[SG-FUZZ] probes=${probes} agree=${okAgree} absent=${absent} eloop=${eloop}\n`);
 });

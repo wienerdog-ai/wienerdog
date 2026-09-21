@@ -114,6 +114,12 @@
             "[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever"
           ],
           "signal": "SG26-hop-budget-does-not-leak-between-roots"
+        },
+        {
+          "test": [
+            "[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded"
+          ],
+          "signal": "SG28-relative-entry-path-is-anchored"
         }
       ]
     },
@@ -203,7 +209,7 @@
       "criterion": "9",
       "why": "Round 8. Criterion 9 asserts that a shelf file's BYTES survive a replay that was trying to delete them — a survival assertion, and the most easily faked one in this package: it also passes when the forged entry was never added, when the fixture's path did not land under the shelf, when the preserve never completed before the replay, and when reverse() was never reached at all. This is the one mutation that restores shipped main behaviour, so a suite that stays green under it is asserting nothing this package adds.",
       "file": "src/core/manifest.js",
-      "find": "      let guarded = false;\n      if (shelfGuardBound(entry.path, res.real)) {",
+      "find": "      let guarded = false;\n      if (shelfGuardBound(admitPath)) {",
       "replace": "      let guarded = false; /* RP_MUT_QUSE_REVERSE_SHELF_GUARD_DROPPED */\n      if (false) {",
       "marker": "RP_MUT_QUSE_REVERSE_SHELF_GUARD_DROPPED",
       "occurrences": 1,
@@ -244,6 +250,12 @@
             "[SG-23] round 2 finding 1 (X12): a CASE-ALIASED entry path cannot slip past the guard"
           ],
           "signal": "SG23-case-aliased-entry-is-canonicalised"
+        },
+        {
+          "test": [
+            "[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded"
+          ],
+          "signal": "SG28-relative-entry-path-is-anchored"
         }
       ]
     },
@@ -350,6 +362,24 @@
             "[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever"
           ],
           "signal": "SG26-hop-budget-does-not-leak-between-roots"
+        },
+        {
+          "test": [
+            "[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded"
+          ],
+          "signal": "SG28-relative-entry-path-is-anchored"
+        },
+        {
+          "test": [
+            "[SG-29] round 3 P2 (X16″): an out-of-root TARGET is not admitted by an in-root SPELLING"
+          ],
+          "signal": "SG29-out-of-root-target-is-not-guarded"
+        },
+        {
+          "test": [
+            "[SG-30] round 3 P2 (X4′): a preserved report is RECONCILED, so an emptied case alias never blocks"
+          ],
+          "signal": "SG30-preserved-report-is-reconciled"
         }
       ]
     },
@@ -435,8 +465,8 @@
       "criterion": "9",
       "why": "Round 13. Criterion 9's resolution-chain arm asserts that an alias AND an original both survive a reverse() plus two disposer calls plus a retry. Every other declaration in this package mutates a deleter; this one mutates an EXEMPTION, and the loss it restores happens two steps downstream of the mutated line — the unlink is harmless in itself, and only the later recursive delete destroys anything. A suite that checks the shelf immediately after reverse() stays green.",
       "file": "src/core/manifest.js",
-      "find": "      if (guarded) {\n        process.stderr.write(",
-      "replace": "      if (guarded && entry.kind !== 'symlink') { /* RP_MUT_QUSE_SYMLINK_ENTRY_BREAKS_CHAIN */\n        process.stderr.write(",
+      "find": "      if (guarded) {\n        // An UNANSWERABLE entry is preserved because nothing could be",
+      "replace": "      if (guarded && entry.kind !== 'symlink') { /* RP_MUT_QUSE_SYMLINK_ENTRY_BREAKS_CHAIN */\n        // An UNANSWERABLE entry is preserved because nothing could be",
       "marker": "RP_MUT_QUSE_SYMLINK_ENTRY_BREAKS_CHAIN",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -455,8 +485,8 @@
       "criterion": "1",
       "why": "Round 14. Criterion 1's two-hop arm asserts an intermediate link and an original survive two disposer calls and a retry. Under the mutation the first call still passes — it protects logs from its cached anchors — and the loss appears only on the second, after the chain has been broken. So the declaration is what forces the fixture to run the sequence twice rather than once, and it is the only one that distinguishes 'the anchors were right' from 'the closure was computed'.",
       "file": "src/core/manifest.js",
-      "find": "  return { lexical, subtrees, chain: [...chain], existing, unanswerable, dirs: ctx.dirs };",
-      "replace": "  return { lexical, subtrees, chain: [], existing, unanswerable, dirs: ctx.dirs }; /* RP_MUT_QUSE_PROTECTED_SET_IS_ANCHORS_ONLY */",
+      "find": "  return { lexical, subtrees, chain: [...chain], existing, unanswerable };",
+      "replace": "  return { lexical, subtrees, chain: [], existing, unanswerable }; /* RP_MUT_QUSE_PROTECTED_SET_IS_ANCHORS_ONLY */",
       "marker": "RP_MUT_QUSE_PROTECTED_SET_IS_ANCHORS_ONLY",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -608,6 +638,12 @@
             "[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever"
           ],
           "signal": "SG26-hop-budget-does-not-leak-between-roots"
+        },
+        {
+          "test": [
+            "[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded"
+          ],
+          "signal": "SG28-relative-entry-path-is-anchored"
         }
       ]
     },
@@ -665,15 +701,55 @@
       "expectRed": [
         {
           "test": [
-            "[SG-9] AC5 (X10/Y9): a symlinked <state> is NEVER DESCENDED, and the ordinary alias layout still completes"
-          ],
-          "signal": "SG9-symlinked-state-is-never-descended"
-        },
-        {
-          "test": [
             "[SG-22] AC10 round 21 (W10 outstanding filter): the remedy TERMINATES — a cleared path never blocks again"
           ],
           "signal": "SG22-remedy-terminates"
+        }
+      ]
+    },
+    {
+      "id": "quse-dot-dot-name-read-as-traversal",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "1",
+      "why": "PR-gate round 2, finding 3. Criterion 1's containment arms assert that bytes under `<core>/logs` SURVIVE, and every one of them uses an ordinary directory name — so the predicate's `startsWith('..')` shortcut is invisible to all of them. Only a component literally NAMED `..recovery` separates \\\"the target is inside\\\" from \\\"the relative path merely begins with two dots\\\", and under the mutation that name reads as an escape out of `<core>/logs`, the guard permits the recursive delete, and the copy goes with it. Declared because a predicate bug is exactly the shape a survival assertion cannot see.",
+      "file": "src/core/manifest.js",
+      "find": "  return !rel.split(path.sep).includes('..');",
+      "replace": "  return !rel.startsWith('..'); /* RP_MUT_QUSE_DOT_DOT_NAME_READ_AS_TRAVERSAL */",
+      "marker": "RP_MUT_QUSE_DOT_DOT_NAME_READ_AS_TRAVERSAL",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-25] round 2 finding 3 (X18): a component NAMED `..recovery` is not parent traversal"
+          ],
+          "signal": "SG25-dot-dot-prefixed-name-is-not-traversal"
+        }
+      ]
+    },
+    {
+      "id": "quse-relative-entry-not-anchored",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "9",
+      "why": "PR-gate round 3. Criterion 9 asserts that a forged manifest entry cannot reach the shelf, and EVERY fixture for it names an ABSOLUTE path — so an input the resolver never anchors is invisible to all of them. Under the mutation a relative entry is walked from an empty root, resolves to a path no anchor contains, and reaches `rmSync`; the manifest is a plaintext untrusted file, so a relative `path` is a forgery anyone can write. This is the declaration that forces a relative-input fixture to exist at all.",
+      "file": "src/core/manifest.js",
+      "find": "  const abs = path.isAbsolute(p) ? p : anchorRelative(p);",
+      "replace": "  const abs = path.isAbsolute(p) ? p : path.parse(process.cwd()).root + p; /* RP_MUT_QUSE_RELATIVE_ENTRY_NOT_ANCHORED */",
+      "marker": "RP_MUT_QUSE_RELATIVE_ENTRY_NOT_ANCHORED",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded"
+          ],
+          "signal": "SG28-relative-entry-path-is-anchored"
+        },
+        {
+          "test": [
+            "[SG-FUZZ] X17′ exactness: walkChain agrees with the kernel over randomised layouts"
+          ],
+          "signal": "SGFUZZ-walkchain-equals-realpath-native"
         }
       ]
     }
