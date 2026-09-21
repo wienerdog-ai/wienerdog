@@ -3306,3 +3306,16 @@ test('R-Y1 (PR round 2): an unreadable level under redacted/ is reported by REDA
   assert.equal(JSON.stringify(inv).includes('zzREDTOKENzz'), false, 'and nothing below it is named');
   assert.notEqual(inv.unreadable[0].dir, q, 'not attributed to the outer shelf');
 });
+
+test("R-K′ (round 3b): a non-directory at the REDACTED position is an ordinary K2 entry, not a blocker", () => {
+  const paths = qPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(r, 'x'.repeat(31)); // a FILE where redacted/ would be
+  const inv = manifestLib.quarantineInventory(paths);
+  assert.deepEqual(inv.blockers, [], 'the blocker rule is the <state>/<quarantine> position only');
+  assert.deepEqual(inv.roots, [{ dir: q, entries: 1, bytes: 31 }],
+    'it is one entry under quarantine, and a regular file contributes its size');
+  assert.equal(inv.entries, 1);
+  assert.equal(inv.bytes, 31);
+});

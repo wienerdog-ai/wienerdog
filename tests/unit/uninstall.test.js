@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -1707,6 +1707,25 @@ function withQuarantineLstatFault(target, code, fn) {
   }
 }
 
+/**
+ * The two remedy lines THIS HOST's block builder emits for `target` — ruling
+ * **R-QU7′**: a CLI-level assertion selects its expected lines by
+ * `process.platform` instead of hard-coding the POSIX pair, or it fails on
+ * win32 for a reason that has nothing to do with what it is testing. Derived
+ * from the product's own builder, so the expectation cannot drift from it.
+ * @param {string} target @returns {string[]}
+ */
+function expectedRemedyLines(target) {
+  const inv = {
+    roots: [{ dir: target, entries: 1, bytes: 1 }],
+    entries: 1, bytes: 1, unreadable: [], blockers: [],
+  };
+  return uninstallMod
+    .quarantineBlock(inv, /** @type {any} */ ({ state: target }), process.platform)
+    .split('\n')
+    .filter((l) => /^ {2}(mv|rm -rf|Move-Item|Remove-Item) /.test(l));
+}
+
 test('[QU-1] AC1 (W3/W4): a non-empty shelf makes uninstall REFUSE — nothing removed, and the message carries all five things', () => {
   const S = 'QU1-non-empty-shelf-must-refuse';
   const { core, env, q, r } = shelfInstall();
@@ -1730,8 +1749,9 @@ test('[QU-1] AC1 (W3/W4): a non-empty shelf makes uninstall REFUSE — nothing r
     `${S}: (4) the Table O row O8 hedge, verbatim`
   );
   assert.doesNotMatch(msg, /\bis the only copy\b/, `${S}: (4) and never strengthened to "is"`);
-  assert.ok(msg.includes(`  mv '${q}' ~/wienerdog-quarantine`), `${S}: (5) the move line`);
-  assert.ok(msg.includes(`  rm -rf '${q}'`), `${S}: (5) the delete line`);
+  const [moveLine, deleteLine] = expectedRemedyLines(q);
+  assert.ok(msg.includes(moveLine), `${S}: (5) the move line, in THIS host's shell — ${moveLine}`);
+  assert.ok(msg.includes(deleteLine), `${S}: (5) the delete line, likewise — ${deleteLine}`);
   assert.ok(msg.includes('then run `wienerdog uninstall` again'), `${S}: (5) and the retry`);
   assert.ok(msg.includes('docs/runbooks/secret-incident.md'), `${S}: (5) with the runbook pointer`);
 });
@@ -1986,8 +2006,9 @@ test('[QU-11] K2 (PR round 1): a FILE sitting where the shelf goes is named BY I
   const res = runUninstallCli(['uninstall', '--yes'], env);
 
   assert.equal(res.status, 1, `${S}: it blocks the uninstall`);
-  assert.ok(res.stderr.includes(`  rm -rf '${up}'`), `${S}: the remedy names the ACTUAL path — ${res.stderr}`);
-  assert.ok(res.stderr.includes(`  mv '${up}' ~/wienerdog-quarantine`), `${S}: both remedy lines do`);
+  const [blockerMove, blockerDelete] = expectedRemedyLines(up);
+  assert.ok(res.stderr.includes(blockerDelete), `${S}: the remedy names the ACTUAL path — ${res.stderr}`);
+  assert.ok(res.stderr.includes(blockerMove), `${S}: both remedy lines do`);
   assert.ok(res.stderr.includes(`  ${up} — not a folder`), `${S}: and it is listed, so the user can see it`);
   assert.ok(fs.existsSync(up), `${S}: the remedy names something that EXISTS`);
   assert.deepEqual(snapshot(core), before, `${S}: nothing removed`);
@@ -2060,9 +2081,14 @@ test('[QU-13] R-Y1 (PR round 2): an unreadable NESTED DIRECTORY is reported by i
   }
 });
 
-test('[QU-14] R-W4-win32 (PR round 2): the remedy lines are the HOST shell’s, and both branches escape their own quotes', () => {
+test('[QU-14] R-W4-win32 (PR rounds 2/3b): the remedy lines are the HOST shell’s, and each branch escapes EVERY quote ITS parser honours', () => {
   const S = 'QU14-remedy-lines-follow-the-host-shell';
-  const target = "/h/it's a $x `id` \"d\" dir/state/quarantine";
+  // Every character that ends a quoted string in one shell or the other, in one
+  // path: the ASCII apostrophe, `$`, a backtick, a double quote, and the four
+  // code points PowerShell ALSO closes a single-quoted string on — U+2018 ‘,
+  // U+2019 ’ (the `O’Connor` case, which is an ordinary folder name, not a
+  // contrived one), U+201A ‚ and U+201B ‛.
+  const target = "/h/O’Connor's ‘x‛ ‚y $z `id` \"d\"/state/quarantine";
   const paths = /** @type {any} */ ({ state: '/h/state' });
   const inv = {
     roots: [{ dir: target, entries: 1, bytes: 9 }],
@@ -2071,26 +2097,89 @@ test('[QU-14] R-W4-win32 (PR round 2): the remedy lines are the HOST shell’s, 
   const lines = (platform) =>
     uninstallMod.quarantineBlock(inv, paths, platform)
       .split('\n')
-      .filter((l) => l.startsWith('  mv ') || l.startsWith('  rm -rf ') || l.startsWith('  Move-Item ') || l.startsWith('  Remove-Item '));
+      .filter((l) => /^ {2}(mv|rm -rf|Move-Item|Remove-Item) /.test(l));
 
+  // ── POSIX branch. String assertions run on EVERY host (R-QU7′); only the real
+  //    shell invocation below is guarded.
   for (const posix of ['darwin', 'linux']) {
     const [mv, rm] = lines(posix);
-    assert.equal(mv, `  mv '/h/it'\\''s a $x \`id\` "d" dir/state/quarantine' ~/wienerdog-quarantine`,
-      `${S}: ${posix} — POSIX single-quote escaping, ' -> '\\''`);
-    assert.equal(rm, `  rm -rf '/h/it'\\''s a $x \`id\` "d" dir/state/quarantine'`, `${S}: ${posix} — and the delete line`);
-    // A real shell must parse the token back to the literal path.
-    const token = rm.slice('  rm -rf '.length);
-    assert.equal(execFileSync('/bin/sh', ['-c', `printf %s ${token}`], { encoding: 'utf8' }), target,
-      `${S}: ${posix} — /bin/sh parses it back to the literal path`);
+    const posixQuoted = `'${target.split("'").join("'\\''")}'`;
+    assert.equal(mv, `  mv ${posixQuoted} ~/wienerdog-quarantine`, `${S}: ${posix} — POSIX single-quote escaping, ' -> '\\''`);
+    assert.equal(rm, `  rm -rf ${posixQuoted}`, `${S}: ${posix} — and the delete line`);
+    assert.equal(rm.includes('Remove-Item'), false, `${S}: ${posix} gets no PowerShell command`);
   }
 
+  // ── win32 branch. All five delimiters doubled, and ONLY those.
   const [move, remove] = lines('win32');
-  assert.equal(move, `  Move-Item -LiteralPath '/h/it''s a $x \`id\` "d" dir/state/quarantine' -Destination "$HOME\\wienerdog-quarantine"`,
-    `${S}: win32 — PowerShell single-quote escaping, ' -> ''`);
-  assert.equal(remove, `  Remove-Item -LiteralPath '/h/it''s a $x \`id\` "d" dir/state/quarantine' -Recurse -Force`,
-    `${S}: win32 — and the delete line`);
+  let psQuoted = '';
+  for (const ch of target) psQuoted += ["'", '‘', '’', '‚', '‛'].includes(ch) ? ch + ch : ch;
+  psQuoted = `'${psQuoted}'`;
+  assert.equal(move, `  Move-Item -LiteralPath ${psQuoted} -Destination "$HOME\\wienerdog-quarantine"`,
+    `${S}: win32 — every PowerShell quote delimiter doubled`);
+  assert.equal(remove, `  Remove-Item -LiteralPath ${psQuoted} -Recurse -Force`, `${S}: win32 — and the delete line`);
   assert.equal(move.includes('mv '), false, `${S}: win32 gets no POSIX command`);
-  assert.equal(lines('darwin').join('\n').includes('Remove-Item'), false, `${S}: and darwin gets no PowerShell one`);
-  // Both branches quote the SAME path, so neither can silently target another.
+  for (const ch of ['‘', '’', '‚', '‛']) {
+    assert.ok(remove.includes(ch + ch), `${S}: win32 — U+${ch.codePointAt(0).toString(16)} is doubled, not passed through`);
+  }
+
+  // ── Both branches name the SAME target, so neither can silently address
+  //    another path.
   assert.ok(move.includes('/state/quarantine') && lines('darwin')[0].includes('/state/quarantine'), `${S}: same target`);
+});
+
+test('[QU-14a] R-W4-win32: a REAL /bin/sh parses the POSIX remedy token back to the literal path', (t) => {
+  // The rule is asserted everywhere by [QU-14]; only this FIXTURE is host-shaped
+  // — there is no /bin/sh on win32 (R-QU7′, same guard as [QU-12]).
+  if (process.platform === 'win32') return t.skip('needs a POSIX shell');
+  const S = 'QU14a-posix-remedy-parses-in-a-real-shell';
+  const target = "/h/O’Connor's ‘x‛ $z `id` \"d\"/state/quarantine";
+  const inv = { roots: [{ dir: target, entries: 1, bytes: 9 }], entries: 1, bytes: 9, unreadable: [], blockers: [] };
+  const rm = uninstallMod.quarantineBlock(inv, /** @type {any} */ ({ state: '/h/state' }), 'darwin')
+    .split('\n').find((l) => l.startsWith('  rm -rf '));
+  const token = rm.slice('  rm -rf '.length);
+  assert.equal(execFileSync('/bin/sh', ['-c', `printf %s ${token}`], { encoding: 'utf8' }), target,
+    `${S}: /bin/sh parses the printed token back to the literal path`);
+});
+
+test('[QU-14b] R-W4-win32 (round 3b): a REAL PowerShell parser reads -LiteralPath back as the literal path', (t) => {
+  // Host-shaped FIXTURE, not a host-shaped rule: skipped where `pwsh` is not on
+  // PATH. Where it is, this is the assertion that actually caught the defect —
+  // doubling only U+0027 left `O’Connor` closing the string early, and
+  // ParseInput reported "The string is missing the terminator: '." (measured).
+  const pwsh = (() => {
+    const probe = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['pwsh'], { encoding: 'utf8' });
+    return probe.status === 0 && String(probe.stdout).trim() ? String(probe.stdout).trim().split('\n')[0] : null;
+  })();
+  if (!pwsh) return t.skip('pwsh is not on PATH');
+  const S = 'QU14b-powershell-parses-literalpath';
+  const target = "/h/O’Connor's ‘x‛ ‚y $z `id` \"d\"/state/quarantine";
+  const inv = { roots: [{ dir: target, entries: 1, bytes: 9 }], entries: 1, bytes: 9, unreadable: [], blockers: [] };
+  const remove = uninstallMod.quarantineBlock(inv, /** @type {any} */ ({ state: '/h/state' }), 'win32')
+    .split('\n').find((l) => l.startsWith('  Remove-Item ')).trim();
+
+  // The line travels through a FILE, never through an argv or a shell, so
+  // nothing between this test and the parser can re-quote it.
+  const scriptDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-psparse-'));
+  const lineFile = path.join(scriptDir, 'line.txt');
+  fs.writeFileSync(lineFile, remove, 'utf8');
+  const script = [
+    '$line = Get-Content -Raw -LiteralPath $env:WD_LINE_FILE',
+    '$errs = $null; $toks = $null',
+    '$ast = [System.Management.Automation.Language.Parser]::ParseInput($line, [ref]$toks, [ref]$errs)',
+    'if ($errs.Count) { Write-Output ("ERRORS=" + $errs.Count); exit 0 }',
+    '$cmd = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)',
+    '$els = $cmd.CommandElements',
+    'for ($i = 0; $i -lt $els.Count; $i++) {',
+    '  if ($els[$i].ToString() -eq "-LiteralPath") { Write-Output ("LITERALPATH=" + $els[$i + 1].Value) }',
+    '}',
+  ].join('\n');
+  const r = spawnSync(pwsh, ['-NoProfile', '-Command', script], {
+    encoding: 'utf8',
+    env: { ...process.env, WD_LINE_FILE: lineFile },
+  });
+  assert.equal(r.status, 0, `${S}: pwsh ran — ${r.stderr}`);
+  const out = String(r.stdout);
+  assert.equal(out.includes('ERRORS='), false, `${S}: the line PARSES — ${out}${r.stderr}`);
+  assert.ok(out.includes(`LITERALPATH=${target}`),
+    `${S}: and -LiteralPath is the literal target, not a truncated or re-parsed one — ${out}`);
 });

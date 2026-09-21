@@ -327,12 +327,24 @@ function shQuote(p) {
   return `'${String(p).split("'").join("'\\''")}'`;
 }
 
+/** The code points PowerShell accepts as a single-quote STRING DELIMITER, not
+ *  just the ASCII one: the parser also closes a single-quoted string on the
+ *  curly quotes U+2018 ‘, U+2019 ’, U+201A ‚ and U+201B ‛. A path holding any of
+ *  them — `O’Connor` is the ordinary case, not a contrived one, because macOS
+ *  and Windows both let a user type a curly apostrophe into a folder name —
+ *  would otherwise END the quoting early and leave the rest of the path as bare
+ *  PowerShell code. Each is escaped the same way: by DOUBLING it. */
+const PS_QUOTE_CHARS = ["'", '‘', '’', '‚', '‛'];
+
 /** PowerShell single-quote a path. Same reasoning as `shQuote`, different
- *  escape: in PowerShell a literal single quote inside a single-quoted string
- *  is written by DOUBLING it, and `-LiteralPath` then also stops `[` and `]`
- *  being read as wildcards. @param {string} p @returns {string} */
+ *  escape: a literal quote inside a single-quoted string is written by DOUBLING
+ *  it, and `-LiteralPath` then also stops `[` and `]` being read as wildcards.
+ *  Every member of `PS_QUOTE_CHARS` is doubled, not just U+0027.
+ *  @param {string} p @returns {string} */
 function psQuote(p) {
-  return `'${String(p).split("'").join("''")}'`;
+  let out = '';
+  for (const ch of String(p)) out += PS_QUOTE_CHARS.includes(ch) ? ch + ch : ch;
+  return `'${out}'`;
 }
 
 /**
