@@ -739,7 +739,7 @@ async function run(argv, opts = {}) {
     throw new WienerdogError(
       'uninstall stopped — nothing further was removed. These could not be read, so Wienerdog '
         + `cannot tell what deleting them would reach:\n\n${unresolvedHeld
-          .map((u) => `  ${u.path} (${u.code})`)
+          .map((u) => `  ${u.path} (${manifestLib.spellResolutionCode(u.code)})`)
           .join('\n')}\n\n`
         + `Left the install manifest, config.yaml and ${paths.core} in place so a retry stays `
         + 'safe. Fix the permission or disk problem, then re-run — re-running is safe: '

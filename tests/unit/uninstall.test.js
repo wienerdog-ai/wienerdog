@@ -3507,20 +3507,27 @@ test('[SG-33] round 4 P1 #3 (X17″): each shelf root gets its OWN hop budget', 
   }
   fs.rmSync(paths.state, { recursive: true, force: true });
   fs.symlinkSync(target, paths.state);
-  // The REDACTED root's walk is the second one; under a shared budget it is
-  // already exhausted by the 21 links above and never reaches this link.
-  const recovery = path.join(paths.logs, 'recovery');
+  // The REDACTED root's walk is the SECOND one, and its intermediate link sits
+  // INSIDE a directory the mechanics sweep deletes recursively. Only collecting
+  // that link makes `<core>/schedules` block from above; a second root whose
+  // walk never got there loses the link and dangles the chain.
+  const recovery = path.join(core, 'store', 'recovery');
   fs.mkdirSync(recovery, { recursive: true });
-  const appLink = path.join(core, 'app-link');
-  fs.symlinkSync(recovery, appLink);
+  const jump = path.join(core, 'schedules', 'jump');
+  fs.symlinkSync(recovery, jump);
   fs.mkdirSync(path.join(realState, 'quarantine'), { recursive: true, mode: 0o700 });
-  fs.symlinkSync(appLink, path.join(realState, 'quarantine', 'redacted'));
+  fs.symlinkSync(jump, path.join(realState, 'quarantine', 'redacted'));
   const note = shelfFile(recovery, '2026-note.md', 'on the second root chain\n');
+  const prot = manifestMod.__shelfProtectionForTest(paths);
+  assert.equal(prot.unanswerable, null,
+    `${S}: each root's walk has budget of its own (${JSON.stringify(prot.unanswerable)})`);
   const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
-  assert.equal(fs.existsSync(appLink), true,
+  assert.equal(isLink(jump), true,
     `${S}: the intermediate link on the SECOND root's chain was collected, so it survives`);
+  assert.equal(fs.existsSync(path.join(core, 'schedules')), true,
+    `${S}: and the swept directory HOLDING it is blocked from above rather than removed`);
   assert.equal(readOrNull(note), 'on the second root chain\n',
-    `${S}: and <core>/logs was not swept — the original's bytes survive`);
+    `${S}: the original's bytes survive`);
   assert.ok(res.preservedQuarantine.length > 0,
     `${S}: the sweep reports what it kept (${JSON.stringify(res.preservedQuarantine)})`);
 });
@@ -3551,4 +3558,190 @@ test('[SG-34] round 4 P2 (X15′): the planner applies the SAME retention as the
     `${S}: and predicts exactly what it removes`);
   assert.ok(plan.preservedQuarantine.length > 0,
     `${S}: and on this fixture that is a NON-EMPTY set (${JSON.stringify(strip(plan.preservedQuarantine, planPaths.core))})`);
+});
+
+/** A core that is ITSELF a symlink, plus an N-link relative chain from
+ *  `<state>/quarantine` to a real directory holding the user's copy. Every hop
+ *  is a DISTINCT link, and reaching each one re-walks the core link — which is
+ *  exactly what used to be charged again on every hop (X17‴). */
+function symlinkedCoreChain(hops) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-sg-')));
+  const real = path.join(root, 'real-wd');
+  const core = path.join(root, 'wd');
+  fs.mkdirSync(real, { recursive: true });
+  fs.symlinkSync(real, core); // <core> IS a link, re-traversed by every relative target
+  const paths = getPaths({
+    HOME: root,
+    WIENERDOG_HOME: core,
+    XDG_CONFIG_HOME: path.join(root, '.config'),
+    CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
+    CODEX_HOME: path.join(root, 'absent-codex'),
+  });
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.mkdirSync(paths.logs, { recursive: true });
+  fs.mkdirSync(paths.secrets, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(paths.logs, 'run.log'), 'log\n');
+  // The far end: a real directory with the user's quarantined copy in it.
+  const store = path.join(paths.state, 'store');
+  const note = shelfFile(store, '2026-note.md', 'at the end of a long chain\n');
+  // `h0 -> h1 -> … -> h(hops-2) -> store`, then `quarantine -> h0`. Relative
+  // targets throughout, so each resolution walks the core link again.
+  for (let i = hops - 2; i >= 0; i -= 1) {
+    const next = i === hops - 2 ? 'store' : `h${i + 1}`;
+    fs.symlinkSync(next, path.join(paths.state, `h${i}`));
+  }
+  fs.symlinkSync('h0', path.join(paths.state, 'quarantine'));
+  return { root, core, paths, note, store };
+}
+
+test('[SG-35] round 4 P1 (X17‴): a hop budget that expires is UNANSWERABLE, never a completed walk', () => {
+  const S = 'SG35-budget-exhaustion-fails-closed';
+  // 45 DISTINCT links: past the 40-hop budget however the hops are counted, so
+  // the collection cannot finish and the answer must be "I could not verify
+  // this", not the kernel's cheerful `ok`.
+  const { paths, note } = symlinkedCoreChain(45);
+  const walked = manifestMod.__walkChainForTest(path.join(paths.state, 'quarantine'));
+  assert.equal(walked.state, 'unanswerable',
+    `${S}: a walk cut short by the budget is UNANSWERABLE, never \`ok\` (${JSON.stringify(walked)})`);
+  assert.equal(walked.code, 'EBUDGET',
+    `${S}: with the budget's own code — the resolver answers before it asks the kernel`);
+  assert.equal(manifestMod.spellResolutionCode('EBUDGET'), 'chain too long to verify',
+    `${S}: which the report spells in words, not as an invented errno`);
+  const prot = manifestMod.__shelfProtectionForTest(paths);
+  assert.notEqual(prot.unanswerable, null,
+    `${S}: and the protected set carries the open question rather than a partial closure`);
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note), 'at the end of a long chain\n',
+    `${S}: and the copy at the far end of the chain still has its bytes`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: the sweep preserves and REPORTS rather than deleting what it could not verify`);
+});
+
+test('[SG-36] round 4 P1 (X17‴): a kernel-valid chain on a symlinked core stays UNDER budget and completes', () => {
+  const S = 'SG36-distinct-link-hops-only';
+  // 25 links — the kernel resolves this without complaint, so a protected set
+  // that reported "too long" here would refuse an install the OS is happy with.
+  // Before X17‴ the core link was charged again on every hop: ~50 charges.
+  const { paths, note, store } = symlinkedCoreChain(25);
+  const prot = manifestMod.__shelfProtectionForTest(paths);
+  assert.equal(prot.unanswerable, null,
+    `${S}: 25 distinct hops is under the budget (got ${JSON.stringify(prot.unanswerable)})`);
+  assert.equal(prot.existing, true, `${S}: and the shelf resolved, so the walk really did finish`);
+  const walked = manifestMod.__walkChainForTest(path.join(paths.state, 'quarantine'));
+  assert.equal(walked.state, 'ok', `${S}: walkChain agrees with the kernel (${JSON.stringify(walked)})`);
+  assert.equal(walked.real, fs.realpathSync.native(store), `${S}: and lands where the kernel lands`);
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note), 'at the end of a long chain\n', `${S}: the copy survives the sweep`);
+  assert.equal(res.removed.includes(paths.logs), true,
+    `${S}: and an ordinary uninstall still proceeds — logs/ is gone (${JSON.stringify(res.removed)})`);
+});
+
+test('[SG-37] round 4 P2: the empty-directory climb never removes a CHAIN NODE', () => {
+  const S = 'SG37-climb-preserves-a-chain-node';
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-sg-')));
+  const real = path.join(root, 'real-wd');
+  const core = path.join(root, 'wd');
+  fs.mkdirSync(path.join(real, 'state', 'quarantine', 'redacted'), { recursive: true });
+  // The core link's own target TRAVELS THROUGH the shelf and climbs back out, so
+  // `redacted` is a class (ii) chain node: remove it and the core link dangles.
+  fs.symlinkSync(
+    [real, 'state', 'quarantine', 'redacted', '..', '..', '..'].join(path.sep),
+    core
+  );
+  const paths = getPaths({
+    HOME: root,
+    WIENERDOG_HOME: core,
+    XDG_CONFIG_HOME: path.join(root, '.config'),
+    CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
+    CODEX_HOME: path.join(root, 'absent-codex'),
+  });
+  fs.mkdirSync(paths.logs, { recursive: true });
+  fs.writeFileSync(path.join(paths.logs, 'run.log'), 'log\n');
+  const redacted = path.join(real, 'state', 'quarantine', 'redacted');
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(fs.existsSync(redacted), true,
+    `${S}: the empty shelf the core link stands on is NOT rmdir'd`);
+  assert.equal(isLink(core), true, `${S}: so the core link still points at something`);
+  assert.equal(fs.realpathSync.native(core), real, `${S}: and still resolves to the physical core`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: and the run REPORTS what it kept instead of claiming completion (${JSON.stringify(res.preservedQuarantine)})`);
+});
+
+test('[SG-38] round 4 P2 (X15′): the planner discounts only the child it predicted removing', () => {
+  const S = 'SG38-planner-discounts-one-predicted-child';
+  // (a) A FILE named `redacted` INSIDE the redacted shelf. Nothing removes it,
+  //     so the live climb takes ENOTEMPTY at the first level and stops — but a
+  //     filter keyed on the fold-equal NAME discounted it and predicted the
+  //     whole tree away. This arm is filesystem-independent.
+  const a = sweepCore();
+  const aRed = path.join(a.paths.state, 'quarantine', 'redacted');
+  shelfFile(aRed, 'redacted', 'a copy that happens to be named after its shelf\n');
+  const aPlan = manifestMod.disposeCoreMechanics(a.paths, { dryRun: true, vaultPath: null });
+  const aLive = manifestMod.disposeCoreMechanics(a.paths, { dryRun: false, vaultPath: null });
+  assert.equal(aPlan.removed.includes(a.paths.state), aLive.removed.includes(a.paths.state),
+    `${S}: plan and live agree about <state> (plan=${JSON.stringify(aPlan.removed)}, live=${JSON.stringify(aLive.removed)})`);
+  assert.equal(aLive.removed.includes(a.paths.state), false,
+    `${S}: and neither removes it — the shelf still holds a file`);
+  assert.equal(readOrNull(path.join(aRed, 'redacted')), 'a copy that happens to be named after its shelf\n',
+    `${S}: whose bytes are untouched`);
+  // (b) The same discount, one level up, on a case-SENSITIVE volume only: a
+  //     second directory `REDACTED` that no climb step removes.
+  const b = sweepCore();
+  const bq = path.join(b.paths.state, 'quarantine');
+  fs.mkdirSync(path.join(bq, 'redacted'), { recursive: true });
+  fs.mkdirSync(path.join(bq, 'REDACTED'), { recursive: true });
+  const caseSensitive = fs.readdirSync(bq).length === 2;
+  const bPlan = manifestMod.disposeCoreMechanics(b.paths, { dryRun: true, vaultPath: null });
+  const bLive = manifestMod.disposeCoreMechanics(b.paths, { dryRun: false, vaultPath: null });
+  assert.equal(bPlan.removed.includes(b.paths.state), bLive.removed.includes(b.paths.state),
+    `${S}: plan and live agree there too (plan=${JSON.stringify(bPlan.removed)}, live=${JSON.stringify(bLive.removed)})`);
+  if (caseSensitive) {
+    assert.equal(bLive.removed.includes(b.paths.state), false,
+      `${S}: and on ext4 neither removes it — REDACTED is a leftover the climb cannot take`);
+  } else {
+    assert.equal(bLive.removed.includes(b.paths.state), true,
+      `${S}: while on a case-INSENSITIVE volume the two spellings are ONE empty shelf, and both take it`);
+  }
+});
+
+test('[SG-39] AC4 round 4 (W8′): the closing summary prints EVERY preserved path, one per line', async () => {
+  const S = 'SG39-summary-lists-every-preserved-path';
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const manifest = path.join(core, 'install-manifest.json');
+  const state = path.join(core, 'state');
+  // `R-post-ledger-preserve` is the ONE path that reaches the closing summary
+  // rather than Table W row W10's stop: the copy lands after the retry ledger is
+  // gone, so the second sweep preserves and the run still completes. Two
+  // directories are preserved — a fold-equal child and the level the climb
+  // stops at — and a summary that named only the first would strand the other.
+  const orig = fs.rmSync;
+  let planted = false;
+  fs.rmSync = (p, ...rest) => {
+    const r = orig(p, ...rest);
+    if (!planted && !fs.existsSync(manifest)) {
+      planted = true;
+      shelfFile(path.join(state, 'Quarantine'), '2026-note.md', 'after the ledger\n');
+    }
+    return r;
+  };
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmSync = orig;
+  }
+  assert.equal(planted, true, `${S}: the seam fired — the copy really did land after the ledger`);
+  assert.equal(res.err, null, `${S}: and the run COMPLETES rather than stopping (${res.err && res.err.message})`);
+  const lines = res.out.split('\n');
+  const header = lines.findIndex((l) => l.includes('your quarantined copies are still in it'));
+  assert.notEqual(header, -1, `${S}: the W8 arm is the one that printed:\n${res.out}`);
+  const listed = [];
+  for (let i = header + 1; i < lines.length && lines[i].startsWith('  '); i += 1) listed.push(lines[i].trim());
+  assert.ok(listed.length >= 2,
+    `${S}: EVERY preserved path is on a line of its own, not just the first (${JSON.stringify(listed)})`);
+  assert.equal(listed.length, new Set(listed).size, `${S}: each exactly once`);
+  for (const p of listed) {
+    assert.equal(fs.existsSync(p), true, `${S}: and each named path really is still there — ${p}`);
+  }
 });

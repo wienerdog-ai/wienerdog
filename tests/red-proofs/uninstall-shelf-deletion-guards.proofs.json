@@ -15,36 +15,6 @@
       "expectRed": [
         {
           "test": [
-            "[SG-1] AC1 (X1/X4): a shelf entry SURVIVES the live sweep, on each shelf in turn, while every mechanics dir still goes"
-          ],
-          "signal": "SG1-shelf-entries-survive-the-sweep"
-        },
-        {
-          "test": [
-            "[SG-2] AC1 round 11 (X18): no recursive delete reaches the shelf THROUGH AN ALIAS, and the target is asserted before the link"
-          ],
-          "signal": "SG2-no-recursive-delete-through-an-alias"
-        },
-        {
-          "test": [
-            "[SG-3] AC1 round 12 (X19): a <state> alias covering a shelf is RETAINED across BOTH live sweeps"
-          ],
-          "signal": "SG3-state-alias-retained-across-both-sweeps"
-        },
-        {
-          "test": [
-            "[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes"
-          ],
-          "signal": "SG4-chain-closure-protects-the-intermediate-link"
-        },
-        {
-          "test": [
-            "[SG-8] AC4 (X1/X3/W8): a copy completing BETWEEN the child removals and the rmdir climb survives, on both live sweeps"
-          ],
-          "signal": "SG8-interleaved-copy-survives"
-        },
-        {
-          "test": [
             "[SG-10] AC5 round 3 (X11): validation runs TOP-DOWN — an external `redacted/` under a symlinked shelf root is never removed"
           ],
           "signal": "SG10-validation-runs-top-down"
@@ -105,6 +75,12 @@
         },
         {
           "test": [
+            "[SG-1] AC1 (X1/X4): a shelf entry SURVIVES the live sweep, on each shelf in turn, while every mechanics dir still goes"
+          ],
+          "signal": "SG1-shelf-entries-survive-the-sweep"
+        },
+        {
+          "test": [
             "[SG-20] AC10 (W10): the MANIFEST survives a sweep that preserved something, and is deleted when nothing was"
           ],
           "signal": "SG20-manifest-survives-a-preserving-sweep"
@@ -135,9 +111,63 @@
         },
         {
           "test": [
+            "[SG-2] AC1 round 11 (X18): no recursive delete reaches the shelf THROUGH AN ALIAS, and the target is asserted before the link"
+          ],
+          "signal": "SG2-no-recursive-delete-through-an-alias"
+        },
+        {
+          "test": [
             "[SG-34] round 4 P2 (X15′): the planner applies the SAME retention as the live sweep"
           ],
           "signal": "SG34-planner-applies-retention"
+        },
+        {
+          "test": [
+            "[SG-35] round 4 P1 (X17‴): a hop budget that expires is UNANSWERABLE, never a completed walk"
+          ],
+          "signal": "SG35-budget-exhaustion-fails-closed"
+        },
+        {
+          "test": [
+            "[SG-36] round 4 P1 (X17‴): a kernel-valid chain on a symlinked core stays UNDER budget and completes"
+          ],
+          "signal": "SG36-distinct-link-hops-only"
+        },
+        {
+          "test": [
+            "[SG-37] round 4 P2: the empty-directory climb never removes a CHAIN NODE"
+          ],
+          "signal": "SG37-climb-preserves-a-chain-node"
+        },
+        {
+          "test": [
+            "[SG-38] round 4 P2 (X15′): the planner discounts only the child it predicted removing"
+          ],
+          "signal": "SG38-planner-discounts-one-predicted-child"
+        },
+        {
+          "test": [
+            "[SG-39] AC4 round 4 (W8′): the closing summary prints EVERY preserved path, one per line"
+          ],
+          "signal": "SG39-summary-lists-every-preserved-path"
+        },
+        {
+          "test": [
+            "[SG-3] AC1 round 12 (X19): a <state> alias covering a shelf is RETAINED across BOTH live sweeps"
+          ],
+          "signal": "SG3-state-alias-retained-across-both-sweeps"
+        },
+        {
+          "test": [
+            "[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes"
+          ],
+          "signal": "SG4-chain-closure-protects-the-intermediate-link"
+        },
+        {
+          "test": [
+            "[SG-8] AC4 (X1/X3/W8): a copy completing BETWEEN the child removals and the rmdir climb survives, on both live sweeps"
+          ],
+          "signal": "SG8-interleaved-copy-survives"
         }
       ]
     },
@@ -207,8 +237,8 @@
       "criterion": "8",
       "why": "Round 7. Criterion 8's populated arm asserts that the plan does NOT predict removal — an absence assertion over one line of output, which goes green whenever the fixture's shelf was empty, the wrong stream was captured, or the plan was never printed. The other horn (skip the syscalls, never predict <state>) is caught by criterion 3's byte-identity; this declaration covers the horn nothing else reaches.",
       "file": "src/core/manifest.js",
-      "find": "      const leftovers = level === state\n        ? names.filter((n) => asciiFold(n) !== QUARANTINE_DIRNAME && !removableChildren.includes(n))\n        : names.filter((n) => asciiFold(n) !== QUARANTINE_REDACTED_DIRNAME);",
-      "replace": "      const leftovers = []; /* RP_MUT_QUSE_DRY_RUN_PLANS_BY_ASSUMING */ void names;",
+      "find": "      const leftovers = names.filter((n) => {\n        if (predictedChild !== null && n === predictedChild) return false;\n        if (level === state && removableChildren.includes(n)) return false;\n        return true;\n      });",
+      "replace": "      const leftovers = []; /* RP_MUT_QUSE_DRY_RUN_PLANS_BY_ASSUMING */ void names; void predictedChild;",
       "marker": "RP_MUT_QUSE_DRY_RUN_PLANS_BY_ASSUMING",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -218,6 +248,12 @@
             "[SG-13] AC8 (X15): --dry-run PLANS BY READING, and performs ZERO mutating filesystem calls"
           ],
           "signal": "SG13-dry-run-plans-by-reading-only"
+        },
+        {
+          "test": [
+            "[SG-38] round 4 P2 (X15′): the planner discounts only the child it predicted removing"
+          ],
+          "signal": "SG38-planner-discounts-one-predicted-child"
         }
       ]
     },
@@ -323,18 +359,6 @@
       "expectRed": [
         {
           "test": [
-            "[SG-7] AC3 (W6/X4): on an install with no shelf ENTRIES the complete stdout is byte-identical, both plans compared in full"
-          ],
-          "signal": "SG7-empty-shelf-output-is-byte-identical"
-        },
-        {
-          "test": [
-            "[SG-9] AC5 (X10/Y9): a symlinked <state> is NEVER DESCENDED, and the ordinary alias layout still completes"
-          ],
-          "signal": "SG9-symlinked-state-is-never-descended"
-        },
-        {
-          "test": [
             "[SG-14] AC9 (X16/Y6): a forged hash-less {kind:file} entry cannot reach the shelf, interleaved and through a `..` alias"
           ],
           "signal": "SG14-forged-file-entry-cannot-reach-the-shelf"
@@ -416,6 +440,30 @@
             "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
+        },
+        {
+          "test": [
+            "[SG-36] round 4 P1 (X17‴): a kernel-valid chain on a symlinked core stays UNDER budget and completes"
+          ],
+          "signal": "SG36-distinct-link-hops-only"
+        },
+        {
+          "test": [
+            "[SG-39] AC4 round 4 (W8′): the closing summary prints EVERY preserved path, one per line"
+          ],
+          "signal": "SG39-summary-lists-every-preserved-path"
+        },
+        {
+          "test": [
+            "[SG-7] AC3 (W6/X4): on an install with no shelf ENTRIES the complete stdout is byte-identical, both plans compared in full"
+          ],
+          "signal": "SG7-empty-shelf-output-is-byte-identical"
+        },
+        {
+          "test": [
+            "[SG-9] AC5 (X10/Y9): a symlinked <state> is NEVER DESCENDED, and the ordinary alias layout still completes"
+          ],
+          "signal": "SG9-symlinked-state-is-never-descended"
         }
       ]
     },
@@ -433,21 +481,33 @@
       "expectRed": [
         {
           "test": [
+            "[SG-27] round 3 P1 (X17′): a NON-ASCII case alias is the kernel’s answer, on EITHER volume"
+          ],
+          "signal": "SG27-non-ascii-case-alias-is-the-kernels"
+        },
+        {
+          "test": [
             "[SG-2] AC1 round 11 (X18): no recursive delete reaches the shelf THROUGH AN ALIAS, and the target is asserted before the link"
           ],
           "signal": "SG2-no-recursive-delete-through-an-alias"
         },
         {
           "test": [
-            "[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes"
+            "[SG-35] round 4 P1 (X17‴): a hop budget that expires is UNANSWERABLE, never a completed walk"
           ],
-          "signal": "SG4-chain-closure-protects-the-intermediate-link"
+          "signal": "SG35-budget-exhaustion-fails-closed"
         },
         {
           "test": [
-            "[SG-27] round 3 P1 (X17′): a NON-ASCII case alias is the kernel’s answer, on EITHER volume"
+            "[SG-36] round 4 P1 (X17‴): a kernel-valid chain on a symlinked core stays UNDER budget and completes"
           ],
-          "signal": "SG27-non-ascii-case-alias-is-the-kernels"
+          "signal": "SG36-distinct-link-hops-only"
+        },
+        {
+          "test": [
+            "[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes"
+          ],
+          "signal": "SG4-chain-closure-protects-the-intermediate-link"
         }
       ]
     },
@@ -535,12 +595,6 @@
       "expectRed": [
         {
           "test": [
-            "[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes"
-          ],
-          "signal": "SG4-chain-closure-protects-the-intermediate-link"
-        },
-        {
-          "test": [
             "[SG-18] AC9 round 13 (X20): a `symlink` entry on a protected shelf’s chain is preserved — the alias first, then the original"
           ],
           "signal": "SG18-symlink-entry-on-the-chain-is-preserved"
@@ -556,6 +610,30 @@
             "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
+        },
+        {
+          "test": [
+            "[SG-33] round 4 P1 #3 (X17″): each shelf root gets its OWN hop budget"
+          ],
+          "signal": "SG33-hop-budget-is-per-root"
+        },
+        {
+          "test": [
+            "[SG-35] round 4 P1 (X17‴): a hop budget that expires is UNANSWERABLE, never a completed walk"
+          ],
+          "signal": "SG35-budget-exhaustion-fails-closed"
+        },
+        {
+          "test": [
+            "[SG-37] round 4 P2: the empty-directory climb never removes a CHAIN NODE"
+          ],
+          "signal": "SG37-climb-preserves-a-chain-node"
+        },
+        {
+          "test": [
+            "[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes"
+          ],
+          "signal": "SG4-chain-closure-protects-the-intermediate-link"
         }
       ]
     },
@@ -571,18 +649,6 @@
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
       "expectRed": [
-        {
-          "test": [
-            "[SG-6] AC2 round 15 (X17 (1a) class split): on a SYMLINKED CORE the credentials are still removed"
-          ],
-          "signal": "SG6-chain-node-does-not-protect-its-descendants"
-        },
-        {
-          "test": [
-            "[SG-9] AC5 (X10/Y9): a symlinked <state> is NEVER DESCENDED, and the ordinary alias layout still completes"
-          ],
-          "signal": "SG9-symlinked-state-is-never-descended"
-        },
         {
           "test": [
             "[SG-17] AC9 round 17 (X17 (1a)): a HYPOTHETICAL shelf root keeps FULL class (i) reach — the physical path is covered too"
@@ -612,6 +678,24 @@
             "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
+        },
+        {
+          "test": [
+            "[SG-36] round 4 P1 (X17‴): a kernel-valid chain on a symlinked core stays UNDER budget and completes"
+          ],
+          "signal": "SG36-distinct-link-hops-only"
+        },
+        {
+          "test": [
+            "[SG-6] AC2 round 15 (X17 (1a) class split): on a SYMLINKED CORE the credentials are still removed"
+          ],
+          "signal": "SG6-chain-node-does-not-protect-its-descendants"
+        },
+        {
+          "test": [
+            "[SG-9] AC5 (X10/Y9): a symlinked <state> is NEVER DESCENDED, and the ordinary alias layout still completes"
+          ],
+          "signal": "SG9-symlinked-state-is-never-descended"
         }
       ]
     },
@@ -841,8 +925,8 @@
       "criterion": "1",
       "why": "PR-gate round 4, Astra P1 #1. Criterion 1's chain arms all name targets WITHOUT a `..`, so a lexical collapse of the target string is invisible to every one of them. Under the mutation `state -> app/jump/../logs` never visits `app/jump`, the link is removed by an ordinary replay, `<state>` dangles, and the next sweep's rebuilt anchors no longer cover the copy. The revert is one substring.",
       "file": "src/core/manifest.js",
-      "find": "        target.absolute ? target.raw : rawJoin(path.dirname(here), target.raw),",
-      "replace": "        target.absolute ? target.raw : path.join(path.dirname(here), target.raw), /* RP_MUT_QUSE_LINK_TARGET_COLLAPSED_BEFORE_TRAVERSAL */",
+      "find": "      target.absolute ? target.raw : rawJoin(path.dirname(here), target.raw),",
+      "replace": "      target.absolute ? target.raw : path.join(path.dirname(here), target.raw), /* RP_MUT_QUSE_LINK_TARGET_COLLAPSED_BEFORE_TRAVERSAL */",
       "marker": "RP_MUT_QUSE_LINK_TARGET_COLLAPSED_BEFORE_TRAVERSAL",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -872,6 +956,12 @@
             "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
+        },
+        {
+          "test": [
+            "[SG-37] round 4 P2: the empty-directory climb never removes a CHAIN NODE"
+          ],
+          "signal": "SG37-climb-preserves-a-chain-node"
         }
       ]
     },
@@ -898,6 +988,12 @@
             "[SG-34] round 4 P2 (X15′): the planner applies the SAME retention as the live sweep"
           ],
           "signal": "SG34-planner-applies-retention"
+        },
+        {
+          "test": [
+            "[SG-38] round 4 P2 (X15′): the planner discounts only the child it predicted removing"
+          ],
+          "signal": "SG38-planner-discounts-one-predicted-child"
         }
       ]
     },
@@ -938,6 +1034,112 @@
             "[SG-30] round 3 P2 (X4′): a preserved report is RECONCILED, so an emptied case alias never blocks"
           ],
           "signal": "SG30-preserved-report-is-reconciled"
+        }
+      ]
+    },
+    {
+      "id": "quse-budget-exhaustion-accepted-as-complete",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "1",
+      "why": "PR-gate round 4 follow-up, X17‴. Every other chain declaration in this package mutates WHICH nodes are collected; this one mutates whether an INCOMPLETE collection may be reported as complete. The kernel can resolve a chain longer than our budget, and then a protected set missing its last nodes is handed back with `ok` — so the sweep deletes a node the shelf stands on and reports success. Nothing else in the suite can see it: every other fixture finishes its walk, so they all stay green under a resolver that accepts a partial closure.",
+      "file": "src/core/manifest.js",
+      "find": "  if (ctx.exhausted) {\n    return { state: 'unanswerable', real: null, dir: abs, code: 'EBUDGET' };\n  }\n",
+      "replace": "  /* RP_MUT_QUSE_BUDGET_EXHAUSTION_ACCEPTED_AS_COMPLETE */\n",
+      "marker": "RP_MUT_QUSE_BUDGET_EXHAUSTION_ACCEPTED_AS_COMPLETE",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-35] round 4 P1 (X17‴): a hop budget that expires is UNANSWERABLE, never a completed walk"
+          ],
+          "signal": "SG35-budget-exhaustion-fails-closed"
+        }
+      ]
+    },
+    {
+      "id": "quse-link-location-charged-per-visit",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "1",
+      "why": "PR-gate round 4 follow-up, X17‴. Charging a link again on every visit turns the fail-closed answer above into a DENIAL OF SERVICE on ordinary installs: a relative target re-walks the path in front of its link, so a symlinked core is charged once per hop and a 25-link chain the kernel resolves without complaint exhausts a 40-hop budget. The two halves have to be declared separately — the fail-closed mutation makes the package too permissive, this one makes it refuse installs that are fine.",
+      "file": "src/core/manifest.js",
+      "find": "    if (ctx.seen.has(location)) continue;\n",
+      "replace": "    /* RP_MUT_QUSE_LINK_LOCATION_CHARGED_PER_VISIT */\n",
+      "marker": "RP_MUT_QUSE_LINK_LOCATION_CHARGED_PER_VISIT",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-36] round 4 P1 (X17‴): a kernel-valid chain on a symlinked core stays UNDER budget and completes"
+          ],
+          "signal": "SG36-distinct-link-hops-only"
+        },
+        {
+          "test": [
+            "[SG-FUZZ] X17′ exactness: walkChain agrees with the kernel over randomised layouts"
+          ],
+          "signal": "SGFUZZ-walkchain-equals-realpath-native"
+        }
+      ]
+    },
+    {
+      "id": "quse-climb-removes-a-chain-node",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "1",
+      "why": "PR-gate round 4 follow-up, Astra P2 #2. Every shelf-preservation fixture in this package puts something INSIDE a shelf, and the climb then stops on ENOTEMPTY for a reason that has nothing to do with the chain. Only an EMPTY shelf that is itself a chain node — a core link whose target reads `…/state/quarantine/redacted/../../..` — separates 'the rmdir happened to fail' from 'the climb asked'. Under the mutation the empty node is removed, the core link dangles, and the run reports completion while the physical core is unreachable for a retry.",
+      "file": "src/core/manifest.js",
+      "find": "    if (onChain(level)) {\n      preservedQuarantine.push(level);\n      return; // PRESERVE and stop climbing — every ancestor is preserved with it\n    }\n",
+      "replace": "    /* RP_MUT_QUSE_CLIMB_REMOVES_A_CHAIN_NODE */\n",
+      "marker": "RP_MUT_QUSE_CLIMB_REMOVES_A_CHAIN_NODE",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-37] round 4 P2: the empty-directory climb never removes a CHAIN NODE"
+          ],
+          "signal": "SG37-climb-preserves-a-chain-node"
+        }
+      ]
+    },
+    {
+      "id": "quse-planner-discounts-every-fold-equal-name",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "8",
+      "why": "PR-gate round 4 follow-up, Astra P2 #3. Criterion 8's populated arm asserts the plan does not predict removal, and it goes green whenever the fixture's leftover is one the live arm also leaves. Only a leftover whose NAME FOLDS EQUAL to a shelf level — a file called `redacted` inside the redacted shelf, or a `REDACTED` beside `redacted` on ext4 — separates 'discount what this plan removed' from 'discount anything that looks like a shelf'. Under the mutation the plan promises `<state>` disappears while the live climb takes ENOTEMPTY and stops: a plan that is wrong in the one direction a plan must never be wrong.",
+      "file": "src/core/manifest.js",
+      "find": "        if (predictedChild !== null && n === predictedChild) return false;\n        if (level === state && removableChildren.includes(n)) return false;\n        return true;",
+      "replace": "        /* RP_MUT_QUSE_PLANNER_DISCOUNTS_EVERY_FOLD_EQUAL_NAME */\n        if (level === state) return !removableChildren.includes(n) && asciiFold(n) !== QUARANTINE_DIRNAME;\n        return asciiFold(n) !== QUARANTINE_REDACTED_DIRNAME;",
+      "marker": "RP_MUT_QUSE_PLANNER_DISCOUNTS_EVERY_FOLD_EQUAL_NAME",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-38] round 4 P2 (X15′): the planner discounts only the child it predicted removing"
+          ],
+          "signal": "SG38-planner-discounts-one-predicted-child"
+        }
+      ]
+    },
+    {
+      "id": "quse-summary-names-only-the-first",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "4",
+      "why": "PR-gate round 4, W8′. Criterion 4's summary arm asserts that the preserved directory is NAMED, and every earlier fixture in this package preserves exactly ONE — so all of them stay green under a summary that prints the first and drops the rest. On R-post-ledger-preserve the manifest is already gone and those paths are the user's only remaining route, so an unnamed one is a directory they cannot find. Only a fixture that preserves TWO, reaches the closing summary rather than W10's stop, and reads the WHOLE stdout back can see it.",
+      "file": "src/cli/uninstall.js",
+      "find": "    for (const d of keptQuarantine) console.log(`  ${d}`);",
+      "replace": "    console.log(`  ${keptQuarantine[0]}`); /* RP_MUT_QUSE_SUMMARY_NAMES_ONLY_THE_FIRST */",
+      "marker": "RP_MUT_QUSE_SUMMARY_NAMES_ONLY_THE_FIRST",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-39] AC4 round 4 (W8′): the closing summary prints EVERY preserved path, one per line"
+          ],
+          "signal": "SG39-summary-lists-every-preserved-path"
         }
       ]
     }
