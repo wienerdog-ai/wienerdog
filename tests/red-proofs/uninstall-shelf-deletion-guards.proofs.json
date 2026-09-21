@@ -102,6 +102,18 @@
             "[SG-20] AC10 (W10): the MANIFEST survives a sweep that preserved something, and is deleted when nothing was"
           ],
           "signal": "SG20-manifest-survives-a-preserving-sweep"
+        },
+        {
+          "test": [
+            "[SG-23] round 2 finding 1 (X12): a CASE-ALIASED entry path cannot slip past the guard"
+          ],
+          "signal": "SG23-case-aliased-entry-is-canonicalised"
+        },
+        {
+          "test": [
+            "[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever"
+          ],
+          "signal": "SG26-hop-budget-does-not-leak-between-roots"
         }
       ]
     },
@@ -191,8 +203,8 @@
       "criterion": "9",
       "why": "Round 8. Criterion 9 asserts that a shelf file's BYTES survive a replay that was trying to delete them — a survival assertion, and the most easily faked one in this package: it also passes when the forged entry was never added, when the fixture's path did not land under the shelf, when the preserve never completed before the replay, and when reverse() was never reached at all. This is the one mutation that restores shipped main behaviour, so a suite that stays green under it is asserting nothing this package adds.",
       "file": "src/core/manifest.js",
-      "find": "      const recursive = RECURSIVE_KINDS.has(entry.kind);\n      let guarded = shelfBlocks(entry.path, shelfProt, recursive);\n      if (!guarded) {",
-      "replace": "      const recursive = RECURSIVE_KINDS.has(entry.kind);\n      let guarded = false; /* RP_MUT_QUSE_REVERSE_SHELF_GUARD_DROPPED */\n      if (guarded) {",
+      "find": "      let guarded = false;\n      if (shelfGuardBound(entry.path, res.real)) {",
+      "replace": "      let guarded = false; /* RP_MUT_QUSE_REVERSE_SHELF_GUARD_DROPPED */\n      if (false) {",
       "marker": "RP_MUT_QUSE_REVERSE_SHELF_GUARD_DROPPED",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -226,6 +238,12 @@
             "[SG-21] AC10 round 20 (X22): a replay-only resolution failure reaches W10, and an unconstructable SET aborts before any mutation"
           ],
           "signal": "SG21-shelf-guard-skip-reaches-w10"
+        },
+        {
+          "test": [
+            "[SG-23] round 2 finding 1 (X12): a CASE-ALIASED entry path cannot slip past the guard"
+          ],
+          "signal": "SG23-case-aliased-entry-is-canonicalised"
         }
       ]
     },
@@ -320,6 +338,18 @@
             "[SG-22] AC10 round 21 (W10 outstanding filter): the remedy TERMINATES — a cleared path never blocks again"
           ],
           "signal": "SG22-remedy-terminates"
+        },
+        {
+          "test": [
+            "[SG-23] round 2 finding 1 (X12): a CASE-ALIASED entry path cannot slip past the guard"
+          ],
+          "signal": "SG23-case-aliased-entry-is-canonicalised"
+        },
+        {
+          "test": [
+            "[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever"
+          ],
+          "signal": "SG26-hop-budget-does-not-leak-between-roots"
         }
       ]
     },
@@ -390,6 +420,12 @@
             "[SG-19] AC4 round 18/19 (X19 clause (b)): an alias whose target OVERLAPS an allowed root is retained, across a full retry"
           ],
           "signal": "SG19-alias-into-an-allowed-root-is-retained"
+        },
+        {
+          "test": [
+            "[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever"
+          ],
+          "signal": "SG26-hop-budget-does-not-leak-between-roots"
         }
       ]
     },
@@ -419,8 +455,8 @@
       "criterion": "1",
       "why": "Round 14. Criterion 1's two-hop arm asserts an intermediate link and an original survive two disposer calls and a retry. Under the mutation the first call still passes — it protects logs from its cached anchors — and the loss appears only on the second, after the chain has been broken. So the declaration is what forces the fixture to run the sequence twice rather than once, and it is the only one that distinguishes 'the anchors were right' from 'the closure was computed'.",
       "file": "src/core/manifest.js",
-      "find": "  return { lexical, subtrees, chain: [...chain], existing, unanswerable };",
-      "replace": "  return { lexical, subtrees, chain: [], existing, unanswerable }; /* RP_MUT_QUSE_PROTECTED_SET_IS_ANCHORS_ONLY */",
+      "find": "  return { lexical, subtrees, chain: [...chain], existing, unanswerable, dirs: ctx.dirs };",
+      "replace": "  return { lexical, subtrees, chain: [], existing, unanswerable, dirs: ctx.dirs }; /* RP_MUT_QUSE_PROTECTED_SET_IS_ANCHORS_ONLY */",
       "marker": "RP_MUT_QUSE_PROTECTED_SET_IS_ANCHORS_ONLY",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -525,8 +561,8 @@
       "criterion": "10",
       "why": "Round 15. Criterion 10 asserts two files STILL EXIST after a run that preserved something. The existence half goes green on any run that failed earlier for an unrelated reason, and the fixture only reaches the mutated line through the concurrent-dream window — so without the declaration nothing distinguishes 'the gate held the manifest' from 'the window never opened'.",
       "file": "src/cli/uninstall.js",
-      "find": "  if (stillHeld.length > 0) {",
-      "replace": "  if (false && stillHeld.length > 0) { /* RP_MUT_QUSE_MANIFEST_DELETED_AFTER_PRESERVE */",
+      "find": "  if (shelfHeld.length > 0) {",
+      "replace": "  if (false && shelfHeld.length > 0) { /* RP_MUT_QUSE_MANIFEST_DELETED_AFTER_PRESERVE */",
       "marker": "RP_MUT_QUSE_MANIFEST_DELETED_AFTER_PRESERVE",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -563,16 +599,22 @@
         },
         {
           "test": [
-            "[SG-21] AC10 round 20 (X22): a replay-only resolution failure reaches W10, and an unconstructable SET aborts before any mutation"
+            "[SG-23] round 2 finding 1 (X12): a CASE-ALIASED entry path cannot slip past the guard"
           ],
-          "signal": "SG21-shelf-guard-skip-reaches-w10"
+          "signal": "SG23-case-aliased-entry-is-canonicalised"
+        },
+        {
+          "test": [
+            "[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever"
+          ],
+          "signal": "SG26-hop-budget-does-not-leak-between-roots"
         }
       ]
     },
     {
       "id": "quse-w10-checks-first-sweep-only",
       "wp": "WP-uninstall-shelf-deletion-guards",
-      "criterion": "10",
+      "criterion": "4",
       "why": "Round 16. Criterion 10's after-the-first-sweep arm asserts the manifest and config STILL EXIST and that a retry completes. Under the mutation the first sweep legitimately returns nothing, so the check passes on stale evidence and the ledger is deleted — and every earlier interleaving fixture, which seeds before the first sweep, stays green. This declaration is what forces the seam to fire BETWEEN the two sweeps rather than before them.",
       "file": "src/cli/uninstall.js",
       "find": "    ...freshQuarantine.roots.filter((r) => r.entries > 0).map((r) => r.dir),\n    ...freshQuarantine.unreadable.map((u) => u.dir),",
@@ -595,8 +637,8 @@
       "criterion": "10",
       "why": "Round 20. Criterion 10's replay-guard arm asserts the manifest and config SURVIVE a run in which the disposer preserved NOTHING — the stop comes from shelfGuarded alone. Every other W10 fixture in this package makes the disposer preserve something, so all of them stay green under this mutation; only a fixture whose resolution failure is confined to the replay window can see it.",
       "file": "src/cli/uninstall.js",
-      "find": "    ...outstandingGuarded,",
-      "replace": "    /* RP_MUT_QUSE_SHELF_GUARD_SKIP_NOT_PROPAGATED */",
+      "find": "  const outstandingGuarded = shelfGuarded.filter((p) => {",
+      "replace": "  const outstandingGuarded = /* RP_MUT_QUSE_SHELF_GUARD_SKIP_NOT_PROPAGATED */ [].filter((p) => {",
       "marker": "RP_MUT_QUSE_SHELF_GUARD_SKIP_NOT_PROPAGATED",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",

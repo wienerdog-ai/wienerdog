@@ -3071,3 +3071,135 @@ test('[SG-22] AC10 round 21 (W10 outstanding filter): the remedy TERMINATES — 
   assert.equal(fs.existsSync(manifestPath), false, `${S}: the manifest is deleted`);
   assert.equal(fs.existsSync(core), false, `${S}: and the core is gone`);
 });
+
+// ─── PR-gate round 2 regressions (PR #312 review, 2026-09-21) ───────────────
+// Four guard bypasses the independent gate reproduced, each planted as the
+// shape it found: the shelf bytes must survive, the run must stop via W10, and
+// the stop must SAY so.
+
+test('[SG-23] round 2 finding 1 (X12): a CASE-ALIASED entry path cannot slip past the guard', async () => {
+  const S = 'SG23-case-aliased-entry-is-canonicalised';
+  const { core, env, q, addEntries } = shelfManifestInstall();
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  const capital = path.join(core, 'state', 'QUARANTINE');
+  const caseInsensitive = fs.existsSync(capital);
+  // The entry names the CAPITALISED spelling while the stored directory is
+  // `quarantine`, so no lexical anchor contains it: only canonicalising each
+  // existing component by the X12 fold can catch it.
+  addEntries([{ kind: 'file', path: path.join(capital, '2026-note.md') }], true);
+  const seamFs = fs.rmSync;
+  let note = null;
+  fs.rmSync = (p, ...rest) => {
+    if (!note) note = shelfFile(q, '2026-note.md', 'case-aliased\n');
+    return seamFs(p, ...rest);
+  };
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmSync = seamFs;
+  }
+  assert.ok(note, `${S}: the fixture completed a preserve before the replay`);
+  assert.equal(readOrNull(note), 'case-aliased\n',
+    `${S}: the original's BYTES survive whichever spelling the entry used`);
+  if (caseInsensitive) {
+    assert.ok(res.err, `${S}: and the run STOPS — the case alias reaches the same object`);
+    assert.ok(/quarantined copies are still here/.test(res.err.message),
+      `${S}: with the shelf-derived form of the stop — ${res.err && res.err.message}`);
+    assert.ok(res.err.message.includes(q), `${S}: naming the shelf directory`);
+  } else {
+    assert.equal(fs.existsSync(capital), false,
+      `${S}: on a case-SENSITIVE volume the capitalised path is genuinely absent, so no deleter reaches it`);
+    assert.ok(res.err, `${S}: and the run still stops on the copy itself`);
+  }
+});
+
+test('[SG-24] round 2 finding 2 (X17): a relative link target resolves SEGMENT BY SEGMENT, not by lexical collapse', () => {
+  const S = 'SG24-relative-link-target-resolved-in-order';
+  const { paths } = sweepCore();
+  const inner = path.join(paths.logs, 'inner');
+  const recovery = path.join(paths.logs, 'recovery');
+  fs.mkdirSync(inner, { recursive: true });
+  fs.mkdirSync(recovery, { recursive: true });
+  fs.symlinkSync(inner, path.join(paths.core, 'jump'));
+  // `../jump/../recovery` from <state>: `..` → <core>, `jump` → <core>/logs/inner,
+  // `..` → <core>/logs, `recovery` → <core>/logs/recovery. Collapsing the `..`
+  // LEXICALLY first yields <core>/recovery and leaves <core>/logs unprotected.
+  fs.symlinkSync('../jump/../recovery', path.join(paths.state, 'quarantine'));
+  const note = shelfFile(recovery, '2026-note.md', 'behind a relative hop\n');
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note), 'behind a relative hop\n',
+    `${S}: the original's bytes survive — the kernel's answer is <core>/logs/recovery`);
+  assert.equal(fs.existsSync(paths.logs), true,
+    `${S}: and <core>/logs was NOT recursively deleted while the link was reported preserved`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: the sweep REPORTS what it kept (${JSON.stringify(res.preservedQuarantine)})`);
+});
+
+test('[SG-25] round 2 finding 3 (X18): a component NAMED `..recovery` is not parent traversal', () => {
+  const S = 'SG25-dot-dot-prefixed-name-is-not-traversal';
+  const { paths } = sweepCore();
+  const odd = path.join(paths.logs, '..recovery');
+  fs.mkdirSync(odd, { recursive: true });
+  fs.symlinkSync(odd, path.join(paths.state, 'quarantine'));
+  const note = shelfFile(odd, '2026-note.md', 'under a dot-dot name\n');
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note), 'under a dot-dot name\n',
+    `${S}: the original's bytes survive — a name beginning with two dots is a NAME, not an escape out of <core>/logs`);
+  assert.equal(fs.existsSync(paths.logs), true, `${S}: and <core>/logs was not recursively deleted`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: the sweep REPORTS what it kept (${JSON.stringify(res.preservedQuarantine)})`);
+});
+
+test('[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever', async () => {
+  const S = 'SG26-hop-budget-does-not-leak-between-roots';
+  const { core, env } = shelfManifestInstall();
+  const state = path.join(core, 'state');
+  const chainRoot = path.join(core, 'hops');
+  const realState = path.join(chainRoot, 'real');
+  fs.mkdirSync(realState, { recursive: true });
+  const realShelf = path.join(realState, 'quarantine');
+  fs.mkdirSync(realShelf, { recursive: true, mode: 0o700 });
+  // 21 links ABOVE the shelf, so both shelf roots are walked through them and
+  // both shelf roots are REAL directories — the gate sees an EMPTY shelf and
+  // the run proceeds to the replay, which is where the budget was spent. Under
+  // a budget SHARED across the roots the second root reports ELOOP, the
+  // protected set is unanswerable, and the live replay aborts on every retry.
+  let target = realState;
+  for (let i = 0; i < 21; i += 1) {
+    const link = path.join(chainRoot, `l${i}`);
+    fs.symlinkSync(target, link);
+    target = link;
+  }
+  fs.rmSync(state, { recursive: true, force: true });
+  fs.symlinkSync(target, state);
+  assert.equal(manifestMod.quarantineInventory(require('../../src/core/paths').getPaths({ ...env })).entries, 0,
+    `${S}: the gate sees an EMPTY shelf, so the run reaches the replay`);
+  const seamFs = fs.rmSync;
+  let note = null;
+  fs.rmSync = (p, ...rest) => {
+    if (!note) note = shelfFile(realShelf, '2026-note.md', 'twenty-one hops away\n');
+    return seamFs(p, ...rest);
+  };
+  let first;
+  try {
+    first = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmSync = seamFs;
+  }
+  assert.ok(note, `${S}: the fixture completed a preserve before the replay`);
+  assert.ok(first.err, `${S}: the run stops`);
+  assert.equal(/ELOOP/.test(first.err.message), false,
+    `${S}: but NOT with an ELOOP abort — the second root must get its own budget — ${first.err.message}`);
+  assert.ok(/quarantined copies are still here/.test(first.err.message),
+    `${S}: it is the shelf-derived stop, which names what to clear — ${first.err.message}`);
+  assert.equal(readOrNull(note), 'twenty-one hops away\n', `${S}: and the original's bytes survive`);
+  // …and the remedy TERMINATES: with the copy and the chain cleared it finishes.
+  fs.rmSync(realShelf, { recursive: true, force: true });
+  fs.unlinkSync(state);
+  fs.rmSync(chainRoot, { recursive: true, force: true });
+  fs.mkdirSync(state, { recursive: true });
+  const second = await uninstallInProcess(env, ['--yes']);
+  assert.equal(second.err, null,
+    `${S}: once the chain and the copy are gone the run COMPLETES (${second.err && second.err.message})`);
+});

@@ -667,6 +667,7 @@ async function run(argv, opts = {}) {
   //    deletion is newer than the consent.
   const {
     removed, skipped, preserved, deferredConfig, deferredConfigHash, shelfGuarded,
+    shelfUnanswerable,
   } = manifestLib.reverse(
     paths,
     manifest,
@@ -705,7 +706,16 @@ async function run(argv, opts = {}) {
       return true; // UNANSWERABLE — it blocks
     }
   });
-  const stillHeld = [
+  // Table W row **W10′**: the stop has TWO FORMS, because the two causes need
+  // different remedies. A SHELF-DERIVED stop names the directories the user's
+  // quarantined copies are in and how to move or delete them. An
+  // UNANSWERABLE-RESOLUTION stop — an entry whose own path failed to resolve for
+  // a non-ENOENT code — names that path and its code and points at the
+  // permission or disk problem; it never claims a quarantined copy is involved,
+  // because nothing established that one is. Both say re-running is safe.
+  const unresolvedHeld = (shelfUnanswerable || []).filter((u) => outstandingGuarded.includes(u.path));
+  const unresolvedPaths = unresolvedHeld.map((u) => u.path);
+  const shelfHeld = [
     ...sweptKept,
     ...freshQuarantine.roots.filter((r) => r.entries > 0).map((r) => r.dir),
     ...freshQuarantine.unreadable.map((u) => u.dir),
@@ -714,15 +724,26 @@ async function run(argv, opts = {}) {
     // R-K's `blockers` field would otherwise throw here, turning a missing
     // disclosure into a crashed uninstall.
     ...(freshQuarantine.blockers || []),
-    ...outstandingGuarded,
+    ...outstandingGuarded.filter((p) => !unresolvedPaths.includes(p)),
   ].filter((p, i, a) => a.indexOf(p) === i);
-  if (stillHeld.length > 0) {
+  if (shelfHeld.length > 0) {
     throw new WienerdogError(
       'uninstall partially completed — your quarantined copies are still here, so nothing '
-        + `further was removed:\n\n${stillHeld.map((p) => `  ${p}`).join('\n')}\n\n`
+        + `further was removed:\n\n${shelfHeld.map((p) => `  ${p}`).join('\n')}\n\n`
         + `Left the install manifest, config.yaml and ${paths.core} in place so a retry stays `
         + 'safe. Copy out anything you want to keep, then delete those files and re-run — '
         + 're-running is safe: npx wienerdog@latest uninstall'
+    );
+  }
+  if (unresolvedHeld.length > 0) {
+    throw new WienerdogError(
+      'uninstall stopped — nothing further was removed. These could not be read, so Wienerdog '
+        + `cannot tell what deleting them would reach:\n\n${unresolvedHeld
+          .map((u) => `  ${u.path} (${u.code})`)
+          .join('\n')}\n\n`
+        + `Left the install manifest, config.yaml and ${paths.core} in place so a retry stays `
+        + 'safe. Fix the permission or disk problem, then re-run — re-running is safe: '
+        + 'npx wienerdog@latest uninstall'
     );
   }
   // Delete the deferred set LAST — MANIFEST FIRST, then config.yaml. Every
@@ -818,7 +839,11 @@ async function run(argv, opts = {}) {
     // deletion. The directory is named LITERALLY, not counted, because by this
     // point the manifest is gone and `rm -rf` on that path is the user's only
     // remaining route.
-    console.log(`\nKept ${paths.core} — your quarantined copies are still in it: ${keptQuarantine[0]}`);
+    // W8′: EVERY preserved path, one per line — on `R-post-ledger-preserve` the
+    // manifest is gone and these paths are the user's only remaining route, so a
+    // summary that named just the first would strand the rest.
+    console.log(`\nKept ${paths.core} — your quarantined copies are still in it:`);
+    for (const d of keptQuarantine) console.log(`  ${d}`);
   } else if (!fs.existsSync(paths.core)) {
     console.log(`\nWienerdog is fully removed — the canonical core (${paths.core}) is gone.`);
   } else if (skippedForVault.length > 0) {

@@ -943,7 +943,8 @@ function save(paths, manifest) {
  *  re-decides it.
  * @returns {{removed: string[], skipped: string[], preserved: string[],
  *            deferredConfig: string|null, deferredConfigHash: string|null,
- *            discoveredSchedules: string[], shelfGuarded: string[]}}
+ *            discoveredSchedules: string[], shelfGuarded: string[],
+ *            shelfUnanswerable: Array<{path:string, code:string}>}}
  *            `discoveredSchedules` is the subset of the passed list's paths
  *            whose UNLOAD this call performed in phase D5a (Table D row D6);
  *            anything phase D5b deleted also appears in `removed`.
@@ -1030,12 +1031,35 @@ function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } =
    *  separately because Table W row W10 must tell a shelf-guard skip from an
    *  ordinary one (X22). Empty on an ordinary install. */
   /** @type {string[]} */ const shelfGuarded = [];
+  /** The subset of `shelfGuarded` whose OWN path failed to resolve for a
+   *  non-`ENOENT` reason, with the code — Table W row **W10′** needs it to pick
+   *  the stop message's form, and an unanswerable resolution is not a shelf. */
+  /** @type {Array<{path: string, code: string}>} */ const shelfUnanswerable = [];
   /** The kinds whose reversers delete RECURSIVELY (Table V) — the FROM-ABOVE
    *  half of X16 applies to exactly these. `dir` is the provable exemption: its
    *  reverser removes only a virtually-empty directory, so it can neither
    *  destroy an original nor break a chain, and guarding it would add a
    *  `skipped` line to an ordinary uninstall (Table W row W6). */
   const RECURSIVE_KINDS = new Set(['vendored-tree', 'copied-skill']);
+  /** Table X row **X16′**: `withinAllowedRoot`'s bound, asked of a path that
+   *  need not EXIST yet — `contains()` realpaths both sides ands false on an
+   *  absent target, which would exempt exactly the late-arriving copy the guard
+   *  is for. Each root is compared in its lexical AND resolved form, against the
+   *  entry's literal and resolved paths.
+   *  @param {string} p @param {string|null} real @returns {boolean} */
+  const shelfGuardBound = (p, real) => {
+    const cands = real !== null && real !== p ? [p, real] : [p];
+    const matching = allowedRoots.filter((root) => {
+      const rr = resolveOne(root, shelfProt.dirs);
+      const forms = rr.real !== null && rr.real !== root ? [root, rr.real] : [root];
+      return forms.some((f) => cands.some((c) => lexicalContains(f, c)));
+    });
+    if (matching.length === 0) return false;
+    if (matching.every((root) => root === localBin)) {
+      return ['wienerdog', 'wienerdog.cmd'].includes(path.basename(p));
+    }
+    return true;
+  };
 
   // ── PHASE D5a — THE WIDENED UNLOAD, BEFORE THE ENTRY LOOP ────────────────
   // WP-scheduler-replay-manifest-independent, Table D rows D5/D6/D10/D13.
@@ -1155,11 +1179,21 @@ function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } =
     // does (X17 (3)) — that is the clause whose lack stranded ordinary installs.
     {
       const recursive = RECURSIVE_KINDS.has(entry.kind);
-      let guarded = shelfBlocks(entry.path, shelfProt, recursive);
-      if (!guarded) {
-        const res = resolveOne(entry.path);
-        if (res.state === 'unanswerable') guarded = true;
-        else if (res.real !== null && shelfBlocks(res.real, shelfProt, recursive)) guarded = true;
+      const res = resolveOne(entry.path, shelfProt.dirs);
+      // X16′: the guard covers only entries the ALLOWED-ROOT BOUND admits. One
+      // it rejects is skipped exactly as it was before this package — no
+      // `shelfGuarded` entry and no Table W row W10 stop — because no deleter
+      // would have reached it, and blocking on it would be a permanent refusal
+      // over a path this command never touches.
+      let guarded = false;
+      if (shelfGuardBound(entry.path, res.real)) {
+        guarded = shelfBlocks(entry.path, shelfProt, recursive);
+        if (!guarded && res.state === 'unanswerable') {
+          guarded = true;
+          shelfUnanswerable.push({ path: entry.path, code: /** @type {string} */ (res.code) });
+        } else if (!guarded && res.real !== null) {
+          guarded = shelfBlocks(res.real, shelfProt, recursive);
+        }
       }
       if (guarded) {
         process.stderr.write(
@@ -1413,7 +1447,7 @@ function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } =
 
   return {
     removed, skipped, preserved, deferredConfig, deferredConfigHash,
-    discoveredSchedules: discoveredUnloaded, shelfGuarded,
+    discoveredSchedules: discoveredUnloaded, shelfGuarded, shelfUnanswerable,
   };
 }
 
@@ -1720,12 +1754,75 @@ function quarantineInventory(paths) {
  *  @param {string} outer @param {string} inner @returns {boolean} */
 function lexicalContains(outer, inner) {
   const rel = path.relative(outer, inner);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  if (rel === '') return true;
+  if (path.isAbsolute(rel)) return false;
+  // PR-gate round 2, finding 3: `startsWith('..')` also matched a COMPONENT
+  // NAMED `..recovery`, so `<core>/logs/..recovery` read as an escape out of
+  // `<core>/logs` and the guard let a recursive delete through. Only a segment
+  // that IS `..` is parent traversal.
+  return !rel.split(path.sep).includes('..');
 }
 
 /** Bound on the link hops one resolution may take, so a cycle answers
  *  UNANSWERABLE (`ELOOP`) instead of recursing forever. */
 const MAX_LINK_HOPS = 40;
+
+/** Marks the point in the pending-segment list at which a link's target has
+ *  been fully resolved — `cur` is then that target, a class (ii) chain node. */
+const CHAIN_TARGET = Object.freeze({ chainTarget: true });
+
+/**
+ * The ON-DISK spelling of `seg` inside `parent`, by Table X row **X12**'s ASCII
+ * fold. PR-gate round 2, finding 1: `walkChain` used to keep the CALLER's
+ * spelling, so on a case-insensitive filesystem a hash-less entry naming
+ * `<state>/QUARANTINE/<name>` resolved to a path the anchors — built from the
+ * stored `quarantine` — did not contain, and the guard let it through to
+ * `rmSync`. A byte-exact match always wins (on a case-sensitive volume both
+ * spellings can exist and they are different objects); otherwise a SINGLE
+ * fold-equal entry is the canonical name. An unreadable parent keeps the
+ * caller's spelling, which is what shipped before this rule.
+ * Neither probe is a CLASSIFICATION — Table X row **X10**'s `lstat`-only rule
+ * governs what may be descended or deleted and stands unchanged; `seg` has
+ * already been classified by the caller's `lstat` before either runs.
+ * @param {string} parent an ALREADY-RESOLVED directory
+ * @param {string} seg
+ * @param {{chain: Set<string>, dirs: Map<string, string[]|null>}} ctx
+ * @param {boolean} isLink whether `parent/seg` is itself a symlink
+ * @returns {string}
+ */
+function canonicalSegment(parent, seg, ctx, isLink) {
+  // No ASCII letter ⇒ no fold variant can exist ⇒ the spelling is already the
+  // stored one. Skips the probe for the overwhelming majority of components.
+  if (!/[A-Za-z]/.test(seg)) return seg;
+  const next = path.join(parent, seg);
+  if (!isLink) {
+    // `parent` is ALREADY resolved, and `seg` is not a symlink, so a native
+    // realpath of `next` collapses no chain — it only reports the spelling the
+    // filesystem stores. Cheaper than listing a crowded parent.
+    try {
+      const real = fs.realpathSync.native(next);
+      if (path.dirname(real) === parent) return path.basename(real);
+    } catch {
+      /* fall through to the listing */
+    }
+    return seg;
+  }
+  // A SYMLINK's stored spelling cannot come from realpath (that would follow
+  // it), so this is the one case that lists the parent — and symlinks are rare.
+  let names = ctx.dirs.get(parent);
+  if (names === undefined) {
+    try {
+      names = fs.readdirSync(parent);
+    } catch {
+      names = null;
+    }
+    ctx.dirs.set(parent, names);
+  }
+  if (names === null || names.includes(seg)) return seg;
+  const folded = asciiFold(seg);
+  const hits = names.filter((n) => asciiFold(n) === folded);
+  return hits.length === 1 ? hits[0] : seg;
+}
 
 /**
  * Resolve `p` COMPONENT BY COMPONENT with `lstat`/`readlink`, recording every
@@ -1733,8 +1830,23 @@ const MAX_LINK_HOPS = 40;
  * **X17 (1a)** class (ii). `fs.realpathSync` cannot be used: it collapses the
  * chain to its endpoint, and the chain is precisely what rows **X19** and
  * **X20** protect.
+ *
+ * THE ALGORITHM IS THE CLASSIC REALPATH ONE, over a PENDING SEGMENT LIST —
+ * PR-gate round 2, finding 2. Resolving a link's target with `path.resolve`
+ * collapsed its `..` segments LEXICALLY, before the links in front of them had
+ * been resolved: `<state>/quarantine -> ../jump/../recovery` with
+ * `<core>/jump -> <core>/logs/inner` resolves in the KERNEL to
+ * `<core>/logs/recovery`, but collapsed lexically to `<core>/recovery`, so the
+ * sweep deleted `<core>/logs` — with the copy in it — while reporting the link
+ * preserved. A link's target is therefore pushed onto the pending list as RAW
+ * segments, and each `..` is applied to `cur` only when it is reached, after
+ * every preceding symlink has been resolved.
+ *
+ * The hop budget is per CALL, so one root's long-but-valid chain can never make
+ * the NEXT root report `ELOOP` (PR-gate round 2, finding 4); `ctx.chain` and
+ * `ctx.dirs` stay shared, which is what Table X row **X17 (1a)** needs.
  * @param {string} p an absolute path
- * @param {{chain: Set<string>, hops: number}} ctx
+ * @param {{chain: Set<string>, dirs: Map<string, string[]|null>}} ctx
  * @returns {{state:'ok'|'absent'|'unanswerable', real:string|null,
  *            dir:string|null, code:string|null}}
  *   `state` — `ok` the whole path exists; `absent` a level reported
@@ -1745,56 +1857,78 @@ const MAX_LINK_HOPS = 40;
  *   (**X17 (4)**), with `dir`/`code` naming it.
  */
 function walkChain(p, ctx) {
+  if (!ctx.dirs) ctx.dirs = new Map();
   const root = path.parse(p).root;
-  const parts = p.slice(root.length).split(path.sep).filter((s) => s !== '' && s !== '.');
+  /** @type {Array<string|typeof CHAIN_TARGET>} */
+  const pending = p.slice(root.length).split(path.sep).filter((s) => s !== '');
+  /** Whatever is still pending, appended LEXICALLY for the absent case (X17 (2)). */
+  const suffix = () => pending.filter((s) => typeof s === 'string');
   let cur = root;
-  let hypothetical = false;
-  for (let i = 0; i < parts.length; i += 1) {
-    const next = path.join(cur, parts[i]);
+  let hops = 0;
+  while (pending.length > 0) {
+    const seg = pending.shift();
+    if (seg === CHAIN_TARGET) {
+      ctx.chain.add(cur); // a link's fully-resolved target — class (ii)
+      continue;
+    }
+    const name = /** @type {string} */ (seg);
+    if (name === '.') continue;
+    if (name === '..') {
+      cur = path.dirname(cur); // applied AFTER the links in front of it resolved
+      continue;
+    }
+    let next = path.join(cur, name);
     let st;
     try {
       st = fs.lstatSync(next);
     } catch (e) {
       const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
       if (isAbsentCode(code)) {
-        return { state: 'absent', real: path.join(next, ...parts.slice(i + 1)), dir: null, code: null };
+        return { state: 'absent', real: path.join(next, ...suffix()), dir: null, code: null };
       }
       return { state: 'unanswerable', real: null, dir: next, code };
     }
-    if (st.isSymbolicLink()) {
-      if (ctx.hops >= MAX_LINK_HOPS) {
-        return { state: 'unanswerable', real: null, dir: next, code: 'ELOOP' };
-      }
-      ctx.hops += 1;
-      ctx.chain.add(next); // the link LOCATION
-      let link;
-      try {
-        link = fs.readlinkSync(next);
-      } catch (e) {
-        const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
-        if (isAbsentCode(code)) {
-          return { state: 'absent', real: path.join(next, ...parts.slice(i + 1)), dir: null, code: null };
-        }
-        return { state: 'unanswerable', real: null, dir: next, code };
-      }
-      const target = path.isAbsolute(link) ? link : path.resolve(path.dirname(next), link);
-      const r = walkChain(target, ctx);
-      if (r.state === 'unanswerable') return r;
-      if (r.state === 'absent') hypothetical = true;
-      if (r.real) ctx.chain.add(r.real); // the intermediate TARGET
-      cur = /** @type {string} */ (r.real);
-    } else {
+    // The component EXISTS, so take its on-disk spelling (X12, finding 1).
+    const canon = canonicalSegment(cur, name, ctx, st.isSymbolicLink());
+    if (canon !== name) next = path.join(cur, canon);
+    if (!st.isSymbolicLink()) {
       cur = next;
+      continue;
     }
+    if (hops >= MAX_LINK_HOPS) {
+      return { state: 'unanswerable', real: null, dir: next, code: 'ELOOP' };
+    }
+    hops += 1;
+    ctx.chain.add(next); // the link LOCATION — class (ii)
+    let link;
+    try {
+      link = fs.readlinkSync(next);
+    } catch (e) {
+      const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+      if (isAbsentCode(code)) {
+        return { state: 'absent', real: path.join(next, ...suffix()), dir: null, code: null };
+      }
+      return { state: 'unanswerable', real: null, dir: next, code };
+    }
+    const absolute = path.isAbsolute(link);
+    const body = absolute ? link.slice(path.parse(link).root.length) : link;
+    const segs = body.split(path.sep).filter((s) => s !== '');
+    cur = absolute ? path.parse(link).root : path.dirname(next);
+    pending.unshift(...segs, CHAIN_TARGET);
   }
-  return { state: hypothetical ? 'absent' : 'ok', real: cur, dir: null, code: null };
+  return { state: 'ok', real: cur, dir: null, code: null };
 }
 
 /** One resolution, with a throwaway chain: the protected set must never be
- *  polluted by the links on a DELETION TARGET's own path.
- *  @param {string} p @returns {ReturnType<typeof walkChain>} */
-function resolveOne(p) {
-  return walkChain(p, { chain: new Set(), hops: 0 });
+ *  polluted by the links on a DELETION TARGET's own path. `dirs` is the
+ *  CALLER's directory-listing cache for `canonicalSegment`, shared across the
+ *  resolutions of one `reverse()` / `disposeCoreMechanics` invocation so a
+ *  crowded ancestor is listed once rather than once per entry; it caches
+ *  SPELLINGS, never a classification or an emptiness.
+ *  @param {string} p @param {Map<string, string[]|null>} [dirs]
+ *  @returns {ReturnType<typeof walkChain>} */
+function resolveOne(p, dirs) {
+  return walkChain(p, { chain: new Set(), dirs: dirs || new Map() });
 }
 
 /**
@@ -1826,7 +1960,10 @@ function shelfProtection(paths) {
   /** @type {Set<string>} */ const chain = new Set();
   /** @type {{dir:string, code:string}|null} */ let unanswerable = null;
   let existing = false;
-  const ctx = { chain, hops: 0 };
+  // The hop budget lives inside each `walkChain` call, so one root's long chain
+  // cannot make the NEXT root report ELOOP (PR-gate round 2, finding 4). The
+  // chain-node set and the directory-listing cache stay SHARED across the roots.
+  const ctx = { chain, dirs: new Map() };
 
   /** @param {string} dir @param {string} code */
   const note = (dir, code) => {
@@ -1867,7 +2004,7 @@ function shelfProtection(paths) {
     if (res.state === 'ok') existing = true;
     if (res.real && !subtrees.includes(res.real)) subtrees.push(res.real);
   }
-  return { lexical, subtrees, chain: [...chain], existing, unanswerable };
+  return { lexical, subtrees, chain: [...chain], existing, unanswerable, dirs: ctx.dirs };
 }
 
 /**
@@ -1924,7 +2061,7 @@ function disposeStateTree(paths, prot, removed, preservedQuarantine) {
     // (b) its target overlaps ANY of withinAllowedRoot's four roots. Otherwise
     // unlink the link and stop — no enumeration, nothing below it is touched,
     // which is byte-for-byte what a single recursive rmSync already did.
-    const res = resolveOne(state);
+    const res = resolveOne(state, prot.dirs);
     if (res.state === 'unanswerable') {
       preservedQuarantine.push(state);
       return;
@@ -1938,7 +2075,7 @@ function disposeStateTree(paths, prot, removed, preservedQuarantine) {
     // every path this command can delete lies under one of the four — and a
     // /tmp-style alias on the root's own path must not hide that.
     const overlapsAllowedRoot = allowedRoots.some((r) => {
-      const rr = resolveOne(r);
+      const rr = resolveOne(r, prot.dirs);
       const forms = rr.real !== null && rr.real !== r ? [r, rr.real] : [r];
       return forms.some((c) => lexicalContains(c, target) || lexicalContains(target, c));
     });
@@ -1963,7 +2100,7 @@ function disposeStateTree(paths, prot, removed, preservedQuarantine) {
       if (name !== QUARANTINE_DIRNAME) preservedQuarantine.push(child);
       continue;
     }
-    const res = resolveOne(child);
+    const res = resolveOne(child, prot.dirs);
     if (
       res.state === 'unanswerable'
       || shelfBlocks(child, prot, true)
@@ -2129,7 +2266,7 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
     if (prot) {
       // X18/Table V: this recursive rmSync is NOT an exemption — `<core>/logs`
       // can be a real directory a shelf symlink resolves into.
-      const res = resolveOne(dir);
+      const res = resolveOne(dir, prot.dirs);
       if (
         res.state === 'unanswerable'
         || shelfBlocks(dir, prot, true)
