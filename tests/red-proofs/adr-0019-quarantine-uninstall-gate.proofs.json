@@ -27,12 +27,6 @@
         },
         {
           "test": [
-            "[QU-3] AC3 (K6/Y1): the refusal prints no shelf FILENAME and no shelf BYTE"
-          ],
-          "signal": "QU3-no-shelf-name-or-byte-on-any-surface"
-        },
-        {
-          "test": [
             "[QU-4] AC4 (W5): --dry-run does not abort — it prints the same block, says a real run stops there, and still prints the plan"
           ],
           "signal": "QU4-dry-run-discloses-the-shelf"
@@ -86,12 +80,6 @@
             "[QU-2] AC2 (W2/Y7): --yes refuses IDENTICALLY — a refusal is not a prompt"
           ],
           "signal": "QU2-yes-refuses-identically"
-        },
-        {
-          "test": [
-            "[QU-3] AC3 (K6/Y1): the refusal prints no shelf FILENAME and no shelf BYTE"
-          ],
-          "signal": "QU3-no-shelf-name-or-byte-on-any-surface"
         },
         {
           "test": [

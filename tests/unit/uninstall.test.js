@@ -21,7 +21,11 @@ delete process.env.WIENERDOG_ALLOW_REAL_SCHEDULER;
 
 /** Isolated temp HOME with env overrides (never touches real config dirs). */
 function tempEnv() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-uninstall-'));
+  // realpath'd: on macOS os.tmpdir() is itself behind a /var -> /private/var
+  // symlink, and WP-uninstall-shelf-deletion-guards' protected set records every
+  // link on a shelf's resolution chain — a host artifact in the fixture's own
+  // root would put one there and make its behaviour platform-dependent.
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-uninstall-')));
   const core = path.join(root, 'wd');
   return {
     root,
@@ -1892,7 +1896,16 @@ test('[QU-6] AC6 (K4/Y5): an UNREADABLE shelf aborts a real run naming its code,
   assert.equal(dry.err, null, `${S}: --dry-run does not abort — ${dry.err && dry.err.message}`);
   assert.ok(dry.out.includes(`${q} (EACCES)`), `${S}: --dry-run reports the unreadable shelf`);
   assert.ok(dry.out.includes('the following will be removed'), `${S}: and still prints the plan`);
-  // ENOENT on the same path is ABSENCE, the one special case.
+  // ENOENT on the same path is ABSENCE, the one special case. The shelf is
+  // EMPTIED first: WP-uninstall-shelf-deletion-guards' Table X row X1 makes the
+  // live deleter's guarantee the KERNEL's — `<state>/quarantine` comes off only
+  // through `rmdirSync`, which fails `ENOTEMPTY` on a populated shelf whatever
+  // an injected `readdirSync` reports — so a shelf that still HOLDS the user's
+  // file is preserved and Table W row W10 stops the run. Faulting the
+  // inventory's read can no longer make the deleter destroy it, which is the
+  // whole point of that row; this arm's subject is the GATE's classification of
+  // `ENOENT`, so the fixture is made genuinely empty to isolate it.
+  fs.rmSync(path.join(q, '2026-07-01-tooling.md'), { force: true });
   const absent = await withQuarantineReaddirFault(q, 'ENOENT', () => uninstallInProcess(env, ['--yes']));
   assert.equal(absent.err, null, `${S}: ENOENT does not abort`);
   assert.equal(fs.existsSync(core), false, `${S}: it uninstalled`);
@@ -2182,4 +2195,1823 @@ test('[QU-14b] R-W4-win32 (round 3b): a REAL PowerShell parser reads -LiteralPat
   assert.equal(out.includes('ERRORS='), false, `${S}: the line PARSES — ${out}${r.stderr}`);
   assert.ok(out.includes(`LITERALPATH=${target}`),
     `${S}: and -LiteralPath is the literal target, not a truncated or re-parsed one — ${out}`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE DELETION-SIDE GUARDS — WP-uninstall-shelf-deletion-guards.
+// Every test here is tagged `[SG-n]` so the RED-proof lane can scope a mutation
+// to this package's own assertions WITHOUT also selecting the gate package's
+// `[QU-n]` ones, and every assertion carries its test's signal so a reddening
+// diagnostic identifies itself.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const manifestMod = require('../../src/core/manifest');
+
+/** Read a file's text, or null when it is gone — so a DESTROYED original
+ *  reddens as an ASSERTION failure carrying its signal, never as a bare ENOENT
+ *  throw (`scripts/red-proofs.js` refuses any red whose code is not
+ *  ERR_ASSERTION). */
+function readOrNull(p) {
+  try { return fs.readFileSync(p, 'utf8'); } catch { return null; }
+}
+
+/** The raw bytes, or null when the file is gone — same reason. @param {string} p */
+function readBytesOrNull(p) {
+  try { return fs.readFileSync(p); } catch { return null; }
+}
+
+/** True iff `p` is an existing symlink — same reason. @param {string} p */
+function isLink(p) {
+  try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; }
+}
+const { getPaths } = require('../../src/core/paths');
+
+/** A bare core laid out like a live install — state/ (with one non-shelf
+ *  child), logs/, schedules/, secrets/ — driven WITHOUT the CLI so the sweep
+ *  can be called directly. */
+function sweepCore() {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-sg-')));
+  const core = path.join(root, 'wd');
+  const paths = getPaths({
+    HOME: root,
+    WIENERDOG_HOME: core,
+    XDG_CONFIG_HOME: path.join(root, '.config'),
+    CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
+    CODEX_HOME: path.join(root, 'absent-codex'),
+  });
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.mkdirSync(paths.logs, { recursive: true });
+  fs.mkdirSync(path.join(core, 'schedules'), { recursive: true });
+  fs.mkdirSync(paths.secrets, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(paths.state, 'scheduler-status.json'), '{}\n');
+  fs.writeFileSync(path.join(paths.logs, 'run.log'), 'log\n');
+  fs.writeFileSync(path.join(paths.secrets, 'token.json'), '{"t":1}\n');
+  return { root, core, paths, sched: path.join(core, 'schedules') };
+}
+
+/** Write one shelf file exactly as `quarantinePreserve` leaves it. */
+function shelfFile(dir, name, text) {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const p = path.join(dir, name);
+  fs.writeFileSync(p, text, { mode: 0o600 });
+  return p;
+}
+
+/** Count every mutating `fs` call made inside `fn`, and optionally run a
+ *  side effect the first time `seamOn` is called — the interleaving seam. */
+function withFsSeam(fn, { seamOn = null, seam = null } = {}) {
+  const names = ['rmSync', 'rmdirSync', 'unlinkSync', 'writeFileSync', 'renameSync', 'mkdirSync', 'chmodSync'];
+  /** @type {Record<string, any[]>} */ const calls = {};
+  /** @type {Record<string, any>} */ const orig = {};
+  let fired = false;
+  for (const n of names) {
+    calls[n] = [];
+    orig[n] = fs[n];
+    fs[n] = (...args) => {
+      if (!fired && seamOn === n && seam) { fired = true; seam(); }
+      calls[n].push(args[0]);
+      return orig[n](...args);
+    };
+  }
+  try {
+    return { value: fn(), calls };
+  } finally {
+    for (const n of names) fs[n] = orig[n];
+  }
+}
+
+/** An install plus a hand-editable manifest AND the two shelf paths. */
+function shelfManifestInstall() {
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const q = path.join(core, 'state', 'quarantine');
+  const addEntries = (entries, first = false) => {
+    const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (first) m.entries.unshift(...entries);
+    else m.entries.push(...entries);
+    fs.writeFileSync(manifestPath, JSON.stringify(m, null, 2));
+  };
+  return { root, core, env, manifestPath, q, r: path.join(q, 'redacted'), addEntries };
+}
+
+test('[SG-1] AC1 (X1/X4): a shelf entry SURVIVES the live sweep, on each shelf in turn, while every mechanics dir still goes', () => {
+  const S = 'SG1-shelf-entries-survive-the-sweep';
+  for (const depth of ['quarantine', 'redacted']) {
+    const { core, paths, sched } = sweepCore();
+    const q = path.join(paths.state, 'quarantine');
+    const dir = depth === 'quarantine' ? q : path.join(q, 'redacted');
+    const note = shelfFile(dir, '2026-09-18-note.md', 'the only copy\n');
+    fs.mkdirSync(path.join(paths.state, 'scratch'), { recursive: true });
+    const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+    assert.equal(readOrNull(note, 'utf8'), 'the only copy\n',
+      `${S}: ${depth} — the entry's BYTES are unchanged, read back and compared`);
+    assert.equal(fs.existsSync(paths.state), true, `${S}: ${depth} — <state> is left in place`);
+    assert.equal(fs.existsSync(q), true, `${S}: ${depth} — and so is the shelf root`);
+    assert.ok(res.preservedQuarantine.length > 0,
+      `${S}: ${depth} — the preserved directories are REPORTED (${JSON.stringify(res.preservedQuarantine)})`);
+    assert.equal(fs.existsSync(paths.logs), false, `${S}: ${depth} — logs/ still goes`);
+    assert.equal(fs.existsSync(sched), false, `${S}: ${depth} — schedules/ still goes`);
+    assert.equal(fs.existsSync(paths.secrets), false, `${S}: ${depth} — secrets/ still goes`);
+    assert.equal(fs.existsSync(path.join(paths.state, 'scratch')), false,
+      `${S}: ${depth} — and every other child of <state>`);
+    assert.equal(res.removed.includes(paths.state), false,
+      `${S}: ${depth} — <state> is NOT reported removed while a shelf level survives (X4)`);
+    assert.equal(fs.existsSync(core), true, `${S}: ${depth} — the core is kept`);
+  }
+});
+
+test('[SG-2] AC1 round 11 (X18): no recursive delete reaches the shelf THROUGH AN ALIAS, and the target is asserted before the link', () => {
+  const S = 'SG2-no-recursive-delete-through-an-alias';
+  for (const where of ['state-sibling', 'core-logs']) {
+    const { paths } = sweepCore();
+    const q = path.join(paths.state, 'quarantine');
+    const targetDir = where === 'state-sibling' ? path.join(paths.state, 'cache') : path.join(paths.logs, 'cache');
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.symlinkSync(targetDir, q);
+    // `quarantinePreserve` writes THROUGH the alias: it joins the lexical path
+    // and the kernel follows it.
+    const note = path.join(q, '2026-09-18-note.md');
+    fs.writeFileSync(note, 'written through the alias\n');
+    const physical = path.join(targetDir, '2026-09-18-note.md');
+    const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+    // THE TARGET'S SURVIVAL FIRST — round 11 measured a loss reported as a save.
+    assert.equal(readOrNull(physical, 'utf8'), 'written through the alias\n',
+      `${S}: ${where} — the ORIGINAL's bytes survive, read back from the alias target`);
+    assert.equal(fs.existsSync(targetDir), true, `${S}: ${where} — the target directory itself is left in place`);
+    assert.ok(res.preservedQuarantine.some((p) => p === targetDir || p === paths.logs || p === q || p === paths.state),
+      `${S}: ${where} — and it is REPORTED (${JSON.stringify(res.preservedQuarantine)})`);
+    assert.equal(isLink(q), true, `${S}: ${where} — the quarantine link is still there`);
+  }
+});
+
+test('[SG-3] AC1 round 12 (X19): a <state> alias covering a shelf is RETAINED across BOTH live sweeps', () => {
+  const S = 'SG3-state-alias-retained-across-both-sweeps';
+  const { paths } = sweepCore();
+  fs.rmSync(paths.state, { recursive: true, force: true });
+  fs.symlinkSync(paths.logs, paths.state);
+  const note = shelfFile(path.join(paths.logs, 'quarantine'), '2026-09-18-note.md', 'under the alias\n');
+  // The sequence uninstall.js actually performs — :408, then :467.
+  const first = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note, 'utf8'), 'under the alias\n', `${S}: the original survives the FIRST sweep`);
+  const second = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note, 'utf8'), 'under the alias\n',
+    `${S}: and the SECOND — an implementation that unlinks the alias loses it here, not on the first call`);
+  assert.equal(isLink(paths.state), true, `${S}: the <state> link is RETAINED`);
+  assert.equal(fs.existsSync(paths.logs), true, `${S}: and <core>/logs was not recursively deleted`);
+  assert.ok(first.preservedQuarantine.length > 0 && second.preservedQuarantine.length > 0,
+    `${S}: both calls REPORT what they retained (${JSON.stringify([first.preservedQuarantine, second.preservedQuarantine])})`);
+});
+
+test('[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes', () => {
+  const S = 'SG4-chain-closure-protects-the-intermediate-link';
+  const { paths } = sweepCore();
+  const q = path.join(paths.state, 'quarantine');
+  const cache = path.join(paths.state, 'cache');
+  const link = path.join(cache, 'link');
+  const recovery = path.join(paths.logs, 'recovery');
+  fs.mkdirSync(cache, { recursive: true });
+  fs.mkdirSync(recovery, { recursive: true });
+  fs.symlinkSync(recovery, link);
+  fs.symlinkSync(link, q);
+  const note = shelfFile(recovery, '2026-09-18-note.md', 'two hops away\n');
+  for (const pass of ['run', 'retry']) {
+    manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+    manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+    assert.equal(fs.existsSync(link), true,
+      `${S}: ${pass} — the INTERMEDIATE link still exists (asserted first: the failure cascades from here)`);
+    assert.equal(fs.existsSync(cache), true, `${S}: ${pass} — <state>/cache was not recursively deleted`);
+    assert.equal(readOrNull(note, 'utf8'), 'two hops away\n', `${S}: ${pass} — and the original's bytes are unchanged`);
+  }
+});
+
+test('[SG-5] AC2 (X1/X4): ABSENT, EMPTY and BOTH-EMPTY all end with <state> gone, reported ONCE, and nothing preserved', () => {
+  const S = 'SG5-empty-and-absent-shelves-still-remove-state';
+  const arms = {
+    absent: () => {},
+    empty: (paths) => fs.mkdirSync(path.join(paths.state, 'quarantine'), { recursive: true }),
+    'both-empty': (paths) => fs.mkdirSync(path.join(paths.state, 'quarantine', 'redacted'), { recursive: true }),
+  };
+  for (const [name, seed] of Object.entries(arms)) {
+    const { paths } = sweepCore();
+    seed(paths);
+    const inv = manifestMod.quarantineInventory(paths);
+    assert.equal(inv.entries, 0, `${S}: ${name} — the inventory counts nothing`);
+    const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+    assert.equal(fs.existsSync(paths.state), false, `${S}: ${name} — <state> is GONE`);
+    assert.deepEqual(res.preservedQuarantine, [], `${S}: ${name} — and nothing was preserved`);
+    assert.equal(res.removed.filter((p) => p === paths.state).length, 1,
+      `${S}: ${name} — <state> appears in removed EXACTLY ONCE (${JSON.stringify(res.removed)})`);
+    assert.equal(res.removed.some((p) => p.includes('quarantine')), false,
+      `${S}: ${name} — and neither shelf path appears in it — the granularity the caller's count depends on`);
+  }
+});
+
+test('[SG-6] AC2 round 15 (X17 (1a) class split): on a SYMLINKED CORE the credentials are still removed', () => {
+  const S = 'SG6-chain-node-does-not-protect-its-descendants';
+  for (const shelves of ['absent', 'present-empty']) {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-sg-')));
+    const physical = path.join(root, 'data', 'wienerdog');
+    fs.mkdirSync(physical, { recursive: true });
+    const core = path.join(root, 'wd');
+    fs.symlinkSync(physical, core);
+    const paths = getPaths({
+      HOME: root, WIENERDOG_HOME: core, XDG_CONFIG_HOME: path.join(root, '.config'),
+      CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'), CODEX_HOME: path.join(root, 'absent-codex'),
+    });
+    fs.mkdirSync(paths.state, { recursive: true });
+    fs.mkdirSync(paths.logs, { recursive: true });
+    fs.mkdirSync(path.join(core, 'app'), { recursive: true });
+    fs.mkdirSync(paths.secrets, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(path.join(paths.secrets, 'google-oauth.json'), '{"refresh_token":"x"}\n');
+    if (shelves === 'present-empty') fs.mkdirSync(path.join(paths.state, 'quarantine', 'redacted'), { recursive: true });
+    manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+    assert.equal(fs.existsSync(path.join(physical, 'secrets')), false,
+      `${S}: ${shelves} — the CREDENTIALS are gone: a protection that strands them has failed in the other direction`);
+    assert.equal(fs.existsSync(path.join(physical, 'logs')), false, `${S}: ${shelves} — logs/ is gone`);
+    assert.equal(fs.existsSync(path.join(physical, 'state')), false, `${S}: ${shelves} — and state/ with it`);
+  }
+});
+
+test('[SG-7] AC3 (W6/X4): on an install with no shelf ENTRIES the complete stdout is byte-identical, both plans compared in full', async () => {
+  const S = 'SG7-empty-shelf-output-is-byte-identical';
+  /** @param {(core:string)=>void} seed */
+  const capture = async (seed, argv) => {
+    const { root, core, env } = tempEnv();
+    run(['init', '--yes'], env);
+    seed(core);
+    const res = await uninstallInProcess(env, argv);
+    assert.equal(res.err, null, `${S}: ${argv.join(' ')} — the run completes (${res.err && res.err.message})`);
+    return normalizeRun(res.out, root, core);
+  };
+  for (const argv of [['--dry-run'], ['--yes']]) {
+    const base = await capture(() => {}, argv);
+    const both = await capture(
+      (core) => fs.mkdirSync(path.join(core, 'state', 'quarantine', 'redacted'), { recursive: true }),
+      argv
+    );
+    assert.equal(both, base,
+      `${S}: ${argv.join(' ')} — two EMPTY shelf directories change not one byte, including the "Removed N item(s)" line and the mechanics plan`);
+    assert.ok(base.includes('Removed') || base.includes('would be removed'),
+      `${S}: ${argv.join(' ')} — and the compared text really is the plan/summary`);
+  }
+});
+
+test('[SG-8] AC4 (X1/X3/W8): a copy completing BETWEEN the child removals and the rmdir climb survives, on both live sweeps', () => {
+  const S = 'SG8-interleaved-copy-survives';
+  for (const shelfName of ['quarantine', 'Quarantine']) {
+    const { paths } = sweepCore();
+    const lex = path.join(paths.state, 'quarantine');
+    fs.mkdirSync(path.join(paths.state, shelfName), { recursive: true, mode: 0o700 });
+    // The gate's inventory sees an EMPTY shelf here, so the run proceeds…
+    assert.equal(manifestMod.quarantineInventory(paths).entries, 0, `${S}: ${shelfName} — the gate sees an empty shelf`);
+    let note = null;
+    const { calls } = withFsSeam(
+      () => manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null }),
+      {
+        seamOn: 'rmdirSync',
+        // …and a preserve completes THROUGH THE LOWERCASE PATH between step 2's
+        // child removals and step 3's climb.
+        seam: () => { note = shelfFile(lex, '2026-09-18-note.md', 'arrived mid-sweep\n'); },
+      }
+    );
+    assert.ok(note && readOrNull(note, 'utf8') === 'arrived mid-sweep\n',
+      `${S}: ${shelfName} — the interleaved copy's BYTES survive, read back`);
+    assert.equal(calls.rmSync.includes(path.join(paths.state, shelfName)), false,
+      `${S}: ${shelfName} — and no recursive rmSync was ever aimed at the shelf, counted through the seam`);
+    const again = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+    assert.equal(readOrNull(note, 'utf8'), 'arrived mid-sweep\n', `${S}: ${shelfName} — the SECOND sweep preserves it too`);
+    assert.ok(again.preservedQuarantine.length > 0, `${S}: ${shelfName} — and reports it`);
+  }
+});
+
+test('[SG-9] AC5 (X10/Y9): a symlinked <state> is NEVER DESCENDED, and the ordinary alias layout still completes', async () => {
+  const S = 'SG9-symlinked-state-is-never-descended';
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const external = path.join(root, 'personal');
+  fs.mkdirSync(path.join(external, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(external, 'notes', 'mine.md'), 'my own file\n');
+  const state = path.join(core, 'state');
+  fs.rmSync(state, { recursive: true, force: true });
+  fs.symlinkSync(external, state);
+  const res = await uninstallInProcess(env, ['--yes']);
+  assert.equal(res.err, null, `${S}: the whole command COMPLETES (${res.err && res.err.message})`);
+  assert.equal(readOrNull(path.join(external, 'notes', 'mine.md'), 'utf8'), 'my own file\n',
+    `${S}: every file in the external directory is present with its bytes unchanged`);
+  assert.equal(fs.existsSync(state), false, `${S}: while the LINK at <core>/state is removed`);
+  assert.equal(fs.existsSync(core), false, `${S}: and the core is gone`);
+  const second = await uninstallInProcess(env, ['--yes']);
+  assert.ok(second.err && /no install manifest found/.test(second.err.message),
+    `${S}: a second run refuses with "no install manifest found", not with a preservation stop — ${second.err && second.err.message}`);
+});
+
+test('[SG-10] AC5 round 3 (X11): validation runs TOP-DOWN — an external `redacted/` under a symlinked shelf root is never removed', () => {
+  const S = 'SG10-validation-runs-top-down';
+  for (const at of ['quarantine', 'state']) {
+    const { paths } = sweepCore();
+    const externalRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-sg-ext-')));
+    let linkPath;
+    let externalRedacted;
+    if (at === 'quarantine') {
+      externalRedacted = path.join(externalRoot, 'redacted');
+      fs.mkdirSync(externalRedacted);
+      linkPath = path.join(paths.state, 'quarantine');
+      fs.symlinkSync(externalRoot, linkPath);
+    } else {
+      externalRedacted = path.join(externalRoot, 'quarantine', 'redacted');
+      fs.mkdirSync(externalRedacted, { recursive: true });
+      linkPath = paths.state;
+      fs.rmSync(paths.state, { recursive: true, force: true });
+      fs.symlinkSync(externalRoot, paths.state);
+    }
+    const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+    assert.equal(fs.existsSync(externalRedacted), true,
+      `${S}: ${at} — the EXTERNAL redacted/ directory still exists (an empty directory has no bytes to compare, so existence is the assertion)`);
+    assert.equal(isLink(linkPath), true, `${S}: ${at} — the link is preserved, never followed and never removed`);
+    assert.ok(res.preservedQuarantine.length > 0, `${S}: ${at} — and reported (${JSON.stringify(res.preservedQuarantine)})`);
+  }
+});
+
+test('[SG-11] AC6 (X12): shelf identity is CASE-FOLDED, and a fold-equal-but-not-byte-equal name is preserved as ambiguous', () => {
+  const S = 'SG11-fold-equal-name-is-preserved';
+  // (b) a NON-EMPTY `Quarantine` is not recursively deleted by step 2.
+  const { paths } = sweepCore();
+  const cap = path.join(paths.state, 'Quarantine');
+  const note = shelfFile(cap, '2026-09-18-note.md', 'capitalized shelf\n');
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note, 'utf8'), 'capitalized shelf\n',
+    `${S}: every byte in a capitalized shelf survives — a byte-equality test would have deleted it in step 2`);
+  assert.ok(res.preservedQuarantine.some((p) => p === cap || p === paths.state),
+    `${S}: and it is reported (${JSON.stringify(res.preservedQuarantine)})`);
+  assert.equal(fs.existsSync(paths.state), true, `${S}: <state> is preserved with it`);
+  // (c) the ambiguity rule, with the byte-exact lowercase name beside it.
+  const caseSensitive = !fs.existsSync(path.join(paths.state, 'QUARANTINE'));
+  if (caseSensitive) {
+    const { paths: p2 } = sweepCore();
+    const lower = path.join(p2.state, 'quarantine');
+    const upper = path.join(p2.state, 'Quarantine');
+    fs.mkdirSync(lower, { recursive: true });
+    fs.mkdirSync(upper, { recursive: true });
+    const res2 = manifestMod.disposeCoreMechanics(p2, { dryRun: false, vaultPath: null });
+    assert.ok(res2.preservedQuarantine.includes(upper),
+      `${S}: a fold-equal name that is NOT byte-equal is preserved and reported even beside the byte-exact one`);
+    assert.equal(fs.existsSync(upper), true, `${S}: and it is still on disk`);
+    assert.equal(fs.existsSync(p2.state), true, `${S}: which keeps <state> alive by the existing ENOTEMPTY rule`);
+  }
+});
+
+test('[SG-12] AC7 (X13/Y10): an ordinary mechanics failure still PROPAGATES while a shelf ENOTEMPTY does not', async () => {
+  const S = 'SG12-mechanics-failure-propagates';
+  const { paths } = sweepCore();
+  shelfFile(path.join(paths.state, 'quarantine'), '2026-09-18-note.md', 'kept\n');
+  const orig = fs.rmSync;
+  let thrown = null;
+  fs.rmSync = (p, ...rest) => {
+    if (p === paths.secrets) {
+      const e = new Error('injected EPERM');
+      /** @type {any} */ (e).code = 'EPERM';
+      throw e;
+    }
+    return orig(p, ...rest);
+  };
+  try {
+    manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  } catch (e) {
+    thrown = e;
+  } finally {
+    fs.rmSync = orig;
+  }
+  assert.ok(thrown && thrown.code === 'EPERM',
+    `${S}: a failure removing secrets/ still THROWS — swallowing it strands a live OAuth credential and deletes the ledger`);
+  assert.equal(fs.existsSync(paths.secrets), true, `${S}: and the directory is still there`);
+  // The other side of the same boundary: a shelf-level ENOTEMPTY does NOT throw.
+  const quiet = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.ok(quiet.preservedQuarantine.length > 0,
+    `${S}: while a shelf-level ENOTEMPTY is reported in preservedQuarantine instead of thrown`);
+  // And a failure ENUMERATING <state> propagates too (X1 step 1).
+  const origRead = fs.readdirSync;
+  let readThrew = null;
+  fs.readdirSync = (p, ...rest) => {
+    if (p === paths.state) {
+      const e = new Error('injected EIO');
+      /** @type {any} */ (e).code = 'EIO';
+      throw e;
+    }
+    return origRead(p, ...rest);
+  };
+  try {
+    manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  } catch (e) {
+    readThrew = e;
+  } finally {
+    fs.readdirSync = origRead;
+  }
+  assert.ok(readThrew, `${S}: and so does a failure ENUMERATING <state>`);
+});
+
+test('[SG-13] AC8 (X15): --dry-run PLANS BY READING, and performs ZERO mutating filesystem calls', () => {
+  const S = 'SG13-dry-run-plans-by-reading-only';
+  const arms = [
+    ['empty', (paths) => fs.mkdirSync(path.join(paths.state, 'quarantine'), { recursive: true }), true],
+    ['populated', (paths) => shelfFile(path.join(paths.state, 'quarantine'), 'n.md', 'x\n'), false],
+  ];
+  for (const [name, seed, predicts] of arms) {
+    const { paths } = sweepCore();
+    seed(paths);
+    const { value, calls } = withFsSeam(() => manifestMod.disposeCoreMechanics(paths, { dryRun: true, vaultPath: null }));
+    for (const n of Object.keys(calls)) {
+      assert.equal(calls[n].length, 0,
+        `${S}: ${name} — ZERO mutating calls, counted through the seam: fs.${n} was called ${calls[n].length} time(s)`);
+    }
+    assert.equal(value.removed.includes(paths.state), predicts,
+      `${S}: ${name} — the plan ${predicts ? 'predicts' : 'does NOT predict'} <state> removed (${JSON.stringify(value.removed)})`);
+    if (!predicts) {
+      assert.ok(value.preservedQuarantine.length > 0,
+        `${S}: ${name} — and names the shelf it would keep instead (${JSON.stringify(value.preservedQuarantine)})`);
+    }
+  }
+  // UNREADABLE: reported, and no removal predicted (K4).
+  const { paths } = sweepCore();
+  const q = path.join(paths.state, 'quarantine');
+  fs.mkdirSync(q, { recursive: true });
+  const origRead = fs.readdirSync;
+  fs.readdirSync = (p, ...rest) => {
+    if (p === q) {
+      const e = new Error('injected EACCES');
+      /** @type {any} */ (e).code = 'EACCES';
+      throw e;
+    }
+    return origRead(p, ...rest);
+  };
+  let plan;
+  try {
+    plan = manifestMod.disposeCoreMechanics(paths, { dryRun: true, vaultPath: null });
+  } finally {
+    fs.readdirSync = origRead;
+  }
+  assert.equal(plan.removed.includes(paths.state), false, `${S}: unreadable — no removal is predicted`);
+  assert.ok(plan.preservedQuarantine.includes(q), `${S}: unreadable — and the level is reported`);
+});
+
+test('[SG-14] AC9 (X16/Y6): a forged hash-less {kind:file} entry cannot reach the shelf, interleaved and through a `..` alias', async () => {
+  const S = 'SG14-forged-file-entry-cannot-reach-the-shelf';
+  for (const shape of ['literal', 'dot-dot']) {
+    const { core, env, manifestPath, q, addEntries } = shelfManifestInstall();
+    const name = '2026-09-18-note.md';
+    const target = shape === 'literal'
+      ? path.join(q, name)
+      : path.join(core, 'state', '.', 'quarantine', '..', 'quarantine', name);
+    // FIRST in `entries` ⇒ LAST in reverse()'s reversed loop, so the seam has
+    // already completed the preserve by the time this entry is replayed.
+    addEntries([{ kind: 'file', path: target }], true);
+    const bytesBefore = fs.readFileSync(manifestPath);
+    // The shelf is EMPTY when the gate's inventory runs, so the run proceeds…
+    const origMkdir = fs.mkdirSync;
+    let planted = null;
+    // …and the preserve completes under exactly that name BEFORE reverse()
+    // replays the entry: seam on reverse()'s own first stderr-free mutation.
+    const seamFs = fs.rmSync;
+    fs.rmSync = (p, ...rest) => {
+      if (!planted) planted = shelfFile(q, name, 'the only copy\n');
+      return seamFs(p, ...rest);
+    };
+    let res;
+    try {
+      res = await uninstallInProcess(env, ['--yes']);
+    } finally {
+      fs.rmSync = seamFs;
+      fs.mkdirSync = origMkdir;
+    }
+    assert.ok(planted, `${S}: ${shape} — the fixture really did complete a preserve mid-run`);
+    assert.equal(readOrNull(planted, 'utf8'), 'the only copy\n',
+      `${S}: ${shape} — the original's BYTES survive the replay, read back`);
+    assert.deepEqual(readBytesOrNull(manifestPath), bytesBefore,
+      `${S}: ${shape} — and the manifest bytes never changed, so the byte-compare is not what saved it`);
+    assert.ok(res.err, `${S}: ${shape} — the run stops rather than deleting the ledger`);
+  }
+});
+
+test('[SG-15] AC9 round 9 (X16 from-above, Table V): a forged recursively-deleting entry that CONTAINS the shelf is guarded, and `dir` is not', async () => {
+  const S = 'SG15-from-above-guard';
+  for (const kind of ['vendored-tree', 'copied-skill']) {
+    const { core, env, q, addEntries } = shelfManifestInstall();
+    const state = path.join(core, 'state');
+    let entryPath = state;
+    if (kind === 'vendored-tree') {
+      // `<core>/app` IS the alias: reverseVendoredTree's ONLY ownership test is
+      // sameResolvedDir(entry.path, appRoot), which a forged entry satisfies
+      // exactly when the two resolve to the same directory.
+      fs.rmSync(path.join(core, 'app'), { recursive: true, force: true });
+      fs.symlinkSync(state, path.join(core, 'app'));
+    } else {
+      // copied-skill's ownership proof is parent-equals-skills-root +
+      // `wienerdog-*` basename + real dir + hashDir match, so the only shape
+      // that reaches its recursive rmSync is a REAL skill directory that
+      // CONTAINS the shelf — which is what a `<state>` alias into it produces.
+      const skillsRoot = path.join(core, 'skills');
+      entryPath = path.join(skillsRoot, 'wienerdog-shelf');
+      fs.mkdirSync(entryPath, { recursive: true });
+      fs.rmSync(state, { recursive: true, force: true });
+      fs.symlinkSync(entryPath, state);
+      env.CLAUDE_CONFIG_DIR = core;
+    }
+    // LAST in `entries` ⇒ FIRST replayed: the forged entry's ownership proof
+    // resolves through `<core>/app`, which the install's OWN vendored-tree entry
+    // unlinks if it is replayed first. The shelf is EMPTY when the gate's
+    // inventory runs, and the preserve completes on entry to `reverse()` —
+    // before the replay, which is the window round 9 measured.
+    const hash = kind === 'copied-skill' ? manifestMod.hashDir(entryPath) : undefined;
+    addEntries([hash ? { kind, path: entryPath, hash } : { kind, path: entryPath }]);
+    const seamFs = fs.rmSync;
+    const origReverse = manifestMod.reverse;
+    /** @type {string[]} */ const recursiveTargets = [];
+    let note = null;
+    fs.rmSync = (p, opts, ...rest) => {
+      if (opts && opts.recursive) recursiveTargets.push(p);
+      return seamFs(p, opts, ...rest);
+    };
+    manifestMod.reverse = (...a) => {
+      if (!note && !a[2].dryRun) note = shelfFile(q, '2026-09-18-note.md', 'guarded from above\n');
+      return origReverse(...a);
+    };
+    let res;
+    try {
+      res = await uninstallInProcess(env, ['--yes']);
+    } finally {
+      fs.rmSync = seamFs;
+      manifestMod.reverse = origReverse;
+    }
+    assert.ok(note, `${S}: ${kind} — the fixture really did complete a preserve before the replay`);
+    assert.equal(readOrNull(note, 'utf8'), 'guarded from above\n',
+      `${S}: ${kind} — the original's bytes survive a recursive reverser aimed ABOVE the shelf`);
+    assert.equal(recursiveTargets.includes(entryPath), false,
+      `${S}: ${kind} — and the recursive rmSync was never invoked on it, counted through the seam (${JSON.stringify(recursiveTargets)})`);
+    assert.ok(res.err, `${S}: ${kind} — the run stops with the ledger intact`);
+  }
+  // THE NEGATIVE CONTROL (Table V): an ordinary `{kind:'dir', path:'<state>'}`
+  // entry is NOT guarded — its reverser removes only a virtually-empty
+  // directory, and guarding it would add a `skipped` line to every ordinary
+  // uninstall and break Table W row W6.
+  const ctl = shelfManifestInstall();
+  const ctlPaths = require('../../src/core/paths').getPaths({ ...ctl.env });
+  fs.mkdirSync(ctl.q, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(ctl.q, 'n.md'), 'x\n', { mode: 0o600 });
+  const ctlManifest = { version: 1, createdAt: '', entries: [{ kind: 'dir', path: path.join(ctl.core, 'state') }] };
+  const ctlRes = manifestMod.reverse(ctlPaths, ctlManifest, { dryRun: true });
+  assert.deepEqual(ctlRes.shelfGuarded, [],
+    `${S}: dir — the dir kind is the single, provable exemption from the from-above half`);
+});
+
+test('[SG-16] AC9 round 10 (X17): ABSENCE is not a failure — an ordinary install skips nothing new, and a late shelf is still protected', async () => {
+  const S = 'SG16-absence-is-not-a-failure';
+  // (a) THE ORDINARY INSTALL: neither shelf directory exists.
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  assert.equal(fs.existsSync(path.join(core, 'state', 'quarantine')), false, `${S}: the fixture really has no shelf`);
+  const plain = await uninstallInProcess(env, ['--yes']);
+  assert.equal(plain.err, null, `${S}: it uninstalls — the round-10 defect turned every app-tree removal into a skip (${plain.err && plain.err.message})`);
+  assert.equal(fs.existsSync(core), false, `${S}: and the core is gone`);
+  assert.equal(/preserving .* secret quarantine/.test(normalizeRun(plain.out, root, core)), false,
+    `${S}: with nothing newly skipped on stdout`);
+  // (c) the two outcomes stay distinguishable.
+  const { paths } = sweepCore();
+  const q = path.join(paths.state, 'quarantine');
+  for (const [code, expectPreserved] of [['ENOENT', false], ['EACCES', true]]) {
+    const { paths: p } = sweepCore();
+    const target = path.join(p.state, 'quarantine');
+    const origLstat = fs.lstatSync;
+    fs.lstatSync = (pp, ...rest) => {
+      if (pp === target) {
+        const e = new Error(`injected ${code}`);
+        /** @type {any} */ (e).code = code;
+        throw e;
+      }
+      return origLstat(pp, ...rest);
+    };
+    let out;
+    try {
+      out = manifestMod.disposeCoreMechanics(p, { dryRun: false, vaultPath: null });
+    } finally {
+      fs.lstatSync = origLstat;
+    }
+    assert.equal(out.preservedQuarantine.length > 0, expectPreserved,
+      `${S}: ${code} — ${expectPreserved ? 'UNANSWERABLE preserves and reports' : 'ABSENCE preserves nothing and reports nothing'} (${JSON.stringify(out.preservedQuarantine)})`);
+  }
+  assert.equal(fs.existsSync(q), false, `${S}: the control fixture had no shelf either`);
+});
+
+test('[SG-17] AC9 round 17 (X17 (1a)): a HYPOTHETICAL shelf root keeps FULL class (i) reach — the physical path is covered too', async () => {
+  const S = 'SG17-hypothetical-root-keeps-subtree-reach';
+  const { root, core, env } = tempEnv();
+  // `init` refuses to write under a symlinked core, so the STABLE alias is put
+  // in place after the install and before the run — which is the layout round 17
+  // measured: created before the run, not during it.
+  run(['init', '--yes'], env);
+  const physical = path.join(root, 'data', 'wienerdog');
+  fs.mkdirSync(path.dirname(physical), { recursive: true });
+  fs.renameSync(core, physical);
+  fs.symlinkSync(physical, core);
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const physicalNote = path.join(physical, 'state', 'quarantine', '2026-09-18-note.md');
+  // FIRST in `entries` ⇒ LAST replayed, so the preserve has completed by then.
+  m.entries.unshift({ kind: 'file', path: physicalNote });
+  fs.writeFileSync(manifestPath, JSON.stringify(m, null, 2));
+  assert.equal(fs.existsSync(path.join(physical, 'state', 'quarantine')), false, `${S}: both shelves start ABSENT`);
+  const seamFs = fs.rmSync;
+  let planted = null;
+  fs.rmSync = (p, ...rest) => {
+    if (!planted) planted = shelfFile(path.join(physical, 'state', 'quarantine'), '2026-09-18-note.md', 'physical path\n');
+    return seamFs(p, ...rest);
+  };
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmSync = seamFs;
+  }
+  assert.equal(readOrNull(physicalNote, 'utf8'), 'physical path\n',
+    `${S}: the bytes survive although the entry names the PHYSICAL path, which the lexical anchors never see`);
+  assert.ok(res.err, `${S}: and the run stops with the ledger intact`);
+});
+
+test('[SG-18] AC9 round 13 (X20): a `symlink` entry on a protected shelf’s chain is preserved — the alias first, then the original', async () => {
+  const S = 'SG18-symlink-entry-on-the-chain-is-preserved';
+  for (const which of ['intermediate', 'outermost']) {
+    const { root, core, env, addEntries } = shelfManifestInstall();
+    const state = path.join(core, 'state');
+    const claudeSkills = path.join(root, 'sg-claude', 'skills');
+    fs.mkdirSync(claudeSkills, { recursive: true });
+    env.CLAUDE_CONFIG_DIR = path.join(root, 'sg-claude');
+    const intermediate = path.join(claudeSkills, 'wienerdog-test');
+    const logs = path.join(core, 'logs');
+    fs.mkdirSync(logs, { recursive: true });
+    fs.rmSync(state, { recursive: true, force: true });
+    fs.symlinkSync(logs, intermediate);
+    fs.symlinkSync(intermediate, state);
+    const notePath = path.join(logs, 'quarantine', '2026-09-18-note.md');
+    const entryPath = which === 'intermediate' ? intermediate : state;
+    const linkTarget = which === 'intermediate' ? logs : intermediate;
+    const id = manifestMod.linkIdentity(entryPath);
+    addEntries([{ kind: 'symlink', path: entryPath, target: linkTarget, ...(id || {}) }], true);
+    const seamFs = fs.rmSync;
+    let note = null;
+    fs.rmSync = (p, ...rest) => {
+      if (!note) note = shelfFile(path.join(logs, 'quarantine'), '2026-09-18-note.md', 'behind two aliases\n');
+      return seamFs(p, ...rest);
+    };
+    let res;
+    try {
+      res = await uninstallInProcess(env, ['--yes']);
+    } finally {
+      fs.rmSync = seamFs;
+    }
+    assert.ok(note && note === notePath, `${S}: ${which} — the fixture completed a preserve before the replay`);
+    assert.equal(fs.existsSync(intermediate), true,
+      `${S}: ${which} — the alias survives FIRST: it is what makes the original protectable on the next pass`);
+    assert.equal(readOrNull(note, 'utf8'), 'behind two aliases\n', `${S}: ${which} — and the original's bytes are unchanged`);
+    assert.ok(res.err, `${S}: ${which} — the run stops with the ledger intact`);
+    // …and again as a RETRY, which is where the pre-round-13 rule lost it.
+    const retry = await uninstallInProcess(env, ['--yes']);
+    assert.equal(readOrNull(note, 'utf8'), 'behind two aliases\n', `${S}: ${which} — the RETRY leaves them unchanged too`);
+    assert.ok(retry.err, `${S}: ${which} — and stops again`);
+  }
+});
+
+test('[SG-19] AC4 round 18/19 (X19 clause (b)): an alias whose target OVERLAPS an allowed root is retained, across a full retry', async () => {
+  const S = 'SG19-alias-into-an-allowed-root-is-retained';
+  const { root, core, env, addEntries } = shelfManifestInstall();
+  const aliasTarget = path.join(root, 'sg-claude');
+  const claudeDir = path.join(aliasTarget, 'cfg');
+  fs.mkdirSync(claudeDir, { recursive: true });
+  env.CLAUDE_CONFIG_DIR = claudeDir;
+  const state = path.join(core, 'state');
+  fs.rmSync(state, { recursive: true, force: true });
+  fs.symlinkSync(aliasTarget, state);
+  const note = path.join(aliasTarget, 'quarantine', '2026-09-18-note.md');
+  addEntries([{ kind: 'file', path: note }]);
+  assert.equal(fs.existsSync(path.join(aliasTarget, 'quarantine')), false, `${S}: both shelves are ABSENT at the retention decision`);
+  // The copy completes AFTER the retention decision: `<state>` is the FIRST
+  // mechanics entry, so step 0b has already run by the time the sweep reaches
+  // its next `fs.rmSync`. Wrapping the disposer is what confines the seam to
+  // that window.
+  const origDispose = manifestMod.disposeCoreMechanics;
+  let planted = null;
+  manifestMod.disposeCoreMechanics = (...a) => {
+    const out = origDispose(...a);
+    if (!planted) planted = shelfFile(path.join(aliasTarget, 'quarantine'), '2026-09-18-note.md', 'ancestor shape\n');
+    return out;
+  };
+  try {
+    await uninstallInProcess(env, ['--yes']);
+  } finally {
+    manifestMod.disposeCoreMechanics = origDispose;
+  }
+  assert.ok(planted, `${S}: the fixture really did complete a copy after the retention decision`);
+  assert.equal(isLink(state), true, `${S}: the alias is RETAINED — its target overlaps an allowed root`);
+  assert.equal(readOrNull(note, 'utf8'), 'ancestor shape\n', `${S}: and the copy survives the first run`);
+  const retry = await uninstallInProcess(env, ['--yes']);
+  assert.equal(readOrNull(note, 'utf8'), 'ancestor shape\n',
+    `${S}: THE RETRY IS THE POINT — under the pre-round-18 rule the first run passes and the second destroys it`);
+  assert.ok(retry.err, `${S}: and the retry stops rather than deleting the ledger`);
+});
+
+test('[SG-20] AC10 (W10): the MANIFEST survives a sweep that preserved something, and is deleted when nothing was', async () => {
+  const S = 'SG20-manifest-survives-a-preserving-sweep';
+  const { core, env, manifestPath, q } = shelfManifestInstall();
+  const configPath = path.join(core, 'config.yaml');
+  const configBefore = fs.readFileSync(configPath);
+  const manifestBefore = fs.readFileSync(manifestPath);
+  const origRmdir = fs.rmdirSync;
+  let planted = null;
+  fs.rmdirSync = (p, ...rest) => {
+    if (!planted) planted = shelfFile(q, '2026-09-18-note.md', 'late copy\n');
+    return origRmdir(p, ...rest);
+  };
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmdirSync = origRmdir;
+  }
+  assert.ok(res.err, `${S}: the run STOPS rather than deleting the retry ledger`);
+  assert.equal(fs.existsSync(manifestPath), true, `${S}: install-manifest.json is still present`);
+  assert.deepEqual(readBytesOrNull(manifestPath), manifestBefore, `${S}: with unchanged bytes`);
+  assert.equal(fs.existsSync(configPath), true, `${S}: and so is config.yaml`);
+  assert.deepEqual(readBytesOrNull(configPath), configBefore, `${S}: likewise unchanged`);
+  assert.ok(res.err.message.includes(q) || res.err.message.includes(path.dirname(q)),
+    `${S}: the message NAMES what was preserved, literally — ${res.err.message}`);
+  assert.ok(/re-running is safe/.test(res.err.message), `${S}: and says re-running is safe — ${res.err.message}`);
+  // …and re-running once the shelf is cleared COMPLETES.
+  fs.rmSync(q, { recursive: true, force: true });
+  const again = await uninstallInProcess(env, ['--yes']);
+  assert.equal(again.err, null, `${S}: re-running after the user clears the shelf completes (${again.err && again.err.message})`);
+  assert.equal(fs.existsSync(core), false, `${S}: and the core is gone`);
+  // ROUND 16'S ARM: the copy lands AFTER the first live sweep returned nothing
+  // and before the manifest delete, and NO manifest entry names it — so the
+  // FRESH inventory read is the only one of W10's three inputs that can see it.
+  const late = shelfManifestInstall();
+  const origDispose = manifestMod.disposeCoreMechanics;
+  let calls = 0;
+  let lateNote = null;
+  manifestMod.disposeCoreMechanics = (...a) => {
+    const out = origDispose(...a);
+    calls += 1;
+    if (calls === 1) lateNote = shelfFile(late.q, '2026-09-18-note.md', 'after the first sweep\n');
+    return out;
+  };
+  let lateRes;
+  try {
+    lateRes = await uninstallInProcess(late.env, ['--yes']);
+  } finally {
+    manifestMod.disposeCoreMechanics = origDispose;
+  }
+  assert.ok(lateNote, `${S}: the fixture really did seam the copy in after the first sweep`);
+  assert.ok(lateRes.err, `${S}: the run stops on the FRESH read alone — the first sweep legitimately returned nothing`);
+  assert.equal(fs.existsSync(late.manifestPath), true, `${S}: and the ledger survives`);
+  assert.equal(fs.existsSync(path.join(late.core, 'config.yaml')), true, `${S}: with config.yaml`);
+  fs.rmSync(late.q, { recursive: true, force: true });
+  const lateAgain = await uninstallInProcess(late.env, ['--yes']);
+  assert.equal(lateAgain.err, null, `${S}: and a retry completes once the shelf is cleared (${lateAgain.err && lateAgain.err.message})`);
+
+  // THE BOUNDARY: with nothing preserved the manifest is deleted exactly as before.
+  const plain = shelfManifestInstall();
+  const ok = await uninstallInProcess(plain.env, ['--yes']);
+  assert.equal(ok.err, null, `${S}: an ordinary install still completes`);
+  assert.equal(fs.existsSync(plain.manifestPath), false, `${S}: and its manifest IS deleted — the criterion measures the boundary`);
+});
+
+test('[SG-21] AC10 round 20 (X22): a replay-only resolution failure reaches W10, and an unconstructable SET aborts before any mutation', async () => {
+  const S = 'SG21-shelf-guard-skip-reaches-w10';
+  // (2) PER-ENTRY: a transient failure CONFINED TO THE LIVE REPLAY WINDOW —
+  // wrapping `reverse()` itself is what confines it, so every later read
+  // succeeds, the inventory finds the shelves empty and the disposer reports no
+  // preservation. The stop then comes from `shelfGuarded` alone, which is the
+  // whole point of the arm.
+  const { core, env, manifestPath } = shelfManifestInstall();
+  const appDir = path.join(core, 'app');
+  // The chain walk classifies each component under its RESOLVED prefix, so the
+  // injection has to answer to both spellings of the same object.
+  const appDirReal = path.join(fs.realpathSync(core), 'app');
+  const origReverse = manifestMod.reverse;
+  manifestMod.reverse = (...a) => {
+    const origLstat = fs.lstatSync;
+    const origNative = fs.realpathSync.native;
+    const boom = () => {
+      const e = new Error('injected EIO');
+      /** @type {any} */ (e).code = 'EIO';
+      throw e;
+    };
+    // Under X17′ the RESOLUTION is `realpathSync.native`, so the injection has
+    // to answer there as well as at the `lstat` that classifies the component.
+    fs.lstatSync = (p, ...rest) => ((p === appDir || p === appDirReal) ? boom() : origLstat(p, ...rest));
+    fs.realpathSync.native = (p, ...rest) => (
+      (p === appDir || p === appDirReal) ? boom() : origNative(p, ...rest)
+    );
+    try {
+      return origReverse(...a);
+    } finally {
+      fs.lstatSync = origLstat;
+      fs.realpathSync.native = origNative;
+    }
+  };
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    manifestMod.reverse = origReverse;
+  }
+  assert.ok(res.err, `${S}: a shelf-guard skip alone STOPS the run — the disposer preserved nothing`);
+  assert.equal(fs.existsSync(manifestPath), true, `${S}: install-manifest.json survives`);
+  assert.equal(fs.existsSync(path.join(core, 'config.yaml')), true, `${S}: and config.yaml with it`);
+  const retry = await uninstallInProcess(env, ['--yes']);
+  assert.equal(retry.err, null, `${S}: and re-running the whole command completes (${retry.err && retry.err.message})`);
+  // (1) SET-LEVEL: unconstructable at guard initialisation ⇒ abort, nothing removed.
+  const set = shelfManifestInstall();
+  const before = snapshot(set.core);
+  const target = path.join(set.core, 'state', 'quarantine');
+  fs.mkdirSync(target, { recursive: true });
+  const targetReal = path.join(fs.realpathSync(set.core), 'state', 'quarantine');
+  const origLstat2 = fs.lstatSync;
+  fs.lstatSync = (p, ...rest) => {
+    if (p === target || p === targetReal) {
+      const e = new Error('injected EIO');
+      /** @type {any} */ (e).code = 'EIO';
+      throw e;
+    }
+    return origLstat2(p, ...rest);
+  };
+  let setRes;
+  let dryRes;
+  try {
+    setRes = await uninstallInProcess(set.env, ['--yes']);
+    dryRes = await uninstallInProcess(set.env, ['--dry-run']);
+  } finally {
+    fs.lstatSync = origLstat2;
+  }
+  assert.ok(setRes.err, `${S}: an unanswerable protected SET aborts the live replay`);
+  assert.ok(setRes.err.message.includes(target) && setRes.err.message.includes('EIO'),
+    `${S}: naming the directory and its code — ${setRes.err.message}`);
+  assert.deepEqual(snapshot(set.core), before, `${S}: with every recorded artifact still present`);
+  assert.equal(dryRes.err, null, `${S}: while --dry-run reports it instead of aborting (${dryRes.err && dryRes.err.message})`);
+});
+
+test('[SG-22] AC10 round 21 (W10 outstanding filter): the remedy TERMINATES — a cleared path never blocks again', async () => {
+  const S = 'SG22-remedy-terminates';
+  const { core, env, manifestPath, q, addEntries } = shelfManifestInstall();
+  const note = shelfFile(q, '2026-09-18-note.md', 'clear me\n');
+  addEntries([{ kind: 'file', path: note }]);
+  const first = await uninstallInProcess(env, ['--yes']);
+  assert.ok(first.err, `${S}: the first run STOPS with that file preserved`);
+  assert.equal(fs.existsSync(manifestPath), true, `${S}: and the manifest is kept`);
+  // The complementary case, in the same test: still present ⇒ still stops.
+  const stillThere = await uninstallInProcess(env, ['--yes']);
+  assert.ok(stillThere.err, `${S}: with the file still present the run still stops — the filter is a FILTER, not a removal`);
+  // Exactly the remedy the refusal prints: clear the file, do NOT edit the manifest.
+  fs.rmSync(q, { recursive: true, force: true });
+  const second = await uninstallInProcess(env, ['--yes']);
+  assert.equal(second.err, null,
+    `${S}: the second run COMPLETES — a protection that can never be satisfied is a denial of service (${second.err && second.err.message})`);
+  assert.equal(fs.existsSync(manifestPath), false, `${S}: the manifest is deleted`);
+  assert.equal(fs.existsSync(core), false, `${S}: and the core is gone`);
+});
+
+// ─── PR-gate round 2 regressions (PR #312 review, 2026-09-21) ───────────────
+// Four guard bypasses the independent gate reproduced, each planted as the
+// shape it found: the shelf bytes must survive, the run must stop via W10, and
+// the stop must SAY so.
+
+test('[SG-23] round 2 finding 1 (X12): a CASE-ALIASED entry path cannot slip past the guard', async () => {
+  const S = 'SG23-case-aliased-entry-is-canonicalised';
+  const { core, env, q, addEntries } = shelfManifestInstall();
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  const capital = path.join(core, 'state', 'QUARANTINE');
+  const caseInsensitive = fs.existsSync(capital);
+  // The entry names the CAPITALISED spelling while the stored directory is
+  // `quarantine`, so no lexical anchor contains it: only canonicalising each
+  // existing component by the X12 fold can catch it.
+  addEntries([{ kind: 'file', path: path.join(capital, '2026-note.md') }], true);
+  const seamFs = fs.rmSync;
+  let note = null;
+  fs.rmSync = (p, ...rest) => {
+    if (!note) note = shelfFile(q, '2026-note.md', 'case-aliased\n');
+    return seamFs(p, ...rest);
+  };
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmSync = seamFs;
+  }
+  assert.ok(note, `${S}: the fixture completed a preserve before the replay`);
+  assert.equal(readOrNull(note), 'case-aliased\n',
+    `${S}: the original's BYTES survive whichever spelling the entry used`);
+  if (caseInsensitive) {
+    assert.ok(res.err, `${S}: and the run STOPS — the case alias reaches the same object`);
+    assert.ok(/quarantined copies are still here/.test(res.err.message),
+      `${S}: with the shelf-derived form of the stop — ${res.err && res.err.message}`);
+    assert.ok(res.err.message.includes(q), `${S}: naming the shelf directory`);
+  } else {
+    assert.equal(fs.existsSync(capital), false,
+      `${S}: on a case-SENSITIVE volume the capitalised path is genuinely absent, so no deleter reaches it`);
+    assert.ok(res.err, `${S}: and the run still stops on the copy itself`);
+  }
+});
+
+test('[SG-24] round 2 finding 2 (X17): a relative link target resolves SEGMENT BY SEGMENT, not by lexical collapse', () => {
+  const S = 'SG24-relative-link-target-resolved-in-order';
+  const { paths } = sweepCore();
+  const inner = path.join(paths.logs, 'inner');
+  const recovery = path.join(paths.logs, 'recovery');
+  fs.mkdirSync(inner, { recursive: true });
+  fs.mkdirSync(recovery, { recursive: true });
+  fs.symlinkSync(inner, path.join(paths.core, 'jump'));
+  // `../jump/../recovery` from <state>: `..` → <core>, `jump` → <core>/logs/inner,
+  // `..` → <core>/logs, `recovery` → <core>/logs/recovery. Collapsing the `..`
+  // LEXICALLY first yields <core>/recovery and leaves <core>/logs unprotected.
+  fs.symlinkSync('../jump/../recovery', path.join(paths.state, 'quarantine'));
+  const note = shelfFile(recovery, '2026-note.md', 'behind a relative hop\n');
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note), 'behind a relative hop\n',
+    `${S}: the original's bytes survive — the kernel's answer is <core>/logs/recovery`);
+  assert.equal(fs.existsSync(paths.logs), true,
+    `${S}: and <core>/logs was NOT recursively deleted while the link was reported preserved`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: the sweep REPORTS what it kept (${JSON.stringify(res.preservedQuarantine)})`);
+});
+
+test('[SG-25] round 2 finding 3 (X18): a component NAMED `..recovery` is not parent traversal', () => {
+  const S = 'SG25-dot-dot-prefixed-name-is-not-traversal';
+  const { paths } = sweepCore();
+  const odd = path.join(paths.logs, '..recovery');
+  fs.mkdirSync(odd, { recursive: true });
+  fs.symlinkSync(odd, path.join(paths.state, 'quarantine'));
+  const note = shelfFile(odd, '2026-note.md', 'under a dot-dot name\n');
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note), 'under a dot-dot name\n',
+    `${S}: the original's bytes survive — a name beginning with two dots is a NAME, not an escape out of <core>/logs`);
+  assert.equal(fs.existsSync(paths.logs), true, `${S}: and <core>/logs was not recursively deleted`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: the sweep REPORTS what it kept (${JSON.stringify(res.preservedQuarantine)})`);
+});
+
+test('[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever', async () => {
+  const S = 'SG26-hop-budget-does-not-leak-between-roots';
+  const { core, env } = shelfManifestInstall();
+  const state = path.join(core, 'state');
+  const chainRoot = path.join(core, 'hops');
+  const realState = path.join(chainRoot, 'real');
+  fs.mkdirSync(realState, { recursive: true });
+  const realShelf = path.join(realState, 'quarantine');
+  fs.mkdirSync(realShelf, { recursive: true, mode: 0o700 });
+  // 21 links ABOVE the shelf, so both shelf roots are walked through them and
+  // both shelf roots are REAL directories — the gate sees an EMPTY shelf and
+  // the run proceeds to the replay, which is where the budget was spent. Under
+  // a budget SHARED across the roots the second root reports ELOOP, the
+  // protected set is unanswerable, and the live replay aborts on every retry.
+  let target = realState;
+  for (let i = 0; i < 21; i += 1) {
+    const link = path.join(chainRoot, `l${i}`);
+    fs.symlinkSync(target, link);
+    target = link;
+  }
+  fs.rmSync(state, { recursive: true, force: true });
+  fs.symlinkSync(target, state);
+  assert.equal(manifestMod.quarantineInventory(require('../../src/core/paths').getPaths({ ...env })).entries, 0,
+    `${S}: the gate sees an EMPTY shelf, so the run reaches the replay`);
+  const seamFs = fs.rmSync;
+  let note = null;
+  fs.rmSync = (p, ...rest) => {
+    if (!note) note = shelfFile(realShelf, '2026-note.md', 'twenty-one hops away\n');
+    return seamFs(p, ...rest);
+  };
+  let first;
+  try {
+    first = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmSync = seamFs;
+  }
+  assert.ok(note, `${S}: the fixture completed a preserve before the replay`);
+  assert.ok(first.err, `${S}: the run stops`);
+  assert.equal(/ELOOP/.test(first.err.message), false,
+    `${S}: but NOT with an ELOOP abort — the second root must get its own budget — ${first.err.message}`);
+  assert.ok(/quarantined copies are still here/.test(first.err.message),
+    `${S}: it is the shelf-derived stop, which names what to clear — ${first.err.message}`);
+  assert.equal(readOrNull(note), 'twenty-one hops away\n', `${S}: and the original's bytes survive`);
+  // …and the remedy TERMINATES: with the copy and the chain cleared it finishes.
+  fs.rmSync(realShelf, { recursive: true, force: true });
+  fs.unlinkSync(state);
+  fs.rmSync(chainRoot, { recursive: true, force: true });
+  fs.mkdirSync(state, { recursive: true });
+  const second = await uninstallInProcess(env, ['--yes']);
+  assert.equal(second.err, null,
+    `${S}: once the chain and the copy are gone the run COMPLETES (${second.err && second.err.message})`);
+});
+
+// ─── PR-gate round 3 regressions (PR #312 review, 2026-09-21) ───────────────
+// Two more P1 bypasses and two P2 false blocks. The resolver is now the
+// kernel's (X17′), so each of these is a property of `realpathSync.native`
+// rather than of a hand-rolled rule — which is what the freeze buys.
+
+test('[SG-27] round 3 P1 (X17\u2032): a NON-ASCII case alias is the kernel\u2019s answer, on EITHER volume', () => {
+  const S = 'SG27-non-ascii-case-alias-is-the-kernels';
+  const { paths } = sweepCore();
+  // The shelf is a DIRECT CHILD of <state>, so the two spellings are the only
+  // thing that differs between the volumes — nothing else moves.
+  const stored = path.join(paths.state, '\u03a9');
+  fs.mkdirSync(path.join(stored, 'recovery'), { recursive: true });
+  const note = shelfFile(path.join(stored, 'recovery'), '2026-note.md', 'behind an omega\n');
+  const lower = path.join(paths.state, '\u03c9', 'recovery');
+  fs.symlinkSync(lower, path.join(paths.state, 'quarantine'));
+  const caseInsensitive = fs.existsSync(lower);
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  if (caseInsensitive) {
+    assert.equal(readOrNull(note), 'behind an omega\n',
+      `${S}: the kernel resolves the lowercase alias to the STORED spelling, so the original's bytes survive`);
+    assert.equal(fs.existsSync(stored), true, `${S}: and the directory holding it is preserved`);
+    assert.ok(res.preservedQuarantine.length > 0,
+      `${S}: the sweep reports what it kept (${JSON.stringify(res.preservedQuarantine)})`);
+  } else {
+    // On a case-SENSITIVE volume the lowercase path names NOTHING, so the link
+    // dangles and protects nothing — and that is the CORRECT outcome, not a
+    // second-class one: <state>'s ordinary children are swept as always.
+    assert.equal(fs.existsSync(lower), false, `${S}: the alias really does dangle here`);
+    assert.equal(readOrNull(note), null,
+      `${S}: and <state>/\u03a9 is swept exactly as any other ordinary child — the dangling alias protects nothing`);
+  }
+});
+
+test('[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded', async () => {
+  const S = 'SG28-relative-entry-path-is-anchored';
+  const { core, env, q, addEntries } = shelfManifestInstall();
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  fs.symlinkSync(q, path.join(core, 'cache'));
+  // `../cache/n.md` means nothing until it is anchored; walked from an empty
+  // root it used to resolve to `/cache/n.md` and miss every anchor.
+  addEntries([{ kind: 'file', path: path.join('..', 'cache', '2026-note.md') }], true);
+  // The cwd must OUTLIVE the sweep: a directory the uninstall removes would
+  // leave the process without one and break every later test in the file.
+  const here = path.join(core, 'cwd-anchor');
+  fs.mkdirSync(here, { recursive: true });
+  const cwd = process.cwd();
+  const seamFs = fs.rmSync;
+  let note = null;
+  fs.rmSync = (p, ...rest) => {
+    if (!note) note = shelfFile(q, '2026-note.md', 'reached by a relative path\n');
+    return seamFs(p, ...rest);
+  };
+  let res;
+  try {
+    process.chdir(here);
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmSync = seamFs;
+    process.chdir(cwd);
+  }
+  assert.ok(note, `${S}: the fixture completed a preserve before the replay`);
+  assert.equal(readOrNull(note), 'reached by a relative path\n',
+    `${S}: the original's BYTES survive — the relative entry resolves into the shelf`);
+  assert.ok(res.err, `${S}: and the run stops rather than deleting the ledger`);
+});
+
+test('[SG-29] round 3 P2 (X16\u2033): an out-of-root TARGET is not admitted by an in-root SPELLING', async () => {
+  const S = 'SG29-out-of-root-target-is-not-guarded';
+  const { root, core, env, addEntries } = shelfManifestInstall();
+  // The reviewer's shape: a SYMLINKED home, with the shelf resolving under the
+  // real home — outside all four allowed roots — and a `copied-skill` LINK
+  // inside the core pointing at that shelf node. Its SPELLING is in-root; its
+  // TARGET is not, and no deleter can reach the target, so guarding it would
+  // block the uninstall forever over a path this command never touches.
+  const realHome = path.join(root, 'real-home');
+  fs.mkdirSync(realHome, { recursive: true });
+  const homeLink = path.join(root, 'home');
+  fs.symlinkSync(realHome, homeLink);
+  const shelfNode = path.join(realHome, 'quarantine');
+  fs.mkdirSync(shelfNode, { recursive: true, mode: 0o700 });
+  const state = path.join(core, 'state');
+  fs.rmSync(state, { recursive: true, force: true });
+  fs.symlinkSync(homeLink, state);
+  const skills = path.join(core, 'skills');
+  fs.mkdirSync(skills, { recursive: true });
+  const link = path.join(skills, 'wienerdog-retargeted');
+  fs.symlinkSync(shelfNode, link);
+  addEntries([{ kind: 'copied-skill', path: link, hash: 'deadbeef' }]);
+  // The ruling is about `shelfGuarded`, so that is what is pinned directly.
+  const paths = require('../../src/core/paths').getPaths({ ...env });
+  const m = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  const dry = manifestMod.reverse(paths, m, { dryRun: true });
+  assert.equal(dry.shelfGuarded.includes(link), false,
+    `${S}: the entry does NOT enter shelfGuarded — its TARGET is outside every allowed root, so no deleter reaches it (${JSON.stringify(dry.shelfGuarded)})`);
+  const res = await uninstallInProcess(env, ['--yes']);
+  assert.equal(readOrNull(path.join(realHome, 'marker')) === null, true,
+    `${S}: nothing was written outside the core by the run`);
+  assert.equal(fs.existsSync(shelfNode), true,
+    `${S}: and the out-of-root shelf node is untouched`);
+  void res;
+});
+
+test('[SG-30] round 3 P2 (X4′): a preserved report is RECONCILED, so an emptied case alias never blocks', async () => {
+  const S = 'SG30-preserved-report-is-reconciled';
+  const { core, env } = shelfManifestInstall();
+  const state = path.join(core, 'state');
+  const capital = path.join(state, 'Quarantine');
+  fs.mkdirSync(capital, { recursive: true, mode: 0o700 });
+  const caseInsensitive = fs.existsSync(path.join(state, 'quarantine'));
+  const res = await uninstallInProcess(env, ['--yes']);
+  if (caseInsensitive) {
+    assert.equal(res.err, null,
+      `${S}: an EMPTY shelf under either spelling lets the uninstall COMPLETE — the report must not name a directory the sweep already removed (${res.err && res.err.message})`);
+    assert.equal(fs.existsSync(core), false, `${S}: and the core is gone`);
+  } else {
+    assert.ok(res.err, `${S}: on a case-SENSITIVE volume the fold-ambiguous name is preserved by X12, as designed`);
+    assert.ok(/quarantined copies are still here/.test(res.err.message),
+      `${S}: with the shelf-derived stop — ${res.err.message}`);
+  }
+});
+
+test('[SG-FUZZ] X17′ exactness: walkChain agrees with the kernel over randomised layouts', () => {
+  const S = 'SGFUZZ-walkchain-equals-realpath-native';
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-fuzz-')));
+  // Unicode case pairs, an ASCII pair and a caseless letter, so the fold this
+  // package no longer runs cannot come back by accident.
+  const NAMES = ['a', 'B', 'b', 'ω', 'Ω', 'é', 'É', 'ß', 'x.y', '..z', 'z..'];
+  const dirs = [root];
+  const files = [];
+  const links = [];
+  let seed = 20260921;
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  for (let i = 0; i < 700; i += 1) {
+    const parent = dirs[rnd(dirs.length)];
+    const name = NAMES[rnd(NAMES.length)] + (rnd(4) === 0 ? '' : String(i));
+    const full = path.join(parent, name);
+    if (fs.existsSync(full)) continue;
+    const kind = rnd(10);
+    try {
+      if (kind < 4) { fs.mkdirSync(full); dirs.push(full); }
+      else if (kind < 6) { fs.writeFileSync(full, 'x'); files.push(full); }
+      else {
+        // Targets: absolute, relative, and relative with `..` AFTER a link.
+        const pick = [...dirs, ...files, ...links][rnd(dirs.length + files.length + links.length)];
+        const t = rnd(3) === 0 ? pick
+          : rnd(2) === 0 ? path.relative(parent, pick) || '.'
+            : path.join(path.relative(parent, pick) || '.', '..', path.basename(pick));
+        fs.symlinkSync(t, full); links.push(full);
+      }
+    } catch { /* name clash on a case-insensitive volume — skip */ }
+  }
+  // A deliberate cycle, so the ELOOP arm is exercised rather than merely declared.
+  const c1 = path.join(root, 'cycle-a');
+  const c2 = path.join(root, 'cycle-b');
+  fs.symlinkSync(c2, c1);
+  fs.symlinkSync(c1, c2);
+  links.push(c1, c2);
+  const cwd = process.cwd();
+  const cwds = [root, dirs[1] || root, dirs[2] || root, dirs[3] || root,
+    dirs[4] || root, dirs[5] || root, dirs[6] || root, cwd];
+  const all = [...dirs, ...files, ...links];
+  let probes = 0; let okAgree = 0; let absent = 0; let eloop = 0;
+  try {
+    for (const from of cwds) {
+      process.chdir(from);
+      for (const target of all) {
+        for (const suffix of ['', '/nope', '/..', '/./x', '/../..', '/nope/../also-nope']) {
+          for (const rel of [false, true]) {
+            let p = target + suffix;
+            if (rel) {
+              const r = path.relative(from, target);
+              if (r === '' || r.startsWith('..')) continue;
+              p = r + suffix;
+            }
+            probes += 1;
+            const mine = manifestMod.__walkChainForTest(p);
+            let kernel = null; let kcode = null;
+            try { kernel = fs.realpathSync.native(p); } catch (e) { kcode = e.code; }
+            if (kernel !== null) {
+              assert.equal(mine.state, 'ok', `${S}: the kernel resolved ${p} but walkChain said ${mine.state}`);
+              assert.equal(mine.real, kernel, `${S}: walkChain must equal realpathSync.native for ${p}`);
+              okAgree += 1;
+            } else if (kcode === 'ELOOP') {
+              assert.equal(mine.state, 'unanswerable', `${S}: ELOOP must be UNANSWERABLE for ${p}`);
+              assert.equal(mine.code, 'ELOOP', `${S}: and carry the code for ${p}`);
+              eloop += 1;
+            } else if (kcode === 'ENOENT' || kcode === 'ENOTDIR') {
+              assert.equal(mine.state, 'absent', `${S}: absence is not a failure for ${p}`);
+              absent += 1;
+            }
+          }
+        }
+      }
+    }
+  } finally {
+    process.chdir(cwd);
+  }
+  assert.ok(probes >= 3000, `${S}: at least 3000 probes (ran ${probes})`);
+  assert.ok(okAgree >= 500, `${S}: and a real population of RESOLVING probes (${okAgree})`);
+  assert.ok(absent >= 100, `${S}: and of absent ones (${absent})`);
+  assert.ok(eloop >= 1, `${S}: and the ELOOP arm really fired (${eloop})`);
+  process.stderr.write(`[SG-FUZZ] probes=${probes} agree=${okAgree} absent=${absent} eloop=${eloop}\n`);
+});
+
+// ─── PR-gate round 4 regressions (PR #312 review, 2026-09-21) ───────────────
+// ONE family: chain collection. Under X17″ the chain nodes of a shelf root are
+// EVERY node the raw-segment traversal visits — each link location, each
+// intermediate target, and every directory traversed inside a link-target
+// string — and each root's walk gets its own hop budget.
+
+/** Plant a copy the first time `fs.rmSync` runs, i.e. after the gate's
+ *  inventory and inside the replay. @returns {() => string|null} */
+function seamPlant(dir, name, text) {
+  const orig = fs.rmSync;
+  let planted = null;
+  fs.rmSync = (p, ...rest) => {
+    if (!planted) planted = shelfFile(dir, name, text);
+    return orig(p, ...rest);
+  };
+  return { restore: () => { fs.rmSync = orig; }, get: () => planted };
+}
+
+test('[SG-31] round 4 P1 #1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain', async () => {
+  const S = 'SG31-relative-target-traversed-raw';
+  const { core, env } = shelfManifestInstall();
+  const app = path.join(core, 'app');
+  const logs = path.join(core, 'logs');
+  const inner = path.join(core, 'inner');
+  fs.mkdirSync(logs, { recursive: true });
+  fs.mkdirSync(inner, { recursive: true });
+  fs.rmSync(app, { recursive: true, force: true });
+  fs.mkdirSync(app, { recursive: true });
+  fs.symlinkSync(inner, path.join(app, 'jump'));
+  const state = path.join(core, 'state');
+  fs.rmSync(state, { recursive: true, force: true });
+  // `app/jump/../logs` as a LITERAL string — `path.join` would collapse it here
+  // in the fixture itself, which is the very mistake under test.
+  fs.symlinkSync(['app', 'jump', '..', 'logs'].join(path.sep), state);
+  const seam = seamPlant(path.join(logs, 'quarantine'), '2026-note.md', 'behind a raw hop\n');
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    seam.restore();
+  }
+  const note = seam.get();
+  assert.ok(note, `${S}: the fixture completed a preserve after the gate`);
+  assert.equal(fs.existsSync(path.join(app, 'jump')), true,
+    `${S}: the link INSIDE the target string survives — removing it makes <state> dangle`);
+  assert.equal(fs.existsSync(app), true, `${S}: and so does the directory holding it`);
+  assert.equal(readOrNull(note), 'behind a raw hop\n', `${S}: so the original's bytes survive`);
+  assert.ok(res.err, `${S}: and the run stops with the ledger intact`);
+});
+
+test('[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node', async () => {
+  const S = 'SG32-traversed-directory-is-a-chain-node';
+  for (const form of ['absolute', 'relative']) {
+    const { core, env } = shelfManifestInstall();
+    const app = path.join(core, 'app');
+    const logs = path.join(core, 'logs');
+    fs.mkdirSync(logs, { recursive: true });
+    const state = path.join(core, 'state');
+    fs.rmSync(state, { recursive: true, force: true });
+    const target = form === 'absolute'
+      ? [app, '..', 'logs'].join(path.sep)
+      : ['app', '..', 'logs'].join(path.sep);
+    fs.symlinkSync(target, state);
+    const seam = seamPlant(path.join(logs, 'quarantine'), '2026-note.md', 'past a traversed dir\n');
+    let res;
+    try {
+      res = await uninstallInProcess(env, ['--yes']);
+    } finally {
+      seam.restore();
+    }
+    const note = seam.get();
+    assert.ok(note, `${S}: ${form} — the fixture completed a preserve after the gate`);
+    assert.equal(fs.existsSync(app), true,
+      `${S}: ${form} — <core>/app is on the chain: its removal would make <state> dangle, so the replay is REFUSED`);
+    assert.equal(readOrNull(note), 'past a traversed dir\n',
+      `${S}: ${form} — and the original's bytes survive`);
+    assert.ok(res.err, `${S}: ${form} — the run stops and reports`);
+  }
+});
+
+test('[SG-33] round 4 P1 #3 (X17″): each shelf root gets its OWN hop budget', () => {
+  const S = 'SG33-hop-budget-is-per-root';
+  const { paths, core } = sweepCore();
+  const chainRoot = path.join(core, 'hops');
+  const realState = path.join(chainRoot, 'real');
+  fs.mkdirSync(realState, { recursive: true });
+  let target = realState;
+  for (let i = 0; i < 21; i += 1) {
+    const link = path.join(chainRoot, `l${i}`);
+    fs.symlinkSync(target, link);
+    target = link;
+  }
+  fs.rmSync(paths.state, { recursive: true, force: true });
+  fs.symlinkSync(target, paths.state);
+  // The REDACTED root's walk is the SECOND one, and its intermediate link sits
+  // INSIDE a directory the mechanics sweep deletes recursively. Only collecting
+  // that link makes `<core>/schedules` block from above; a second root whose
+  // walk never got there loses the link and dangles the chain.
+  const recovery = path.join(core, 'store', 'recovery');
+  fs.mkdirSync(recovery, { recursive: true });
+  const jump = path.join(core, 'schedules', 'jump');
+  fs.symlinkSync(recovery, jump);
+  fs.mkdirSync(path.join(realState, 'quarantine'), { recursive: true, mode: 0o700 });
+  fs.symlinkSync(jump, path.join(realState, 'quarantine', 'redacted'));
+  const note = shelfFile(recovery, '2026-note.md', 'on the second root chain\n');
+  const prot = manifestMod.__shelfProtectionForTest(paths);
+  assert.equal(prot.unanswerable, null,
+    `${S}: each root's walk has budget of its own (${JSON.stringify(prot.unanswerable)})`);
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(isLink(jump), true,
+    `${S}: the intermediate link on the SECOND root's chain was collected, so it survives`);
+  assert.equal(fs.existsSync(path.join(core, 'schedules')), true,
+    `${S}: and the swept directory HOLDING it is blocked from above rather than removed`);
+  assert.equal(readOrNull(note), 'on the second root chain\n',
+    `${S}: the original's bytes survive`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: the sweep reports what it kept (${JSON.stringify(res.preservedQuarantine)})`);
+});
+
+test('[SG-34] round 4 P2 (X15′): the planner applies the SAME retention as the live sweep', () => {
+  const S = 'SG34-planner-applies-retention';
+  const build = () => {
+    const { paths } = sweepCore();
+    fs.rmSync(paths.state, { recursive: true, force: true });
+    fs.symlinkSync(paths.logs, paths.state);
+    fs.mkdirSync(path.join(paths.logs, 'quarantine'), { recursive: true, mode: 0o700 });
+    return paths;
+  };
+  const planPaths = build();
+  const { value: plan, calls } = withFsSeam(
+    () => manifestMod.disposeCoreMechanics(planPaths, { dryRun: true, vaultPath: null })
+  );
+  for (const n of Object.keys(calls)) {
+    assert.equal(calls[n].length, 0,
+      `${S}: the planner still performs ZERO mutating calls — fs.${n} ran ${calls[n].length} time(s)`);
+  }
+  const livePaths = build();
+  const live = manifestMod.disposeCoreMechanics(livePaths, { dryRun: false, vaultPath: null });
+  const strip = (arr, base) => arr.map((x) => path.relative(base, x)).sort();
+  assert.deepEqual(strip(plan.preservedQuarantine, planPaths.core), strip(live.preservedQuarantine, livePaths.core),
+    `${S}: the plan PRESERVES exactly what the live run preserves — a plan that lists a directory the command cannot remove is the defect`);
+  assert.deepEqual(strip(plan.removed, planPaths.core), strip(live.removed, livePaths.core),
+    `${S}: and predicts exactly what it removes`);
+  assert.ok(plan.preservedQuarantine.length > 0,
+    `${S}: and on this fixture that is a NON-EMPTY set (${JSON.stringify(strip(plan.preservedQuarantine, planPaths.core))})`);
+});
+
+/** A core that is ITSELF a symlink, plus an N-link relative chain from
+ *  `<state>/quarantine` to a real directory holding the user's copy. Every hop
+ *  is a DISTINCT link, and reaching each one re-walks the core link — which is
+ *  exactly what used to be charged again on every hop (X17‴). */
+function symlinkedCoreChain(hops) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-sg-')));
+  const real = path.join(root, 'real-wd');
+  const core = path.join(root, 'wd');
+  fs.mkdirSync(real, { recursive: true });
+  fs.symlinkSync(real, core); // <core> IS a link, re-traversed by every relative target
+  const paths = getPaths({
+    HOME: root,
+    WIENERDOG_HOME: core,
+    XDG_CONFIG_HOME: path.join(root, '.config'),
+    CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
+    CODEX_HOME: path.join(root, 'absent-codex'),
+  });
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.mkdirSync(paths.logs, { recursive: true });
+  fs.mkdirSync(paths.secrets, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(paths.logs, 'run.log'), 'log\n');
+  // The far end: a real directory with the user's quarantined copy in it.
+  const store = path.join(paths.state, 'store');
+  const note = shelfFile(store, '2026-note.md', 'at the end of a long chain\n');
+  // `h0 -> h1 -> … -> h(hops-2) -> store`, then `quarantine -> h0`. Relative
+  // targets throughout, so each resolution walks the core link again.
+  for (let i = hops - 2; i >= 0; i -= 1) {
+    const next = i === hops - 2 ? 'store' : `h${i + 1}`;
+    fs.symlinkSync(next, path.join(paths.state, `h${i}`));
+  }
+  fs.symlinkSync('h0', path.join(paths.state, 'quarantine'));
+  return { root, core, paths, note, store };
+}
+
+test('[SG-35] round 4 P1 (X17‴): a hop budget that expires is UNANSWERABLE, never a completed walk', () => {
+  const S = 'SG35-budget-exhaustion-fails-closed';
+  // 45 DISTINCT links: past the 40-hop budget however the hops are counted, so
+  // the collection cannot finish and the answer must be "I could not verify
+  // this", not the kernel's cheerful `ok`.
+  const { paths, note } = symlinkedCoreChain(45);
+  const walked = manifestMod.__walkChainForTest(path.join(paths.state, 'quarantine'));
+  assert.equal(walked.state, 'unanswerable',
+    `${S}: a walk cut short by the budget is UNANSWERABLE, never \`ok\` (${JSON.stringify(walked)})`);
+  assert.equal(walked.code, 'EBUDGET',
+    `${S}: with the budget's own code — the resolver answers before it asks the kernel`);
+  assert.equal(manifestMod.spellResolutionCode('EBUDGET'), 'chain too long to verify',
+    `${S}: which the report spells in words, not as an invented errno`);
+  const prot = manifestMod.__shelfProtectionForTest(paths);
+  assert.notEqual(prot.unanswerable, null,
+    `${S}: and the protected set carries the open question rather than a partial closure`);
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note), 'at the end of a long chain\n',
+    `${S}: and the copy at the far end of the chain still has its bytes`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: the sweep preserves and REPORTS rather than deleting what it could not verify`);
+});
+
+test('[SG-36] round 4 P1 (X17‴): a kernel-valid chain on a symlinked core stays UNDER budget and completes', () => {
+  const S = 'SG36-distinct-link-hops-only';
+  // 25 links — the kernel resolves this without complaint, so a protected set
+  // that reported "too long" here would refuse an install the OS is happy with.
+  // Before X17‴ the core link was charged again on every hop: ~50 charges.
+  const { paths, note, store } = symlinkedCoreChain(25);
+  const prot = manifestMod.__shelfProtectionForTest(paths);
+  assert.equal(prot.unanswerable, null,
+    `${S}: 25 distinct hops is under the budget (got ${JSON.stringify(prot.unanswerable)})`);
+  assert.equal(prot.existing, true, `${S}: and the shelf resolved, so the walk really did finish`);
+  const walked = manifestMod.__walkChainForTest(path.join(paths.state, 'quarantine'));
+  assert.equal(walked.state, 'ok', `${S}: walkChain agrees with the kernel (${JSON.stringify(walked)})`);
+  assert.equal(walked.real, fs.realpathSync.native(store), `${S}: and lands where the kernel lands`);
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(readOrNull(note), 'at the end of a long chain\n', `${S}: the copy survives the sweep`);
+  assert.equal(res.removed.includes(paths.logs), true,
+    `${S}: and an ordinary uninstall still proceeds — logs/ is gone (${JSON.stringify(res.removed)})`);
+});
+
+test('[SG-37] round 4 P2: the empty-directory climb never removes a CHAIN NODE', () => {
+  const S = 'SG37-climb-preserves-a-chain-node';
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-sg-')));
+  const real = path.join(root, 'real-wd');
+  const core = path.join(root, 'wd');
+  fs.mkdirSync(path.join(real, 'state', 'quarantine', 'redacted'), { recursive: true });
+  // The core link's own target TRAVELS THROUGH the shelf and climbs back out, so
+  // `redacted` is a class (ii) chain node: remove it and the core link dangles.
+  fs.symlinkSync(
+    [real, 'state', 'quarantine', 'redacted', '..', '..', '..'].join(path.sep),
+    core
+  );
+  const paths = getPaths({
+    HOME: root,
+    WIENERDOG_HOME: core,
+    XDG_CONFIG_HOME: path.join(root, '.config'),
+    CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
+    CODEX_HOME: path.join(root, 'absent-codex'),
+  });
+  fs.mkdirSync(paths.logs, { recursive: true });
+  fs.writeFileSync(path.join(paths.logs, 'run.log'), 'log\n');
+  const redacted = path.join(real, 'state', 'quarantine', 'redacted');
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(fs.existsSync(redacted), true,
+    `${S}: the empty shelf the core link stands on is NOT rmdir'd`);
+  assert.equal(isLink(core), true, `${S}: so the core link still points at something`);
+  assert.equal(fs.realpathSync.native(core), real, `${S}: and still resolves to the physical core`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: and the run REPORTS what it kept instead of claiming completion (${JSON.stringify(res.preservedQuarantine)})`);
+});
+
+test('[SG-38] round 4 P2 (X15′): the planner discounts only the child it predicted removing', () => {
+  const S = 'SG38-planner-discounts-one-predicted-child';
+  // (a) A FILE named `redacted` INSIDE the redacted shelf. Nothing removes it,
+  //     so the live climb takes ENOTEMPTY at the first level and stops — but a
+  //     filter keyed on the fold-equal NAME discounted it and predicted the
+  //     whole tree away. This arm is filesystem-independent.
+  const a = sweepCore();
+  const aRed = path.join(a.paths.state, 'quarantine', 'redacted');
+  shelfFile(aRed, 'redacted', 'a copy that happens to be named after its shelf\n');
+  const aPlan = manifestMod.disposeCoreMechanics(a.paths, { dryRun: true, vaultPath: null });
+  const aLive = manifestMod.disposeCoreMechanics(a.paths, { dryRun: false, vaultPath: null });
+  assert.equal(aPlan.removed.includes(a.paths.state), aLive.removed.includes(a.paths.state),
+    `${S}: plan and live agree about <state> (plan=${JSON.stringify(aPlan.removed)}, live=${JSON.stringify(aLive.removed)})`);
+  assert.equal(aLive.removed.includes(a.paths.state), false,
+    `${S}: and neither removes it — the shelf still holds a file`);
+  assert.equal(readOrNull(path.join(aRed, 'redacted')), 'a copy that happens to be named after its shelf\n',
+    `${S}: whose bytes are untouched`);
+  // (b) The same discount, one level up, on a case-SENSITIVE volume only: a
+  //     second directory `REDACTED` that no climb step removes.
+  const b = sweepCore();
+  const bq = path.join(b.paths.state, 'quarantine');
+  fs.mkdirSync(path.join(bq, 'redacted'), { recursive: true });
+  fs.mkdirSync(path.join(bq, 'REDACTED'), { recursive: true });
+  const caseSensitive = fs.readdirSync(bq).length === 2;
+  const bPlan = manifestMod.disposeCoreMechanics(b.paths, { dryRun: true, vaultPath: null });
+  const bLive = manifestMod.disposeCoreMechanics(b.paths, { dryRun: false, vaultPath: null });
+  assert.equal(bPlan.removed.includes(b.paths.state), bLive.removed.includes(b.paths.state),
+    `${S}: plan and live agree there too (plan=${JSON.stringify(bPlan.removed)}, live=${JSON.stringify(bLive.removed)})`);
+  if (caseSensitive) {
+    assert.equal(bLive.removed.includes(b.paths.state), false,
+      `${S}: and on ext4 neither removes it — REDACTED is a leftover the climb cannot take`);
+  } else {
+    assert.equal(bLive.removed.includes(b.paths.state), true,
+      `${S}: while on a case-INSENSITIVE volume the two spellings are ONE empty shelf, and both take it`);
+  }
+});
+
+test('[SG-39] AC4 round 4 (W8′): the closing summary prints EVERY preserved path, one per line', async () => {
+  const S = 'SG39-summary-lists-every-preserved-path';
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const manifest = path.join(core, 'install-manifest.json');
+  const state = path.join(core, 'state');
+  // `R-post-ledger-preserve` is the ONE path that reaches the closing summary
+  // rather than Table W row W10's stop: the copy lands after the retry ledger is
+  // gone, so the second sweep preserves and the run still completes. Two
+  // directories are preserved — a fold-equal child and the level the climb
+  // stops at — and a summary that named only the first would strand the other.
+  const orig = fs.rmSync;
+  let planted = false;
+  fs.rmSync = (p, ...rest) => {
+    const r = orig(p, ...rest);
+    if (!planted && !fs.existsSync(manifest)) {
+      planted = true;
+      shelfFile(path.join(state, 'Quarantine'), '2026-note.md', 'after the ledger\n');
+    }
+    return r;
+  };
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    fs.rmSync = orig;
+  }
+  assert.equal(planted, true, `${S}: the seam fired — the copy really did land after the ledger`);
+  assert.equal(res.err, null, `${S}: and the run COMPLETES rather than stopping (${res.err && res.err.message})`);
+  const lines = res.out.split('\n');
+  const header = lines.findIndex((l) => l.includes('your quarantined copies are still in it'));
+  assert.notEqual(header, -1, `${S}: the W8 arm is the one that printed:\n${res.out}`);
+  const listed = [];
+  for (let i = header + 1; i < lines.length && lines[i].startsWith('  '); i += 1) listed.push(lines[i].trim());
+  assert.ok(listed.length >= 2,
+    `${S}: EVERY preserved path is on a line of its own, not just the first (${JSON.stringify(listed)})`);
+  assert.equal(listed.length, new Set(listed).size, `${S}: each exactly once`);
+  for (const p of listed) {
+    assert.equal(fs.existsSync(p), true, `${S}: and each named path really is still there — ${p}`);
+  }
+});
+
+// ─── PR-gate round 5b regressions (PR #312 review, 2026-09-21) ──────────────
+// X17⁗: every deletion guard tests BOTH the kernel-canonical target and the one
+// the deleter's own `fs.realpathSync` computes; a chain that cannot be READ to
+// the end is unanswerable; and the planner matches its predicted child by
+// filesystem identity.
+
+test('[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resolves, not only the kernel’s', () => {
+  const S = 'SG40-deleter-target-is-guarded';
+  const { core, env, q, addEntries } = shelfManifestInstall();
+  const outside = path.join(core, 'outside', 'deep');
+  fs.mkdirSync(outside, { recursive: true });
+  // The KERNEL's landing place has to exist too, or the alias is simply dangling
+  // and both resolvers agree on ENOENT. With both present they split.
+  fs.mkdirSync(path.join(core, 'outside', 'state', 'quarantine'), { recursive: true });
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  // `jump -> outside/deep`, and the alias target carries a `..` AFTER it. The
+  // kernel follows `jump` first and lands in `<core>/outside`; Node's own
+  // realpath collapses the `..` LEXICALLY and lands in `<core>/state/quarantine`
+  // — and it is that second answer the file reverser acts on.
+  fs.symlinkSync(path.join('outside', 'deep'), path.join(core, 'jump'));
+  const alias = path.join(core, 'alias');
+  fs.symlinkSync(['jump', '..', 'state', 'quarantine'].join(path.sep), alias);
+  const native = (p) => { try { return fs.realpathSync.native(p); } catch { return null; } };
+  const js = (p) => { try { return fs.realpathSync(p); } catch { return null; } };
+  assert.notEqual(native(alias), js(alias),
+    `${S}: the fixture really does split the two resolvers (${native(alias)} vs ${js(alias)})`);
+  assert.equal(js(alias), fs.realpathSync(q), `${S}: and the DELETER's answer is the shelf itself`);
+  // `reverse()` deletes `fs.realpathSync(entry.path)` — so the alias names the
+  // SHELF to the deleter, even though the kernel reads the same spelling as a
+  // path inside `outside/`.
+  assert.equal(fs.realpathSync(alias), fs.realpathSync(q),
+    `${S}: the deleter's own resolver lands on the shelf itself`);
+  const note = shelfFile(q, '2026-note.md', 'reached through the collapsed alias\n');
+  const shadow = path.join(alias, '2026-note.md');
+  assert.equal(fs.realpathSync(shadow), fs.realpathSync(note),
+    `${S}: and so does the entry path — this is the file \`reverse()\` would unlink`);
+  addEntries([{ kind: 'file', path: shadow }], true);
+  // The ruling is about the GUARD, so `reverse()` is driven directly: the CLI's
+  // gate refuses a populated shelf long before any deleter runs, which would
+  // make a whole-command fixture pass for a reason that is not this one.
+  const paths = require('../../src/core/paths').getPaths({ ...env });
+  const m = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  // `reverse()` may ABORT before any mutation (X22) — that is also a preserve,
+  // and it must reach this test as an assertion about the bytes rather than as
+  // an uncaught throw, which `scripts/red-proofs.js` refuses as a red.
+  let res = null;
+  let err = null;
+  try {
+    res = manifestMod.reverse(paths, m, { dryRun: false });
+  } catch (e) {
+    err = e;
+  }
+  assert.equal(readOrNull(note), 'reached through the collapsed alias\n',
+    `${S}: the copy's BYTES survive the replay`);
+  if (res) {
+    assert.equal(res.shelfGuarded.includes(shadow), true,
+      `${S}: and the entry is REPORTED as shelf-guarded (${JSON.stringify(res.shelfGuarded)})`);
+    assert.equal(res.removed.includes(shadow), false, `${S}: never removed`);
+  } else {
+    // Not `assert.ok(err)` — that is true of any throw at all. The abort must be
+    // the X22 set-level one, and the shelf must still be on disk.
+    assert.match(String(err && err.message), /could not be read|quarantine/i,
+      `${S}: the replay aborted at the set-level check (${err && err.message})`);
+    assert.equal(fs.existsSync(q), true, `${S}: and the shelf is still on disk`);
+  }
+});
+
+test('[SG-41] round 5b P1: a chain that cannot be READ to the end is UNANSWERABLE, not a shorter chain', () => {
+  const S = 'SG41-unreadable-chain-fails-closed';
+  const { paths, core } = sweepCore();
+  const bridge = path.join(core, 'app', 'bridge');
+  fs.mkdirSync(path.join(core, 'app'), { recursive: true });
+  const store = path.join(core, 'store');
+  fs.mkdirSync(store, { recursive: true });
+  fs.symlinkSync(store, bridge);
+  fs.rmSync(paths.state, { recursive: true, force: true });
+  fs.symlinkSync(path.join('app', 'bridge'), paths.state);
+  const note = shelfFile(path.join(store, 'quarantine'), '2026-note.md', 'behind an unreadable link\n');
+  // The kernel resolves the whole path happily; our own `readlink` of <state>
+  // is what fails, so without X17‴'s widening the walk would answer `ok` with
+  // `app/bridge` missing from the chain.
+  const origReadlink = fs.readlinkSync;
+  fs.readlinkSync = (p, ...rest) => {
+    if (String(p) === paths.state) {
+      const e = new Error('injected'); /** @type {any} */ (e).code = 'EIO'; throw e;
+    }
+    return origReadlink(p, ...rest);
+  };
+  let prot;
+  let res;
+  try {
+    prot = manifestMod.__shelfProtectionForTest(paths);
+    res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  } finally {
+    fs.readlinkSync = origReadlink;
+  }
+  assert.notEqual(prot.unanswerable, null,
+    `${S}: an incomplete collection is reported, not carried on with`);
+  assert.equal(prot.unanswerable.code, 'EIO',
+    `${S}: carrying the code the filesystem gave (${JSON.stringify(prot.unanswerable)})`);
+  assert.equal(readOrNull(note), 'behind an unreadable link\n', `${S}: and the copy's bytes survive`);
+  assert.equal(isLink(paths.state), true, `${S}: the <state> link is retained`);
+  assert.ok(res.preservedQuarantine.length > 0, `${S}: and the sweep reports what it kept`);
+});
+
+test('[SG-42] round 5b P2 (X15′): the planner matches its predicted child by filesystem IDENTITY', () => {
+  const S = 'SG42-predicted-child-matched-by-identity';
+  const { paths } = sweepCore();
+  const q = path.join(paths.state, 'quarantine');
+  // Only the CAPITAL spelling is created, so on a case-insensitive volume the
+  // stored name differs from the lowercase path the climb predicts removing —
+  // which is exactly when a byte comparison leaves the plan's own child sitting
+  // in `leftovers`.
+  fs.mkdirSync(path.join(q, 'REDACTED'), { recursive: true });
+  const caseInsensitive = fs.existsSync(path.join(q, 'redacted'));
+  const plan = manifestMod.disposeCoreMechanics(paths, { dryRun: true, vaultPath: null });
+  const live = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(plan.removed.includes(paths.state), live.removed.includes(paths.state),
+    `${S}: plan and live agree about <state> (plan=${JSON.stringify(plan.removed)}, live=${JSON.stringify(live.removed)})`);
+  assert.deepEqual(plan.preservedQuarantine, live.preservedQuarantine,
+    `${S}: and about what is preserved`);
+  if (caseInsensitive) {
+    assert.equal(live.removed.includes(paths.state), true,
+      `${S}: on this volume REDACTED and redacted are ONE empty shelf, so the whole of <state> goes — a plan matching by NAME would have said preserved`);
+  } else {
+    assert.equal(live.removed.includes(paths.state), false,
+      `${S}: on a case-SENSITIVE volume they are two directories and the climb stops at the leftover`);
+  }
+});
+
+// ─── PR-gate round 6b regressions (PR #312 review, 2026-09-22) ──────────────
+// Four rulings already recorded, each applied at ONE MORE SITE: X17⁗ at the
+// ADMISSION test, X17‴ at the SWEEP, X16⁗'s per-reverser boundary, and X15′'s
+// per-level prediction state.
+
+test('[SG-43] round 6b (X17⁗ at ADMISSION): an entry is admitted for guarding if EITHER resolver puts it in bounds', () => {
+  const S = 'SG43-admission-tests-both-resolvers';
+  const { core, env, q, addEntries } = shelfManifestInstall();
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  // The kernel places the alias OUT of every allowed root; Node's own resolver
+  // — the one the file reverser calls — places it in the shelf. Admitting on
+  // the kernel's answer alone left the entry unguarded ENTIRELY, so the
+  // both-target test inside the guard never ran at all.
+  const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-out-')));
+  fs.mkdirSync(path.join(outside, 'deep'), { recursive: true });
+  fs.mkdirSync(path.join(outside, 'state', 'quarantine'), { recursive: true });
+  fs.symlinkSync(path.join(outside, 'deep'), path.join(core, 'jump'));
+  const alias = path.join(core, 'alias');
+  fs.symlinkSync(['jump', '..', 'state', 'quarantine'].join(path.sep), alias);
+  const native = (() => { try { return fs.realpathSync.native(alias); } catch { return null; } })();
+  assert.equal(native !== null && native.startsWith(outside), true,
+    `${S}: the KERNEL puts the alias outside every allowed root (${native})`);
+  assert.equal(fs.realpathSync(alias), fs.realpathSync(q),
+    `${S}: while the deleter's own resolver puts it in the shelf`);
+  const note = shelfFile(q, '2026-note.md', 'out of root to the kernel only\n');
+  const shadow = path.join(alias, '2026-note.md');
+  addEntries([{ kind: 'file', path: shadow }], true);
+  const paths = require('../../src/core/paths').getPaths({ ...env });
+  const m = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  let res = null;
+  let err = null;
+  try {
+    res = manifestMod.reverse(paths, m, { dryRun: false });
+  } catch (e) {
+    err = e;
+  }
+  assert.equal(readOrNull(note), 'out of root to the kernel only\n',
+    `${S}: the copy's BYTES survive the replay`);
+  if (res) {
+    assert.equal(res.shelfGuarded.includes(shadow), true,
+      `${S}: and the entry is ADMITTED and guarded (${JSON.stringify(res.shelfGuarded)})`);
+  } else {
+    assert.equal(fs.existsSync(q), true, `${S}: the replay aborted and the shelf is still on disk (${err && err.message.slice(0, 80)})`);
+  }
+});
+
+test('[SG-44] round 6b (X17‴ sweep clause): an UNANSWERABLE set forbids every recursive delete the sweep would do', () => {
+  const S = 'SG44-unanswerable-set-forbids-the-sweep';
+  const { paths, core, sched } = sweepCore();
+  const store = path.join(paths.state, 'store');
+  const note = shelfFile(store, '2026-note.md', 'reachable only through the unreadable shelf\n');
+  fs.symlinkSync(store, path.join(paths.state, 'quarantine'));
+  const q = path.join(paths.state, 'quarantine');
+  const origLstat = fs.lstatSync;
+  fs.lstatSync = (p, ...rest) => {
+    if (String(p) === q) {
+      const e = new Error('injected'); /** @type {any} */ (e).code = 'EIO'; throw e;
+    }
+    return origLstat(p, ...rest);
+  };
+  let res;
+  try {
+    res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  } finally {
+    fs.lstatSync = origLstat;
+  }
+  assert.equal(readOrNull(note), 'reachable only through the unreadable shelf\n',
+    `${S}: the copy behind the unreadable shelf still has its bytes`);
+  assert.equal(fs.existsSync(store), true, `${S}: and the directory holding it survives`);
+  assert.equal(fs.existsSync(paths.logs), true,
+    `${S}: NO mechanics directory is recursively deleted either — the chain is unknown`);
+  assert.equal(fs.existsSync(sched), true, `${S}: schedules/ too`);
+  assert.equal(fs.existsSync(paths.secrets), true, `${S}: and secrets/`);
+  assert.equal(res.removed.length, 0, `${S}: nothing is reported removed (${JSON.stringify(res.removed)})`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: and every withheld target is REPORTED (${JSON.stringify(res.preservedQuarantine)})`);
+  assert.equal(manifestMod.spellResolutionCode('EIO'), 'EIO',
+    `${S}: a kernel code is reported as itself; only our own EBUDGET is spelled out`);
+  void core;
+});
+
+test('[SG-45] round 6b (X16⁗): the guard admits a scheduler-entry by ITS reverser’s boundary', () => {
+  const S = 'SG45-admission-uses-the-entrys-own-boundary';
+  const { core, env, addEntries } = shelfManifestInstall();
+  const paths = require('../../src/core/paths').getPaths({ ...env });
+  // `<state>` points at the launchd directory, so the shelf lives inside a root
+  // that `withinAllowedRoot` does not know about — but `withinSchedulerRoot`,
+  // which is what the scheduler reverser uses, does.
+  const agents = path.join(paths.home, 'Library', 'LaunchAgents');
+  fs.mkdirSync(agents, { recursive: true });
+  fs.rmSync(paths.state, { recursive: true, force: true });
+  fs.symlinkSync(agents, paths.state);
+  const plist = shelfFile(path.join(agents, 'quarantine'), 'ai.wienerdog.dream.plist', '<plist/>\n');
+  addEntries([{ kind: 'scheduler-entry', path: plist, unload: [] }], true);
+  const m = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  let res = null;
+  let err = null;
+  try {
+    res = manifestMod.reverse(paths, m, { dryRun: false });
+  } catch (e) {
+    err = e;
+  }
+  assert.equal(readOrNull(plist), '<plist/>\n',
+    `${S}: the schedule file INSIDE the shelf keeps its bytes (${err && err.message.slice(0, 80)})`);
+  if (res) {
+    assert.equal(res.shelfGuarded.includes(plist), true,
+      `${S}: and it is admitted and guarded (${JSON.stringify(res.shelfGuarded)})`);
+    assert.equal(res.removed.includes(plist), false, `${S}: never removed`);
+  }
+});
+
+test('[SG-46] round 6b (X15′ per level): a preserved SIBLING does not stop prediction at descendant levels', () => {
+  const S = 'SG46-prediction-state-is-per-level';
+  const build = () => {
+    const { paths } = sweepCore();
+    // An ALTERNATE SPELLING of the shelf: on a case-insensitive volume this is
+    // the same directory the climb predicts removing, and step 2 preserves it
+    // by name — which used to set one flag that stopped prediction everywhere.
+    fs.mkdirSync(path.join(paths.state, 'Quarantine', 'redacted'), { recursive: true });
+    return paths;
+  };
+  const planPaths = build();
+  const livePaths = build();
+  const caseInsensitive = fs.existsSync(path.join(planPaths.state, 'quarantine'));
+  const plan = manifestMod.disposeCoreMechanics(planPaths, { dryRun: true, vaultPath: null });
+  const live = manifestMod.disposeCoreMechanics(livePaths, { dryRun: false, vaultPath: null });
+  // The core ITSELF is compared out: the live run empties it and the pre-existing
+  // empty-core step then removes it, which a plan that mutates nothing can never
+  // predict. Everything BENEATH the core is what X15′ is about.
+  const strip = (a, root) => a.map((p) => p.replace(root, '<core>')).filter((p) => p !== '<core>').sort();
+  assert.deepEqual(strip(plan.removed, planPaths.core), strip(live.removed, livePaths.core),
+    `${S}: the plan predicts exactly what the live sweep removes`);
+  assert.deepEqual(strip(plan.preservedQuarantine, planPaths.core), strip(live.preservedQuarantine, livePaths.core),
+    `${S}: and reports exactly what it preserves`);
+  if (caseInsensitive) {
+    assert.equal(live.removed.includes(livePaths.state), true,
+      `${S}: on this volume the alternate spelling IS the shelf, both are empty, and <state> goes`);
+  }
 });
