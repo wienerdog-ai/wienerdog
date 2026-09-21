@@ -562,7 +562,9 @@ async function run(argv, opts = {}) {
       dryRun: true,
       discoveredSchedules: discovery.schedules,
     });
-    const { removed: mech, skippedForVault } = manifestLib.disposeCoreMechanics(paths, {
+    const {
+      removed: mech, skippedForVault, preservedQuarantine: mechKept,
+    } = manifestLib.disposeCoreMechanics(paths, {
       dryRun: true,
       vaultPath,
     });
@@ -584,6 +586,14 @@ async function run(argv, opts = {}) {
     if (mech.length > 0) {
       console.log('\nMachine-generated state (removed recursively, not manifest-tracked):');
       for (const d of mech) console.log(`  ${d}`);
+    }
+    if (mechKept.length > 0) {
+      // Table W row W5's second half: what the read-only planner predicts would
+      // be KEPT instead (Table X rows X4/X15). Empty — and therefore silent —
+      // whenever the shelf is absent or empty, which is what keeps W6's
+      // byte-identity claim true for every ordinary install.
+      console.log('\nKept in place (your quarantined copies — not removed):');
+      for (const d of mechKept) console.log(`  ${d}`);
     }
     console.log(`  ${paths.core}  (the canonical core — removed once empty)`);
     printDiscoveredSchedules(discovery, process.platform, vaultPath, new Set(removed));
@@ -613,6 +623,7 @@ async function run(argv, opts = {}) {
     }
     if (plan.deferredConfig) console.log(`  remove ${plan.deferredConfig} (unmodified config — deleted last)`);
     for (const d of mechPlan.removed) console.log(`  remove ${d} (machine-generated state, recursive)`);
+    for (const d of mechPlan.preservedQuarantine) console.log(`  keep ${d} (your quarantined copies)`);
     console.log(`  remove ${paths.core} (the canonical core — removed once empty)`);
     printDiscoveredSchedules(discovery, process.platform, vaultPath, new Set(plan.removed));
     const ok = await confirm('\nProceed with removal? [y/N] ');
@@ -654,7 +665,9 @@ async function run(argv, opts = {}) {
   // 3. reverse() acts on the ACCEPTED SNAPSHOT — the same parsed manifest the plan
   //    was disclosed from, with the pre-confirm vaultPath: no input to the
   //    deletion is newer than the consent.
-  const { removed, skipped, preserved, deferredConfig, deferredConfigHash } = manifestLib.reverse(
+  const {
+    removed, skipped, preserved, deferredConfig, deferredConfigHash, shelfGuarded,
+  } = manifestLib.reverse(
     paths,
     manifest,
     { dryRun: false, discoveredSchedules: discovery.schedules }
@@ -664,10 +677,54 @@ async function run(argv, opts = {}) {
   // is NOT removed yet — the manifest + config.yaml still sit in it, so its
   // emptiness check fails (correct). The recovery ledger has survived every
   // crash-prone step above.
-  const { removed: mech, skippedForVault } = manifestLib.disposeCoreMechanics(paths, {
+  const {
+    removed: mech, skippedForVault, preservedQuarantine: sweptKept,
+  } = manifestLib.disposeCoreMechanics(paths, {
     dryRun: false,
     vaultPath,
   });
+  // ── Table W row W10: THE MANIFEST IS NOT DELETED WHILE ANYTHING IS PRESERVED.
+  //    The pre-plan gate has already passed by here, so every route in which
+  //    something was preserved AFTER it — the concurrent-dream window, an
+  //    unanswerable shelf level at deleter time, a retained `<state>` alias, a
+  //    preserved chain component — reaches the unconditional manifest delete
+  //    two statements below, after which a retry refuses with "no install
+  //    manifest found" and the preserved artifact is stranded. Three inputs, and
+  //    the rule is: BLOCK ON WHAT STILL EXISTS OR CANNOT BE CHECKED, never on
+  //    what is confirmed gone. `shelfGuarded` alone needs the outstanding filter
+  //    — the guard deliberately runs before reverse()'s already-gone check, so a
+  //    path the user has since cleared would otherwise block EVERY retry.
+  const freshQuarantine = manifestLib.quarantineInventory(paths);
+  const outstandingGuarded = shelfGuarded.filter((p) => {
+    try {
+      fs.lstatSync(p);
+      return true; // still there — it blocks
+    } catch (e) {
+      const code = (e && e.code) || 'UNKNOWN';
+      if (code === 'ENOENT' || code === 'ENOTDIR') return false; // confirmed ABSENT
+      return true; // UNANSWERABLE — it blocks
+    }
+  });
+  const stillHeld = [
+    ...sweptKept,
+    ...freshQuarantine.roots.filter((r) => r.entries > 0).map((r) => r.dir),
+    ...freshQuarantine.unreadable.map((u) => u.dir),
+    // `|| []` because `quarantineInventory` is another module's export and this
+    // is a spread: a caller or seam that hands back a shape predating ruling
+    // R-K's `blockers` field would otherwise throw here, turning a missing
+    // disclosure into a crashed uninstall.
+    ...(freshQuarantine.blockers || []),
+    ...outstandingGuarded,
+  ].filter((p, i, a) => a.indexOf(p) === i);
+  if (stillHeld.length > 0) {
+    throw new WienerdogError(
+      'uninstall partially completed — your quarantined copies are still here, so nothing '
+        + `further was removed:\n\n${stillHeld.map((p) => `  ${p}`).join('\n')}\n\n`
+        + `Left the install manifest, config.yaml and ${paths.core} in place so a retry stays `
+        + 'safe. Copy out anything you want to keep, then delete those files and re-run — '
+        + 're-running is safe: npx wienerdog@latest uninstall'
+    );
+  }
   // Delete the deferred set LAST — MANIFEST FIRST, then config.yaml. Every
   // crash-prone step above has completed. Manifest-before-config is load-bearing:
   // a retry proceeds only while the manifest exists, and a retry that reaches a
@@ -723,7 +780,9 @@ async function run(argv, opts = {}) {
   // unmodified config deleted the core is now empty, so this removes it
   // (symlink-aware, vault-aware). A kept CUSTOMIZED config leaves the core
   // non-empty → core preserved (unchanged).
-  const { removed: coreSwept } = manifestLib.disposeCoreMechanics(paths, {
+  const {
+    removed: coreSwept, preservedQuarantine: coreKept,
+  } = manifestLib.disposeCoreMechanics(paths, {
     dryRun: false,
     vaultPath,
   });
@@ -751,7 +810,16 @@ async function run(argv, opts = {}) {
     console.log(`Skipped ${skippedShown.length} item(s) (a customized config or other file kept in place):`);
     for (const s of skippedShown) console.log(`  ${s}`);
   }
-  if (!fs.existsSync(paths.core)) {
+  const keptQuarantine = [...sweptKept, ...coreKept].filter((p, i, a) => a.indexOf(p) === i);
+  if (keptQuarantine.length > 0) {
+    // Table W row W8. Checked BEFORE "fully removed": a shelf that survived the
+    // last sweep (Table W row W11's `R-post-ledger-preserve`) must never be
+    // reported as a complete removal — a false "fully removed" is as bad as the
+    // deletion. The directory is named LITERALLY, not counted, because by this
+    // point the manifest is gone and `rm -rf` on that path is the user's only
+    // remaining route.
+    console.log(`\nKept ${paths.core} — your quarantined copies are still in it: ${keptQuarantine[0]}`);
+  } else if (!fs.existsSync(paths.core)) {
     console.log(`\nWienerdog is fully removed — the canonical core (${paths.core}) is gone.`);
   } else if (skippedForVault.length > 0) {
     console.log(`\nKept ${paths.core} (your memory vault still lives inside it).`);

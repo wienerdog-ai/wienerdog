@@ -1,7 +1,7 @@
 ---
 id: WP-uninstall-shelf-deletion-guards
 title: Make every uninstall deletion — the disposer's sweeps and the manifest replay — unable to reach the secret quarantine
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-adr-0019-quarantine-uninstall-gate]
@@ -163,6 +163,7 @@ that constraint binds this package too.
 | modify | tests/unit/manifest.test.js | the carve-out's `rmdirSync` climb and its `ENOTEMPTY` preservation (**X1**), the return field (**X4**), the deleter's enumeration-failure arm, the **interleaving** tests including their **alias** arms (**X3**/**X18**), the symlinked-`state` and symlinked-`quarantine` regressions (**X10**/**X11**/**X19**), the sweep-side case-fold arms (**X12**), the propagation boundary (**X13**), the read-only dry-run planner (**X15**), the forged-manifest-entry interleavings from below **and** from above with the `{kind:'dir'}` negative control (**X16**/**X20**, Table **V**), the two-hop and ancestor alias arms (**X17 (1a)**/**X19**), and the Table Y rows that are unit-observable |
 | modify | tests/unit/uninstall.test.js | the manifest-survives-a-preserving-sweep test and its replay-guard, set-level-abort and remedy-terminates arms (**W10**/**W11**/**X22**), and the preserved-quarantine summary arm (**W8**) |
 | create | tests/red-proofs/uninstall-shelf-deletion-guards.proofs.json | the declared RED proofs of Table B (ADR-0042) |
+| modify | tests/red-proofs/adr-0019-quarantine-uninstall-gate.proofs.json | drop the `[QU-3]` entry from the `expectRed` arrays of `quse-refusal-not-raised` and `quse-yes-skips-the-refusal`, and nothing else — the change must land in the SAME COMMIT as the carve-out, because on the tree before it `[QU-3]` still reddens. Added by the PR-gate round 1 ruling at the end of Contract reference |
 
 ### Exact contracts
 
@@ -394,6 +395,24 @@ rather than by a reviewer.
 - [ ] **Cross-document mirrors of package A** — every citation of Table **K**, of rows
       **W1**–**W7**/**W9** and of **Y1**–**Y5**/**Y7**/**Y8** defers to
       `WP-adr-0019-quarantine-uninstall-gate` and re-decides nothing
+
+### PR-gate round 1 ruling (PR #312 review, 2026-09-21) — a Deliverables row for the predecessor's declarations
+
+<!-- markdownlint-disable MD038 -->
+<!-- The ruling's text is reproduced VERBATIM and its Deliverables-row literal
+     nests backticks inside a code span, which MD038 reads as three spans with
+     spaces at their edges. The rule is scoped off for this one block rather
+     than the text being reworded. -->
+
+This package's W10 stop makes the gate-blinding mutations of
+`WP-adr-0019-quarantine-uninstall-gate` exit 1 instead of 0, so that package's
+declarations `quse-refusal-not-raised` and `quse-yes-skips-the-refusal` lose
+`[QU-3]` from their observed red sets. The Deliverables table gains one row:
+`modify | tests/red-proofs/adr-0019-quarantine-uninstall-gate.proofs.json | drop the `[QU-3]` entry from those two `expectRed` arrays and nothing else — the change must land in the same commit as the carve-out, because on the tree before it `[QU-3]` still reddens`.
+Architect ruling on a review gate; nothing here records the owner approving
+anything.
+
+<!-- markdownlint-enable MD038 -->
 
 ## Dispatch precondition — owner items
 

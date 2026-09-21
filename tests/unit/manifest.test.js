@@ -3319,3 +3319,105 @@ test("R-K′ (round 3b): a non-directory at the REDACTED position is an ordinary
   assert.equal(inv.entries, 1);
   assert.equal(inv.bytes, 31);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// disposeCoreMechanics + reverse()'s shelf guard — WP-uninstall-shelf-deletion-guards.
+// The CLI-level arms of every acceptance criterion live in
+// tests/unit/uninstall.test.js, tagged `[SG-n]`, because that is where the
+// declared RED proofs' reddening identities are. What is asserted HERE is the
+// unit-level contract of the two functions themselves.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A core laid out like a live install, for the sweep alone. */
+function sweepPaths() {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.mkdirSync(paths.logs, { recursive: true });
+  fs.mkdirSync(path.join(paths.core, 'schedules'), { recursive: true });
+  fs.mkdirSync(paths.secrets, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(paths.state, 'scheduler-status.json'), '{}\n');
+  fs.writeFileSync(path.join(paths.secrets, 'token.json'), '{"t":1}\n');
+  return paths;
+}
+
+test('X4: the return shape gains preservedQuarantine, and `removed` keeps its MECHANICS-DIRECTORY granularity', () => {
+  const paths = sweepPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(r, { recursive: true });
+  const out = manifestLib.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.deepEqual(Object.keys(out).sort(), ['preservedQuarantine', 'removed', 'skippedForVault']);
+  assert.deepEqual(out.preservedQuarantine, [], 'two EMPTY shelf directories preserve nothing');
+  assert.equal(out.removed.filter((p) => p === paths.state).length, 1, '<state> appears exactly once');
+  assert.equal(out.removed.includes(q), false, 'the intermediate rmdir of `quarantine` is internal');
+  assert.equal(out.removed.includes(r), false, 'and so is `redacted`');
+});
+
+test('X1 step 3: an ENOTEMPTY stops the climb, and every ancestor is preserved with the level that stopped it', () => {
+  const paths = sweepPaths();
+  const { q, r } = shelves(paths);
+  fs.mkdirSync(r, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(r, '2026-09-18-note.md'), 'original\n', { mode: 0o600 });
+  const out = manifestLib.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(fs.readFileSync(path.join(r, '2026-09-18-note.md'), 'utf8'), 'original\n');
+  assert.ok(out.preservedQuarantine.includes(r), 'the level rmdirSync refused is reported');
+  assert.equal(fs.existsSync(q), true, 'its ancestor is preserved by construction');
+  assert.equal(fs.existsSync(paths.state), true, 'and so is <state>');
+  assert.equal(out.removed.includes(paths.state), false, 'which is why <state> is not reported removed');
+});
+
+test('X10: classification is lstat-based — a non-directory at <state> is left alone, never enumerated', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  fs.writeFileSync(paths.state, 'not a directory\n');
+  const out = manifestLib.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(fs.readFileSync(paths.state, 'utf8'), 'not a directory\n');
+  assert.equal(out.removed.includes(paths.state), false);
+});
+
+test('X15: the dryRun planner reports the shelf it would keep, and predicts <state> only when the shelf is clean', () => {
+  const clean = sweepPaths();
+  fs.mkdirSync(shelves(clean).r, { recursive: true });
+  const cleanPlan = manifestLib.disposeCoreMechanics(clean, { dryRun: true, vaultPath: null });
+  assert.equal(cleanPlan.removed.includes(clean.state), true, 'an empty shelf predicts <state> removed');
+  assert.deepEqual(cleanPlan.preservedQuarantine, []);
+  assert.equal(fs.existsSync(clean.state), true, 'and the planner mutated nothing');
+
+  const dirty = sweepPaths();
+  const dq = shelves(dirty).q;
+  fs.mkdirSync(dq, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(dq, 'n.md'), 'x\n', { mode: 0o600 });
+  const dirtyPlan = manifestLib.disposeCoreMechanics(dirty, { dryRun: true, vaultPath: null });
+  assert.equal(dirtyPlan.removed.includes(dirty.state), false, 'a populated shelf predicts no removal');
+  assert.deepEqual(dirtyPlan.preservedQuarantine, [dq], 'and names the shelf it would keep');
+});
+
+test('X8: the vault guard still runs first and is untouched — a <state> holding the vault is skipped whole', () => {
+  const paths = sweepPaths();
+  const vault = path.join(paths.state, 'vault');
+  fs.mkdirSync(vault, { recursive: true });
+  fs.writeFileSync(path.join(vault, 'note.md'), 'treasure\n');
+  const out = manifestLib.disposeCoreMechanics(paths, { dryRun: false, vaultPath: vault });
+  assert.deepEqual(out.skippedForVault, [paths.state]);
+  assert.deepEqual(out.preservedQuarantine, [], 'the carve-out never ran on it');
+  assert.equal(fs.readFileSync(path.join(vault, 'note.md'), 'utf8'), 'treasure\n');
+});
+
+test('X16/X22: reverse() returns shelfGuarded, empty on an ordinary install and a strict subset of skipped', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const res = manifestLib.reverse(paths, manifest, { dryRun: true });
+  assert.ok(Array.isArray(res.shelfGuarded), 'the field exists');
+  assert.deepEqual(res.shelfGuarded, [], 'and is empty on an ordinary install (Table W row W6)');
+
+  const paths2 = tempPaths();
+  const manifest2 = makeInstall(paths2);
+  const { q } = shelves(paths2);
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  const note = path.join(q, '2026-09-18-note.md');
+  fs.writeFileSync(note, 'the only copy\n', { mode: 0o600 });
+  manifestLib.record(manifest2, { kind: 'file', path: note });
+  const guarded = manifestLib.reverse(paths2, manifest2, { dryRun: false });
+  assert.deepEqual(guarded.shelfGuarded, [note], 'a hash-less shelf-resident entry is guarded');
+  assert.ok(guarded.skipped.includes(note), 'and is a strict subset of skipped');
+  assert.equal(fs.readFileSync(note, 'utf8'), 'the only copy\n', 'its bytes survive the replay');
+});

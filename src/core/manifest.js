@@ -943,10 +943,17 @@ function save(paths, manifest) {
  *  re-decides it.
  * @returns {{removed: string[], skipped: string[], preserved: string[],
  *            deferredConfig: string|null, deferredConfigHash: string|null,
- *            discoveredSchedules: string[]}} the new field is the subset of the
- *            passed list's paths whose UNLOAD this call performed in phase D5a
- *            (Table D row D6). Anything phase D5b deleted also appears in
- *            `removed`.
+ *            discoveredSchedules: string[], shelfGuarded: string[]}}
+ *            `discoveredSchedules` is the subset of the passed list's paths
+ *            whose UNLOAD this call performed in phase D5a (Table D row D6);
+ *            anything phase D5b deleted also appears in `removed`.
+ *            `shelfGuarded` is the entries the PRE-DISPATCH SHELF GUARD skipped
+ *            (Table X rows X16/X22). `skipped` keeps its contents and its
+ *            rendering; `shelfGuarded` is a strict subset of it, exposed
+ *            separately because Table W row W10 must distinguish a shelf-guard
+ *            skip from an ordinary one. Empty on an ordinary install. An
+ *            UNANSWERABLE protected set at guard initialisation ABORTS the live
+ *            replay before any mutation (X22).
  */
 function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } = {}) {
   /** @type {string[]} */ const removed = [];
@@ -995,6 +1002,40 @@ function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } =
   const MUTATING_KINDS = new Set([
     'file', 'dir', 'symlink', 'managed-block', 'settings-entry', 'vendored-tree', 'copied-skill',
   ]);
+  // ── THE PROTECTED SHELF SET (Table X rows X16/X17/X22) ────────────────────
+  // The manifest is the SECOND deleter that reaches the secret quarantine: a
+  // hash-less {kind:'file'} naming a shelf path passes validateEntry and
+  // withinAllowedRoot and reaches rmSync, and a recursively-deleting kind can
+  // take a shelf from ABOVE. Computed ONCE per call, before the entry loop.
+  const shelfProt = shelfProtection(paths);
+  if (shelfProt.unanswerable) {
+    const { dir, code } = shelfProt.unanswerable;
+    if (!dryRun) {
+      // X22 (1) SET-LEVEL: an unanswerable set ABORTS the live replay BEFORE
+      // any mutation, so the manifest and config.yaml are untouched and the
+      // retry is clean. This is the cheap case — nothing has been deleted yet.
+      throw new WienerdogError(
+        'wienerdog uninstall stopped — nothing was removed. A folder on the secret quarantine\'s '
+          + `path could not be read (${dir}: ${code}), so Wienerdog cannot tell which files a `
+          + 'deletion would reach. Fix the permission or disk problem, then re-run: '
+          + 'npx wienerdog@latest uninstall'
+      );
+    }
+    // --dry-run REPORTS instead of aborting: it deletes nothing (Table K row K4).
+    process.stderr.write(
+      `wienerdog: could not read ${dir} (${code}) — a real uninstall stops here\n`
+    );
+  }
+  /** Entries the shelf guard skipped — a strict subset of `skipped`, exposed
+   *  separately because Table W row W10 must tell a shelf-guard skip from an
+   *  ordinary one (X22). Empty on an ordinary install. */
+  /** @type {string[]} */ const shelfGuarded = [];
+  /** The kinds whose reversers delete RECURSIVELY (Table V) — the FROM-ABOVE
+   *  half of X16 applies to exactly these. `dir` is the provable exemption: its
+   *  reverser removes only a virtually-empty directory, so it can neither
+   *  destroy an original nor break a chain, and guarding it would add a
+   *  `skipped` line to an ordinary uninstall (Table W row W6). */
+  const RECURSIVE_KINDS = new Set(['vendored-tree', 'copied-skill']);
 
   // ── PHASE D5a — THE WIDENED UNLOAD, BEFORE THE ENTRY LOOP ────────────────
   // WP-scheduler-replay-manifest-independent, Table D rows D5/D6/D10/D13.
@@ -1102,6 +1143,34 @@ function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } =
       continue;
     }
     // ── end global guard ─────────────────────────────────────────────────────
+    // ── SHELF GUARD (Table X row X16), STILL BEFORE KIND DISPATCH ────────────
+    // Skip-and-report any entry whose LITERAL path is at or under a lexical
+    // shelf anchor, or whose RESOLVED path is caught by X17 (1a)'s two-class
+    // test. SYMMETRIC: from BELOW for every kind, and from ABOVE for the kinds
+    // whose reversers delete recursively (Table V). A `symlink` entry naming a
+    // link ON a protected shelf's chain is caught by the class (ii) equality —
+    // removing it deletes REACHABILITY, which a later recursive delete then
+    // turns into deleted bytes (X20). Fail-closed here means PRESERVE, so an
+    // UNANSWERABLE resolution guards too (X17 (4), X22 (2)); mere ABSENCE never
+    // does (X17 (3)) — that is the clause whose lack stranded ordinary installs.
+    {
+      const recursive = RECURSIVE_KINDS.has(entry.kind);
+      let guarded = shelfBlocks(entry.path, shelfProt, recursive);
+      if (!guarded) {
+        const res = resolveOne(entry.path);
+        if (res.state === 'unanswerable') guarded = true;
+        else if (res.real !== null && shelfBlocks(res.real, shelfProt, recursive)) guarded = true;
+      }
+      if (guarded) {
+        process.stderr.write(
+          `wienerdog: preserving ${entry.path} — it is in, or on the path of, the secret quarantine (not deleting)\n`
+        );
+        skipped.push(entry.path);
+        shelfGuarded.push(entry.path);
+        continue;
+      }
+    }
+    // ── end shelf guard ──────────────────────────────────────────────────────
     // ── PER-ENTRY ERROR ISOLATION + ROOT BOUND + DELETE-TIME BINDING (A8) ─────
     // One throwing reverser must never abort the whole uninstall (that made the
     // install permanently un-uninstallable — every retry hit the same entry).
@@ -1344,7 +1413,7 @@ function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } =
 
   return {
     removed, skipped, preserved, deferredConfig, deferredConfigHash,
-    discoveredSchedules: discoveredUnloaded,
+    discoveredSchedules: discoveredUnloaded, shelfGuarded,
   };
 }
 
@@ -1642,18 +1711,349 @@ function quarantineInventory(paths) {
   return { roots, entries, bytes, unreadable, blockers };
 }
 
+/** Purely LEXICAL containment over two paths that have ALREADY been resolved by
+ *  `walkChain`: true when `inner` IS `outer` or sits beneath it. Deliberately
+ *  NOT `contains()` (Table X row X7): that helper realpaths both sides and
+ *  returns a bare `false` on any resolution error, which is the wrong direction
+ *  here — every resolution this package performs happens ONCE, in `walkChain`,
+ *  which distinguishes ABSENT from UNANSWERABLE (Table X row X17 (3)/(4)).
+ *  @param {string} outer @param {string} inner @returns {boolean} */
+function lexicalContains(outer, inner) {
+  const rel = path.relative(outer, inner);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/** Bound on the link hops one resolution may take, so a cycle answers
+ *  UNANSWERABLE (`ELOOP`) instead of recursing forever. */
+const MAX_LINK_HOPS = 40;
+
+/**
+ * Resolve `p` COMPONENT BY COMPONENT with `lstat`/`readlink`, recording every
+ * link LOCATION and every intermediate TARGET in `ctx.chain` — Table X row
+ * **X17 (1a)** class (ii). `fs.realpathSync` cannot be used: it collapses the
+ * chain to its endpoint, and the chain is precisely what rows **X19** and
+ * **X20** protect.
+ * @param {string} p an absolute path
+ * @param {{chain: Set<string>, hops: number}} ctx
+ * @returns {{state:'ok'|'absent'|'unanswerable', real:string|null,
+ *            dir:string|null, code:string|null}}
+ *   `state` — `ok` the whole path exists; `absent` a level reported
+ *   `ENOENT`/`ENOTDIR`, which is ABSENCE and not an error (**X17 (3)**), and
+ *   `real` then carries the nearest existing ancestor's resolved path with the
+ *   missing suffix appended LEXICALLY (**X17 (2)**), so a resolved anchor
+ *   exists even when the shelf does not; `unanswerable` any other code
+ *   (**X17 (4)**), with `dir`/`code` naming it.
+ */
+function walkChain(p, ctx) {
+  const root = path.parse(p).root;
+  const parts = p.slice(root.length).split(path.sep).filter((s) => s !== '' && s !== '.');
+  let cur = root;
+  let hypothetical = false;
+  for (let i = 0; i < parts.length; i += 1) {
+    const next = path.join(cur, parts[i]);
+    let st;
+    try {
+      st = fs.lstatSync(next);
+    } catch (e) {
+      const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+      if (isAbsentCode(code)) {
+        return { state: 'absent', real: path.join(next, ...parts.slice(i + 1)), dir: null, code: null };
+      }
+      return { state: 'unanswerable', real: null, dir: next, code };
+    }
+    if (st.isSymbolicLink()) {
+      if (ctx.hops >= MAX_LINK_HOPS) {
+        return { state: 'unanswerable', real: null, dir: next, code: 'ELOOP' };
+      }
+      ctx.hops += 1;
+      ctx.chain.add(next); // the link LOCATION
+      let link;
+      try {
+        link = fs.readlinkSync(next);
+      } catch (e) {
+        const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+        if (isAbsentCode(code)) {
+          return { state: 'absent', real: path.join(next, ...parts.slice(i + 1)), dir: null, code: null };
+        }
+        return { state: 'unanswerable', real: null, dir: next, code };
+      }
+      const target = path.isAbsolute(link) ? link : path.resolve(path.dirname(next), link);
+      const r = walkChain(target, ctx);
+      if (r.state === 'unanswerable') return r;
+      if (r.state === 'absent') hypothetical = true;
+      if (r.real) ctx.chain.add(r.real); // the intermediate TARGET
+      cur = /** @type {string} */ (r.real);
+    } else {
+      cur = next;
+    }
+  }
+  return { state: hypothetical ? 'absent' : 'ok', real: cur, dir: null, code: null };
+}
+
+/** One resolution, with a throwaway chain: the protected set must never be
+ *  polluted by the links on a DELETION TARGET's own path.
+ *  @param {string} p @returns {ReturnType<typeof walkChain>} */
+function resolveOne(p) {
+  return walkChain(p, { chain: new Set(), hops: 0 });
+}
+
+/**
+ * THE PROTECTED SHELF SET — Table X row **X17**, computed BEFORE any mutation
+ * (**X1** step 0a). Three collections, and their reach differs:
+ *   `lexical`  — the byte-exact `<state>/quarantine[/redacted]` joins PLUS every
+ *                ASCII-fold-equal name actually found at those levels (**X12**).
+ *                Retained whether or not the shelves exist (**X17 (1)**).
+ *   `subtrees` — CLASS (i): the shelf roots' RESOLVED targets. These protect the
+ *                node AND every descendant; a HYPOTHETICAL root (derived through
+ *                the nearest existing ancestor for an absent shelf) keeps the
+ *                same full class (i) reach (**X17 (1a)**, round 17).
+ *   `chain`    — CLASS (ii): every link LOCATION and intermediate TARGET on a
+ *                shelf's resolution chain. These protect the node and its
+ *                ANCESTORS only — NOT their unrelated descendants, which is what
+ *                keeps `secrets/` removable on a symlinked-core install.
+ * `existing` is true when at least one shelf root actually exists; it is
+ * consulted by exactly ONE decision in this package, Table X row **X19**'s alias
+ * retention. `unanswerable` carries the first non-`ENOENT`/`ENOTDIR` failure,
+ * and that level is added to BOTH classes so the question it left open fails
+ * closed toward preservation without stranding anything it does not touch.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @returns {{lexical:string[], subtrees:string[], chain:string[],
+ *            existing:boolean, unanswerable:{dir:string, code:string}|null}}
+ */
+function shelfProtection(paths) {
+  /** @type {string[]} */ const lexical = [];
+  /** @type {string[]} */ const subtrees = [];
+  /** @type {Set<string>} */ const chain = new Set();
+  /** @type {{dir:string, code:string}|null} */ let unanswerable = null;
+  let existing = false;
+  const ctx = { chain, hops: 0 };
+
+  /** @param {string} dir @param {string} code */
+  const note = (dir, code) => {
+    if (!unanswerable) unanswerable = { dir, code };
+    if (!subtrees.includes(dir)) subtrees.push(dir);
+    chain.add(dir);
+  };
+  /** @param {string} dir @param {string} want @returns {string[]} */
+  const foldNames = (dir, want) => {
+    try {
+      return fs.readdirSync(dir).filter((n) => asciiFold(n) === want);
+    } catch (e) {
+      const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+      if (!isAbsentCode(code)) note(dir, code);
+      return [];
+    }
+  };
+
+  const qLex = path.join(paths.state, QUARANTINE_DIRNAME);
+  /** @type {string[]} */ const roots = [qLex, path.join(qLex, QUARANTINE_REDACTED_DIRNAME)];
+  for (const r of roots) lexical.push(r);
+  for (const name of foldNames(paths.state, QUARANTINE_DIRNAME)) {
+    const q = path.join(paths.state, name);
+    if (!lexical.includes(q)) lexical.push(q);
+    if (!roots.includes(q)) roots.push(q);
+    for (const sub of foldNames(q, QUARANTINE_REDACTED_DIRNAME)) {
+      const red = path.join(q, sub);
+      if (!lexical.includes(red)) lexical.push(red);
+      if (!roots.includes(red)) roots.push(red);
+    }
+  }
+  for (const r of roots) {
+    const res = walkChain(r, ctx);
+    if (res.state === 'unanswerable') {
+      note(/** @type {string} */ (res.dir), /** @type {string} */ (res.code));
+      continue;
+    }
+    if (res.state === 'ok') existing = true;
+    if (res.real && !subtrees.includes(res.real)) subtrees.push(res.real);
+  }
+  return { lexical, subtrees, chain: [...chain], existing, unanswerable };
+}
+
+/**
+ * Table X row **X16**'s containment check, over Table X row **X17**'s set.
+ * FROM BELOW (every caller): the target is at, under, or equal to a lexical
+ * anchor or a class (i) subtree, or equals a class (ii) chain node. FROM ABOVE
+ * (`recursive` only — Table **V**): the target CONTAINS any of them. The
+ * asymmetry is load-bearing: a chain node's unrelated descendants stay
+ * removable, which is what keeps `secrets/` deletable on a symlinked core.
+ * @param {string} target an absolute path
+ * @param {ReturnType<typeof shelfProtection>} prot
+ * @param {boolean} recursive true when the deletion at hand is RECURSIVE
+ * @returns {boolean} true ⇒ PRESERVE and report
+ */
+function shelfBlocks(target, prot, recursive) {
+  for (const a of prot.lexical) {
+    if (lexicalContains(a, target)) return true;
+    if (recursive && lexicalContains(target, a)) return true;
+  }
+  for (const n of prot.subtrees) {
+    if (lexicalContains(n, target)) return true;
+    if (recursive && lexicalContains(target, n)) return true;
+  }
+  for (const n of prot.chain) {
+    if (target === n) return true;
+    if (recursive && lexicalContains(target, n)) return true;
+  }
+  return false;
+}
+
+/**
+ * Dispose `paths.state` under Table X row **X1** — the LIVE arm, which never
+ * calls `fs.rmSync(…, {recursive:true})` on `<state>`, on `<state>/quarantine`
+ * or on `<state>/quarantine/redacted`, and never deletes a shelf file at all.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {ReturnType<typeof shelfProtection>} prot the set from step 0a
+ * @param {string[]} removed @param {string[]} preservedQuarantine
+ * @returns {void}
+ */
+function disposeStateTree(paths, prot, removed, preservedQuarantine) {
+  const state = paths.state;
+  // (0b) CLASSIFY WITH lstat — never statSync, never the isDir helper (X10).
+  let st;
+  try {
+    st = fs.lstatSync(state);
+  } catch (e) {
+    const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+    if (isAbsentCode(code)) return; // absent — nothing to dispose
+    preservedQuarantine.push(state); // UNANSWERABLE — preserve and report (X17 (4))
+    return;
+  }
+  if (st.isSymbolicLink()) {
+    // X19: RETAIN when (a) an EXISTING shelf's chain passes through it, or
+    // (b) its target overlaps ANY of withinAllowedRoot's four roots. Otherwise
+    // unlink the link and stop — no enumeration, nothing below it is touched,
+    // which is byte-for-byte what a single recursive rmSync already did.
+    const res = resolveOne(state);
+    if (res.state === 'unanswerable') {
+      preservedQuarantine.push(state);
+      return;
+    }
+    const target = /** @type {string} */ (res.real);
+    const localBin = path.join(paths.home, '.local', 'bin');
+    const allowedRoots = [paths.core, paths.claudeDir, paths.codexDir, localBin];
+    const onExistingChain = prot.existing && shelfBlocks(target, prot, true);
+    // The roots are LEXICAL and `target` is RESOLVED, so each root is compared
+    // in both forms: `withinAllowedRoot` gates every mutating replay kind, so
+    // every path this command can delete lies under one of the four — and a
+    // /tmp-style alias on the root's own path must not hide that.
+    const overlapsAllowedRoot = allowedRoots.some((r) => {
+      const rr = resolveOne(r);
+      const forms = rr.real !== null && rr.real !== r ? [r, rr.real] : [r];
+      return forms.some((c) => lexicalContains(c, target) || lexicalContains(target, c));
+    });
+    if (onExistingChain || overlapsAllowedRoot) {
+      preservedQuarantine.push(state);
+      return;
+    }
+    fs.unlinkSync(state);
+    removed.push(state); // X4: the whole of <state> is gone
+    return;
+  }
+  if (!st.isDirectory()) return; // not a directory at all — do nothing
+  // (1) ENUMERATE. A failure here PROPAGATES, exactly as before (X13).
+  const children = fs.readdirSync(state);
+  // (2) Remove every non-shelf child, each gated by X16's symmetric check (X18).
+  for (const name of children) {
+    const child = path.join(state, name);
+    if (asciiFold(name) === QUARANTINE_DIRNAME) {
+      // A name that folds equal but is NOT byte-equal is PRESERVED and reported:
+      // nothing cheap can tell our shelf under another spelling from a
+      // look-alike the user made (X12). The byte-exact one is step 3's.
+      if (name !== QUARANTINE_DIRNAME) preservedQuarantine.push(child);
+      continue;
+    }
+    const res = resolveOne(child);
+    if (
+      res.state === 'unanswerable'
+      || shelfBlocks(child, prot, true)
+      || (res.real !== null && shelfBlocks(res.real, prot, true))
+    ) {
+      preservedQuarantine.push(child);
+      continue;
+    }
+    fs.rmSync(child, { recursive: true, force: true }); // a failure PROPAGATES (X13)
+  }
+  // (3) VALIDATE TOP-DOWN, THEN REMOVE BOTTOM-UP — two passes, opposite
+  //     directions (X11). lstat classifies only a path's FINAL component, so
+  //     every ancestor is proven a real directory before any descendant is
+  //     accessed at all.
+  const levels = [
+    state,
+    path.join(state, QUARANTINE_DIRNAME),
+    path.join(state, QUARANTINE_DIRNAME, QUARANTINE_REDACTED_DIRNAME),
+  ];
+  /** @type {string[]} */ const validated = [];
+  for (const level of levels) {
+    let ls;
+    try {
+      ls = fs.lstatSync(level);
+    } catch (e) {
+      const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+      if (!isAbsentCode(code)) preservedQuarantine.push(level);
+      break; // absent ⇒ nothing below it; unreadable ⇒ off-limits
+    }
+    if (!ls.isDirectory()) {
+      preservedQuarantine.push(level); // a symlink, file or socket — never followed
+      break;
+    }
+    validated.push(level);
+  }
+  for (let i = validated.length - 1; i >= 0; i -= 1) {
+    const level = validated[i];
+    try {
+      // rmdirSync IS the whole mechanism: it removes a directory if and only if
+      // it is empty, atomically, in the kernel — so the emptiness test and the
+      // deletion are one syscall with no interval for anything to arrive in.
+      fs.rmdirSync(level);
+    } catch (e) {
+      const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+      if (isAbsentCode(code)) continue; // already gone — not an error
+      preservedQuarantine.push(level);
+      return; // PRESERVE and stop climbing (every ancestor is preserved with it)
+    }
+    // Success is INTERNAL bookkeeping except for <state> itself (X4).
+    if (level === state) removed.push(state);
+  }
+}
+
 /**
  * Dispose the canonical core's machine-generated-mechanics subdirs after a
- * manifest replay, then remove the now-empty core (ADR-0019). state/, logs/,
- * schedules/, secrets/ hold only Wienerdog-authored runtime artifacts (digest,
- * watermarks, alerts, update-check, schedule.json, scratch, run-job logs,
- * Windows Task Scheduler XML, OAuth tokens) — none manifest-tracked, none
- * user-authored. Remove each recursively, then remove the now-empty core dir
- * itself (best-effort; a core that is itself a symlink has its link unlinked,
- * leaving the emptied target dir in place). A user-modified config.yaml (kept
- * by reverse) keeps the core alive — the sole exception to "uninstall leaves
- * only the vault". Idempotent: subdirs already gone are skipped. In dry-run
- * nothing is removed (the caller lists what it reports).
+ * manifest replay, then remove the now-empty core (ADR-0019). logs/,
+ * schedules/, secrets/ hold only Wienerdog-authored runtime artifacts (alerts,
+ * update-check, schedule.json, run-job logs, Windows Task Scheduler XML, OAuth
+ * tokens) — none manifest-tracked, none user-authored. Remove each recursively,
+ * then remove the now-empty core dir itself (best-effort; a core that is itself
+ * a symlink has its link unlinked, leaving the emptied target dir in place). A
+ * user-modified config.yaml (kept by reverse) keeps the core alive — the sole
+ * exception to "uninstall leaves only the vault". Idempotent: subdirs already
+ * gone are skipped.
+ *
+ * **`state/` IS THE ONE EXCEPTION TO "none user-authored"**, and it is why this
+ * function no longer sweeps it whole: the dream gate copies the user's own note
+ * text into `<state>/quarantine` and `<state>/quarantine/redacted` before
+ * withholding or redacting it (`src/core/dream/validate.js`), under the
+ * amendment to ADR-0019. Disposal of `paths.state` therefore follows Table X
+ * row **X1** and takes NO inventory on the LIVE arm. EVERY path it classifies is
+ * classified with `fs.lstatSync`, never `statSync` and never the `isDir` helper
+ * (**X10**): a SYMLINKED `paths.state` is unlinked only when **X19** permits it
+ * and is NEVER descended, and a shelf root that is not a real directory is
+ * preserved untouched. Because `lstat` classifies only a path's FINAL
+ * component, the shelf levels are VALIDATED top-down before any descendant is
+ * accessed, and only the validated prefix is then removed bottom-up (**X11**).
+ * The shelf directories are identified by ASCII CASE FOLD (**X12**). The
+ * no-throw handling is SCOPED to the shelf levels and to the pre-existing
+ * empty-core step (**X13**): a failure enumerating `paths.state`, or removing
+ * any non-shelf child, `logs/`, `schedules/` or `secrets/`, still PROPAGATES
+ * exactly as before, so `uninstall.js` never reaches its manifest and config
+ * deletes and the install stays retryable.
+ *
+ * `dryRun: true` is a READ-ONLY PLANNER (**X15**), not a disposal with the
+ * writes removed: it runs `quarantineInventory` — same fold, same top-down
+ * validation — performs NO mutating filesystem call at all, and returns
+ * `removed` as PREDICTED removals at the same granularity. The live arm stays
+ * snapshot-free, and the carve-out takes NO option: no caller can disable it
+ * (**X2**).
  *
  * Containment guard (defense in depth): `adopt` refuses a vault inside the
  * core, but this deleter does not trust that invariant — a legacy or
@@ -1662,23 +2062,82 @@ function quarantineInventory(paths) {
  * reported in `skippedForVault` so the caller can tell the truth about it.
  * @param {import('./paths').WienerdogPaths} paths
  * @param {{dryRun?: boolean, vaultPath?: string|null}} [opts]
- * @returns {{removed: string[], skippedForVault: string[]}} dirs recursively
- *   removed (+ the core if removed), and dirs left alive to protect the vault.
+ * @returns {{removed: string[], skippedForVault: string[],
+ *            preservedQuarantine: string[]}} `removed` KEEPS ITS ORIGINAL
+ *   MECHANICS-DIRECTORY GRANULARITY (**X4**): `paths.state` appears at most once
+ *   and only when the whole of `<state>` is gone; the intermediate rmdirs of
+ *   `quarantine` and `redacted` are internal and never appear; and when any
+ *   shelf level was preserved `paths.state` does not appear at all. The caller
+ *   sums `removed.length` and renders it, so this granularity is what keeps an
+ *   empty-shelf uninstall byte-identical to before. `skippedForVault` is
+ *   unchanged. `preservedQuarantine` lists the directories this call left in
+ *   place, in the shape the caller already uses for `skippedForVault`.
  */
 function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) {
   /** @type {string[]} */ const removed = [];
   /** @type {string[]} */ const skippedForVault = [];
+  /** @type {string[]} */ const preservedQuarantine = [];
   const mechanics = [
     paths.state,
     paths.logs,
     path.join(paths.core, 'schedules'),
     paths.secrets,
   ];
+  // (0a) THE PROTECTED SHELF TARGETS, FIRST — before step 0b, before step 2 and
+  //      before step 3. Computing them later leaves the checks with nothing to
+  //      check (X18) or lets the unlink erase the evidence they derive from
+  //      (X19). The LIVE arm takes no inventory and holds no snapshot (X2).
+  const prot = dryRun ? null : shelfProtection(paths);
+  const plan = dryRun ? quarantineInventory(paths) : null;
   for (const dir of mechanics) {
-    if (!isDir(dir)) continue;
-    if (vaultPath && contains(dir, vaultPath)) {
+    const isState = dir === paths.state;
+    // `<state>` is classified by Table X row X1 step 0b, with `lstat`, INSIDE
+    // `disposeStateTree` — never by `isDir`, which follows symlinks (X10).
+    if (!isState && !isDir(dir)) continue;
+    // The vault guard runs FIRST and is untouched (X8): a swept dir that equals
+    // or contains the resolved vault is skipped whole and the carve-out never
+    // runs on it. Both rules only ever PRESERVE, so their interaction cannot
+    // delete anything either would have kept.
+    if (vaultPath && isDir(dir) && contains(dir, vaultPath)) {
       skippedForVault.push(dir);
       continue;
+    }
+    if (isState) {
+      if (plan) {
+        // X15's READ-ONLY PLANNER. `<state>` is predicted removed IFF the shelf
+        // is ABSENT or EMPTY and every level validated; otherwise the levels
+        // that would be preserved are named instead. Being wrong costs a line
+        // of output, never a byte — a planner has no deletion to race.
+        if (!isDir(dir)) continue;
+        const shelfClean = plan.entries === 0 && plan.unreadable.length === 0;
+        if (shelfClean) {
+          removed.push(dir);
+        } else {
+          for (const r of plan.roots) if (r.entries > 0) preservedQuarantine.push(r.dir);
+          for (const u of plan.unreadable) {
+            if (!preservedQuarantine.includes(u.dir)) preservedQuarantine.push(u.dir);
+          }
+          for (const b of plan.blockers || []) {
+            if (!preservedQuarantine.includes(b)) preservedQuarantine.push(b);
+          }
+        }
+        continue;
+      }
+      disposeStateTree(paths, /** @type {any} */ (prot), removed, preservedQuarantine);
+      continue;
+    }
+    if (prot) {
+      // X18/Table V: this recursive rmSync is NOT an exemption — `<core>/logs`
+      // can be a real directory a shelf symlink resolves into.
+      const res = resolveOne(dir);
+      if (
+        res.state === 'unanswerable'
+        || shelfBlocks(dir, prot, true)
+        || (res.real !== null && shelfBlocks(res.real, prot, true))
+      ) {
+        preservedQuarantine.push(dir);
+        continue;
+      }
     }
     if (!dryRun) fs.rmSync(dir, { recursive: true, force: true });
     removed.push(dir);
@@ -1703,7 +2162,7 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
       /* ignore — leaving an empty core behind beats a nonzero uninstall */
     }
   }
-  return { removed, skippedForVault };
+  return { removed, skippedForVault, preservedQuarantine };
 }
 
 module.exports = { load, record, save, reverse, disposeCoreMechanics, quarantineInventory, discoverSchedulesOnDisk, DISCOVERED_DISPOSITION, R9_LOGIN_RELOAD_WARNING, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, linkIdentity, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
