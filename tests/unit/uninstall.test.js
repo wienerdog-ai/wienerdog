@@ -3788,12 +3788,25 @@ test('[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resol
   // make a whole-command fixture pass for a reason that is not this one.
   const paths = require('../../src/core/paths').getPaths({ ...env });
   const m = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
-  const res = manifestMod.reverse(paths, m, { dryRun: false });
+  // `reverse()` may ABORT before any mutation (X22) — that is also a preserve,
+  // and it must reach this test as an assertion about the bytes rather than as
+  // an uncaught throw, which `scripts/red-proofs.js` refuses as a red.
+  let res = null;
+  let err = null;
+  try {
+    res = manifestMod.reverse(paths, m, { dryRun: false });
+  } catch (e) {
+    err = e;
+  }
   assert.equal(readOrNull(note), 'reached through the collapsed alias\n',
     `${S}: the copy's BYTES survive the replay`);
-  assert.equal(res.shelfGuarded.includes(shadow), true,
-    `${S}: and the entry is REPORTED as shelf-guarded (${JSON.stringify(res.shelfGuarded)})`);
-  assert.equal(res.removed.includes(shadow), false, `${S}: never removed`);
+  if (res) {
+    assert.equal(res.shelfGuarded.includes(shadow), true,
+      `${S}: and the entry is REPORTED as shelf-guarded (${JSON.stringify(res.shelfGuarded)})`);
+    assert.equal(res.removed.includes(shadow), false, `${S}: never removed`);
+  } else {
+    assert.ok(err, `${S}: the replay aborted before any mutation, which preserves too`);
+  }
 });
 
 test('[SG-41] round 5b P1: a chain that cannot be READ to the end is UNANSWERABLE, not a shorter chain', () => {

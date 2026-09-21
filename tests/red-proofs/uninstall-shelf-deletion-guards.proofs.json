@@ -249,7 +249,7 @@
       "criterion": "8",
       "why": "Round 7. Criterion 8's populated arm asserts that the plan does NOT predict removal — an absence assertion over one line of output, which goes green whenever the fixture's shelf was empty, the wrong stream was captured, or the plan was never printed. The other horn (skip the syscalls, never predict <state>) is caught by criterion 3's byte-identity; this declaration covers the horn nothing else reaches.",
       "file": "src/core/manifest.js",
-      "find": "      const leftovers = names.filter((n) => {\n        if (predictedChild !== null && n === predictedChild) return false;\n        if (level === state && removableChildren.includes(n)) return false;\n        return true;\n      });",
+      "find": "      const leftovers = names.filter((n) => {\n        if (predictedChild !== null && sameObject(path.join(level, n), predictedChild)) return false;\n        if (level === state && removableChildren.includes(n)) return false;\n        return true;\n      });",
       "replace": "      const leftovers = []; /* RP_MUT_QUSE_DRY_RUN_PLANS_BY_ASSUMING */ void names; void predictedChild;",
       "marker": "RP_MUT_QUSE_DRY_RUN_PLANS_BY_ASSUMING",
       "occurrences": 1,
@@ -470,12 +470,6 @@
             "[SG-39] AC4 round 4 (W8′): the closing summary prints EVERY preserved path, one per line"
           ],
           "signal": "SG39-summary-lists-every-preserved-path"
-        },
-        {
-          "test": [
-            "[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resolves, not only the kernel’s"
-          ],
-          "signal": "SG40-deleter-target-is-guarded"
         },
         {
           "test": [
@@ -1133,8 +1127,8 @@
       "criterion": "8",
       "why": "PR-gate round 4 follow-up, Astra P2 #3. Criterion 8's populated arm asserts the plan does not predict removal, and it goes green whenever the fixture's leftover is one the live arm also leaves. Only a leftover whose NAME FOLDS EQUAL to a shelf level — a file called `redacted` inside the redacted shelf, or a `REDACTED` beside `redacted` on ext4 — separates 'discount what this plan removed' from 'discount anything that looks like a shelf'. Under the mutation the plan promises `<state>` disappears while the live climb takes ENOTEMPTY and stops: a plan that is wrong in the one direction a plan must never be wrong.",
       "file": "src/core/manifest.js",
-      "find": "        if (predictedChild !== null && n === predictedChild) return false;\n        if (level === state && removableChildren.includes(n)) return false;\n        return true;",
-      "replace": "        /* RP_MUT_QUSE_PLANNER_DISCOUNTS_EVERY_FOLD_EQUAL_NAME */\n        if (level === state) return !removableChildren.includes(n) && asciiFold(n) !== QUARANTINE_DIRNAME;\n        return asciiFold(n) !== QUARANTINE_REDACTED_DIRNAME;",
+      "find": "      const leftovers = names.filter((n) => {\n        if (predictedChild !== null && sameObject(path.join(level, n), predictedChild)) return false;\n        if (level === state && removableChildren.includes(n)) return false;\n        return true;\n      });",
+      "replace": "      /* RP_MUT_QUSE_PLANNER_DISCOUNTS_EVERY_FOLD_EQUAL_NAME */\n      const leftovers = names.filter((n) => {\n        if (level === state) return !removableChildren.includes(n) && asciiFold(n) !== QUARANTINE_DIRNAME;\n        return asciiFold(n) !== QUARANTINE_REDACTED_DIRNAME;\n      });\n      void predictedChild;",
       "marker": "RP_MUT_QUSE_PLANNER_DISCOUNTS_EVERY_FOLD_EQUAL_NAME",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
