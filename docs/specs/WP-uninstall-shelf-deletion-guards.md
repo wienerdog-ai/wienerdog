@@ -161,7 +161,7 @@ that constraint binds this package too.
 | modify | src/core/manifest.js | **plus the two test-only hooks the contract rows are asserted through, `__shelfProtectionForTest` (Table X row **X17**’s protected set) and `__walkChainForTest` (the resolver of Table X rows **X17′**/**X17‴**), exported beside the product surface and used by no product code.** The carve-out inside `disposeCoreMechanics` and its `preservedQuarantine` return field (**X1**/**X2**/**X4**); `lstat` classification (**X10**) in the top-down-then-bottom-up order of **X11**; the ASCII fold at the deleters (**X12**, whose inventory half is package A's Table K row **K8**); non-shelf deletion failures still propagating (**X13**); the `dryRun: true` read-only planner (**X15**); the single resolution rule and the two-class protected SET (**X17**, including **(1a)**'s chain closure); the protected set computed **before any mutation** and every recursive deletion gated on it (**X18**, Table **V**); the `<state>`-alias retention rule (**X19**); the resolution-chain rule for `reverse()`'s `symlink` kind (**X20**); the pre-dispatch shelf guard in `reverse()` (**X16**, all three clauses) with its `shelfGuarded` return field and the guard-initialisation abort (**X22**); and that function's doc comment (**X9**). **`quarantineInventory` is package A's and is not re-implemented here.** `contains`, `withinSchedulerRoot`, `withinAllowedRoot`, `validateEntry`, `isDir` and **every reverser body inside `reverse()`** stay byte-unchanged — `reverse()` itself is edited **only** in its pre-dispatch region |
 | modify | src/cli/uninstall.js | render the preserved-quarantine arm of the closing summary (**W8**); stop immediately before the manifest delete when any sweep preserved something, a fresh `quarantineInventory` read reports anything, or `reverse()` returned a still-OUTSTANDING `shelfGuarded` entry (**W10**, **X22**); the `--dry-run` planner's half of package A's **W5**. Package A's refusal, its inventory call site, `requireDeletionClearance`, the byte-exact manifest compare and everything `WP-scheduler-replay-manifest-independent` adds stay byte-unchanged |
 | modify | tests/unit/manifest.test.js | the SIX unit-level contracts of the two functions: `preservedQuarantine` and `removed`'s mechanics-directory granularity (**X4**), the `ENOTEMPTY` climb and its ancestor preservation (**X1** step 3), the `lstat` classification of a non-directory `<state>` (**X10**), the read-only `dryRun` planner (**X15**), the vault guard's precedence (**X8**), and `reverse()`'s `shelfGuarded` field (**X16**/**X22**). **Every DECLARED RED identity lives in `tests/unit/uninstall.test.js`** — see that row |
-| modify | tests/unit/uninstall.test.js | **owns every declared RED identity — the tags run `[SG-1]`–`[SG-38]` and **Table B enumerates exactly which of them are DECLARED**, which is the only authority on that set**, one per acceptance criterion arm: the carve-out and its alias/`<state>`-alias/two-hop arms (**X1**/**X18**/**X19**/**X17 (1a)**), the absent-and-empty and symlinked-core arms (**X4**, the class split), **W6**'s byte-identity, the interleavings (**X3**/**X12**), the never-descended symlink and top-down validation (**X10**/**X11**), the fold ambiguity (**X12**), the propagation boundary (**X13**), the read-only planner (**X15**), the forged-entry from-below/from-above/absence/hypothetical/chain arms (**X16**/**X17**/**X20**, Table **V**), and **W10**/**W11**/**X22**'s stop, replay-guard, set-level abort and remedy-terminates arms. **Plus the PR-gate round 2 regressions `[SG-23]`–`[SG-26]`, the round 3 regressions `[SG-27]`–`[SG-30]`, the round 4 regressions `[SG-31]`–`[SG-38]` and the resolver exactness fuzz `[SG-FUZZ]`.** Package A's `[QU-6]` ENOENT arm is re-fixtured here (see the round 1 ruling) |
+| modify | tests/unit/uninstall.test.js | **owns every declared RED identity — the tags run `[SG-1]`–`[SG-42]` plus `[SG-FUZZ]` and **Table B enumerates exactly which of them are DECLARED**, which is the only authority on that set**, one per acceptance criterion arm: the carve-out and its alias/`<state>`-alias/two-hop arms (**X1**/**X18**/**X19**/**X17 (1a)**), the absent-and-empty and symlinked-core arms (**X4**, the class split), **W6**'s byte-identity, the interleavings (**X3**/**X12**), the never-descended symlink and top-down validation (**X10**/**X11**), the fold ambiguity (**X12**), the propagation boundary (**X13**), the read-only planner (**X15**), the forged-entry from-below/from-above/absence/hypothetical/chain arms (**X16**/**X17**/**X20**, Table **V**), and **W10**/**W11**/**X22**'s stop, replay-guard, set-level abort and remedy-terminates arms. **Plus the PR-gate round 2 regressions `[SG-23]`–`[SG-26]`, the round 3 regressions `[SG-27]`–`[SG-30]`, the round 4 regressions `[SG-31]`–`[SG-38]` and the resolver exactness fuzz `[SG-FUZZ]`.** Package A's `[QU-6]` ENOENT arm is re-fixtured here (see the round 1 ruling) |
 | create | tests/red-proofs/uninstall-shelf-deletion-guards.proofs.json | the declared RED proofs of Table B (ADR-0042) |
 | modify | tests/red-proofs/adr-0019-quarantine-uninstall-gate.proofs.json | drop the `[QU-3]` entry from the `expectRed` arrays of `quse-refusal-not-raised` and `quse-yes-skips-the-refusal`, and nothing else — the change must land in the SAME COMMIT as the carve-out, because on the tree before it `[QU-3]` still reddens. Added by the PR-gate round 1 ruling at the end of Contract reference |
 
@@ -339,32 +339,30 @@ built around it is unique. **Every anchor below is shown without its leading
 indentation**; the declaration's own `find` string must include the line's real
 indentation, and the count is the same either way.
 
-**TWENTY-TWO declarations after PR-gate rounds 2 and 3** — the twenty below plus
-`quse-dot-dot-name-read-as-traversal` (criterion 1, round 2 finding 3: the containment
-predicate reads a component NAMED `..recovery` as parent traversal) and
-`quse-relative-entry-not-anchored` (criterion 9, round 3: a RELATIVE manifest path walked
-from an empty root instead of the kernel-canonical cwd). Both mutations REVERT the
-respective fix and both `expectRed` sets were measured, like every other row here.
-**Two further round-2/3 findings — the lexical `..` collapse of a link target and the
-hand-rolled spelling lookup — carry NO declaration, and that is a measured fact rather than
-an omission: under Table X row X17′ the resolver is `fs.realpathSync.native` on the longest
-existing prefix, so neither defect has a site left to revert, and a mutation that removes
-canonicalisation or normalises the input was measured NOT to redden `[SG-24]`. **PR-gate round 4
-adds two more of the same kind, and they are measurements too:** X17″'s full traversal makes
-`<core>/logs` a chain node in its own right, so reverting the `..`-name predicate no longer
-reddens `[SG-25]`; and reverting the per-root hop budget does not redden `[SG-33]` either. **`[SG-33]` was RE-FIXTURED at
-PR-gate round 4b** so its second root's chain node sits INSIDE a directory the mechanics sweep
-deletes, and the mutation was re-measured on that fixture: still zero. The reason is now
-structural rather than incidental. Under **X17‴** a link location is charged ONCE, and root 1's
-path is a PREFIX of root 2's, so the shared counter after both roots is just the number of
-distinct links on root 2's path — which the kernel itself caps well below the budget, or refuses
-with `ELOOP`. A shared budget therefore cannot starve a root whose chain the kernel resolves,
-and when it could the answer is UNANSWERABLE (X17‴), which preserves rather than deletes. Both fixes and both regressions
-ship; neither carries a declaration, because ADR-0042 forbids declaring a red that was not
-observed. **`[SG-27]`
-was RE-FIXTURED at PR-gate round 4** so the aliased directory is a direct child of `<state>`
-and the case-SENSITIVE arm asserts the correct outcome (a dangling alias protects nothing),
-and it is re-measured with the rest. The regressions ship regardless.**
+**THE COUNT IS THE TABLE: 34 declarations ship, and every one of them has a row below.**
+Twenty were designed here; the rest were added by the PR-gate rounds, each with its own row
+naming the round that found it. A row and a shipped declaration are the same thing — if the
+JSON and this table ever disagree, the JSON is what `scripts/red-proofs.js` runs and this
+table is the bug.
+
+**Four fixes ship with NO declaration, and each absence is a MEASUREMENT, not an omission**
+(ADR-0042 forbids declaring a red that was not observed; each mutation below was applied to
+the final tree and reddened zero tests):
+
+| Fix that ships undeclared | Why no mutation reddens it |
+|---|---|
+| the lexical `..` collapse of a link target (round 2) | under **X17′** the resolver is `fs.realpathSync.native` on the longest existing prefix, so the defect has no site left to revert |
+| the hand-rolled spelling lookup (round 3) | same: a mutation that strips canonicalisation or normalises the input was measured not to redden `[SG-24]`/`[SG-27]` |
+| the `..`-NAME predicate (round 2 finding 3) | **X17″**'s full traversal makes `<core>/logs` a chain node in its own right, so reverting the predicate no longer reddens `[SG-25]` |
+| the PER-ROOT hop budget (round 2 finding 4) | under **X17‴** a link location is charged ONCE and root 1's path is a PREFIX of root 2's, so the shared counter after both roots is just the distinct links on root 2's path — which the kernel caps below the budget or refuses with `ELOOP`. A shared budget cannot starve a root the kernel resolves, and where it could the answer is UNANSWERABLE, which preserves |
+
+**Two regressions were RE-FIXTURED by a later round and re-measured with the rest.**
+`[SG-27]` (round 4) now puts the aliased directory directly under `<state>`, and its
+case-SENSITIVE arm asserts the correct outcome — a dangling alias protects nothing.
+`[SG-33]` (round 4b) now puts the second root's chain node INSIDE a directory the mechanics
+sweep deletes, which is what makes collecting it load-bearing. Both regressions ship; the
+hop-budget declaration still does not, for the structural reason in the table above.
+
 **Of the original twenty, nine carry a pre-measurable anchor and eleven mutate code this
 package authors** — the ratio is itself a fact about this package: most of its rules did
 not exist before a review round measured the hole they close.
@@ -396,6 +394,15 @@ not exist before a review round measured the hole they close.
 | `quse-climb-removes-a-chain-node` | 1 | `src/core/manifest.js` | remove the class (ii) membership gate from X1 step 3's climb, so an EMPTY shelf level that is itself a chain node is `rmdir`'d | PR-gate round 4 follow-up (no pre-existing anchor) | that the climb never dangles the link a shelf's own chain stands on — every other preservation fixture stops the climb on `ENOTEMPTY` for a reason unrelated to the chain |
 | `quse-summary-names-only-the-first` | 4 | `src/cli/uninstall.js` | print only the FIRST preserved path in Table W row **W8**'s closing summary, restoring the single-path wording **W8′** replaced | PR-gate round 4 (no pre-existing anchor) | that every preserved directory is named: on `R-post-ledger-preserve` the manifest is gone and those paths are the user's only route, and every earlier fixture preserves exactly one |
 | `quse-planner-discounts-every-fold-equal-name` | 8 | `src/core/manifest.js` | restore the FOLD-EQUAL leftover filter in Table X row **X15′**'s planner, so any shelf-shaped name is discounted rather than the one child the plan predicted removing | PR-gate round 4 follow-up (no pre-existing anchor) | that the plan is never wrong in the one direction a plan must not be wrong — promising `<state>` disappears where the live climb takes `ENOTEMPTY` and stops |
+| `quse-relative-entry-not-anchored` | 9 | `src/core/manifest.js` | walk a RELATIVE manifest path from an empty root instead of anchoring it at the kernel-canonical `process.cwd()` (**X17′**) | PR-gate round 3 (no pre-existing anchor) | that a forged relative `path` cannot slip past every anchor — the manifest is a plaintext untrusted file, and EVERY other criterion-9 fixture names an absolute path |
+| `quse-link-target-collapsed-before-traversal` | 1 | `src/core/manifest.js` | collapse a link's target string LEXICALLY before visiting its components (**X17″**) | PR-gate round 4 (no pre-existing anchor) | that `state -> app/jump/../logs` puts `app/jump` on the chain: a collapse skips it, an ordinary replay then removes it, and the rebuilt anchors no longer cover the copy |
+| `quse-traversed-directory-not-a-chain-node` | 1 | `src/core/manifest.js` | record only the LINKS met inside a target string, not every node the traversal visits (**X17″**) | PR-gate round 4 (no pre-existing anchor) | that the chain is the TRAVERSAL and not merely its links — removing the real `app` in `state -> app/../logs` dangles the link just as surely |
+| `quse-planner-ignores-retention` | 8 | `src/core/manifest.js` | let the read-only planner predict the climb WITHOUT applying the live sweep's retention decisions (**X15′**) | PR-gate round 4 (no pre-existing anchor) | that the plan never lists a directory the live command cannot remove |
+| `quse-out-of-root-target-guarded` | 9 | `src/core/manifest.js` | admit an entry to the guard on its literal SPELLING when its resolution succeeded, rather than on the resolved boundary (**X16″**) | PR-gate round 3 (no pre-existing anchor) | that an in-root spelling with an out-of-root TARGET never enters `shelfGuarded` — it would block Table W row **W10** forever over a path no deleter reaches |
+| `quse-preserved-report-not-reconciled` | 10 | `src/core/manifest.js` | return `preservedQuarantine` unreconciled, naming directories the sweep already removed (**X4′**) | PR-gate round 3 (no pre-existing anchor) | that the remedy TERMINATES: a report naming a vanished directory makes **W10** block on a path the user cannot clear |
+| `quse-deleter-target-not-guarded` | 9 | `src/core/manifest.js` | test the pre-dispatch guard on the KERNEL's target only, dropping the deleter's own `fs.realpathSync` answer (**X17⁗**) | PR-gate round 5b (no pre-existing anchor) | that the guard covers the path the replay actually unlinks — `reverse()` deletes `fs.realpathSync(entry.path)`, which collapses a `..` lexically and can land where the kernel never does |
+| `quse-unreadable-chain-carried-on` | 1 | `src/core/manifest.js` | carry on with a PARTIAL chain when a component cannot be read, instead of answering UNANSWERABLE (**X17‴**, as round 5b widens it) | PR-gate round 5b (no pre-existing anchor) | that a chain we cannot finish reading is never handed back as a complete one — the kernel resolves such a path happily, so nothing else in the run would notice |
+| `quse-predicted-child-matched-by-name` | 8 | `src/core/manifest.js` | match the planner's predicted child by NAME rather than by filesystem identity (**X15′**) | PR-gate round 5b (no pre-existing anchor) | that the plan discounts the child it really removed: on a case-insensitive volume the stored spelling need not be the predicted one, and a byte comparison promises preservation where the live sweep removes |
 
 **Criterion numbers in the table above are the UNSPLIT document's** and are mapped to
 this spec's numbering by the closing section of
@@ -425,8 +432,8 @@ rather than by a reviewer.
       **X16**/**X17**/**X20**/**Y6** and Table **V**; 10 asserts **W10**/**W11**/**X22**;
       11 asserts Table B
 - [ ] **Verification commands / greps** — the `preservedQuarantine` grep mirrors **X4**;
-      the two `contains` greps mirror **X7**; the `recursive: true` grep mirrors Table
-      **V**'s completeness requirement
+      the `shelfGuarded` grep mirrors **X22**; the two `contains` greps mirror **X7**;
+      the `recursive: true` grep mirrors Table **V**'s completeness requirement
 - [ ] **Current-state description** — item 2 is the measured basis of
       **X1**/**X4**/**X8**/**X9**; item 3 is the basis of **X7**
 - [ ] **Security-checklist bullets that restate a contract** — the symlink bullet
@@ -547,11 +554,23 @@ decisions as the live sweep — it computes the protected set and reports as
 preserved exactly what the live run would preserve — so the plan never lists a
 directory the live command cannot remove. It still performs no mutation.
 
+**X17⁗** (amends X17′): every deletion guard tests BOTH the kernel-canonical target
+(`fs.realpathSync.native`) AND the target the deleter's own resolver computes (Node's
+`fs.realpathSync`, which collapses `..` lexically before following links) — a hit on
+either preserves. The two resolvers agree on every layout without `..` after a link;
+where they disagree the deleter's answer is the one that would delete, so it must be
+guarded too.
+
 **X17‴** (amends X17 (4)): a chain collection whose hop budget expires before the
 walk completes is UNANSWERABLE for that root — the entry or sweep target is
 preserved and reported with code `ELOOP`-class `EBUDGET` (spelled in the report
 as `chain too long to verify`), exactly as X17 (4) treats any other unanswerable
-resolution. A partial closure is never accepted as complete.
+resolution. A partial closure is never accepted as complete. **Round 5b widens the same
+rule to the other way a collection ends incomplete:** a component the collection cannot
+READ — an `lstat` or `readlink` refused for anything but absence — is UNANSWERABLE for
+that root in exactly the same way, carrying the code the filesystem gave. The kernel may
+well resolve the whole path, because it makes no `readlink` call we can see fail; without
+this the walk would answer `ok` with a chain missing its later nodes.
 
 Two further round-4 rulings, on the same gate:
 
@@ -560,9 +579,15 @@ Two further round-4 rulings, on the same gate:
   `…/state/quarantine/redacted/../../..` puts the traversed `redacted` on the
   chain — and X1 step 3's bottom-up `rmdirSync` removed it whenever the shelves
   were empty, dangling the core link while the run reported completion. Each
-  empty-directory removal in the climb is now gated on class (ii) membership
-  (equal-or-contains, over the level's lexical AND resolved spellings); a chain
-  node is preserved and reported, and the climb stops there.
+  empty-directory removal in the climb is now gated on the level ITSELF being a
+  class (ii) node, tested over both its lexical and its resolved spelling; a
+  chain node is preserved and reported, and the climb stops there. **Equality,
+  not containment, is the exact condition, and the reason is `rmdir`:** it
+  removes a directory only when that directory is EMPTY, so the one chain node a
+  climb step can destroy is the step's own level. A chain node BENEATH the level
+  keeps it non-empty, and the same `ENOTEMPTY` that has always stopped the climb
+  stops it — testing containment would only preserve, and report, a level the
+  kernel was going to refuse anyway.
 - **X15′'s discount is exact.** The planner discounts ONLY the specific child
   whose removal it predicted at the preceding level, plus step 2's own removals
   at `<state>`. Discounting every FOLD-EQUAL name instead let the plan predict

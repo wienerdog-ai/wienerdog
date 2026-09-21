@@ -159,6 +159,18 @@
         },
         {
           "test": [
+            "[SG-41] round 5b P1: a chain that cannot be READ to the end is UNANSWERABLE, not a shorter chain"
+          ],
+          "signal": "SG41-unreadable-chain-fails-closed"
+        },
+        {
+          "test": [
+            "[SG-42] round 5b P2 (X15′): the planner matches its predicted child by filesystem IDENTITY"
+          ],
+          "signal": "SG42-predicted-child-matched-by-identity"
+        },
+        {
+          "test": [
             "[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes"
           ],
           "signal": "SG4-chain-closure-protects-the-intermediate-link"
@@ -322,6 +334,12 @@
             "[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
           ],
           "signal": "SG32-traversed-directory-is-a-chain-node"
+        },
+        {
+          "test": [
+            "[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resolves, not only the kernel’s"
+          ],
+          "signal": "SG40-deleter-target-is-guarded"
         }
       ]
     },
@@ -452,6 +470,12 @@
             "[SG-39] AC4 round 4 (W8′): the closing summary prints EVERY preserved path, one per line"
           ],
           "signal": "SG39-summary-lists-every-preserved-path"
+        },
+        {
+          "test": [
+            "[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resolves, not only the kernel’s"
+          ],
+          "signal": "SG40-deleter-target-is-guarded"
         },
         {
           "test": [
@@ -1140,6 +1164,66 @@
             "[SG-39] AC4 round 4 (W8′): the closing summary prints EVERY preserved path, one per line"
           ],
           "signal": "SG39-summary-lists-every-preserved-path"
+        }
+      ]
+    },
+    {
+      "id": "quse-deleter-target-not-guarded",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "9",
+      "why": "PR-gate round 5b, X17⁗. The guard tested only the KERNEL's answer, while `reverse()` deletes `fs.realpathSync(entry.path)` — Node's own resolver, which collapses a `..` LEXICALLY before following the link in front of it. The two agree on every fixture in this package, because none of them puts a `..` after a link in an entry path; only a layout where both landing places EXIST splits them, and then the guard permits the very path the deleter unlinks.",
+      "file": "src/core/manifest.js",
+      "find": "          guarded = shelfBlocks(res.real, shelfProt, recursive)\n            || shelfBlocks(deleterTarget(entry.path), shelfProt, recursive);",
+      "replace": "          guarded = shelfBlocks(res.real, shelfProt, recursive); /* RP_MUT_QUSE_DELETER_TARGET_NOT_GUARDED */",
+      "marker": "RP_MUT_QUSE_DELETER_TARGET_NOT_GUARDED",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resolves, not only the kernel’s"
+          ],
+          "signal": "SG40-deleter-target-is-guarded"
+        }
+      ]
+    },
+    {
+      "id": "quse-unreadable-chain-carried-on",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "1",
+      "why": "PR-gate round 5b. Every other unanswerable arm in this package comes from a resolution the KERNEL refused; this one comes from a component WE could not read while the kernel resolves the path happily. A collection that stops early hands back a chain missing its later nodes, and the replay then removes one of them — with no error anywhere, because nothing failed from the kernel's point of view.",
+      "file": "src/core/manifest.js",
+      "find": "  if (ctx.unreadable) {\n    return { state: 'unanswerable', real: null, dir: abs, code: ctx.unreadable };\n  }\n",
+      "replace": "  /* RP_MUT_QUSE_UNREADABLE_CHAIN_CARRIED_ON */\n",
+      "marker": "RP_MUT_QUSE_UNREADABLE_CHAIN_CARRIED_ON",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-41] round 5b P1: a chain that cannot be READ to the end is UNANSWERABLE, not a shorter chain"
+          ],
+          "signal": "SG41-unreadable-chain-fails-closed"
+        }
+      ]
+    },
+    {
+      "id": "quse-predicted-child-matched-by-name",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "8",
+      "why": "PR-gate round 5b, X15′. The planner's discount matched its own predicted child by NAME, and on a case-insensitive volume the stored spelling need not be the one the climb predicts: a `REDACTED` beside the lowercase path is the SAME directory, so the plan left it in `leftovers` and promised preservation where the live sweep removes the whole of `<state>`. Only a fixture whose stored spelling differs from the predicted one can see it.",
+      "file": "src/core/manifest.js",
+      "find": "        if (predictedChild !== null && sameObject(path.join(level, n), predictedChild)) return false;",
+      "replace": "        if (predictedChild !== null && n === path.basename(predictedChild)) return false; /* RP_MUT_QUSE_PREDICTED_CHILD_MATCHED_BY_NAME */",
+      "marker": "RP_MUT_QUSE_PREDICTED_CHILD_MATCHED_BY_NAME",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-42] round 5b P2 (X15′): the planner matches its predicted child by filesystem IDENTITY"
+          ],
+          "signal": "SG42-predicted-child-matched-by-identity"
         }
       ]
     }

@@ -1017,14 +1017,14 @@ function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } =
       // retry is clean. This is the cheap case — nothing has been deleted yet.
       throw new WienerdogError(
         'wienerdog uninstall stopped — nothing was removed. A folder on the secret quarantine\'s '
-          + `path could not be read (${dir}: ${code}), so Wienerdog cannot tell which files a `
+          + `path could not be read (${dir}: ${spellResolutionCode(code)}), so Wienerdog cannot tell which files a `
           + 'deletion would reach. Fix the permission or disk problem, then re-run: '
           + 'npx wienerdog@latest uninstall'
       );
     }
     // --dry-run REPORTS instead of aborting: it deletes nothing (Table K row K4).
     process.stderr.write(
-      `wienerdog: could not read ${dir} (${code}) — a real uninstall stops here\n`
+      `wienerdog: could not read ${dir} (${spellResolutionCode(code)}) — a real uninstall stops here\n`
     );
   }
   /** Entries the shelf guard skipped — a strict subset of `skipped`, exposed
@@ -1196,7 +1196,14 @@ function reverse(paths, manifest, { dryRun = false, discoveredSchedules = [] } =
           guarded = true;
           shelfUnanswerable.push({ path: entry.path, code: /** @type {string} */ (res.code) });
         } else if (!guarded && res.real !== null) {
-          guarded = shelfBlocks(res.real, shelfProt, recursive);
+          // X17⁗: BOTH targets. `res.real` is the KERNEL's answer
+          // (`realpathSync.native`); the reversers below resolve with Node's own
+          // `fs.realpathSync`, which collapses `..` LEXICALLY before following
+          // the link in front of it. The two agree on every layout without a
+          // `..` after a link — and where they disagree, the deleter's answer is
+          // the one that would delete, so it has to be guarded too.
+          guarded = shelfBlocks(res.real, shelfProt, recursive)
+            || shelfBlocks(deleterTarget(entry.path), shelfProt, recursive);
         }
       }
       if (guarded) {
@@ -1762,6 +1769,41 @@ function spellResolutionCode(code) {
   return code === 'EBUDGET' ? 'chain too long to verify' : code;
 }
 
+/** Are these two paths the SAME filesystem object? Compared by `lstat`'s
+ *  device and inode, which is what "same object" means on every platform this
+ *  ships to, and which answers correctly on a case-insensitive volume where two
+ *  spellings name one directory. Never follows a link: the objects being
+ *  compared here are the climb's own levels. False when either side cannot be
+ *  read — an unreadable child stays in `leftovers`, which preserves.
+ *  @param {string} a @param {string} b @returns {boolean} */
+function sameObject(a, b) {
+  if (a === b) return true;
+  try {
+    const sa = fs.lstatSync(a);
+    const sb = fs.lstatSync(b);
+    return sa.dev === sb.dev && sa.ino === sb.ino;
+  } catch {
+    return false;
+  }
+}
+
+/** The target THE DELETER would act on — Node's own `fs.realpathSync`, not the
+ *  kernel's `realpathSync.native` (X17⁗). The JS implementation collapses a
+ *  `..` LEXICALLY before following the link in front of it, so for
+ *  `alias -> jump/../state/quarantine` with `jump -> outside/deep` the two
+ *  resolvers land in different places — and it is THIS one the reversers use to
+ *  decide what to unlink. Returns the input unchanged when it cannot resolve:
+ *  the literal path is then what the guard tests, which is the fail-closed
+ *  direction.
+ *  @param {string} p @returns {string} */
+function deleterTarget(p) {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
 /** Purely LEXICAL containment over two paths that have ALREADY been resolved by
  *  `walkChain`: true when `inner` IS `outer` or sits beneath it. Deliberately
  *  NOT `contains()` (Table X row X7): that helper realpaths both sides and
@@ -1840,7 +1882,7 @@ function rawSegments(abs) {
  * @param {string} p an absolute path, or a relative one anchored at the
  *   kernel-canonical `process.cwd()`
  * @param {{chain: Set<string>, hops?: number, seen?: Set<string>,
- *          exhausted?: boolean}} ctx
+ *          exhausted?: boolean, unreadable?: string|null}} ctx
  * @returns {{state:'ok'|'absent'|'unanswerable', real:string|null,
  *            dir:string|null, code:string|null}}
  */
@@ -1848,6 +1890,7 @@ function walkChain(p, ctx) {
   if (ctx.hops === undefined) ctx.hops = 0;
   if (!ctx.seen) ctx.seen = new Set();
   ctx.exhausted = false;
+  ctx.unreadable = null;
   // Anchored by RAW concatenation, not `path.join`: joining would collapse a
   // leading `..` before the component in front of it had been resolved.
   const abs = path.isAbsolute(p) ? p : anchorRelative(p);
@@ -1861,6 +1904,13 @@ function walkChain(p, ctx) {
   // the same answer: preserve and report.
   if (ctx.exhausted) {
     return { state: 'unanswerable', real: null, dir: abs, code: 'EBUDGET' };
+  }
+  // The same rule for the other way a collection ends INCOMPLETE: a component
+  // that could not be read at all. The kernel may still resolve the whole path
+  // — it needs no `readlink` of its own that we can see fail — so without this
+  // the walk would answer `ok` with a chain missing its later nodes.
+  if (ctx.unreadable) {
+    return { state: 'unanswerable', real: null, dir: abs, code: ctx.unreadable };
   }
   // THE RESOLUTION IS THE KERNEL'S (X17′) — asked of the whole path first,
   // because the kernel answers shapes an `lstat` walk cannot: `file/..`
@@ -1893,11 +1943,15 @@ function walkChain(p, ctx) {
 /**
  * Collect the CHAIN NODES of `abs` — every symlink component met along the
  * lexical path and along each link target, recorded by its KERNEL-CANONICAL
- * parent plus its own name (X17′ (a)). Never throws and never decides
- * anything: it stops at the first component it cannot classify.
+ * parent plus its own name (X17′ (a)). Never throws. **It does decide one
+ * thing** (X17‴, as round 5b widens it): a component it cannot READ — an
+ * `lstat` or `readlink` refused for anything but absence — leaves the chain
+ * INCOMPLETE, and an incomplete chain is UNANSWERABLE for that root, never a
+ * shorter chain quietly carried on with. ABSENCE is not a failure: there is
+ * simply nothing further to collect.
  * @param {string} abs
  * @param {{chain: Set<string>, hops: number, seen: Set<string>,
- *          exhausted?: boolean}} ctx
+ *          exhausted?: boolean, unreadable?: string|null}} ctx
  */
 function collectChain(abs, ctx, insideTarget) {
   const { root, segs } = rawSegments(abs);
@@ -1907,7 +1961,9 @@ function collectChain(abs, ctx, insideTarget) {
     let st;
     try {
       st = fs.lstatSync(here);
-    } catch {
+    } catch (e) {
+      const code = (e && /** @type {any} */ (e).code) || 'UNKNOWN';
+      if (!isAbsentCode(code)) ctx.unreadable = code; // INCOMPLETE — fail closed
       return; // absent or unreadable — nothing further to collect
     }
     // X17″: EVERY node the traversal visits INSIDE a link-target string is a
@@ -1926,7 +1982,17 @@ function collectChain(abs, ctx, insideTarget) {
     const via = canonicalise(here);
     if (via !== null) ctx.chain.add(via); // the fully-resolved intermediate TARGET
     const target = readLinkTarget(here);
-    if (target.raw === null) continue;
+    if (target.raw === null) {
+      // A link we cannot READ is a chain we cannot finish. Carrying on with the
+      // nodes collected so far hands back a protected set that is missing the
+      // rest of the chain, and the deleters would then remove one of them while
+      // the kernel's own realpath succeeds — round 5b, Astra P1 #2.
+      if (!isAbsentCode(/** @type {string} */ (target.code))) {
+        ctx.unreadable = /** @type {string} */ (target.code);
+        return;
+      }
+      continue;
+    }
     // X17‴: one link location is charged ONCE. Its target string is a function
     // of the link alone, so a second visit can only re-collect what the first
     // already added — and on a symlinked core, a relative target re-walks the
@@ -2248,8 +2314,12 @@ function disposeStateTree(paths, prot, removed, preservedQuarantine, mutate) {
     const r = resolveOne(lvl);
     return r.real !== null && prot.chain.includes(r.real);
   };
-  /** The basename this climb PREDICTED removed one level down, and the only
-   *  child a parent level may discount (X15′, Astra P2 #3). */
+  /** The level this climb PREDICTED removed one step down, and the only child a
+   *  parent level may discount (X15′, Astra P2 #3). Held as a PATH and matched
+   *  by filesystem IDENTITY rather than by name (round 5b, Astra P2): on a
+   *  case-insensitive volume `REDACTED` and `redacted` are the same object, so a
+   *  byte comparison leaves the very child the plan just removed sitting in
+   *  `leftovers` and the plan says preserved where the live sweep removes. */
   let predictedChild = null;
   for (let i = validated.length - 1; i >= 0; i -= 1) {
     const level = validated[i];
@@ -2274,7 +2344,7 @@ function disposeStateTree(paths, prot, removed, preservedQuarantine, mutate) {
       // gone while the live climb met a `REDACTED` beside `redacted`, took
       // ENOTEMPTY and stopped (PR-gate round 4, Astra P2 #3).
       const leftovers = names.filter((n) => {
-        if (predictedChild !== null && n === predictedChild) return false;
+        if (predictedChild !== null && sameObject(path.join(level, n), predictedChild)) return false;
         if (level === state && removableChildren.includes(n)) return false;
         return true;
       });
@@ -2283,7 +2353,7 @@ function disposeStateTree(paths, prot, removed, preservedQuarantine, mutate) {
         return;
       }
       if (level === state) removed.push(state);
-      predictedChild = path.basename(level);
+      predictedChild = level;
       continue;
     }
     try {

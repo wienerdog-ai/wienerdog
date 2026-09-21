@@ -3745,3 +3745,116 @@ test('[SG-39] AC4 round 4 (W8′): the closing summary prints EVERY preserved pa
     assert.equal(fs.existsSync(p), true, `${S}: and each named path really is still there — ${p}`);
   }
 });
+
+// ─── PR-gate round 5b regressions (PR #312 review, 2026-09-21) ──────────────
+// X17⁗: every deletion guard tests BOTH the kernel-canonical target and the one
+// the deleter's own `fs.realpathSync` computes; a chain that cannot be READ to
+// the end is unanswerable; and the planner matches its predicted child by
+// filesystem identity.
+
+test('[SG-40] round 5b P1 (X17⁗): the guard tests the target the DELETER resolves, not only the kernel’s', () => {
+  const S = 'SG40-deleter-target-is-guarded';
+  const { core, env, q, addEntries } = shelfManifestInstall();
+  const outside = path.join(core, 'outside', 'deep');
+  fs.mkdirSync(outside, { recursive: true });
+  // The KERNEL's landing place has to exist too, or the alias is simply dangling
+  // and both resolvers agree on ENOENT. With both present they split.
+  fs.mkdirSync(path.join(core, 'outside', 'state', 'quarantine'), { recursive: true });
+  fs.mkdirSync(q, { recursive: true, mode: 0o700 });
+  // `jump -> outside/deep`, and the alias target carries a `..` AFTER it. The
+  // kernel follows `jump` first and lands in `<core>/outside`; Node's own
+  // realpath collapses the `..` LEXICALLY and lands in `<core>/state/quarantine`
+  // — and it is that second answer the file reverser acts on.
+  fs.symlinkSync(path.join('outside', 'deep'), path.join(core, 'jump'));
+  const alias = path.join(core, 'alias');
+  fs.symlinkSync(['jump', '..', 'state', 'quarantine'].join(path.sep), alias);
+  const native = (p) => { try { return fs.realpathSync.native(p); } catch { return null; } };
+  const js = (p) => { try { return fs.realpathSync(p); } catch { return null; } };
+  assert.notEqual(native(alias), js(alias),
+    `${S}: the fixture really does split the two resolvers (${native(alias)} vs ${js(alias)})`);
+  assert.equal(js(alias), fs.realpathSync(q), `${S}: and the DELETER's answer is the shelf itself`);
+  // `reverse()` deletes `fs.realpathSync(entry.path)` — so the alias names the
+  // SHELF to the deleter, even though the kernel reads the same spelling as a
+  // path inside `outside/`.
+  assert.equal(fs.realpathSync(alias), fs.realpathSync(q),
+    `${S}: the deleter's own resolver lands on the shelf itself`);
+  const note = shelfFile(q, '2026-note.md', 'reached through the collapsed alias\n');
+  const shadow = path.join(alias, '2026-note.md');
+  assert.equal(fs.realpathSync(shadow), fs.realpathSync(note),
+    `${S}: and so does the entry path — this is the file \`reverse()\` would unlink`);
+  addEntries([{ kind: 'file', path: shadow }], true);
+  // The ruling is about the GUARD, so `reverse()` is driven directly: the CLI's
+  // gate refuses a populated shelf long before any deleter runs, which would
+  // make a whole-command fixture pass for a reason that is not this one.
+  const paths = require('../../src/core/paths').getPaths({ ...env });
+  const m = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  const res = manifestMod.reverse(paths, m, { dryRun: false });
+  assert.equal(readOrNull(note), 'reached through the collapsed alias\n',
+    `${S}: the copy's BYTES survive the replay`);
+  assert.equal(res.shelfGuarded.includes(shadow), true,
+    `${S}: and the entry is REPORTED as shelf-guarded (${JSON.stringify(res.shelfGuarded)})`);
+  assert.equal(res.removed.includes(shadow), false, `${S}: never removed`);
+});
+
+test('[SG-41] round 5b P1: a chain that cannot be READ to the end is UNANSWERABLE, not a shorter chain', () => {
+  const S = 'SG41-unreadable-chain-fails-closed';
+  const { paths, core } = sweepCore();
+  const bridge = path.join(core, 'app', 'bridge');
+  fs.mkdirSync(path.join(core, 'app'), { recursive: true });
+  const store = path.join(core, 'store');
+  fs.mkdirSync(store, { recursive: true });
+  fs.symlinkSync(store, bridge);
+  fs.rmSync(paths.state, { recursive: true, force: true });
+  fs.symlinkSync(path.join('app', 'bridge'), paths.state);
+  const note = shelfFile(path.join(store, 'quarantine'), '2026-note.md', 'behind an unreadable link\n');
+  // The kernel resolves the whole path happily; our own `readlink` of <state>
+  // is what fails, so without X17‴'s widening the walk would answer `ok` with
+  // `app/bridge` missing from the chain.
+  const origReadlink = fs.readlinkSync;
+  fs.readlinkSync = (p, ...rest) => {
+    if (String(p) === paths.state) {
+      const e = new Error('injected'); /** @type {any} */ (e).code = 'EIO'; throw e;
+    }
+    return origReadlink(p, ...rest);
+  };
+  let prot;
+  let res;
+  try {
+    prot = manifestMod.__shelfProtectionForTest(paths);
+    res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  } finally {
+    fs.readlinkSync = origReadlink;
+  }
+  assert.notEqual(prot.unanswerable, null,
+    `${S}: an incomplete collection is reported, not carried on with`);
+  assert.equal(prot.unanswerable.code, 'EIO',
+    `${S}: carrying the code the filesystem gave (${JSON.stringify(prot.unanswerable)})`);
+  assert.equal(readOrNull(note), 'behind an unreadable link\n', `${S}: and the copy's bytes survive`);
+  assert.equal(isLink(paths.state), true, `${S}: the <state> link is retained`);
+  assert.ok(res.preservedQuarantine.length > 0, `${S}: and the sweep reports what it kept`);
+});
+
+test('[SG-42] round 5b P2 (X15′): the planner matches its predicted child by filesystem IDENTITY', () => {
+  const S = 'SG42-predicted-child-matched-by-identity';
+  const { paths } = sweepCore();
+  const q = path.join(paths.state, 'quarantine');
+  // Only the CAPITAL spelling is created, so on a case-insensitive volume the
+  // stored name differs from the lowercase path the climb predicts removing —
+  // which is exactly when a byte comparison leaves the plan's own child sitting
+  // in `leftovers`.
+  fs.mkdirSync(path.join(q, 'REDACTED'), { recursive: true });
+  const caseInsensitive = fs.existsSync(path.join(q, 'redacted'));
+  const plan = manifestMod.disposeCoreMechanics(paths, { dryRun: true, vaultPath: null });
+  const live = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(plan.removed.includes(paths.state), live.removed.includes(paths.state),
+    `${S}: plan and live agree about <state> (plan=${JSON.stringify(plan.removed)}, live=${JSON.stringify(live.removed)})`);
+  assert.deepEqual(plan.preservedQuarantine, live.preservedQuarantine,
+    `${S}: and about what is preserved`);
+  if (caseInsensitive) {
+    assert.equal(live.removed.includes(paths.state), true,
+      `${S}: on this volume REDACTED and redacted are ONE empty shelf, so the whole of <state> goes — a plan matching by NAME would have said preserved`);
+  } else {
+    assert.equal(live.removed.includes(paths.state), false,
+      `${S}: on a case-SENSITIVE volume they are two directories and the climb stops at the leftover`);
+  }
+});
