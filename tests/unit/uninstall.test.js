@@ -1895,18 +1895,16 @@ test('[QU-7] AC7 (W7): the shelf gate runs FIRST — with BOTH a non-empty shelf
   plantShelfFile(q, '2026-07-01-tooling.md', 812);
   const before = snapshot(core);
 
-  // Control on its OWN install, so the fixture under test is never disturbed:
-  // with an EMPTY shelf the same injection reaches D9, which is what makes the
-  // ordering assertion below about precedence rather than a dead fixture.
-  const ctl = tempEnv();
-  run(['init', '--yes'], ctl.env);
-  const ctlSched = path.join(ctl.core, 'schedules');
-  fs.mkdirSync(ctlSched, { recursive: true });
-  fs.writeFileSync(path.join(ctlSched, 'wienerdog-orphan.xml'), 'x');
-  const control = await withRealpathFault(ctlSched, 'EACCES', () => uninstallInProcess(ctl.env, ['--yes']));
-  assert.ok(control.err, `${S}: the injected scheduler-root failure DOES abort on its own`);
-  assert.ok(control.err.message.includes('a folder that can hold scheduled jobs'),
-    `${S}: and it is D9 that speaks then — ${control.err.message}`);
+  // NO CONTROL ARM HERE, deliberately. The control this ordering assertion wants
+  // — "the same injection DOES abort on its own once the shelf is empty" — is
+  // already a shipped, declared test of the package that owns D9:
+  // `WP-scheduler-replay AC17` above, which is the sole declared red of that
+  // package's `srm-resolution-failure-read-as-external`. Asserting D9's VERDICT
+  // a second time here makes this test redden under that package's mutation
+  // without being declared in it, and a red whose reason is not the cell's is
+  // not a measurement — the unfiltered lane rejected exactly that (measured).
+  // This test asserts PRECEDENCE only, which is its own concern and is
+  // insensitive to how D9 classifies a resolution failure.
 
   const res = await withRealpathFault(schedRoot, 'EACCES', () => uninstallInProcess(env, ['--yes']));
   assert.ok(res.err, `${S}: the run refused`);
