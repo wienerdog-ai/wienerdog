@@ -1,7 +1,7 @@
 ---
 id: WP-transcript-parsers-harden-text-values
 title: Make the default transcript parsers decline a non-string text value instead of throwing or inventing dialogue
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-dream-collect-parse-throw-quarantine]
@@ -10,6 +10,129 @@ epic: transcript-fault-boundary
 ---
 
 # WP-transcript-parsers-harden-text-values: Make the default transcript parsers decline a non-string text value instead of throwing or inventing dialogue
+
+> **Errata, 2026-09-21 (post-merge) — four spec-prose facts falsified by the
+> landed tree. None is a defect in what shipped.**
+>
+> **Landed in PR #304** (merge `6eff5186`, 2026-09-18 22:28:11 UTC), tip
+> `97fb4307`, branch `wp/transcript-parsers-harden-text-values`. **ONE gate
+> round, both gates clean.** The independent gate (Codex plugin `review` on
+> `gpt-6-astra`, detached worktree, porcelain identical) returned *"The four
+> string checks correctly decline non-string text without changing existing
+> block-type filters or message-emission rules."* wd-reviewer (spec fidelity)
+> returned **APPROVE** with executed evidence: all four hardened lines
+> byte-match Table A at the pinned line numbers and the `src` diff is 4 lines
+> over 4; the first law re-established independently — the snapshot regenerated
+> in a detached worktree at base `423a0f9e` and diffed, base-derived, exactly
+> one exception, row B3's literal byte-matching; the four-site gate green for
+> all five poison shapes at all four sites; all four `htv-*` declarations
+> hand-applied with measured sets matching exactly (`[HTV-1,2,6]` / `[HTV-3]` /
+> `[HTV-4]` / `[HTV-5,7]`, every red `ERR_ASSERTION` with its signal); the four
+> sibling `pt-*` declarations hand-applied **after** the retarget with sets
+> 5/3/1/1 unchanged — `pt-only-parse-is-caught` still reddens `[PT-3]` alone, so
+> Table C row C3(b)'s boundary-extent evidence survives the retarget, measured
+> rather than argued; all 14 declarations targeting `src/core/transcripts/`
+> still find their anchors at declared counts; `npm run lint` clean;
+> `boundary-check` exit 0 over eight files; no owner-approval language. CI on
+> `97fb4307`: seven checks pass.
+>
+> **One `npm test` failure is recorded rather than dropped.** The fidelity
+> gate measured `npm test` 2914 / 2901 pass / **1 fail** on this tip. The
+> failure is `reap-escape` *"TOCTOU (finding 8a)"*, a process-group integration
+> test that passes in isolation on the same tip and that no diff changing two
+> `.filter()` predicates can reach; four implementer worktrees were running
+> concurrently on the machine. It was adjudicated as a **load-dependent flake
+> and a flaky-suite signal, not a finding against this package**, and it is
+> written down here so the record does not read as a clean suite it was not.
+>
+> **Red-proofs verdict on the merged tip.** The implementer's **UNFILTERED**
+> `npm run red-proofs` on `97fb4307`, redirected to a file and waited on by PID
+> with `RUN:` read from the file: **175 `PROVEN` lines**, `RUN: PROVEN`,
+> `EXIT=0`, and **no** `FILTERED`, `VACUOUS`, `UNCONTROLLED`, `FAILED` or
+> `ERROR` verdict anywhere in the run — which is what criterion 6 asks for, and
+> it is also the measurement that settles Table C row C4's prediction in the
+> affirmative: the three retargeted tests kept their names, so no sibling
+> declaration's `expectRed` set moved and
+> `tests/red-proofs/dream-collect-parse-throw.proofs.json` needed no edit.
+>
+> **Erratum 1 — Table D's uniqueness paragraph (`:341-354`) exempts sites 1 and
+> 2 from a trap that applies to them too.** *What is wrong:* *"Sites 1 and 2
+> live in the same file and differ only by indentation (4 spaces at `:80`, 6 at
+> `:93`), so an indented `find` is unique for each."* *What is true:* after the
+> hardening, `codex.js:80` and `codex.js:93` are the **same line body** at two
+> indentations, so `:80`'s 4-space line is a proper substring of `:93`'s 6-space
+> line — exactly the relation the paragraph goes on to describe for sites 3 and
+> 4. Measured on `origin/main` at `8b4cbd4c`: `codex.js:80` and `:93` both read
+> `.filter((block) => block && (block.type === 'input_text' || block.type === 'output_text') && typeof block.text === 'string')`
+> at 4 and 6 leading spaces, and `claude.js:61` and `:176` both read
+> `.filter((block) => block && block.type === 'text' && typeof block.text === 'string')`
+> at 6 and 10. The trap is at **all four** sites, not two of them. *Routing:*
+> **corrected in place** — the paragraph now states the relation once for all
+> four pairs and keeps its two operative instructions unchanged (include enough
+> surrounding text to make each `find` unique; verify every `occurrences`
+> against the finished tree rather than against this paragraph). Nothing shipped
+> wrong: the implementer verified the counts against the tree, as the paragraph
+> told it to, and the four declarations are unique. **Class: a canonical cell
+> arguing from a difference the change itself removes.**
+>
+> **Erratum 2 — `[PT-5]` does not exist and never has.** *What is wrong:* Table
+> C row C1 lists *"`[PT-2]`, `[PT-3]`, `[PT-5]`, `[PT-7]` and `[PT-8]`"* as the
+> tests that are not retargeted, and acceptance criterion 5 mirrors the same
+> five ids and additionally says *"All of `[PT-1]` … `[PT-8]`"*. *What is true:*
+> the `[PT-` suite in `tests/unit/dream-collect.test.js` carries **seven**
+> tests — `[PT-1]`, `[PT-2]`, `[PT-3]`, `[PT-4]`, `[PT-6]`, `[PT-7]`, `[PT-8]` —
+> with **no `[PT-5]`**, at base `08de2bc3`, on the merged tip and on
+> `origin/main` at `8b4cbd4c`; the predecessor's own filed spec,
+> `docs/specs/done/WP-dream-collect-parse-throw-quarantine.md`, contains zero
+> occurrences of the string `PT-5`. The id was invented by this spec's canonical
+> table and mirrored faithfully into the criterion. *Routing:* **corrected in
+> place in both mirrors in the same edit** — the untouched set is `[PT-2]`,
+> `[PT-3]`, `[PT-7]`, `[PT-8]`, and the criterion's range becomes the seven ids
+> named. Nothing shipped wrong: an id that names no test cannot fail, and the
+> gate confirmed all seven pass. **Class: a canonical table inventing an element
+> of a set it did not count.**
+>
+> **Erratum 3 — the Security checklist and this spec's own registered
+> verification gate prescribe opposite observation surfaces.** *What is wrong:*
+> the fourth Security-checklist bullet (`:517-522`) ends *"Assert the absence of
+> the coerced strings **in the serialized extract**, not merely the absence of a
+> throw."* The registered four-site gate says the opposite in a comment
+> (`:694-696`): *"Read ONLY the message text values. Searching the serialized
+> extract instead false-positives on every JSON null and on any number that
+> shares digits with a coerced form."* *What is true:* **the gate is right and
+> the implementer took its reading.** The serialized extract carries JSON
+> `null`s and numeric metadata of its own, so a substring search over it is not
+> a test of what a block contributed. *Routing:* the fact is promoted into the
+> canonical table as **Table A row A9 (how a decline is observed)**, the
+> checklist bullet is rewritten to defer to it, the gate's comment is registered
+> as a mirror of it, and the Mirrored Surface Checklist gains both. This is the
+> ADR-0031 remedial move: one table owns the fact, every surface cites it.
+> **Class: two unregistered mirrors of an unwritten contract, contradicting each
+> other.**
+>
+> **Erratum 4 — criterion 2's last clause is not observable under the gate this
+> spec registers for it.** *What is wrong:* criterion 2 requires that a sibling
+> string-valued block *"still contributes its text, **in its original position
+> and with the site's own separator**"*. *What is true:* the registered
+> four-site gate builds each site's content array as exactly **two** blocks — one
+> poisoned, one `KEEP<n>` string — so once the poisoned block declines, exactly
+> **one** string survives the filter, and a one-element `join` emits no separator
+> and has no position to be in. The clause quantifies over a shape the gate
+> cannot produce. *Routing:* **narrowed in place** to what the gate actually
+> establishes — the sibling string block still contributes its text unchanged —
+> with the position-and-separator property explicitly named as **not covered by
+> this package's verification** and left to Table A row A7, which pins the
+> separators as unchanged. Nothing shipped wrong: the separators are byte-unchanged
+> in the diff. **Class: an acceptance criterion asserting more than its own
+> registered check can see.**
+>
+> **Routed, not done here.** The gate recommended a canonical-extraction pass
+> for the RED-anchoring family — `find` / `occurrences` / anchor-uniqueness —
+> because this is the second package in this epic to land findings on it
+> (`WP-dream-collect-parse-throw-quarantine`'s Erratum 5 was the first, and
+> erratum 1 above is the third instance of the same shape). That pass belongs to
+> whichever package next authors declarations over `src/core/transcripts/`, not
+> to this filing.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -293,6 +416,7 @@ its definition.
 | A5 | Block-level, not record-level | A decline drops **the block**, never the message and never the record. Nothing about which records are emitted is decided by this package: each site's existing emptiness rule is untouched, and the three that exist are `codex.js:201-202`'s `if (mapped) messages.push(mapped)` (so a Codex message whose blocks all decline is still emitted, with `text: ''`), `claude.js:179`'s `if (text !== '')` (so a Claude assistant record whose text blocks all decline emits no assistant message), and `extractToolOutputText`'s documented `''` return (`codex.js:85-87`), which still emits the item as `tool_result`. Each is the behavior that site already has for a `content` array carrying no matching block. |
 | A6 | Agreement with the projection | After this package, the default parsers and `parsePrimaryWithOutcome` agree about every block: both accept exactly the string-valued `text` of a block whose `type` their own site already accepts. Before it they disagreed — the projection declined what the default parser coerced or threw on. Acceptance criterion 4 is this row. |
 | A7 | What is NOT changed | The block `type` filters (`input_text`/`output_text` for Codex, `text` for Claude), the separators (`'\n'` at sites 1, 2 and 3; `'\n\n'` at site 4), `TRUSTED_MESSAGE_ROLES`, `TOOL_OUTPUT_TYPES`, the `block &&` truthiness guards already present at sites 1–4, the metadata fields (Out of scope), `src/core/transcripts/index.js`, `src/core/transcripts/primary-dialogue.js`, `src/core/transcripts/stream.js`, and `src/core/dream/scratch.js`'s `parse-threw` boundary. None is in the Deliverables. |
+| A9 | How a decline is OBSERVED | A decline is observed on the **message text values** the parse returns (`extract.messages[].text`), never on the serialized extract. A substring search over the serialized extract is not a test of what a block contributed: the extract carries JSON `null`s and numeric metadata of its own, so it false-positives on every JSON null and on any number sharing digits with a coerced form. This row is the single place that fact is decided; the Security checklist and the four-site verification gate's comment both mirror it. *(Added at the done-flip, erratum 3 — it was previously stated in two unregistered surfaces that contradicted each other.)* |
 | A8 | ADR status | **No ADR amendment.** ADR-0023's bounded-intake contract is about how much is read and what happens to a file that cannot be read; this package changes neither. It removes a coercion inside a parse that already completes within those bounds. |
 
 **Table B — the first law: the default parse output is byte-identical to today,
@@ -318,7 +442,7 @@ consequence for its shipped tests is settled.
 
 | Row | Fact / rule | Value |
 |-----|-------------|-------|
-| C1 | What must be retargeted, exactly | The three tests measured to break: `[PT-1]` (`tests/unit/dream-collect.test.js:1705`), `[PT-4]` (`:1782`) and `[PT-6]` (`:1829`). Each builds its crafted candidate from `tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl` through the suite helper `writeCraftedCodex`. `[PT-2]`, `[PT-3]`, `[PT-5]`, `[PT-7]` and `[PT-8]` are **not** retargeted and must keep passing untouched. |
+| C1 | What must be retargeted, exactly | The three tests measured to break: `[PT-1]` (`tests/unit/dream-collect.test.js:1705`), `[PT-4]` (`:1782`) and `[PT-6]` (`:1829`). Each builds its crafted candidate from `tests/fixtures/dream/transcripts/codex-poisoned-text-block.jsonl` through the suite helper `writeCraftedCodex`. `[PT-2]`, `[PT-3]`, `[PT-7]` and `[PT-8]` are **not** retargeted and must keep passing untouched. *(Corrected at the done-flip, erratum 2: the suite has seven tests — `[PT-1]`–`[PT-4]` and `[PT-6]`–`[PT-8]` — and there is no `[PT-5]`.)* |
 | C2 | What they are retargeted TO | The **seam mock `[PT-2]` already uses**: `t.mock.method(transcripts, 'parsePrimaryWithOutcome', …)`, throwing for exactly one candidate keyed by basename and delegating to the real function otherwise (`tests/unit/dream-collect.test.js:1733-1737`). Each of the three keeps its own corpus, its own assertions and its own name; only the source of the throw changes. |
 | C3 | Why the seam and not another crafted fixture | Two reasons, and the second is the binding one. (a) There is no fixture-expressible in-parse throw left once Table A lands — and hunting for one would mean building this suite on a parser defect this package exists to remove. A `toJSON` that throws during `JSON.stringify` is **not** an option: `JSON.parse` cannot produce a function, so it too needs a seam mock. (b) **A post-parse throw would break an existing RED declaration's isolation.** `pt-only-parse-is-caught` mutates the collector's `catch` arm to re-throw `if (extract !== undefined)`, i.e. only when the parse already **returned**, and declares that `[PT-3]` and *only* `[PT-3]` reddens — which is the whole evidence for the boundary extending past the parse call. Retargeting the three to any post-parse throw (the session-id fixture, a `toJSON` mock) would make them redden under it too, widening that declaration's set and destroying what it demonstrates. A throw **from the parse seam** leaves `extract` undefined, so the guard is false and the three stay green. |
 | C4 | The consequence for the proofs file, and the condition under which it needs no edit | The existing declarations in `tests/red-proofs/dream-collect-parse-throw.proofs.json` name their `expectRed` entries by **test name**. If the three tests keep their names byte-identical — which row C2 requires — then no declaration's `expectRed` set changes: all three still observe the set-aside record (so `pt-boundary-drops-instead-of-quarantining` still reddens them), `[PT-1]` still pins the reason literal (so `pt-reason-literal-pinned` still reddens it), and row C3 keeps them green under `pt-only-parse-is-caught`. **That is the intended outcome, and it is a prediction the unfiltered run in criterion 6 measures, not a fact this table asserts.** If the run says otherwise, the Deliverables grant permission to correct the file. |
@@ -339,19 +463,20 @@ observe nothing.
 | `htv-site4-claude-assistant-check-removed` | 1, 2 | in `src/core/transcripts/claude.js`, remove Table A row A4's conjunct from `:176` | the same for site 4 |
 
 **Each mutation's `find` must be anchored so that it matches its own site and no
-other — and leading indentation alone is not enough at sites 3 and 4.** Sites 1
-and 2 live in the same file and differ only by indentation (4 spaces at `:80`, 6
-at `:93`), so an indented `find` is unique for each. Sites 3 and 4 are worse:
-`:61` carries 6 leading spaces and `:176` carries 10, so **`:61`'s whole
-indented line is a proper substring of `:176`'s** — an `occurrences: 1`
-declaration written for site 3 would match at site 4 as well and report 2. This
-was **measured while drafting**: a naive substring replacement of site 3's
-6-space line silently rewrote site 4 too, and the four-site gate below then
-passed with site 4 supposedly unhardened. Include enough surrounding text (the
-preceding line, or the trailing `.map`/`.join` pair, whose separators differ —
-`'\n'` at site 3, `'\n\n'` at site 4) to make each `find` unique, and **verify
-every declaration's `occurrences` against the finished tree** rather than
-trusting this paragraph.
+other — and leading indentation alone is not enough at ANY of the four sites.**
+*(Corrected at the done-flip, erratum 1: the original text exempted sites 1 and
+2 from this trap.)* The hardening makes each file's two sites the **same line
+body** at two indentations, so in each file the shallower line is a proper
+substring of the deeper one: `codex.js:80` (4 spaces) inside `:93` (6), and
+`claude.js:61` (6 spaces) inside `:176` (10). An `occurrences: 1` declaration
+written for the shallower site would match at the deeper one as well and report
+2. This was **measured while drafting** for sites 3 and 4: a naive substring
+replacement of site 3's 6-space line silently rewrote site 4 too, and the
+four-site gate below then passed with site 4 supposedly unhardened. Include
+enough surrounding text (the preceding line, or the trailing `.map`/`.join`
+pair, whose separators differ — `'\n'` at sites 1, 2 and 3, `'\n\n'` at site 4)
+to make each `find` unique, and **verify every declaration's `occurrences`
+against the finished tree** rather than trusting this paragraph.
 
 **`expectRed` sets are MEASURED, never predicted.** The Criterion column above
 is an authoring intent. Measure each set by hand-applying its mutation and
@@ -408,13 +533,15 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       named in Out of scope
 - [ ] Acceptance criteria that assert its facts — criterion 1 asserts Table A
       row A5 and Table B rows B2 and B3; criterion 2 asserts Table A rows
-      A0–A5 at all four sites; criterion 3 asserts Table B in full; criterion 4
+      A0–A5 and A9 at all four sites; criterion 3 asserts Table B in full; criterion 4
       asserts Table A row A6; criterion 5 asserts Table C rows C1, C2 and C6;
       criterion 9 asserts Table E;
       criterion 6 asserts Table D and Table C row C4; criterion 7 asserts Table
       A row A7
 - [ ] Verification commands / greps — the four-site `node -e` gate asserts Table
-      A rows A0 and A5 at each site by shape rather than by fixture; the
+      A rows A0, A5 and A9 at each site by shape rather than by fixture, and its
+      "read ONLY the message text values" comment is a registered mirror of row
+      A9 (done-flip erratum 3); the
       snapshot regeneration command asserts Table B rows B1, B2 and B4 and is
       the only thing that can establish B4; the `grep` gate asserts Table A row
       A7's untouched `primary-dialogue.js` line; `npm test` carries every
@@ -434,7 +561,9 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       - Context's "the rule this package adopts is already in the tree" paragraph
         → Table A rows A0 and A6
       - Context's "every rule here is an acceptance allowlist" paragraph → Table
-        A row A0 and the Security checklist's last bullet
+        A row A0 and the Security checklist's last bullet; the Security
+        checklist's no-coercion bullet → Table A row A9 (registered at the
+        done-flip, erratum 3)
       - Current state's "what the change breaks, MEASURED" → Table C rows C1 and
         C3; its "the parse output that changes" → Table B rows B3 and B5
       - "Exact contracts"' site-1 listing → Table A rows A0 and A1, and Table D's
@@ -518,8 +647,9 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       no declined block's value reaches the extract in **any** form: not
       `"[object Object]"`, not a number's digits, not `"null"`, not an array's
       comma-joined elements, not an empty string *contributed by the block*.
-      Assert the absence of the coerced strings in the serialized extract, not
-      merely the absence of a throw.
+      Assert that absence **where Table A row A9 says it is observable** — over
+      the message text values, not over the serialized extract — and never
+      merely as the absence of a throw.
 - [ ] **The rule is an allowlist and stays one** (Table A row A0). It names the
       one shape we accept — a string — so a `text` shape nobody has thought of
       yet declines by default. Confirm no part of the change enumerates rejected
@@ -539,11 +669,18 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       dialogue.** For each of the four sites named in Table A rows A1–A4,
       separately: a record whose text-bearing block carries a `text` that is an
       object with a poisoned `toString`, a plain object, a number, `null` and an
-      array is parsed without throwing; the resulting extract contains **none**
-      of the coerced forms those values would have produced; and a sibling block
-      in the same record whose `text` **is** a string still contributes its text,
-      in its original position and with the site's own separator (Table A rows
-      A0, A5).
+      array is parsed without throwing; the **message text values** contain
+      **none** of the coerced forms those values would have produced (Table A
+      row A9); and a sibling block in the same record whose `text` **is** a
+      string still contributes its text unchanged (Table A rows A0, A5).
+      *Done-flip erratum 4: this criterion previously also required the
+      surviving text to be "in its original position and with the site's own
+      separator". The registered four-site gate builds two blocks per site, one
+      poisoned and one string, so exactly one string survives the filter and a
+      one-element join emits no separator and has no position — the clause was
+      not observable under this package's own verification and is withdrawn. The
+      separators themselves are pinned unchanged by Table A row A7 and are
+      byte-unchanged in the diff.*
 - [ ] 3. **The first law: the default parse is byte-identical to today, with one
       named exception.** For every key in
       `tests/fixtures/transcripts/parse-baseline.snapshot.json` except Table B
@@ -556,12 +693,14 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       block, the set of block values the default parse takes text from and the
       set `parsePrimaryWithOutcome` takes text from are the same — neither
       accepts a block the other declines (Table A row A6).
-- [ ] 5. **The `parse-threw` boundary is intact and its suite is whole.** All of
-      `[PT-1]` … `[PT-8]` in `tests/unit/dream-collect.test.js` pass;
-      `[PT-1]`, `[PT-4]` and `[PT-6]` reach their throw through Table C row C2's
-      seam and keep their names, corpora and assertions; `[PT-2]`, `[PT-3]`,
-      `[PT-5]`, `[PT-7]` and `[PT-8]` are unmodified; and no file under
-      `src/core/dream/` or `src/cli/` is in the diff (Table C rows C1, C2, C6).
+- [ ] 5. **The `parse-threw` boundary is intact and its suite is whole.** All
+      **seven** `[PT-` tests in `tests/unit/dream-collect.test.js` — `[PT-1]`,
+      `[PT-2]`, `[PT-3]`, `[PT-4]`, `[PT-6]`, `[PT-7]`, `[PT-8]`; there is no
+      `[PT-5]` (done-flip erratum 2) — pass; `[PT-1]`, `[PT-4]` and `[PT-6]`
+      reach their throw through Table C row C2's seam and keep their names,
+      corpora and assertions; `[PT-2]`, `[PT-3]`, `[PT-7]` and `[PT-8]` are
+      unmodified; and no file under `src/core/dream/` or `src/cli/` is in the
+      diff (Table C rows C1, C2, C6).
 - [ ] 6. **The declared RED proofs are `PROVEN`.** The **UNFILTERED**
       `npm run red-proofs` reports `RUN: PROVEN`, with `PROVEN` for all four
       Table D declarations **and** for every declaration this package did not

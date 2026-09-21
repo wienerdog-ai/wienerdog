@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-only-copy-shelf
 title: Decide what the redacted shelf owes a copy that is the only one of a note's pre-scrub content
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: [WP-quarantine-banner-location]
@@ -10,6 +10,145 @@ epic: dream-promotion
 ---
 
 # WP-quarantine-only-copy-shelf: what the `redacted/` shelf owes an only-copy
+
+> **Errata, 2026-09-21 (post-merge) — ONE Table O mirror-sync pass over five
+> surfaces, done as one pass rather than five point edits. None is a defect in
+> what shipped.**
+>
+> **Landed in PR #305** (merge `06ccdb95`, 2026-09-18 22:39:54 UTC), tip
+> `5152129c`, base `c357b281`. **Branch was `wp/only-copy-shelf`**, not the
+> `wp/quarantine-only-copy-shelf` Definition of done item 1(d) names — the same
+> orchestrator dispatch error as PR #303, accepted-and-noted and fixed in the
+> dispatch template afterwards. **ONE gate round, both gates clean.** The
+> independent gate (Codex plugin `review` on `gpt-6-astra`, orchestrator-run in
+> a detached worktree, porcelain identical before and after) returned *"The
+> added tests, mutation proof, and documentation match the specified retention
+> behavior; no actionable defects were identified."*; a second, implementer-run
+> plugin review on the same tip returned the same reading and is posted on the
+> PR. wd-reviewer (spec fidelity) returned **APPROVE**, executed in a throwaway
+> copy and never in the reviewed worktree: the four tests by name (4/4), full
+> `npm test` 2911 / 2899 pass / **0 fail** / 12 skipped, `npm run lint` passed,
+> `tests/unit/red-proofs.test.js` 139/139, `boundary-check` exit 0, plus
+> byte-comparisons of the declaration and of all four test names against this
+> spec's frozen blocks — **identical**. CI on `5152129c`: 7/7 green.
+>
+> **Red-proofs verdict, and exactly whose it is.** The implementer's **bare
+> UNFILTERED** `npm run red-proofs` on this tip reported **107 declared
+> proof(s), 107 selected** and `RUN: PROVEN`, with
+> `prune-keeps-a-copy-of-what-it-evicts` `PROVEN`. The fidelity gate ran the
+> **`--wp`-filtered** lane instead (`PROVEN` for this criterion, overall
+> `RUN: FILTERED` by construction) and said so, so the unfiltered verdict is
+> the implementer's and was **not** independently reproduced. What the
+> orchestrator did reproduce by hand on this tip: the copy-then-delete mutation
+> reddens exactly `[OC-1]` **and** `[OC-4]`, as declared.
+>
+> **This is one pass, and the reason it is one pass is on the record.** The
+> fidelity gate found four spec-side items and recommended *"a Table O
+> mirror-sync pass … rather than five point edits, because this is the second
+> round of mirror drift on the same contract family."* Every item below is a
+> mirror of Table O that stopped agreeing with the frozen Exact-contracts block
+> after a late design round; none of them is a claim Table O itself got wrong.
+> All five are applied in this one commit (update-all-mirrors) and the two
+> surfaces that were not registered are added to the Mirrored Surface Checklist
+> in the same pass (register-new-mirrors).
+>
+> **Erratum 1 — criterion 6 and verification steps 2–3 still say the
+> declaration has ONE `expectRed` entry; the frozen block says TWO.** *What is
+> wrong:* criterion 6 requires `expectRed` holding *"**exactly one** entry whose
+> `test` is a **one-element** identity path"* and *"`[OC-1]` as the sole red"*;
+> verification step 2's comment reads *"the ONE test the RED declaration names"*
+> and step 3's reads *"exactly ONE `expectRed` entry"*. *What is true:* round 4
+> measured that `[OC-4]`'s whole-tree absence walk reddens under the same
+> mutation, and an **undeclared** `testCodeFailure` throws
+> (`scripts/red-proofs.js:1668-1670`), so `[OC-4]` had to be declared. The
+> frozen declaration under **Exact contracts** carries **two** `expectRed`
+> entries, each a one-element path, and the paragraph beneath it says so in
+> bold. Measured on `origin/main` at `8b4cbd4c`:
+> `tests/red-proofs/quarantine-only-copy-shelf.proofs.json` has id
+> `prune-keeps-a-copy-of-what-it-evicts`, `criterion: "1"`, and
+> `expectRed.length === 2` naming `[OC-1]` and `[OC-4]`. The criterion is
+> self-defeating as written — a package cannot both satisfy it and satisfy the
+> frozen block — and the implementer took the frozen block, which is correct
+> (the block is the contract; the criterion is what a reviewer reads first, and
+> the PR body said so). *Routing:* **corrected in place in all three mirrors.**
+> **Class: an acceptance criterion and its verification comments left behind by
+> a late design round that changed the canonical block.**
+>
+> **Erratum 2 — the Deliverables proofs-file cell names an id and a table row
+> that do not exist.** *What is wrong:* the cell reads *"**one** RED
+> declaration, `shelf-copy-gains-a-withheld-twin` (Table O row O9)"*. *What is
+> true:* the declaration's `id` is **`prune-keeps-a-copy-of-what-it-evicts`**
+> (frozen under Exact contracts, and that is what shipped), and the Table O row
+> that decides the two declared RED targets is **O8** — its `(O8c)` clause names
+> `[OC-1]` and `[OC-4]` as *"the two declared RED targets"*. Row **O9** is the
+> parked prune-selection guard (owner item 2) and has nothing to do with this
+> file. `shelf-copy-gains-a-withheld-twin` occurs nowhere in the repo.
+> *Routing:* **corrected in place** — id and row both. **Class: a Deliverables
+> cell mirroring a canonical table by memory of an earlier round.**
+>
+> **Erratum 3 — verification step 1 cannot fail.** *What is wrong:* step 1 runs
+> `npm test -- --test-name-pattern 'OC-1'` (and `OC-2`, `OC-3`, `OC-4`) as the
+> check that the four new tests exist and pass. *What is true:* `npm test` is
+> `node tests/run.js`, which counts **one "test" per FILE**, and a file in which
+> no test name matches the pattern still reports a pass — so the step reads
+> greenest exactly where the tests were never written. Step 2's `grep -c` is the
+> half that can actually fail, and it covers only `[OC-1]`. *Routing:*
+> **corrected in place** — step 1 keeps the pattern runs as a reading and gains
+> a `grep -c` companion for each of the four names, which is the shape
+> `docs/runbooks/spec-authoring.md` requires of a name-based check; the
+> implementer independently recorded the same mechanism as a lesson.
+> **Class: a verification step that passes hardest on the deliverable-absent
+> state.**
+>
+> **Erratum 4 — an orphaned fragment sat between the doc-clause paragraphs and
+> `## Contract reference` (`:476-479` as the spec stood at merge).** *What is
+> wrong:* two lines — a dangling *"fails there, before the lane."* and a
+> duplicated *"**Ambiguity → choose the simpler option …**"* bullet — sitting
+> after the `docs/GLOSSARY.md` clause paragraph, with no list and no sentence to
+> belong to. Both are intact in their real home under **Implementation notes**.
+> The fragment is **pre-existing on `main`**, not introduced by this PR.
+> *Routing:* **deleted.** It carried no fact that is not stated where it
+> belongs. **Class: an editing orphan.**
+>
+> **Erratum 5 — Table O row O8's "may be" hedge is not the hedge that
+> shipped, and three surfaces disagreed about which one it is.** *What is
+> wrong:* row **O8** says the package ships *"**(O8a)** one clause … saying the
+> deleted file **may be** the only copy"*, and criterion 7 mirrors *"**may
+> be**"*; but the **Exact contracts** instruction for the same clause says *"for
+> most files there this is the **only** copy of that original"*, and criterion 8
+> mirrors the GLOSSARY clause as *"**usually** the only surviving copy"*. *What
+> is true:* the shipped text follows the Exact-contracts instruction. Measured on
+> `origin/main` at `8b4cbd4c`: `docs/runbooks/secret-incident.md` reads *"for
+> most files in there that is the only copy of the original, which cannot be
+> recovered once it is deleted"*, and `docs/GLOSSARY.md`'s `secret quarantine`
+> entry reads *"a file there is **usually** the only surviving copy of that
+> note's pre-scrub text, so dropping the oldest to stay inside the bound is
+> generally an irreversible loss rather than the removal of a spare"*. Both are
+> **quantified hedges**, and both satisfy all three of row O8's prohibitions —
+> neither claims the file is always the only copy (false for class C1 while its
+> twin lives), neither says the vault note holds a redacted form of it (false
+> for class B), and neither promises a warning, banner, record or recovery path.
+> *Routing:* **reconciled in place, with Table O row O8 as the owner of the
+> fact.** What row O8 decides is that each clause carries **a hedge**; the
+> clause's own wording is the Exact-contracts instruction's, and criteria 7 and
+> 8 now quote the shipped wording rather than a third paraphrase. The two
+> user-facing files are **not** edited by this filing — the text that shipped is
+> the text row O8 wanted, and only the spec's account of it was wrong.
+> **Class: three mirrors of one canonical hedge, each paraphrasing it
+> differently.**
+>
+> **Registered in this pass (register-new-mirrors).** The Mirrored Surface
+> Checklist gains two bullets it was missing and that are exactly where errata 1
+> and 3 landed: **the frozen RED declaration's `expectRed` shape** (arity and
+> path length) as a mirror of Table O row O8's two-declared-targets clause, and
+> **verification steps 1–3** as mirrors of the frozen declaration and the four
+> test names.
+>
+> **Still open at merge, and untouched:** owner item 2 — the prune's
+> overlapping-run selection defect — is measured, parked and unfixed, as this
+> spec's Definition of done item 4 required the PR body to state plainly, and it
+> did. `docs/GLOSSARY.md` and `docs/runbooks/secret-incident.md` are shared with
+> `WP-adr-0019-quarantine-uninstall-gate`, whose clause is byte-unchanged here.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -265,7 +404,7 @@ drift — `tests/unit/dream-validate.test.js:2039-2041`):
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | tests/unit/dream-validate.test.js | add **exactly four** tests — `[OC-1]`, `[OC-2]`, `[OC-3]`, `[OC-4]` — at the end of the AC-14 block (after `:3844`). Reuse the existing helpers (`redactFixture`, `RUN`, `seedRedacted`, `patchFs`, `stubCollaborators`, `noopScanStub`, `lsRedacted`, `redactedDir`, `CAP`); add no new helper and change no existing test |
-| create | tests/red-proofs/quarantine-only-copy-shelf.proofs.json | **one** RED declaration, `shelf-copy-gains-a-withheld-twin` (Table O row O9) |
+| create | tests/red-proofs/quarantine-only-copy-shelf.proofs.json | **one** RED declaration, `prune-keeps-a-copy-of-what-it-evicts`, whose `expectRed` holds the **two** declared targets of Table O row O8's `(O8c)` clause — `[OC-1]` and `[OC-4]` (done-flip errata 1 and 2) |
 | modify | docs/runbooks/secret-incident.md | **one** clause inside the existing bullet at `:57-59` (Table O row O8a). No other edit to this file |
 | modify | docs/GLOSSARY.md | **one** clause inside the existing `secret quarantine` entry at `:141-148` (Table O row O8b). No other edit to this file |
 
@@ -474,10 +613,6 @@ original text cannot be recovered — which is why the review window matters.
 that note's pre-scrub text, so the cap's eviction is generally an irreversible
 loss rather than the removal of a spare.
 
-  fails there, before the lane.
-- **Ambiguity → choose the simpler option and record it under "Decisions made".**
-  Do not expand scope to resolve it.
-
 ## Contract reference
 
 **Activation trigger (ADR-0031's 2-of-7): four of seven fire.**
@@ -527,7 +662,7 @@ spec's fixture description and are re-derived by deliverable `[OC-1]`.)*
 | **O5** | **CANDIDATE (b) — refuse to prune below a floor of only-copies.** | **REJECTED, and round 2 makes the rejection broader again.** The floor is classes **A + B + C2** — everything except the rare **C1** leftover — so (b) is very nearly *"never prune"*, and nothing bounds how many A/B/C2 copies accumulate. Measured cost (`OC-P4`): a single run redacting 60 notes leaves 60, and no later run reduces them. **And (b) needs the fact the product does not have:** separating C1 from C2 at prune time means knowing whether byte-identity was ever PROVEN — a run-scoped boolean that is never persisted (row **O2**), and the same missing record candidate (c) needs. The cap's value is owner-approved (Table N row **N1**) and this package may not re-litigate it |
 | **O6** | **CANDIDATE (c) — mark and warn before deleting.** | **REJECTED, on re-derived grounds.** *Mark:* the earlier draft called it vacuous because every file was an only-copy; under the corrected O1 **that argument is withdrawn** — a mark would now genuinely distinguish A/B from C. It is rejected instead because **the mark IS the missing durable record**: the class is known only inside the run that wrote the file (`:1431` builds the record; nothing persists it), so marking means new per-artifact durable state, which is what the stub required be priced. *Warn:* `reports/warnings.md` cannot carry the line — `composeWarnings` is **a pure function of the transcript ledger alone** and that purity is a stated contract (`src/core/dream/warnings.js:21-26`: *"THE RENDER IS A PURE FUNCTION OF THE LEDGER ALONE … no byte a user leaves in the file can be laundered into Wienerdog's own render"*), so it needs the same new record class. The digest's pending-review banner cannot carry it either: it is the **withheld** shelf's by design (`src/core/digest.js:848-856`). Both are new durable state, and both are larger than this package |
 | **O7** | **CANDIDATE (d) — what the code already implies, and the limit of it.** | **PARTLY TRUE, and the part that is true is load-bearing.** The dream report **already names every shelf copy in the run that creates it**, for all three classes: the gate returns `preserved: [{artifact, location: 'quarantine/redacted'}]` (`src/core/dream/validate.js:1431`) and `redactionLine` / `preservedLine` render it (`src/core/dream/promote.js:744-760`). The user-facing runbook **already discloses the cap** (`docs/runbooks/secret-incident.md:57-59`). **What is NOT implied anywhere:** that for classes **A** and **B** the deleted file is the only copy — the runbook implies loss without naming it as total — and there is no notice **at deletion time**, which by rows **O2** and **O6** cannot be added without the record that does not exist. **What the runbook must NOT be made to say (round 1, HEAVY 1):** that the deleted file is *always* the only copy (false for **C**), or that the vault note holds a redacted form of it (false for **B**) |
-| **O8** | **THE DECISION — candidate (a), delete anyway, argued per class.** | **(a) SURVIVES ALL THREE ROUNDS, and by round 3 the honest form of the argument is that NOTHING the prune deletes is provably a spare.** The lossless case is not a class but a *condition*: a **C1** file whose byte-identical twin is **still present at prune time** — which the prune never checks (row **O2**) and which the product actively invites the owner to falsify by telling them to delete the twin. **A, B and C2 hold the sole surviving form of a version outright.** That is the bargain the owner already struck: approving a *count* cap on a shelf like this **is** approving bounded destruction of sole-surviving copies, and `REDACTED_RETENTION_CAP = 50` is owner-approved (Table N row **N1**). Rows **O5** and **O6** show every alternative needs a durable record the product does not have. This package re-decides nothing; it makes the bargain legible **without claiming any part of it is safe**, and pins the premise. It ships **(O8a)** one clause in `docs/runbooks/secret-incident.md` saying the deleted file **may be** the only copy of that original and that where it is, the text is unrecoverable; **(O8b)** one clause in `docs/GLOSSARY.md` beside *"disposable"* removing the implication of spareness; and **(O8c)** the four tests `[OC-1]`–`[OC-4]`, pinning class **A** end to end, both **C2** entrances, and **C1**'s decay into a sole survivor — of which **`[OC-1]` and `[OC-4]` are the two declared RED targets**, because they are the two that assert byte absence after a prune. **The "may be" hedge in both clauses is what makes them true under every round's correction** — verified against A, B, C1 and C2 at round 3 — and it is why neither clause needed rewording when C1 moved |
+| **O8** | **THE DECISION — candidate (a), delete anyway, argued per class.** | **(a) SURVIVES ALL THREE ROUNDS, and by round 3 the honest form of the argument is that NOTHING the prune deletes is provably a spare.** The lossless case is not a class but a *condition*: a **C1** file whose byte-identical twin is **still present at prune time** — which the prune never checks (row **O2**) and which the product actively invites the owner to falsify by telling them to delete the twin. **A, B and C2 hold the sole surviving form of a version outright.** That is the bargain the owner already struck: approving a *count* cap on a shelf like this **is** approving bounded destruction of sole-surviving copies, and `REDACTED_RETENTION_CAP = 50` is owner-approved (Table N row **N1**). Rows **O5** and **O6** show every alternative needs a durable record the product does not have. This package re-decides nothing; it makes the bargain legible **without claiming any part of it is safe**, and pins the premise. It ships **(O8a)** one clause in `docs/runbooks/secret-incident.md` saying that **for most files there** this is the only copy of the original and that it cannot be recovered once deleted; **(O8b)** one clause in `docs/GLOSSARY.md` beside *"disposable"* removing the implication of spareness; and **(O8c)** the four tests `[OC-1]`–`[OC-4]`, pinning class **A** end to end, both **C2** entrances, and **C1**'s decay into a sole survivor — of which **`[OC-1]` and `[OC-4]` are the two declared RED targets**, because they are the two that assert byte absence after a prune. **A HEDGE in both clauses is what makes them true under every round's correction** — verified against A, B, C1 and C2 at round 3 — and it is why neither clause needed rewording when C1 moved. **What this row decides is that there IS a hedge; the clauses' exact wording is fixed by the Exact-contracts instruction** (the runbook's *"for most files in there"*, the glossary's *"usually"*), and every other surface quotes that rather than paraphrasing it (done-flip erratum 5) |
 | **O9** | **WHAT DOES NOT SHIP, and why it is an owner item rather than a fold-in.** | The **selection guard** of owner item **O9** in `docs/specs/done/WP-quarantine-disposal-durability.md:90-130` — refusing to prune while the pruning run's own `created` set has reached the cap — is **recommended and NOT taken here**. It changes Table N rows **N3** and **N5**, which are contract rows of a `Done` package, and the stub's own rule is that such a change is an owner item with a recommendation and a cost of overruling, never a fold-in. See **Dispatch precondition — owner items**, item 2 |
 
 ### Mirrored Surface Checklist
@@ -552,6 +687,13 @@ Mirrors of **Table O** (canonical source: this file):
 - [ ] **Exact contracts → the new test** — the `[O1-…]` and `[O2-…]` assertion signals and the fixture shape (mirror O1, O2)
 - [ ] **Exact contracts → the RED declaration** — its `why` field and both
       `signal`s (mirror O1, O2, and O8's two-declared-targets clause)
+- [ ] **Exact contracts → the RED declaration's `expectRed` SHAPE** — its arity
+      (two entries) and each entry's one-element identity path (mirrors O8's
+      two-declared-targets clause). *Registered at the done-flip, erratum 1.*
+- [ ] **Verification steps 1, 2 and 3** — the four test names and the
+      declaration's id, arity and path lengths (mirror the frozen Exact-contracts
+      declaration and the four test names). *Registered at the done-flip,
+      errata 1 and 3.*
 - [ ] **Exact contracts → the two doc clauses** — the prohibition on promising a warning, record or recovery (mirrors O5, O6, O7)
 - [ ] **Current state → "Who else reads the shelf"** and **"What the user is already told"** (mirror O2, O7)
 - [ ] **Acceptance criteria 1–5** (mirror O1, O2, O8a, O8b, O9)
@@ -667,13 +809,21 @@ Mirrors of **Table O** (canonical source: this file):
       the loss and does not prevent it**; no `src/` change.
 - [ ] **6.** `tests/red-proofs/quarantine-only-copy-shelf.proofs.json` exists and
       is byte-for-byte the declaration under **Exact contracts**, with
-      `expectRed` holding **exactly one** entry whose `test` is a **one-element**
-      identity path, and `npm run red-proofs` reports this package's criterion
-      `1` as `PROVEN` with **`[OC-1]` as the sole red** (ADR-0042;
+      `expectRed` holding **exactly two** entries — `[OC-1]` and `[OC-4]`, the
+      two declared RED targets of Table O row O8's `(O8c)` clause — each of
+      which is a **one-element** identity path, and the bare unfiltered
+      `npm run red-proofs` reports this package's criterion `1` as `PROVEN` with
+      **`[OC-1]` and `[OC-4]` as the reds and nothing else** (ADR-0042;
       `scripts/red-proofs.js:693-694`, `:1599-1602`, `:1668-1670`).
+      *Done-flip erratum 1: this criterion said "exactly one entry" and
+      "`[OC-1]` as the sole red", which round 4's measurement had already
+      falsified in the frozen block above. Two top-level names still may not
+      share one `test` array — that constraint is what makes them two entries
+      rather than one two-element path.*
 - [ ] **7.** `docs/runbooks/secret-incident.md` states, inside the existing
-      bullet, that the deleted file **may be** the only copy of that original and
-      that where it is, the text cannot be recovered (Table O row O8a). It does
+      bullet, that **for most files there** this is the only copy of the
+      original and that it cannot be recovered once it is deleted (Table O row
+      O8a, in the wording the **Exact contracts** instruction fixes). It does
       **not** claim the file is always the only copy, does **not** say the vault
       note holds a redacted form of it, and promises **no** warning, banner or
       record.
@@ -681,6 +831,12 @@ Mirrors of **Table O** (canonical source: this file):
       the `redacted/` shelf is **usually** the only surviving copy of that note's
       pre-scrub text, so the eviction is generally irreversible rather than the
       removal of a spare (Table O row O8b). Same three prohibitions as criterion 7.
+
+*Done-flip erratum 5: criterion 7 previously read "**may be** the only copy",
+a third paraphrase of a hedge whose wording the Exact-contracts instruction
+already fixed. Table O row O8 decides that each clause carries **a hedge**; the
+two shipped clauses carry the quantified hedges above, and both satisfy all
+three of row O8's prohibitions.*
 - [ ] **9.** `git diff --stat` against the base commit touches **only** the four
       Deliverables paths plus this spec file. **`src/` is untouched.**
 - [ ] **10.** `npm test` and `npm run lint` pass.
@@ -691,18 +847,28 @@ Mirrors of **Table O** (canonical source: this file):
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-# 1 — the four new tests, by name
+# 1 — the four new tests. The pattern runs are a READING, not a gate: `npm test`
+#     is `node tests/run.js`, which counts one "test" per FILE, so a file in
+#     which nothing matches the pattern still passes — greenest exactly where
+#     the tests were never written (done-flip erratum 3). The grep is the gate.
+for n in 1 2 3 4; do
+  test -f tests/unit/dream-validate.test.js &&
+  test "$(grep -c "EP2 retention \[OC-$n\]:" tests/unit/dream-validate.test.js)" = 1 ||
+    { echo "GATE FAIL: [OC-$n] is not present exactly once"; exit 1; }
+done
 npm test -- --test-name-pattern 'OC-1'
 npm test -- --test-name-pattern 'OC-2'
 npm test -- --test-name-pattern 'OC-3'
 npm test -- --test-name-pattern 'OC-4'
 
-# 2 — the ONE test the RED declaration names must exist, spelled exactly
+# 2 — both tests the RED declaration names must exist, spelled exactly
 grep -c 'EP2 retention \[OC-1\]: the prune destroys a SOLE-SURVIVING copy' tests/unit/dream-validate.test.js
+grep -c 'EP2 retention \[OC-4\]: a C1 duplicate DECAYS into a sole survivor' tests/unit/dream-validate.test.js
 
-# 3 — the declaration is valid JSON, names this WP, and holds exactly ONE
-#     expectRed entry whose identity path has exactly ONE element
-node -e "const d=require('./tests/red-proofs/quarantine-only-copy-shelf.proofs.json');const p=d.proofs[0];console.log(d.suite,d.proofs.length,p.wp,'expectRed='+p.expectRed.length,'pathLen='+p.expectRed[0].test.length)"
+# 3 — the declaration is valid JSON, names this WP, and holds exactly TWO
+#     expectRed entries, each an identity path of exactly ONE element
+#     (done-flip erratum 1)
+node -e "const d=require('./tests/red-proofs/quarantine-only-copy-shelf.proofs.json');const p=d.proofs[0];console.log(d.suite,d.proofs.length,p.wp,p.id,'expectRed='+p.expectRed.length,'pathLens='+p.expectRed.map((e)=>e.test.length).join(','))"
 
 # 4 — the RED lane, BARE and unfiltered (a filtered run is reported as filtered,
 #     never as proven — ADR-0042 Decision 1)

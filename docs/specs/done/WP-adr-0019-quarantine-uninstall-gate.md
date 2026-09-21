@@ -1,7 +1,7 @@
 ---
 id: WP-adr-0019-quarantine-uninstall-gate
 title: Stop `wienerdog uninstall` destroying the secret quarantine — the ADR-0019 amendment and the pre-deletion gate
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-secret-fence-ep2-redact-arm, WP-scheduler-replay-manifest-independent, WP-quarantine-only-copy-shelf]
@@ -36,7 +36,276 @@ epic: secret-lifecycle
 > unguarded `disposeCoreMechanics`. **That is not a regression** — it is today's
 > behaviour, narrowed — and closing it is exactly what B does.
 >
-> Every code citation is pinned to **`5b77865f`** and was read construct by
+> **Errata, 2026-09-21 (post-merge) — ONE SPLIT-ERRATA PASS. None is a defect
+> in what shipped.**
+>
+> **Landed in PR #309** (merge `8b4cbd4c`, 2026-09-21 09:12:37 UTC), tip
+> `0458b6a9`, branch `wp/adr-0019-quarantine-uninstall-gate`, base `1d8d4743`.
+> **THREE gate rounds plus a LIGHT round 3b.** Round 3 on `3cbb611c`:
+> wd-reviewer (spec fidelity) **APPROVE** — ruling R-Y1 executed over **30
+> scenarios** (depth 1–3 under both roots, file and directory, `readdir` and
+> `lstat` faults) plus a **24-shape Y1 leak fuzz** with tokens in basenames and
+> contents, **zero leaks**, only shelf roots named, de-duplicated; R-K's file,
+> symlink and fifo blockers each yielding the actual path, with the printed
+> remedy **executed** and the re-run completing; R-W4-win32 verified against
+> **PowerShell's own `[Parser]::ParseInput`** for both lines over a path
+> carrying `'`, `$x`, backticks and `"`, and the POSIX lines round-tripped
+> through `/bin/sh`; R-QU7 with **no skip** and ubuntu CI green; all eleven
+> `scheduler-replay` declarations swept against the `[QU-*]` suite with none
+> reddening; `gateStrings()` proven product-derived by mutation; six RED sets
+> observed = declared; W6 byte-identical to the **real** base on four surfaces;
+> the ADR-0019 amendment byte-exact; `src/` removing exactly two
+> `module.exports` lines; no owner claim. The independent gate raised three
+> Windows-portability P2s, one of them a **real defect for a valid Windows
+> path**: `psQuote` doubled only U+0027, while PowerShell also closes a
+> single-quoted string on U+2018, U+2019, U+201A and U+201B, so an ordinary
+> folder name like `O’Connor` ended the quoting early and left the rest of the
+> path as bare code inside `Remove-Item -Recurse -Force`. Closed in round 3b by
+> ruling **R-QU7′**'s quoting clause (`PS_QUOTE_CHARS`, all five doubled), with
+> the orchestrator re-rendering the win32 line for a shelf path under a
+> Windows home directory carrying all five PowerShell single-quote delimiters
+> plus `$x`, a backtick-substitution and a double quote, and parsing it
+> with PowerShell's own parser: **0 parse errors, `-LiteralPath` `-ceq` the
+> literal target: True.** CI on `0458b6a9`: seven checks pass.
+>
+> **Red-proofs verdict, and exactly what it covers.** The implementer's
+> **UNFILTERED** `npm run red-proofs` on the round-3 tip `3cbb611c`:
+> `RUN: PROVEN`, **all six declarations PROVEN**, and **no** `FAILED`,
+> `VACUOUS`, `UNCONTROLLED` or `FILTERED` verdict anywhere in the run. It was
+> **not re-run for round 3b**, and the PR body says so: **none of the six RED
+> `find` anchors moved** — `psQuote` is not an anchor and no declaration mutates
+> it — so the six declared sets stand as measured at round 3. That is the
+> verdict this record claims. Round 3b's own verification on the tip:
+> `npm test` 3023 tests / **0 fail** / 12 skipped, `npm run lint` passed,
+> `boundary-check` exit 0, `git status --porcelain tests/golden/` empty, all 12
+> commands of this spec's literal verification block exit 0.
+>
+> **Owner item 1 shipped under the standing process. The ADR-0019 amendment is
+> on `main` reading `Status: **ACCEPTED under standing authorization 2026-09-18
+> — owner signature pending.**` (`docs/adr/0019-…:88`).** Nothing in this
+> repository records the owner approving, accepting, ratifying or signing it.
+> Owner items 2 and 3 remain open in the standing form.
+>
+> ---
+>
+> **THE SPLIT-ERRATA PASS — what this is, and why it is one pass.**
+>
+> This spec is one half of a design-gate document that was split in two; the
+> other half is `WP-uninstall-shelf-deletion-guards`, which owns every **deleter**
+> (`disposeCoreMechanics`, `reverse()`'s guard, the sweep) and the return fields
+> `preservedQuarantine` and `shelfGuarded`. **The acceptance criteria are the
+> surface the split leaked through.** Contract rows were re-homed with their ids
+> intact, but four criteria and one table cell still describe the sibling's
+> return fields — and **this package's own verification block contains a
+> `! grep preservedQuarantine` step that exists precisely to reject them**, so
+> the criteria as filed could not all be satisfied at once. On top of that, the
+> split renumbered the acceptance criteria from the unsplit document and **every
+> cross-reference to a criterion number stayed at its old value**, including
+> Table B's entire `Criterion` column. All of it is corrected here in one pass
+> (update-all-mirrors), and the two surfaces that carried criterion numbers
+> without being registered are added to the Mirrored Surface Checklist in the
+> same pass (register-new-mirrors). Nothing shipped wrong: the implementer read
+> the gate-side-only reading, which the fidelity gate ruled the only consistent
+> one, and re-derived every `criterion` field against this file's numbering
+> before writing the JSON — as Table B told it to.
+>
+> **Erratum 1 — four acceptance criteria carry deletion-side clauses that
+> belong to `WP-uninstall-shelf-deletion-guards`.** *What is wrong, clause by
+> clause:* **criterion 4**'s final clause (*"still prints today's plan — in
+> which `<state>` no longer appears under the machine-generated-state heading
+> and the preserved shelf does"*) asserts the sibling's carve-out and its
+> `preservedQuarantine` rendering; **criterion 5**'s Table **X4** attribution
+> and its `Removed N item(s)` granularity clause are the sibling's row and the
+> sibling's deleter; **criterion 6**'s final sentence (*"**And at the deleter:**
+> `disposeCoreMechanics` given the same injected failure **preserves** `<state>`
+> and reports it in `preservedQuarantine`"*) names a return field this package
+> does not introduce; **criterion 11**'s arms **(b)** and **(c)** drive *"X1
+> step 2"* — the sibling's sweep — and assert `preservedQuarantine` and the
+> `ENOTEMPTY` rule. *What is true:* this package's Deliverables row for
+> `src/core/manifest.js` says *"add and export **`quarantineInventory` ONLY**"*
+> and that `disposeCoreMechanics`, `reverse()` and every other deleter *"stay
+> byte-unchanged"*; the gate-side reading is the only one consistent with that
+> boundary and with the `! grep preservedQuarantine` step. *Routing:* **the
+> deletion-side clauses are struck from all four criteria and re-pointed at the
+> sibling by name**, so the criterion states what this package can observe and
+> the reader is told where the other half lives. **Class: a split that moved
+> the contract rows and left the criteria behind.**
+>
+> **Erratum 2 — Table W row W5's cell asserts, for this package alone, a plan
+> change this package does not make.** *What is wrong:* W5 says the plan
+> *"correctly no longer lists `<state>` under 'Machine-generated state …' and
+> instead lists the preserved shelf from `preservedQuarantine` (**X4**)"*. *What
+> is true:* `preservedQuarantine` is the sibling's field and the carve-out is
+> the sibling's change; **for this package alone the `--dry-run` plan below the
+> block is today's plan, unchanged, `<state>` line included.** *Routing:* **the
+> cell is split** — its first half (the block, the "a real run stops here" line,
+> the "then today's plan" statement) stays canonical here; its second half (what
+> the plan then says about `<state>`) is marked as the sibling's and deferred to,
+> exactly as the note under Table W already does for rows W8, W10 and W11.
+> **Class: a canonical cell describing the joint document's end state rather
+> than this package's.**
+>
+> **Erratum 3 — every criterion cross-reference in this spec is still in the
+> UNSPLIT document's numbering.** *What is wrong, and what is true* — all
+> re-derived against this file's own list: criterion **2**'s *"Criterion 3 holds
+> identically"* → **criterion 1**; criterion **4**'s *"the same counts and byte
+> total as criterion 3's refusal"* → **criterion 1's**; Table Y row **Y1**'s
+> *"Asserted, not assumed — acceptance criterion 5"* → **criterion 3**; Table Y
+> row **Y7**'s *"(acceptance criteria 3 and 4)"* → **criteria 1 and 2**; owner
+> item 2's *"acceptance criteria 3 and 4 flip"* → **criteria 1 and 2**; the
+> **Platform scope** section's *"the **unreadable** fixture of criterion 8"* →
+> **criterion 6**. *Routing:* **corrected in place, all six.** **Class: a split
+> that renumbered a list and left its citers pointing at the old numbers.**
+>
+> **Erratum 4 — Table B's `Criterion` column is wrong in every row, and its
+> own footnote says so without fixing it.** *What is wrong:* the column reads
+> 3, 4, 8, 7, 6 and "**15**, 9", followed by a note that *"Criterion numbers in
+> the table above are the UNSPLIT document's"* and that the implementer
+> re-derives them. *What is true:* the implementer did, and the shipped
+> `tests/red-proofs/adr-0019-quarantine-uninstall-gate.proofs.json` on
+> `origin/main` at `8b4cbd4c` carries **1, 2, 6, 5, 4 and 11** for
+> `quse-refusal-not-raised`, `quse-yes-skips-the-refusal`,
+> `quse-unreadable-shelf-read-as-empty`, `quse-block-printed-on-an-empty-shelf`,
+> `quse-dry-run-block-suppressed` and `quse-shelf-name-case-sensitive`
+> respectively. Leaving a canonical column wrong and delegating the fix to the
+> implementer is the failure mode ADR-0031 exists to stop: the table stopped
+> being the place the fact is decided. *Routing:* **the column is corrected to
+> the shipped values and the delegating footnote is withdrawn**; the
+> `What it proves` cells' criterion references are re-derived with it.
+> **Class: a canonical column knowingly left stale.**
+>
+> **Erratum 5 — Table B's prose miscounts its own anchor classes, and one
+> anchor cell is falsified by what shipped.** *What is wrong:* *"Six
+> declarations over six criteria: **five** carry a pre-measurable anchor and
+> **one** mutates code this package authors"*, and
+> `quse-dry-run-block-suppressed`'s anchor cell names
+> `` `item(s) would be removed, ${skipped.length} skipped.` — **1** ``. *What is
+> true, measured against the base `1d8d4743` and the shipped declarations:*
+> **three and three.** Pre-measurable at the base (`grep -Fc` = 1 each):
+> `const vaultPath = readVaultPath(paths.config) || paths.vault;`,
+> `const yes = argv.includes('--yes');`, and
+> `console.log('wienerdog uninstall — the following will be removed:\n');`.
+> **New, authored by this package** (`grep -Fc` = 0 at the base):
+> `if (unreadable.some((u) => u.dir === reportAs)) return;` +
+> `unreadable.push({ dir: reportAs, code });`,
+> `console.log(quarantineBlock(quarantine, paths));`, and
+> `if (asciiFold(name) !== QUARANTINE_DIRNAME) continue;`.
+> `quse-dry-run-block-suppressed` could not use the headline line as its anchor:
+> W5 puts the block **before** the headline, so a `find` built around the
+> headline cannot suppress the block — the declaration mutates the `--dry-run`
+> arm of the gate **this package authors**, which is why it proves. *Routing:*
+> **the prose is corrected to three-and-three and that anchor cell to "new —
+> authored by this package"**, matching the two cells that already read that
+> way. **Class: a canonical table's prose counting rows the table itself
+> contradicts.**
+>
+> **Erratum 6 — the base pin is `1d8d4743`, not `5b77865f`.** *What is wrong:*
+> twelve places pin citations, byte-identity and anchor counts to `5b77865f` —
+> including Table W row **W6** (*"`disposeCoreMechanics` behaves as at
+> `5b77865f`"* and the byte-identity sentence), acceptance criterion **5**, and
+> Table B's *"Each anchor is `grep -Fc` over the named file at `5b77865f`"*.
+> *What is true:* the package was dispatched onto `1d8d4743` (PR #306's merge)
+> and rebased onto it during round 1, and the round-2 fidelity gate established
+> W6's byte-identity **against that real base** on four surfaces. *Routing:*
+> **re-pinned in place to `1d8d4743` everywhere the pin is a claim about this
+> package's base.** **Class: a base pin that moved under the package during
+> dispatch.**
+>
+> **Erratum 7 — Current-state item 2 assigns this package a JSDoc correction
+> its Deliverables forbid.** *What is wrong:* item 2 says
+> `disposeCoreMechanics`'s JSDoc sentence at `manifest.js:1112-1116` is *"false
+> on this tree and must be corrected by this package (Table X row **X9**)"*.
+> *What is true:* Table X is `WP-uninstall-shelf-deletion-guards`'s table, and
+> this package's Deliverables row says `disposeCoreMechanics` stays
+> **byte-unchanged**. *Routing:* **corrected in place** — the sentence is still
+> false, and the correction is the sibling's, by name. **Class: a split leaking
+> through a Current-state observation as well as through the criteria.**
+>
+> **Erratum 8 — Table W row W9's prescribed runbook sentence is unscoped, and
+> the shipped one is scoped.** *What is wrong:* W9 says the sentence is replaced
+> by one saying `wienerdog uninstall` *"**will not remove this folder**: it
+> stops and asks the user to move or delete these files first"*. *What is true:*
+> unqualified, that is false — an **empty** shelf is removed exactly as before
+> (Table W row W6, Table K row K3's EMPTY arm). The shipped sentence carries the
+> scope: measured on `origin/main` at `8b4cbd4c`,
+> `docs/runbooks/secret-incident.md` reads *"And `wienerdog uninstall` will not
+> remove this folder: **while either quarantine folder still holds a file**, it
+> stops and asks you to move those files somewhere you keep, or delete them,
+> first — so uninstalling cannot lose them."* *Routing:* **W9's cell is
+> corrected to the scoped wording that shipped.** The two user-facing files are
+> **not** edited by this filing — the text that shipped is right; only the
+> spec's account of it was. **Class: a canonical cell stating a universal its
+> own sibling row excepts.**
+>
+> **Erratum 9 — Table K row K2 does not decide a root-position non-directory's
+> BYTE contribution, and ruling R-K′ needs it to.** *What is wrong:* K2 says a
+> *"symlink, file or any non-directory occupying either root path counts as one
+> entry"* and stops there; ruling **R-K** then says a blocker contributes **0
+> bytes**, and ruling **R-K′** says a non-directory at the
+> `<quarantine>/redacted` position is instead *"an ordinary entry under
+> `quarantine` … one entry; a regular file contributes its size"*. The two rules
+> are different and K2 carried neither. *What is true, and now stated in K2:*
+> at the **`<state>/quarantine`** position a non-directory is a **blocker** — one
+> entry, **0 bytes**, its actual path reported in `blockers`; at the
+> **`<quarantine>/redacted`** position it is an ordinary entry under
+> `quarantine` — one entry, and a regular file **contributes its size**. The
+> asymmetry is deliberate and R-K′ gives the reason: at the outer position there
+> is no shelf root for the remedy to name, at the inner one there is.
+> *Routing:* **folded into Table K row K2, with R-K and R-K′ as its registered
+> mirrors.** **Class: a canonical cell thinner than the rulings that amend it.**
+>
+> **Erratum 10 — Table W row W4's remedy destination is easy to confuse with a
+> declined owner-item candidate, and the spec never separates them.** *What is
+> wrong:* ruling R-W4-win32 fixes the remedy's first line as
+> `mv '<p>' ~/wienerdog-quarantine` (POSIX) / `Move-Item -LiteralPath '<p>'
+> -Destination "$HOME\wienerdog-quarantine"` (win32), while **owner item 2
+> candidate (b)** — *a fixed location in HOME* — was weighed and **not taken**.
+> *What is true, and now said in one clause:* these are different things. The
+> remedy line is a **copyable suggestion the USER executes**; **Wienerdog writes
+> nothing there and creates nothing there** (Table W row W1: *"nowhere.
+> Wienerdog writes no copy of its own"*, and Table Y row **Y2**: under W1's cell
+> there is *"no export, no new file, no new directory, no new permission
+> decision"*). Owner item 2 candidate (b) was about **the product** copying the
+> shelf to a fixed HOME location, which would engage Table Y row **Y3**'s whole
+> binding contract. *Routing:* **the clause is added to W4 beside the remedy.**
+> **Class: two surfaces naming the same path for opposite reasons, with nothing
+> saying they are different.**
+>
+> **Routed to the sibling, not done here.** The gate also flagged
+> `docs/GLOSSARY.md`'s *"disposable"* clause: `WP-quarantine-only-copy-shelf`
+> (row O8b) and this package both edit the `secret quarantine` entry, and their
+> ranges overlap on paper — W9's own cell flags this. Both clauses landed and
+> neither collided. `docs/GLOSSARY.md` and `docs/runbooks/secret-incident.md`
+> are **not** touched by this filing.
+>
+> **Reviewer notes, non-errata** (recorded rather than dropped). (a)
+> `countShelfTree` has no depth bound; unreachable under `PATH_MAX`. (b) One of
+> five `GATE_STRINGS` was a string the product never emits, making that arm of
+> `[QU-5]` vacuous — fixed in round 3 by rendering the product through
+> `gateStrings()` instead of transcribing it, and proven product-derived by
+> mutation. (c) `[QU-7]` ships **no control arm**, recorded in the PR body
+> rather than left as a silent deletion: the boundary forbids the sibling
+> package's cell that would have been its control. (d) For `quarantine` and
+> `redacted` specifically, an explicit ASCII fold and
+> `String.prototype.toLowerCase` are **observationally identical** — the
+> implementer swept U+0080–U+10FFFF for a code point whose `toLowerCase()` is a
+> single ASCII character occurring in either name and found **zero hits**, and
+> the fidelity gate reproduced the sweep. K8's rule is a correct defensive
+> constraint rather than an observable behaviour, and its reddening evidence is
+> the byte-equality mutation. (e) `tests/unit/uninstall.test.js` cannot be run
+> with a bare `node --test`: `tests/run.js` sets
+> `WIENERDOG_TEST_NO_REAL_SCHEDULER`, and a direct run fails a pre-existing
+> guard test unrelated to this package — reproduced on `origin/main`.
+>
+> **Line numbers in this spec's PR body are stale** against the landed tree and
+> were not swept; the spec's own cites are re-pinned by erratum 6 and by the
+> construct-adjacent form the Definition of done already requires.
+
+<!-- the errata block ends above; the spec as it shipped follows -->
+
+> Every code citation is pinned to **`1d8d4743`** — the real dispatch base,
+> re-pinned at the done-flip (erratum 6; the spec as filed said `5b77865f`) — and
+> was read construct by
 > construct at that commit.
 
 ## Context (read this, nothing else)
@@ -130,7 +399,7 @@ that costs the user least is not a copy Wienerdog writes.
 
 ## Current state
 
-Everything below was read at `5b77865f`. `src/core/manifest.js` and
+Everything below was read at `1d8d4743`. `src/core/manifest.js` and
 `src/cli/uninstall.js` contain the string `quarantine` **zero** times
 (`grep -c quarantine` over both = 0), so nothing in the uninstall path knows the
 shelves exist.
@@ -164,8 +433,11 @@ shelves exist.
    downward to `state/` and the two shelves. Its JSDoc asserts the shelves do not
    exist — *"state/, logs/, schedules/, secrets/ hold only Wienerdog-authored
    runtime artifacts … none manifest-tracked, none user-authored"*, a sentence
-   spanning **`:1112-1116`** — which is **false on this tree** and must be
-   corrected by this package (Table X row **X9**).
+   spanning **`:1112-1116`** — which is **false on this tree**. *(Done-flip
+   erratum 7: this read "must be corrected by this package (Table X row
+   **X9**)". Table X is `WP-uninstall-shelf-deletion-guards`' table and this
+   package's Deliverables row keeps `disposeCoreMechanics` byte-unchanged — the
+   sentence is still false, and the correction is the sibling's.)*
 3. **`contains`** — `src/core/manifest.js:1097-1108`. Realpaths both sides and
    returns `false` on any resolution error. It is the vault guard's helper and
    stays byte-unchanged (Table X row **X7**).
@@ -279,7 +551,7 @@ same block, says a real run stops there, and then prints the rest of today's pla
 **The emptied-shelf case, which is the state the refusal asks the user to reach.**
 With both shelf directories present and holding **nothing**, the roots themselves are
 not counted (**K2**), so `entries: 0`, the outcome is **EMPTY**, the uninstall
-**proceeds**, and **the run's complete output is byte-identical to `5b77865f`**
+**proceeds**, and **the run's complete output is byte-identical to `1d8d4743`**
 (**W6**).
 
 ## Contract reference
@@ -305,9 +577,9 @@ never restated, here**. Citations to other documents are always package-qualifie
 | Row | Fact | Value |
 |---|---|---|
 | **K1** | **The two shelves, and how their paths are fixed** | `<state>/quarantine` and `<state>/quarantine/redacted`, where `<state>` is `paths.state` = `path.join(core,'state')` (`src/core/paths.js:70`). The **canonical** paths are literal joins of a path this package already owns: `path.join(paths.state,'quarantine')` and `path.join(that,'redacted')` — those are what `quarantinePreserve` writes and what Table X row **X1** step 3 removes. **The inventory LOCATES them by enumerating `<state>` and selecting the children whose names ASCII-case-fold to `quarantine`, then `redacted` inside each** (Table X row **X12**), because on a case-insensitive volume the stored name may be `Quarantine` while the lowercase path resolves to it; `roots` reports each by its **actual on-disk path**, so the plan names what exists. **No ambient value, env var or manifest field contributes to any of it** — the only names used are ones that already matched a closed, anchored set — which is why no containment or resolution question arises (Table X row **X7**) |
-| **K2** | **What is counted — and the TWO SHELF ROOTS THEMSELVES ARE NOT** | *Amended at PR-gate round 3 — see the end of this section.* *Rewritten at design gate round 1, finding 2.* **The two shelf root directories — `<state>/quarantine` and `<state>/quarantine/redacted` — contribute ZERO entries when each is a real directory.** They are created by `quarantinePreserve`'s `mkdirSync` (`validate.js:950`), not by the user, and they outlive their contents: counting them would make a user who has deleted every quarantined file face a refusal **forever**, which contradicts Table K row **K3**'s EMPTY arm and the worked example, and would turn this package's protection into a permanent block on uninstalling. **Everything else counts, conservatively:** every regular file (contributing its `size` to `bytes`), and **every other entry of any type at any depth — any further directory, any symlink, any socket or fifo — contributing 0 bytes but 1 entry and making the shelf NON-EMPTY.** The exclusion is by **path and type together**: a **symlink, file or any non-directory occupying either root path counts as one entry**, because it is not the product's directory, it is something else sitting where the product's directory should be — **and Table X row X10 gives that same object the matching treatment in the sweep: preserved, never followed, never removed**. An entry at or under `<quarantine>/redacted` counts toward the `redacted` root's row; every other entry counts toward `quarantine`'s. `lstat` throughout: a symlink is counted and **never followed**, so a planted link cannot make the walk descend outside the shelf or loop |
+| **K2** | **What is counted — and the TWO SHELF ROOTS THEMSELVES ARE NOT** | *Amended at PR-gate round 3 — see the end of this section.* *Rewritten at design gate round 1, finding 2.* **The two shelf root directories — `<state>/quarantine` and `<state>/quarantine/redacted` — contribute ZERO entries when each is a real directory.** They are created by `quarantinePreserve`'s `mkdirSync` (`validate.js:950`), not by the user, and they outlive their contents: counting them would make a user who has deleted every quarantined file face a refusal **forever**, which contradicts Table K row **K3**'s EMPTY arm and the worked example, and would turn this package's protection into a permanent block on uninstalling. **Everything else counts, conservatively:** every regular file (contributing its `size` to `bytes`), and **every other entry of any type at any depth — any further directory, any symlink, any socket or fifo — contributing 0 bytes but 1 entry and making the shelf NON-EMPTY.** The exclusion is by **path and type together**: a **symlink, file or any non-directory occupying either root path counts as one entry**, because it is not the product's directory, it is something else sitting where the product's directory should be. **Its BYTE contribution differs by which root position it occupies, and the two rulings below decide it (folded in at the done-flip, erratum 9, because this cell carried neither):** at the **`<state>/quarantine`** position it is a **blocker** — one entry, **0 bytes**, its actual on-disk path reported in `blockers` (ruling **R-K**); at the **`<quarantine>/redacted`** position it is an ordinary entry under `quarantine` — one entry, and a **regular file contributes its size** (ruling **R-K′**). The asymmetry is deliberate and R-K′ gives the reason: at the outer position there is no shelf root left for the remedy to name, at the inner one the quarantine root exists and removing it removes the blocker — **and Table X row X10 gives that same object the matching treatment in the sweep: preserved, never followed, never removed**. An entry at or under `<quarantine>/redacted` counts toward the `redacted` root's row; every other entry counts toward `quarantine`'s. `lstat` throughout: a symlink is counted and **never followed**, so a planted link cannot make the walk descend outside the shelf or loop |
 | **K3** | **The four outcomes** | **ABSENT** — `<state>/quarantine` does not exist (`ENOENT`/`ENOTDIR` from `readdir` or `lstat`): contributes nothing, is not an error, produces no block and no refusal. A root Wienerdog never wrote to is genuinely empty. **EMPTY** — it exists and the walk finds zero entries, **which by K2 includes the state in which BOTH shelf directories are present and hold nothing at all**: identical treatment, and this is the state a user reaches by doing exactly what the refusal asked of them. **NON-EMPTY** — at least one entry: Table W applies. **UNREADABLE** — any other error code (`EACCES`, `EPERM`, `EIO`, `ELOOP`, `EMFILE`, …) from any `readdir` or `lstat` in the walk: the shelf's state is **UNKNOWN**, recorded as `{dir, code}` in `unreadable` |
-| **K4** | **UNREADABLE is never EMPTY — one rule, two sites, both preserving** | This is the fail-open direction and it is the one that destroys data: an `EACCES` read as "nothing on the shelf" would let the gate pass and `disposeCoreMechanics`'s `rmSync({force:true})` — which reports nothing — take the tree anyway. The rule is therefore stated once and **what it maps to differs by site, always toward preservation**: **at the gate** (Table W row **W3**), a non-empty `unreadable` **ABORTS** a non-dry-run uninstall before any disclosure and before any deletion, naming each directory and its `code`; **inside `disposeCoreMechanics`, AT A SHELF LEVEL ONLY** (an `lstat` failure in **X11**'s validation pass, or an `rmdirSync` failure in its removal pass), it **PRESERVES** — the level and its ancestors are left in place and reported in `preservedQuarantine` — because that function runs mid-uninstall, where an abort leaves a half-reversed install, and because the only outcome of preserving is that more of the user's text survives. **This arm is scoped to the shelf and it is Table X row X13 that scopes it:** a failure enumerating `<state>` itself, or removing any non-shelf child, `logs/`, `schedules/` or `secrets/`, **still throws out of the function exactly as at `5b77865f`** — round 5 found that a blanket no-throw reading would swallow an `EPERM` on `secrets/`, strand a credential, and then let the manifest be deleted so the retry could not run. `--dry-run` does **not** abort at either site; it prints the unreadable directories and continues, because it deletes nothing. **This is `WP-scheduler-replay-manifest-independent`'s Table D rows D9 and D15 applied to this walk**, with the same reason and the same single special case (absence) |
+| **K4** | **UNREADABLE is never EMPTY — one rule, two sites, both preserving** | This is the fail-open direction and it is the one that destroys data: an `EACCES` read as "nothing on the shelf" would let the gate pass and `disposeCoreMechanics`'s `rmSync({force:true})` — which reports nothing — take the tree anyway. The rule is therefore stated once and **what it maps to differs by site, always toward preservation**: **at the gate** (Table W row **W3**), a non-empty `unreadable` **ABORTS** a non-dry-run uninstall before any disclosure and before any deletion, naming each directory and its `code`; **inside `disposeCoreMechanics`, AT A SHELF LEVEL ONLY** (an `lstat` failure in **X11**'s validation pass, or an `rmdirSync` failure in its removal pass), it **PRESERVES** — the level and its ancestors are left in place and reported in `preservedQuarantine` — because that function runs mid-uninstall, where an abort leaves a half-reversed install, and because the only outcome of preserving is that more of the user's text survives. **This arm is scoped to the shelf and it is Table X row X13 that scopes it:** a failure enumerating `<state>` itself, or removing any non-shelf child, `logs/`, `schedules/` or `secrets/`, **still throws out of the function exactly as at `1d8d4743`** — round 5 found that a blanket no-throw reading would swallow an `EPERM` on `secrets/`, strand a credential, and then let the manifest be deleted so the retry could not run. `--dry-run` does **not** abort at either site; it prints the unreadable directories and continues, because it deletes nothing. **This is `WP-scheduler-replay-manifest-independent`'s Table D rows D9 and D15 applied to this walk**, with the same reason and the same single special case (absence) |
 | **K5** | **When the gate's inventory runs** | **Exactly once per `uninstall` invocation, before anything is printed** — before the manifest headline (`uninstall.js:311`), before `WP-scheduler-replay-manifest-independent`'s schedule discovery and therefore before its D9 abort (Table W row **W7**). That single result is the only one the **gate** ever uses. **The `dryRun: true` planner of Table X row X15 calls the same function again, read-only**, and its result is a **prediction**, never a consent figure; nothing is deleted on that path, so a second read cannot widen anything |
 | **K6** | **The inventory never reads a file's CONTENTS** | `readdir` + `lstat` only. Nothing opens a shelf file, so no shelf byte can reach stdout, a log, an error message or an argv (Table Y row **Y1**). `bytes` comes from `lstat`'s `size`, which is metadata |
 | **K7** | **The LIVE deleter takes NO inventory — there is no second number to diverge** | *Rewritten at design gate round 1, finding 1.* An earlier revision had `disposeCoreMechanics` run its own inventory and branch on it; that is a snapshot, and a snapshot narrows the race rather than closing it. **Under Table X row X1 the LIVE deleter performs no emptiness test at all** (the `dryRun: true` planner is Table X row **X15** and deletes nothing, so it is exempt): it never deletes a shelf file, and it removes each shelf directory with a single non-recursive `rmdirSync`, whose own atomic failure on a non-empty directory *is* the test. So the gate's number is the only number **that anything acts on**, it is purely a **disclosure** figure, and what survives is decided at deletion time by the kernel. *(Table X row **X15**'s `dryRun: true` planner reads the inventory again, but it deletes nothing and produces a prediction, not a second consent figure.)* Consent integrity holds without a byte-compare and in the strongest form available: **nothing the user was not told about is ever deleted, and the only thing that can change after the disclosure is that more of their text survives** |
@@ -320,11 +592,11 @@ never restated, here**. Citations to other documents are always package-qualifie
 | **W1** | **OWNER ITEM 2a — where the preserved copies go** | **RECOMMENDED VALUE: nowhere. Wienerdog writes no copy of its own.** `uninstall` stops before removing anything and tells the user to move or delete the files themselves. The two alternatives the stub named — a **fixed location in HOME** and a **user-chosen path** — are weighed in full under owner item 2, with the cost of overruling. **The package ships from either answer with the same mechanism**: Table X's carve-out is what a copying destination would need anyway (**X3**), Table K's inventory is the same walk, and the disclosure block of **W4**/**W5** changes only its closing line. What an overrule adds is a copier, and Table Y row **Y3** is that copier's binding contract, written here so an overrule is one ruling rather than one design session |
 | **W2** | **OWNER ITEM 2b — may an unattended run proceed?** | **RECOMMENDED VALUE: no.** `--yes` does **not** proceed past a NON-EMPTY or UNREADABLE shelf: the refusal is printed and the process exits non-zero in exactly the same way with and without it. **This does not change what `--yes` means**, and the distinction is the reason: `--yes` skips the **prompt**, and the shipped contract at `uninstall.js:349-351` is that *"the set of valid actions is identical either way"*. A refusal is not a prompt — it removes an action from the valid set for both runs equally. **ADR-0035 governs the direction:** the attended CLI invocation is the trust surface, and the one thing a scripted, unattended run must not be able to do is irreversibly destroy the user's own text with nobody present. Note that a `--yes` run today prints **no plan at all** (**W7** of Current state item 5), so a disclosure-only design would be silent in precisely the configuration that needs it |
 | **W3** | **Where the refusal is raised** | In `src/cli/uninstall.js`, immediately after `quarantineInventory` (Table K row **K5**) and **before the first `console.log`** — so before the manifest headline at `:311`, before any plan, and before every deletion. It is a `WienerdogError` in the shape the file's other refusals already use (`:286-288`, `:386-390`): a refusal, not a crash. It fires when `entries > 0` **or** `unreadable.length > 0` (**K3**/**K4**) |
-| **W4** | **What the refusal says** | *Amended at PR-gate round 3 — see the end of this section.* Plain language for knowledge workers (CLAUDE.md), and it carries exactly five things (plus item (3b) when a blocker is present — see the round-3 rulings): **(1)** that nothing was removed; **(2)** the total entry count and the **total size in bytes as a plain integer** (a human-readable unit in parentheses is permitted, the integer is not optional); **(3)** one line per shelf directory **that holds at least one entry**, with its own count and byte total — a shelf directory that exists but is empty contributes no line, because by Table K row **K2** it contributes no entry either, and a refusal listing an empty directory would tell the user to deal with nothing; **(4)** the hedged statement of what these files are — *"some or all of these may be the only copy of that text on this computer, and they hold the original, not a blanked-out version"* — which is `WP-quarantine-only-copy-shelf`'s Table O row **O8** "may be" hedge, verified there against all four shelf classes and **never strengthened to "is"**; **(5)** the remedy, as two literal shell lines the user can copy — move the directory somewhere they keep, or delete it — followed by *"then run `wienerdog uninstall` again"*, and a pointer to `docs/runbooks/secret-incident.md`. **When `unreadable` is non-empty the message names each directory and its `code` instead of a count**, and says the state could not be determined. It **never prints a filename and never prints a byte of any file's content** (Table Y row **Y1**) |
-| **W5** | **`--dry-run`** | Does **not** abort — it deletes nothing, and aborting would hide the plan it exists to show. It prints the same block as **W4** (same counts, same byte totals, same directories, same hedge), then one line saying that a real `wienerdog uninstall` stops at this point and that the rest of the plan is what it would do once these files are moved or deleted, and then **today's plan unchanged**. Under the carve-out that plan correctly no longer lists `<state>` under *"Machine-generated state (removed recursively, not manifest-tracked)"* (`uninstall.js:337-341`) and instead lists the preserved shelf from `preservedQuarantine` (**X4**). **What decides which of the two it prints is Table X row X15's read-only planner**, not a syscall — `--dry-run` performs no mutating filesystem call at all — and both lines are therefore **predictions**, with `R-dry-run-prediction-drift` named in X15. **On an install whose shelf directories exist but are empty the plan is unchanged and still lists `<state>` once**, because `removed` keeps its mechanics-directory granularity (**X4**) — the round-6 case. This preserves ADR-0019's own `--dry-run`-exactness consequence (`:68-69`) and M1's *"lists exactly what was created"* gate |
-| **W6** | **The ABSENT and EMPTY cases — nothing changes at all** | No block, no extra line, no abort, no new field rendered, and `disposeCoreMechanics` behaves as at `5b77865f`. **The complete stdout of `--dry-run` and of a full `uninstall --yes` on an install with no shelf entries is byte-identical to the same run at `5b77865f`.** This is the row that keeps the package from changing every existing uninstall's output, and it is a declared RED target (Table B) |
+| **W4** | **What the refusal says** | *Amended at PR-gate round 3 — see the end of this section.* Plain language for knowledge workers (CLAUDE.md), and it carries exactly five things (plus item (3b) when a blocker is present — see the round-3 rulings): **(1)** that nothing was removed; **(2)** the total entry count and the **total size in bytes as a plain integer** (a human-readable unit in parentheses is permitted, the integer is not optional); **(3)** one line per shelf directory **that holds at least one entry**, with its own count and byte total — a shelf directory that exists but is empty contributes no line, because by Table K row **K2** it contributes no entry either, and a refusal listing an empty directory would tell the user to deal with nothing; **(4)** the hedged statement of what these files are — *"some or all of these may be the only copy of that text on this computer, and they hold the original, not a blanked-out version"* — which is `WP-quarantine-only-copy-shelf`'s Table O row **O8** "may be" hedge, verified there against all four shelf classes and **never strengthened to "is"**; **(5)** the remedy, as two literal shell lines the user can copy — move the directory somewhere they keep, or delete it — followed by *"then run `wienerdog uninstall` again"*, and a pointer to `docs/runbooks/secret-incident.md`. **What the move line's destination is, and what it is NOT (added at the done-flip, erratum 10):** ruling **R-W4-win32** fixes that destination as `~/wienerdog-quarantine` (POSIX) / `"$HOME\wienerdog-quarantine"` (win32), and it is **a suggestion printed for the USER to execute**. **Wienerdog creates nothing there, writes nothing there and never verifies it** — row **W1**'s cell is *"nowhere. Wienerdog writes no copy of its own"* and Table Y row **Y2** is why. This is NOT owner item 2's declined candidate **(b)**, "a fixed location in HOME", which was about **the product** copying the shelf and would engage Table Y row **Y3**'s whole binding contract. The two name a similar path for opposite reasons. **When `unreadable` is non-empty the message names each directory and its `code` instead of a count**, and says the state could not be determined. It **never prints a filename and never prints a byte of any file's content** (Table Y row **Y1**) |
+| **W5** | **`--dry-run`** | Does **not** abort — it deletes nothing, and aborting would hide the plan it exists to show. It prints the same block as **W4** (same counts, same byte totals, same directories, same hedge), then one line saying that a real `wienerdog uninstall` stops at this point and that the rest of the plan is what it would do once these files are moved or deleted, and then **today's plan unchanged**. In the SIBLING package that plan gains a carve-out — it no longer lists `<state>` under *"Machine-generated state (removed recursively, not manifest-tracked)"* and instead lists the preserved shelf from `preservedQuarantine` (**X4**), decided by Table X row X15's read-only planner rather than by a syscall, with `R-dry-run-prediction-drift` named in X15. **That is `WP-uninstall-shelf-deletion-guards`' half and is reproduced here only so the joint end state is legible; it is NOT this package's behaviour** (done-flip erratum 2). **On an install whose shelf directories exist but are empty the plan is unchanged and still lists `<state>` once** — the round-6 case. This preserves ADR-0019's own `--dry-run`-exactness consequence (`:68-69`) and M1's *"lists exactly what was created"* gate. **SPLIT AT THE DONE-FLIP (erratum 2): everything above about what the plan says BELOW the block — the `<state>` carve-out line, the `preservedQuarantine` line and `removed`'s granularity (Table X row X4) — is `WP-uninstall-shelf-deletion-guards`' half and this cell DEFERS to it, exactly as the note under this table already does for rows W8, W10 and W11. FOR THIS PACKAGE ALONE the plan below the block is today's plan, unchanged, `<state>` line included** — this package edits no deleter and introduces no `preservedQuarantine`. What stays canonical here is the first half: `--dry-run` does not abort, it prints W4's block with the same counts, byte totals, directories and hedge, then the one line saying a real `wienerdog uninstall` stops at this point, then the plan |
+| **W6** | **The ABSENT and EMPTY cases — nothing changes at all** | No block, no extra line, no abort, no new field rendered, and `disposeCoreMechanics` behaves as at `1d8d4743`. **The complete stdout of `--dry-run` and of a full `uninstall --yes` on an install with no shelf entries is byte-identical to the same run at `1d8d4743`.** This is the row that keeps the package from changing every existing uninstall's output, and it is a declared RED target (Table B) |
 | **W7** | **Ordering against `WP-scheduler-replay-manifest-independent`, and what must not be disturbed** | **The shelf gate runs FIRST** — before that package's Table D row **D2** discovery and therefore before its **D9** abort. Both aborts delete nothing and both are retryable, so **either order is safe**; the shelf gate goes first because it is the cheaper check (one walk inside our own core, no ambient roots) and because it reports data we would **destroy**, while D9 reports a deletion we might **fail to perform**. **Rows of that package this package must not disturb — in `uninstall.js`:** its discovery call and D9 abort, its **D3** disclosure block in both `--dry-run` and the pre-confirm plan, the `discoveredSchedules` snapshot passed to both `reverse()` calls (**D4**/**D7**), and the `vaultPath` read at `:309` that its **D12** consumes. **In `manifest.js`:** `discoverSchedulesOnDisk` (**D1**, **D9**–**D12**, **D14**, **D15**), `reverse()`'s phases **D5a**/**D5b**, `recognizeScheduleBasename`'s call site (**R2**), and `withinSchedulerRoot` / `withinAllowedRoot` / `validateEntry` / `contains`. **Round 8 changed this row, and the change is stated exactly rather than waved at.** This package now edits `reverse()` too (Table X row **X16**), so "disjoint functions" is no longer the argument; **disjoint regions and disjoint targets are.** *Lines added:* the `quarantineRoots` computation beside `schedulerOpts` (`manifest.js:751-758`), and one skip-and-report guard immediately after the global deferred-member guard (`:781`) and still **before kind dispatch** (`:790` region). *Nothing else in `reverse()`.* **No D-row changes:** **D5a** runs **before** the entry loop and **D5b** **after** it, while the guard lives **inside** the loop before dispatch — three disjoint regions. **And the targets cannot overlap either, by construction, which is the stronger claim:** D5b acts only on items `discoverSchedulesOnDisk` yielded, and every such item must sit under a **scheduler root** — `<home>/Library/LaunchAgents`, the systemd user dir, or `<core>/schedules` — while the shelf is `<core>/state/quarantine/**`; `<core>/schedules` and `<core>/state` are **sibling subtrees of `<core>`** and neither contains the other, and the other two roots are outside `<core>` entirely. **Even under a contrived `<core>/schedules` → shelf symlink no overlap is reachable**, because a discovered candidate must also carry a basename matching **R2** (`^wienerdog-[a-z0-9][a-z0-9-]*\.xml$`), whereas `quarantinePreserve` names every shelf file `<date>-<stem><ext>` (`validate.js:958`) — always date-prefixed, so never R2-matching. **Landing order:** that package is in `depends_on` and lands **first**, so its "`reverse()` untouched" claim is true when it ships and this package amends `reverse()` afterwards. **If the order is ever reversed, that claim must be re-pinned by its implementer** — it is a statement about the tree, not about this package |
-| **W9** | **The two user-facing sentences, re-derived** | Both are single edits inside existing sentences and both are written to **W1**'s cell, so an overrule rewrites them and nothing else. **`docs/runbooks/secret-incident.md`** — the sentence at `:61-63` (*"And `wienerdog uninstall` removes this folder along with everything else Wienerdog keeps, so copy out anything you want to keep before you uninstall."*) is replaced by one saying that `wienerdog uninstall` **will not remove this folder**: it stops and asks the user to move or delete these files first, so uninstalling cannot lose them. **`docs/GLOSSARY.md`** — inside the `secret quarantine` entry, the clause *"disposable — `wienerdog uninstall` removes it with everything else Wienerdog keeps"* is replaced by one saying that `wienerdog uninstall` stops while either quarantine directory still holds a file and asks the user to deal with them first. **Neither edit touches the clause `WP-quarantine-only-copy-shelf` adds about the cap and only-copies** — that package lands first (`depends_on`) and owns that clause; this package owns the uninstall clause. **The two GLOSSARY ranges overlap on paper and that is flagged deliberately** (round-zero note): that package's row **O8b** cites `docs/GLOSSARY.md:141-148`, the whole `secret quarantine` entry, which **contains** this package's `:146-147` target. There is **no content collision** — O8b adds a clause beside *"disposable"* about the cap and only-copies, this package replaces the *"`wienerdog uninstall` removes it …"* clause — but the paper overlap is why the ordering is a `depends_on` and not a convention, and why the implementer **re-derives the line numbers after that package has landed** rather than trusting either range. **Neither sentence may promise a copy, an export destination or a recovery path this package does not ship**, and neither may strengthen the "may be the only copy" hedge |
+| **W9** | **The two user-facing sentences, re-derived** | Both are single edits inside existing sentences and both are written to **W1**'s cell, so an overrule rewrites them and nothing else. **`docs/runbooks/secret-incident.md`** — the sentence at `:61-63` (*"And `wienerdog uninstall` removes this folder along with everything else Wienerdog keeps, so copy out anything you want to keep before you uninstall."*) is replaced by one saying that `wienerdog uninstall` **will not remove this folder** — **scoped: *while either quarantine folder still holds a file*** — it stops and asks the user to move those files somewhere they keep, or delete them, first, so uninstalling cannot lose them. *(Done-flip erratum 8: the unscoped form is false, because an EMPTY shelf is removed exactly as before — row **W6**, Table K row **K3**'s EMPTY arm. The scope is what shipped.)* **`docs/GLOSSARY.md`** — inside the `secret quarantine` entry, the clause *"disposable — `wienerdog uninstall` removes it with everything else Wienerdog keeps"* is replaced by one saying that `wienerdog uninstall` stops while either quarantine directory still holds a file and asks the user to deal with them first. **Neither edit touches the clause `WP-quarantine-only-copy-shelf` adds about the cap and only-copies** — that package lands first (`depends_on`) and owns that clause; this package owns the uninstall clause. **The two GLOSSARY ranges overlap on paper and that is flagged deliberately** (round-zero note): that package's row **O8b** cites `docs/GLOSSARY.md:141-148`, the whole `secret quarantine` entry, which **contains** this package's `:146-147` target. There is **no content collision** — O8b adds a clause beside *"disposable"* about the cap and only-copies, this package replaces the *"`wienerdog uninstall` removes it …"* clause — but the paper overlap is why the ordering is a `depends_on` and not a convention, and why the implementer **re-derives the line numbers after that package has landed** rather than trusting either range. **Neither sentence may promise a copy, an export destination or a recovery path this package does not ship**, and neither may strengthen the "may be the only copy" hedge |
 
 **Rows W8, W10 and W11 are canonical in `WP-uninstall-shelf-deletion-guards`** and
 are not reproduced here: all three turn on `preservedQuarantine` and `shelfGuarded`,
@@ -336,12 +608,12 @@ cells rather than re-deciding them.
 
 | Row | Threat | What holds |
 |---|---|---|
-| **Y1** | A shelf byte, or a shelf filename, reaching a surface that persists or displays it | *Amended at PR-gate round 3 — see the end of this section.* Closed at the source: the inventory reads **metadata only** (Table K row **K6**), so no file is ever opened, and the refusal prints **directory paths, an entry count and a byte total** — never a filename, never a fragment of content. Filenames are `<date>-<sanitized note basename>`, derived from the user's own note paths; the user is about to list the directory themselves, so printing them buys nothing and not printing them is strictly safer. Asserted, not assumed — acceptance criterion 5 |
+| **Y1** | A shelf byte, or a shelf filename, reaching a surface that persists or displays it | *Amended at PR-gate round 3 — see the end of this section.* Closed at the source: the inventory reads **metadata only** (Table K row **K6**), so no file is ever opened, and the refusal prints **directory paths, an entry count and a byte total** — never a filename, never a fragment of content. Filenames are `<date>-<sanitized note basename>`, derived from the user's own note paths; the user is about to list the directory themselves, so printing them buys nothing and not printing them is strictly safer. Asserted, not assumed — acceptance criterion **3** (renumbered at the done-flip, erratum 3) |
 | **Y2** | **A new sensitive artifact created by the uninstall itself** | Under Table W row **W1**'s recommended cell there is **no export**, so there is no new file, no new directory, no new permission decision and no new thing to leave behind. This is the subtractive form of the answer and it is why the recommendation is what it is: an export would write a fresh, unmanaged pile of **unredacted credentials** into the user's home, outside the core, outside the manifest, unknown to every future Wienerdog run and unremovable by any uninstall — the accidental-persistence outcome ADR-0034 exists to prevent, performed as the last act of a command the user ran to remove the product |
 | **Y3** | The same threat **under an overrule of W1 to a copying destination** | Binding contract, written now so an overrule needs no new design. Such an export **must never**: print or log any shelf file's contents; create a destination file more permissive than `0600` or a destination directory more permissive than `0700`, or widen the mode of any path that already exists; follow a symlink out of the shelf (classify every entry with `lstat`, never `dereference`); copy anything that is not a regular file; **leave a copy the user was not told about** — every destination path is named in the pre-consent disclosure **before any byte is written**, and a run that cannot name it writes nothing; overwrite an existing file at the destination; or delete a shelf file whose copy was not verified present at the destination. **And it must not construct a destination path from a shelf-supplied name without an anchored recognizer of what `quarantinePreserve` writes** — an entry whose name is not recognized is **copied nowhere, deleted nowhere, and named in the report as left in place**, so nothing unrecognized is silently destroyed |
 | **Y4** | An untrusted identifier reaching a filesystem path or an argv | Under **W1**'s cell the package builds no argv at all, and every path it constructs is either a literal join of `paths.state` (Table K row **K1**) or that join with **one `readdirSync` name that has already matched the closed ASCII-case-fold set of Table X row **X12****. **It enumerates its own good twice over:** the accepted names are exactly the ASCII case variants of `quarantine` and `redacted` — a finite, closed set, because our names are pure ASCII with no combining marks — and **everything under the shelves is treated as the user's regardless of its name**. No entry name is ever classified as bad, matched against a denylist, or used to build a path before it has matched that set; a `readdirSync` name cannot contain a separator in any case. There is no grammar here we do not own, and no name is trusted with anything |
 | **Y5** | An unreadable shelf read as an empty one — the **fail-open** direction | Closed by Table K row **K4** at both sites. This is the failure that loses the data: `rmSync({force:true})` succeeds silently on a tree the walk could not see. Chmod-ing one's own `0700` directory is a same-user act and not an adversary this package defends against; what matters is that the **accident** — a permission-damaged shelf, an `EIO`, an `EMFILE` under load — cannot read as "nothing to preserve" while the tree is disposed |
-| **Y7** | `--yes`, or any scripted invocation, silencing the refusal | Closed by Table W row **W2**: the refusal is raised before the `if (!yes)` branch is reached and is independent of it. Asserted for both runs, with identical text (acceptance criteria 3 and 4) |
+| **Y7** | `--yes`, or any scripted invocation, silencing the refusal | Closed by Table W row **W2**: the refusal is raised before the `if (!yes)` branch is reached and is independent of it. Asserted for both runs, with identical text (acceptance criteria **1 and 2** — renumbered at the done-flip, erratum 3) |
 | **Y8** | Anything in this package outliving its invocation | Nothing does. One read-only directory walk, one `console.log`, one thrown `WienerdogError`, and a `fs.rmSync` that does not happen. No process, no socket, no schedule, no telemetry (ADR-0004) |
 
 **Rows Y6, Y9 and Y10 are canonical in `WP-uninstall-shelf-deletion-guards`** — they
@@ -352,31 +624,40 @@ direction, none of which this package changes.
 
 One file, `tests/red-proofs/adr-0019-quarantine-uninstall-gate.proofs.json`.
 **`expectRed` sets are MEASURED at implementation time, never predicted.** Each
-anchor is `grep -Fc` over the named file at `5b77865f`; a count of `1` means a
+anchor is `grep -Fc` over the named file at `1d8d4743`; a count of `1` means a
 find-string built around it is unique. **Every anchor below is shown without its
 leading indentation** (a code span may not carry one); the declaration's own `find`
 string must include the line's real indentation, and the count is the same either way.
 
-**Six declarations over six criteria: five carry a pre-measurable anchor and one
-mutates code this package authors** (`quse-unreadable-shelf-read-as-empty`). The
-remaining twenty declarations of the unsplit document belong to
+**Six declarations over six criteria: THREE carry a pre-measurable anchor and THREE
+mutate code this package authors** (`quse-unreadable-shelf-read-as-empty`,
+`quse-dry-run-block-suppressed`, `quse-shelf-name-case-sensitive`). *(Done-flip
+erratum 5: this read "five … and one", which the table's own cells already
+contradicted.)* The remaining twenty declarations of the unsplit document belong to
 `WP-uninstall-shelf-deletion-guards`, which mutates the deleters this package leaves
 byte-unchanged.
 
-| Proof id | Criterion | File | Mutation | Anchor at `5b77865f` (occurrences) | What it proves |
-|---|---|---|---|---|---|
-| `quse-refusal-not-raised` | 3 | `src/cli/uninstall.js` | make the gate treat NON-EMPTY as EMPTY, so the run proceeds and deletes | `const vaultPath = readVaultPath(paths.config) \|\| paths.vault;` — **1** (the adjacent, unchanged pre-plan line the gate is inserted beside) | criterion 3 asserts an **abort**, and an abort assertion goes green whenever the run fails for any reason at all — a bad fixture, a missing manifest, a throw in unrelated setup. Same shape, same reason as `WP-scheduler-replay-manifest-independent`'s `srm-unreadable-root-read-as-empty` |
-| `quse-yes-skips-the-refusal` | 4 | `src/cli/uninstall.js` | gate the refusal on `!yes`, so a `--yes` run proceeds | `const yes = argv.includes('--yes');` — **1** | criterion 4 is the one the whole of Table W row **W2** rests on, and it is invisible to any suite that only ever drives the interactive path. A `--yes` suite that asserts "the run refused" passes under the mutation if it never actually passed `--yes` |
-| `quse-unreadable-shelf-read-as-empty` | 8 | `src/core/manifest.js` | make the walk's `catch` swallow the error and return `unreadable: []`, restoring the fail-open shape exactly | *new — authored by this package*, so no pre-measurable anchor exists; the mutation site is the inventory's error classification | criterion 8 asserts an abort **and** zero removals, and both halves go green on a fixture that never made the shelf unreadable. This is Table K row **K4** and Table Y row **Y5**, and it is the one failure that silently destroys the data rather than merely failing to protect it |
-| `quse-block-printed-on-an-empty-shelf` | 7 | `src/cli/uninstall.js` | print the block unconditionally, so an install with no shelf gets a `0 file(s), 0 bytes` block | `console.log('wienerdog uninstall — the following will be removed:\n');` — **1** | criterion 7 asserts **byte-identity with `5b77865f`** for an install with no shelf. It is the criterion that keeps this package from changing every existing uninstall's output, and a byte-identity assertion is trivially satisfiable by a fixture that compares the wrong stream or an empty one |
-| `quse-dry-run-block-suppressed` | 6 | `src/cli/uninstall.js` | drop the block from the `--dry-run` arm while leaving the refusal intact | `item(s) would be removed, ${skipped.length} skipped.` — **1** | criterion 6 observes **disclosure**, not the refusal. Without this declaration a suite can assert the refusal (which is loud) and never notice that `--dry-run` — the surface a user consults precisely to find out what an uninstall will do — says nothing about the shelf at all |
-| `quse-shelf-name-case-sensitive` | **15**, 9 | `src/core/manifest.js` | replace Table X row **X12**'s ASCII fold in X1 step 2's exclusion with byte equality (`name === 'quarantine'`), restoring the round-4 defect exactly | *new — authored by this package*, so no pre-measurable anchor exists; the mutation site is step 2's name test | *Round 4.* Criteria 15 and 9's case-fold arm assert that a capitalized shelf and the bytes inside it **survive**. Both are survival assertions, and both go green on any fixture that never created the capitalized directory, created it on the wrong volume, or left it empty when the interleaved preserve was supposed to fill it. **The defect is also invisible to every existing assertion in this package**: X10 and X11 classify types and ancestors, not names, so nothing already declared reddens under this mutation |
+**The `Criterion` column below is THIS file's numbering, re-derived at the done-flip
+(erratum 4) and byte-checked against the shipped
+`tests/red-proofs/adr-0019-quarantine-uninstall-gate.proofs.json` on `origin/main`
+at `8b4cbd4c`.** It is a canonical column, not a placeholder.
 
-**Criterion numbers in the table above are the UNSPLIT document's** and are mapped to
-this spec's numbering by the closing section of
-`docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-review.md`.
-The implementer re-derives each `criterion` field against **this** file's numbering
-when writing the JSON, and says so in the PR body.
+| Proof id | Criterion | File | Mutation | Anchor at `1d8d4743` (occurrences) | What it proves |
+|---|---|---|---|---|---|
+| `quse-refusal-not-raised` | **1** | `src/cli/uninstall.js` | make the gate treat NON-EMPTY as EMPTY, so the run proceeds and deletes | `const vaultPath = readVaultPath(paths.config) \|\| paths.vault;` — **1** (the adjacent, unchanged pre-plan line the gate is inserted beside) | criterion **1** asserts an **abort**, and an abort assertion goes green whenever the run fails for any reason at all — a bad fixture, a missing manifest, a throw in unrelated setup. Same shape, same reason as `WP-scheduler-replay-manifest-independent`'s `srm-unreadable-root-read-as-empty` |
+| `quse-yes-skips-the-refusal` | **2** | `src/cli/uninstall.js` | gate the refusal on `!yes`, so a `--yes` run proceeds | `const yes = argv.includes('--yes');` — **1** | criterion **2** is the one the whole of Table W row **W2** rests on, and it is invisible to any suite that only ever drives the interactive path. A `--yes` suite that asserts "the run refused" passes under the mutation if it never actually passed `--yes` |
+| `quse-unreadable-shelf-read-as-empty` | **6** | `src/core/manifest.js` | make the walk's `catch` swallow the error and return `unreadable: []`, restoring the fail-open shape exactly | *new — authored by this package*, so no pre-measurable anchor exists; the mutation site is the inventory's error classification | criterion **6** asserts an abort **and** zero removals, and both halves go green on a fixture that never made the shelf unreadable. This is Table K row **K4** and Table Y row **Y5**, and it is the one failure that silently destroys the data rather than merely failing to protect it |
+| `quse-block-printed-on-an-empty-shelf` | **5** | `src/cli/uninstall.js` | print the block unconditionally, so an install with no shelf gets a `0 file(s), 0 bytes` block | `console.log('wienerdog uninstall — the following will be removed:\n');` — **1** | criterion **5** asserts **byte-identity with `1d8d4743`** for an install with no shelf. It is the criterion that keeps this package from changing every existing uninstall's output, and a byte-identity assertion is trivially satisfiable by a fixture that compares the wrong stream or an empty one |
+| `quse-dry-run-block-suppressed` | **4** | `src/cli/uninstall.js` | drop the block from the `--dry-run` arm while leaving the refusal intact | *new — authored by this package*, so no pre-measurable anchor exists; the mutation site is the `--dry-run` arm's own `quarantineBlock` call. *(Done-flip erratum 5: this cell named the headline line `item(s) would be removed, ${skipped.length} skipped.`; W5 puts the block BEFORE the headline, so no find-string built around that line can suppress the block.)* | criterion **4** observes **disclosure**, not the refusal. Without this declaration a suite can assert the refusal (which is loud) and never notice that `--dry-run` — the surface a user consults precisely to find out what an uninstall will do — says nothing about the shelf at all |
+| `quse-shelf-name-case-sensitive` | **11** | `src/core/manifest.js` | replace Table X row **X12**'s ASCII fold in X1 step 2's exclusion with byte equality (`name === 'quarantine'`), restoring the round-4 defect exactly | *new — authored by this package*, so no pre-measurable anchor exists; the mutation site is step 2's name test | *Round 4.* Criterion **11**'s case-fold arm asserts that a capitalized shelf and the bytes inside it **survive**. Both are survival assertions, and both go green on any fixture that never created the capitalized directory, created it on the wrong volume, or left it empty when the interleaved preserve was supposed to fill it. **The defect is also invisible to every existing assertion in this package**: X10 and X11 classify types and ancestors, not names, so nothing already declared reddens under this mutation |
+
+*(Done-flip erratum 4: this paragraph used to read "Criterion numbers in the table
+above are the UNSPLIT document's", mapped elsewhere, with the implementer asked to
+re-derive them when writing the JSON. Delegating a canonical column's values is
+exactly what ADR-0031 exists to stop; the column above is now this file's numbering.
+The unsplit document's mapping is still recorded in the closing section of
+`docs/specs/logbook/2026-09-18-adr-0019-quarantine-uninstall-export-design-review.md`
+for anyone reading that document.)*
 
 **Binding:** `scripts/red-proofs.js` refuses any red whose failure `code` is not
 `ERR_ASSERTION`, and requires each `expectRed` entry's non-empty `signal` to appear in
@@ -421,6 +702,19 @@ here on the spot.
       (`roots`/`entries`/`bytes` → **K2**/**K3**, `unreadable` → **K3**/**K4** and
       ruling **R-Y1**, `blockers` → **K2** and ruling **R-K**). A field added,
       renamed or re-described there and not in Table K is a mirror break
+- [ ] **The acceptance-criteria list itself, as a CROSS-REFERENCE surface**
+      *(registered at the done-flip, erratum 3)* — every criterion number cited
+      anywhere in this spec mirrors that list's numbering: criterion 2's and
+      criterion 4's internal references, Table Y rows **Y1** and **Y7**, owner
+      item 2's flip sentence, the Platform-scope section's unreadable fixture,
+      and Table B's `What it proves` cells. A renumbering updates all of them in
+      the same commit
+- [ ] **Table B's `Criterion` and `Anchor` columns** *(registered at the
+      done-flip, errata 4 and 5)* — the `Criterion` column mirrors the
+      acceptance-criteria list and the shipped declaration file's `criterion`
+      fields; the `Anchor` column mirrors each declaration's `find` string and
+      its pre-measurability at the base `1d8d4743`. Neither may be left for the
+      implementer to re-derive
 - [ ] **The "PR-gate round 3 rulings" section** — it is a registered mirror of
       Tables **K**, **W** and **Y**, not a separate contract: **R-Y1** amends
       **Y1**, **R-K**/**R-K′** amend **K2** and **W4**, **R-W4-win32** amends
@@ -638,7 +932,7 @@ question: what the command does when it finds the shelf non-empty.
   unnamed before a byte is written, no shelf file deleted whose copy was not
   verified — must ship and be asserted. Table W rows **W4** and **W5** then name
   the destination instead of the remedy, Table W row **W9**'s two sentences say
-  where the copy goes, and acceptance criteria 3 and 4 flip from asserting a
+  where the copy goes, and acceptance criteria **1 and 2** flip from asserting a
   refusal to asserting a verified copy followed by a disclosed deletion. **Table
   X, Table K and the ADR amendment's first four paragraphs are unchanged under
   either answer.**
@@ -697,7 +991,7 @@ path for that package's `R-alias-outside-closure`. It is **open** there.
 - **The two doc edits are user-facing text for knowledge workers** (CLAUDE.md). Plain
   language, no jargon, no file path the surrounding text has not already given, and the
   *"may be the only copy"* hedge is never strengthened.
-- **Re-derive every line number at dispatch.** This spec is pinned to `5b77865f`, and
+- **Re-derive every line number at dispatch.** This spec is pinned to `1d8d4743`, and
   `WP-scheduler-replay-manifest-independent` and `WP-quarantine-only-copy-shelf` land
   in these files first. Cite what you find, not what this spec predicted.
 - When uncertain: choose the simpler option and note it in the PR description under
@@ -716,7 +1010,8 @@ package touches is therefore host-agnostic and **fully executable on the
 development machine**: the inventory is a directory walk, the carve-out is an
 `fs.rmSync` that does not happen, and the refusal is a thrown error.
 
-The one platform-shaped question is the **unreadable** fixture of criterion 8: a
+The one platform-shaped question is the **unreadable** fixture of criterion **6**
+(renumbered at the done-flip, erratum 3): a
 `chmod 0000` directory does not produce `EACCES` for a privileged user, and
 Windows permissions do not map onto it. Assert it by **injecting the failure**
 (a `readdir`/`lstat` that throws a given `code`), as the repo's other
@@ -774,40 +1069,54 @@ platform, in any test.
       and its message contains the total entry count, the **total size in bytes
       as a plain integer**, both existing shelf directory paths with their own
       counts, the "may be the only copy" hedge, and the two-line remedy.
-- [ ] **2.** *(Table W row **W2**, Table Y row **Y7**.)* Criterion 3 holds
+- [ ] **2.** *(Table W row **W2**, Table Y row **Y7**.)* Criterion **1** holds
       identically for `wienerdog uninstall --yes`, and the refusal's text is
       **byte-identical** between the two runs.
 - [ ] **3.** *(Table K row **K6**, Table Y row **Y1**.)* Given a shelf file whose
       basename and whose contents are each a distinctive string, the refusal's
       **complete** stdout+stderr contains neither. Asserted over both strings,
       with the fixture first shown to place both on disk.
-- [ ] **4.** *(Table W row **W5**.)* With a non-empty shelf, `--dry-run` **exits
-      0**, prints the block with the same counts and byte total as criterion 3's
-      refusal, prints the line saying a real run stops there, and still prints
-      today's plan — in which `<state>` no longer appears under the
-      machine-generated-state heading and the preserved shelf does.
-- [ ] **5.** *(Table W row **W6**, Table X row **X4**.)* On an install with no
+- [ ] **4.** *(Table W row **W5**, first half.)* With a non-empty shelf,
+      `--dry-run` **exits 0**, prints the block with the same counts and byte
+      total as criterion **1**'s refusal, prints the line saying a real run stops
+      there, and still prints **today's plan, unchanged**. *(Done-flip erratum 1:
+      this criterion also required that the plan "no longer lists `<state>` under
+      the machine-generated-state heading and the preserved shelf does" — the
+      carve-out and the `preservedQuarantine` rendering, both of which belong to
+      `WP-uninstall-shelf-deletion-guards`. This package changes no deleter, and
+      its own verification block's `! grep preservedQuarantine` step forbids that
+      field appearing in its diff.)*
+- [ ] **5.** *(Table W row **W6**.)* On an install with no
       shelf entries, the **complete stdout of `--dry-run`, and of a full
-      `uninstall --yes`, is byte-identical to the same run at `5b77865f`.**
+      `uninstall --yes`, is byte-identical to the same run at `1d8d4743`.**
       Asserted against a captured expectation, not by absence of the new strings
       alone. **Two fixtures, and the second is the round-6 one that the first
       cannot catch:** (a) **no shelf directory at all**; (b) **both
       `<state>/quarantine/` and `<state>/quarantine/redacted/` present as
-      directories and empty** — the state the refusal asks the user to reach, and
-      the state in which a naive implementation reports three removed paths where
-      the baseline reports one. **Both the `Removed N item(s)` line and the
-      `--dry-run` mechanics plan are compared in full**, because X4's granularity
-      is visible in each of them and in neither alone.
+      directories and empty** — the state the refusal asks the user to reach.
+      **Both the `Removed N item(s)` line and the `--dry-run` mechanics plan are
+      compared in full**, because byte-identity is the whole claim and each
+      stream can hide a change the other shows. *(Done-flip erratum 1: this
+      criterion was attributed to Table **X4** and explained by that row's
+      `removed` granularity — "a naive implementation reports three removed paths
+      where the baseline reports one". X4 is
+      `WP-uninstall-shelf-deletion-guards`' row and describes its deleter; here
+      the claim is simply byte-identity with the base, which needs no deleter
+      behaviour to state.)*
 - [ ] **6.** *(Table K row **K4**, Table Y row **Y5**.)* A `<state>/quarantine`
       that exists but cannot be enumerated — asserted for at least `EACCES` and
       `EIO`, by injecting the failing `code` (Platform scope) — makes a
       non-dry-run `uninstall` **abort naming that directory and its `code`, with
       the manifest and the core still present and zero files removed**.
       `ENOENT`/`ENOTDIR` on the same path does **not** abort. `--dry-run` against
-      the unreadable shelf does **not** abort and reports it. **And at the
-      deleter:** `disposeCoreMechanics` given the same injected failure
-      **preserves** `<state>` and reports it in `preservedQuarantine` rather than
-      throwing or deleting.
+      the unreadable shelf does **not** abort and reports it. *(Done-flip
+      erratum 1: this criterion also asserted "**And at the deleter:**
+      `disposeCoreMechanics` … preserves `<state>` and reports it in
+      `preservedQuarantine`". `preservedQuarantine` is a return field this
+      package does not introduce and `disposeCoreMechanics` stays byte-unchanged
+      here; that half is `WP-uninstall-shelf-deletion-guards`' — Table Y row
+      **Y5** already says the rule is "closed by Table K row **K4** at both
+      sites", and the second site is the sibling's.)*
 - [ ] **7.** *(Table W row **W7**.)* `WP-scheduler-replay-manifest-independent`'s
       surfaces are undisturbed: its existing tests pass unchanged, its **D3**
       block still appears in `--dry-run` and in the pre-confirm plan, and its
@@ -839,15 +1148,20 @@ platform, in any test.
       arms. **(a)** With `<state>` holding a directory named **`Quarantine`** that
       contains a file, `quarantineInventory` **counts that file**, the run
       **refuses**, and the refusal names the directory **by its actual on-disk
-      name**. **(b)** With `<state>` holding a **non-empty** `Quarantine` and the
-      sweep driven directly, X1 step 2 **does not recursively delete it** — every
-      byte in it survives — and it is reported in `preservedQuarantine`. **(c)**
-      The ambiguity rule: a child whose name folds equal but is **not byte-equal**
-      to `quarantine` is **preserved and reported** even when the byte-exact
-      lowercase `quarantine` also exists beside it (a case-sensitive-volume
-      fixture), and `<state>` is then preserved too by X1 step 3's existing
-      `ENOTEMPTY` rule. Every arm asserts against an **explicit ASCII fold**, not
-      `toLowerCase`.
+      name**. **(b)** The ambiguity rule, on the INVENTORY side: a child of
+      `<state>` whose name folds equal to `quarantine` but is **not byte-equal**
+      to it is still located and counted **even when the byte-exact lowercase
+      `quarantine` also exists beside it** (a case-sensitive-volume fixture), and
+      each is reported in `roots` by its actual on-disk path. Both arms assert
+      against an **explicit ASCII fold**, not `toLowerCase`. *(Done-flip erratum
+      1: the criterion's arms (b) and (c) drove "X1 step 2" — the sibling's sweep
+      — and asserted `preservedQuarantine` and X1 step 3's `ENOTEMPTY` rule. The
+      sweep half of both arms is
+      `WP-uninstall-shelf-deletion-guards`'; what survives here is the inventory
+      half, which is what `quarantineInventory` can be asked. **Note also that
+      K8's fold-versus-`toLowerCase` rule is not observable for these two names**
+      — see reviewer note (d) at the top of this file — so the reddening evidence
+      is the byte-equality mutation `quse-shelf-name-case-sensitive`.)*
 - [ ] **12.** The declared RED proofs of Table B are `PROVEN` in an **UNFILTERED**
       `npm run red-proofs` run, with no `FILTERED`, `VACUOUS`, `UNCONTROLLED` or
       `FAILED` verdict.
@@ -863,7 +1177,7 @@ test -f src/core/manifest.js && grep -n 'quarantine' src/core/manifest.js
 test -f src/cli/uninstall.js && grep -n 'quarantine' src/cli/uninstall.js
 
 # This package changes NO deleter: disposeCoreMechanics keeps its single recursive
-# sweep and contains() keeps its one vault-guard call site, exactly as at 5b77865f.
+# sweep and contains() keeps its one vault-guard call site, exactly as at 1d8d4743.
 # Both must print, unchanged.
 test -f src/core/manifest.js && grep -Fn 'if (!dryRun) fs.rmSync(dir, { recursive: true, force: true });' src/core/manifest.js
 test -f src/core/manifest.js && grep -Fn 'contains(dir, vaultPath)' src/core/manifest.js

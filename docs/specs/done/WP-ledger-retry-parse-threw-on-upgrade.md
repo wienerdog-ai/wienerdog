@@ -1,7 +1,7 @@
 ---
 id: WP-ledger-retry-parse-threw-on-upgrade
 title: Give the hardened parser one bounded second look at transcripts quarantined parse-threw before it existed
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-transcript-parsers-harden-text-values]
@@ -10,6 +10,162 @@ epic: transcript-fault-boundary
 ---
 
 # WP-ledger-retry-parse-threw-on-upgrade: Give the hardened parser one bounded second look at transcripts quarantined parse-threw before it existed
+
+> **Errata, 2026-09-21 (post-merge) — six spec-prose facts falsified by
+> measurement, and one set of mirror-only contract facts folded into the table
+> that should own them. None is a defect in what shipped.**
+>
+> **Landed in PR #307** (merge `c73676bf`, 2026-09-19 00:08:07 UTC), tip
+> `eedde8ab`, branch `wp/ledger-retry-parse-threw-on-upgrade`. The implementer
+> reports running both gates itself over two rounds — round 1 blocked on three
+> sentences of ADR-0023 Amendment 4 that the code in the same commit falsified,
+> round 2 clean — and none of that was posted on the PR, so **both gates were
+> re-run independently by the orchestrator on the same tip and both are clean.**
+> The independent gate (Codex plugin `review` on `gpt-6-astra`, detached
+> worktree, porcelain identical) returned *"No actionable regressions found. The
+> retry preserves record identity, leaves unrelated quarantines untouched, and
+> persists its one-shot marker without changing dry-run state."* wd-reviewer
+> (spec fidelity, detached worktree) returned **APPROVE**: `npm test` 2924 /
+> 2912 pass / **0 fail** / 12 skipped; `npm run lint` 0; `boundary-check` 0 over
+> 7 files (6 Deliverables rows + this spec); the `SELECTSTATE AND
+> RECORDQUARANTINED UNCHANGED OK` gate re-diffed by hand; the upgrade gate
+> reproduced in all three states (base → `no one-time parse-threw retry`;
+> widened reason → `expected exactly 2 conversions, got 8`; head →
+> `PARSE-THREW RETRY OK`); **all five** RED declarations hand-applied with
+> measured sets identical to the declarations and every red `ERR_ASSERTION`
+> with its signal; 21 sibling declarations over `ledger.js` / `dream.js` still
+> finding their `find` at declared count; Amendment 4 checked sentence by
+> sentence against the code with no false sentence remaining; version-1 ledgers
+> serializing byte-identically across six measured shapes; no owner-approval
+> claim in the diff. CI on `eedde8ab`: seven checks pass.
+>
+> **Red-proofs verdict on the merged tip.** The implementer's **UNFILTERED**
+> `npm run red-proofs`, exit 0: `RUN: PROVEN`, **186 declarations reported
+> `PROVEN`**, and **zero** `FILTERED`, `VACUOUS`, `UNCONTROLLED`, `FAILED` or
+> `ERROR` verdicts — including `pointer-derivation-doctor`, the sibling
+> declaration whose `file` is the file this package edits, which criterion 6
+> names as the concrete risk. All five `expectRed` sets were re-measured after
+> the round-1 `Object.create(null)` fix and were unchanged.
+>
+> **Owner item 1 shipped under the standing process. ADR-0023 Amendment 4 is on
+> `main` reading `Status: **ACCEPTED under standing authorization 2026-09-18 —
+> owner signature pending.**` (`docs/adr/0023-…:520`).** Nothing in this
+> repository records the owner approving, accepting, ratifying or signing it.
+>
+> **Erratum 1 — acceptance criterion 6 counts three Table B declarations; Table
+> B declares five.** *What is wrong:* criterion 6 reads *"reports `RUN: PROVEN`
+> for all **three** Table B declarations"*. *What is true:* Table B has **five**
+> rows — `rpt-deletion-instead-of-deferral`, `rpt-reason-filter-widened`,
+> `rpt-gate-never-set`, `rpt-gate-not-persisted`,
+> `rpt-reason-dropped-on-conversion` — and five were written, measured and
+> proven; `tests/red-proofs/ledger-retry-parse-threw.proofs.json` on
+> `origin/main` at `8b4cbd4c` holds exactly those five ids. *Routing:*
+> **corrected in place**, and the criterion now defers to Table B for the count
+> rather than restating it, which is what stops the number going stale again.
+> **Class: an acceptance criterion pinning a count its canonical table owns.**
+>
+> **Erratum 2 — Table B's `rpt-deletion-instead-of-deferral` predicts a
+> narrower red set than the runner measures.** *What is wrong:* the row says
+> *"only the at-or-below-baseline case reddens"*. *What is true:* the prediction
+> holds **inside** `[LRP-1]` — its above-baseline assertion stays green and its
+> at-or-below-baseline one fails, which is the property the row exists to
+> establish — but `[LRP-2]` and `[LRP-3]` redden too, because they observe the
+> record's continued **existence** and its written **shape**, both of which a
+> deletion destroys. Measured: the shipped declaration's `expectRed` names
+> `[LRP-1]`, `[LRP-2]` and `[LRP-3]`, and the declaration's own `why` was
+> corrected to say so before merge. This is the **third** package in a row where
+> a Table B row predicts per-criterion while the runner measures everything
+> `testNamePattern` selects. *Routing:* **corrected in place**, and the row now
+> states the intra-test property it owns (`[LRP-1]`'s two arms) and says
+> explicitly that the red set is *at least* that, measured in the declaration.
+> **Authoring rule recorded with it:** write a Table B prediction as "at least"
+> or per-test, never as an exact set a `testNamePattern` will widen.
+> **Class: a canonical table predicting a measurement's scope instead of
+> deferring to it.**
+>
+> **Erratum 3 — five `src/core/dream/ledger.js` line cites were stale at
+> authoring time and are staler now.** *What is wrong:* Current state and
+> Table A cite `readLedger` `:139-157`, `writeLedger` `:160-177`, `selectState`
+> `:235-263`, the baseline check `:260-261` and `secretDeferralCount`'s reason
+> guard `:288-289`, all pinned to base `08de2bc3`. *What is true:* they were
+> already off by one to two lines at that base — the gate measured `readLedger`
+> `140-158`, `writeLedger` `162-178`, `selectState` `235-264`, the baseline at
+> `:262` — and this package's own 100-odd added lines moved them again.
+> Re-derived construct by construct on `origin/main` at `8b4cbd4c`:
+> **`readLedger` `:163-182`, `writeLedger` `:186-203`, `selectState`
+> `:320-349`, the baseline check `:347`, `secretDeferralCount` `:368-390` with
+> its reason guard at `:374`, `recordQuarantined` `:411-419`, and
+> `retryParseThrewOnce` itself `:250-287`.** *Routing:* **re-pinned in place to
+> the landed tree**, with the construct kept adjacent to every number, because
+> the construct is what authenticates the cite and the number will move again
+> the next time a sibling lands in this file. **Class: line cites in a file the
+> package itself grows.**
+>
+> **Erratum 4 — the `tests/unit/dream-pipeline.test.js` Deliverables cell
+> glosses criterion 5 as the wrong criterion.** *What is wrong:* the cell reads
+> *"Whatever acceptance criterion 5 requires — **the sweep observed through a
+> real run**"*. *What is true:* criterion 5 is *"**A dry run changes nothing on
+> disk**"*, the `--dry-run` criterion; the real-run observation belongs to
+> criteria 1, 3 and 4. The Mirrored Surface Checklist has it right (criterion 5
+> → Table A row A5, whose dry-run clause it is). *Routing:* **corrected in
+> place** — the cell now names the dry-run criterion, which is what the file
+> actually carries. **Class: a Deliverables cell paraphrasing a criterion it
+> points at.**
+>
+> **Erratum 5 — the Mirrored Surface Checklist's Amendment-4 bullet mislabels
+> the round-1 findings.** *What is wrong:* the bullet says *"two of its
+> sentences were measured false against the code in the commit that created them
+> (the key's **byte-compatibility** claim, and 'the retry never runs on a
+> preview')"*. *What is true:* **three** sentences were corrected, and the first
+> one named is the corrected form rather than the false one. Both gates agreed
+> on: (1) *"A ledger that has never needed the retry does not gain the key"* —
+> **false**, because `retryParseThrewOnce` sets the marker unconditionally, so
+> the first later write carries it on every install (the **key-acquisition**
+> claim; byte-compatibility is what the FIX says — the key is optional *in the
+> serializer*, so a ledger written by code that has not run the retry stays
+> byte-identical); (2) *"older code that drops the key causes at most one extra
+> reconsideration"* — an **understatement**, since each marker-erasing rewrite
+> authorizes another retry, so the bound is **per marker, not global**; and (3)
+> *"The retry never runs on a preview"* — **false**, because the sweep runs in
+> memory on `--dry-run` (that is how the plan is truthful) and only the write is
+> suppressed. *Routing:* **corrected in place**, naming all three. **Class: a
+> checklist bullet summarizing findings it does not quote.**
+>
+> **Erratum 6 — two contract facts existed only in Amendment 4's prose and in
+> the code, never in the table that owns them.** *What is wrong:* Table A row
+> A4 defines the one-shot gate but says nothing about what a **missing,
+> empty or non-string** marker means, and nothing about the **scope of the
+> bound**. Both facts were decided at round 1 and written only into the ADR
+> amendment — a registered mirror — which is the ADR-0031 failure mode inverted:
+> the mirror carrying what the canonical cell does not. *What is true*, measured
+> on `origin/main` at `8b4cbd4c`: `optionalParseThrewRetry` (`ledger.js:156`)
+> carries the key only when its value is a **non-empty string**, so an absent,
+> empty or non-string marker **is no marker** and the retry runs; and the gate
+> at `:251` compares against `PARSE_THREW_RETRY_MARKER`
+> (`'parse-threw:harden-text-values'`, `:59`), so the bound is **per marker, not
+> global** — a different marker value is a different, deliberate retry, and
+> older code that drops the key authorizes one more reconsideration each time it
+> does. *Routing:* **folded into Table A row A4**, the cell that decides the
+> gate, with Amendment 4's prose left as its registered mirror. **Class: a
+> canonical cell thinner than its own mirror.**
+>
+> **Process finding recorded with this filing.** When a spec carries a
+> conditional ADR-amendment deliverable, **pin the amendment's byte-exact text
+> in the spec**, as sibling packages do, so the implementer copies a block
+> instead of authoring a new, unregistered mirror of the spec's own contract
+> table. Every blocking finding in round 1 came from that one gap.
+>
+> **Reviewer notes, non-errata** (recorded rather than dropped). (a)
+> `retryParseThrewOnce` rebuilds `ledger.files` on a null prototype, so a future
+> test comparing a post-sweep `files` against an object literal with
+> `assert.deepStrictEqual` would fail on the prototype; the shipped suite is
+> unaffected. (b) `retryParseThrewOnce` overwrites a *foreign* value under
+> `parse_threw_retry` with its own marker — bounded and symmetric with erratum
+> 6's per-marker bound, and a note for whoever writes the second retry. (c) Row
+> A5's `converted > 0 && !dryRun` persistence guard was traced end to end and
+> explicitly cleared: a converting run persists the marker and the conversions
+> in the same atomic write, and the residual is an idle install paying one
+> `Object.entries` pass — zero I/O, zero re-parse.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -67,13 +223,18 @@ re-check that claim at dispatch rather than assuming it.
 **`src/core/dream/ledger.js`** is the only production file this package edits.
 Four of its constructs decide everything here:
 
-1. **The quarantine record, `recordQuarantined` (`:326-334`)** writes exactly
+**Line cites below were re-pinned at the done-flip (erratum 3) to `origin/main`
+at `8b4cbd4c` — the LANDED tree, which includes this package's own additions.
+The construct name is what authenticates each cite; the number moves whenever a
+sibling lands in this file.**
+
+1. **The quarantine record, `recordQuarantined` (`:411-419`)** writes exactly
    `{fingerprint: fingerprint(disc), outcome: 'quarantined', reason, updated_at, harness}`
    through `withRecord`. **It carries no version and no counter.** `appVersion`
    does exist in this file — but only on `oversizedExtracts` memo entries
-   (`:103`, `:118-125`, `normalizeOversizedExtracts`), which are a different map
+   (`normalizeOversizedExtracts`), which are a different map
    with a different lifecycle and are not quarantine records.
-2. **`selectState(ledger, disc)` (`:235-263`)**, in order: a present-but-corrupt
+2. **`selectState(ledger, disc)` (`:320-349`)**, in order: a present-but-corrupt
    record → `'select'`; a quarantined record whose `reason` is
    `SECRET_REVERT_EXHAUSTED_REASON` → `'skip-quarantined'` **without consulting
    the fingerprint** (the one sticky arm); then
@@ -82,26 +243,30 @@ Four of its constructs decide everything here:
    `'skip-quarantined'`, `deferred` → `'select'`, default → `'select'`. With
    **no record at all**, it falls through to
    `if (typeof baseline === 'number' && disc.mtimeMs <= baseline) return 'skip-processed';`
-   (`:260-261`) and only then to `'select'`. **The baseline check is reached
+   (`:347`) and only then to `'select'`. **The baseline check is reached
    ONLY on the no-record path** — a record that is present and whose fingerprint
    matches never consults it. That asymmetry is the whole of Table A rows A1 and
    A9: a *removed* record is not the same as a retryable one, and `'deferred'`
    is the outcome that already means "retry".
-3. **`readLedger(stateDir)` (`:139-157`)** returns a fresh `emptyLedger()` on
+3. **`readLedger(stateDir)` (`:163-182`)** returns a fresh `emptyLedger()` on
    anything missing, corrupt or malformed — fail closed — and otherwise returns
    an object it **hard-pins to `version: 1`**. It never reads `obj.version`.
-4. **`writeLedger(stateDir, ledger)` (`:160-177`)** serializes exactly
+4. **`writeLedger(stateDir, ledger)` (`:186-203`)** serializes exactly
    `{version: 1, baseline_mtime, files, oversizedExtracts?}` — via
    `optionalOversizedExtracts`, which omits the memo map when empty to keep
    version-1 ledgers byte-compatible. **Any top-level key not in that literal is
    silently dropped on the next write**, which is why a one-shot marker is not
    free (Table A row A4).
 
-**`src/cli/dream.js`** — `:708` reads the ledger, `:709-711` applies the
-existing one-time `migrateFromWatermarks` migration and persists it with
-`if (mig.migrated && !dryRun)`, and `:712` calls `collectExtracts`. That
+**`src/cli/dream.js`** — at base `08de2bc3`, `:708` read the ledger, `:709-711`
+applied the existing one-time `migrateFromWatermarks` migration and persisted it
+with `if (mig.migrated && !dryRun)`, and `:712` called `collectExtracts`. That
 three-line shape is the precedent Table A row A5 tells the implementer to copy,
-and its comment at `:705-707` already carries the dry-run rule.
+and its comment already carries the dry-run rule. On the landed tree
+(`origin/main` at `8b4cbd4c`) the same three constructs are `readLedger` at
+`:717`, `migrateFromWatermarks` at `:718`, this package's
+`retryParseThrewOnce` at `:735` and `collectExtracts` at `:744` (done-flip
+erratum 3).
 
 **`src/core/dream/scratch.js`** — `collectExtracts` calls `selectState` for each
 discovered file and skips before parsing; the `parse-threw` fault boundary
@@ -126,7 +291,7 @@ the reason for the `occurrences` sweep under "Implementation notes".
 | modify | src/core/dream/ledger.js | Table A in full — rows A1–A5. No change to `selectState`, to `recordQuarantined`, or to any record's shape |
 | modify | tests/unit/ledger.test.js | Whatever the acceptance criteria require in this file, including the upgrade test (criterion 1) |
 | modify | src/cli/dream.js | Table A row A5 only — the one call site that applies the sweep and persists it. Nothing else in this file |
-| modify | tests/unit/dream-pipeline.test.js | Whatever acceptance criterion 5 requires — the sweep observed through a real run |
+| modify | tests/unit/dream-pipeline.test.js | Whatever acceptance criterion 5 requires — **the DRY-RUN criterion**: a `--dry-run` over a ledger holding `parse-threw` records reports what it would convert and leaves the ledger file byte-identical (done-flip erratum 4) |
 | create | tests/red-proofs/ledger-retry-parse-threw.proofs.json | Table B — `suite` is `tests/unit/ledger.test.js` |
 | modify | docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md | Table A row A7 — **only if** owner item 1 is resolved in favour of an amendment. Absent that, this file is not touched |
 
@@ -160,12 +325,12 @@ decided.
 
 | Row | Fact / rule | Value |
 |-----|-------------|-------|
-| A1 | The mechanism | **CONVERT the record to a deferred one. Do not delete it, and do not add a `selectState` branch.** For each entry in `ledger.files` whose `outcome` is `'quarantined'` **and** whose `reason` is exactly `'parse-threw'`, rewrite that entry to `{fingerprint: <unchanged>, outcome: 'deferred', reason: 'parse-threw', updated_at: <now>, harness: <unchanged>}` — same key, same fingerprint, and **no `deferrals`**. `selectState` then takes the record-present path, matches the fingerprint, and hits `case 'deferred': return 'select'` (`src/core/dream/ledger.js:255-256`). **`selectState` is not edited and no new field is introduced**: `outcome: 'deferred'` and `reason: 'parse-threw'` are existing values of existing keys. **Deletion was the round-1 design and it is WRONG — row A9.** |
+| A1 | The mechanism | **CONVERT the record to a deferred one. Do not delete it, and do not add a `selectState` branch.** For each entry in `ledger.files` whose `outcome` is `'quarantined'` **and** whose `reason` is exactly `'parse-threw'`, rewrite that entry to `{fingerprint: <unchanged>, outcome: 'deferred', reason: 'parse-threw', updated_at: <now>, harness: <unchanged>}` — same key, same fingerprint, and **no `deferrals`**. `selectState` then takes the record-present path, matches the fingerprint, and hits `case 'deferred': return 'select'` (`src/core/dream/ledger.js`, `selectState`'s `case 'deferred'` arm — `:340` on the landed tree). **`selectState` is not edited and no new field is introduced**: `outcome: 'deferred'` and `reason: 'parse-threw'` are existing values of existing keys. **Deletion was the round-1 design and it is WRONG — row A9.** |
 | A9 | Why deletion is wrong, and why `deferred` is the fix — MEASURED | **Deleting the record does not reliably select the file.** The no-record path consults the baseline first, so a file whose `mtimeMs` is at or below `baseline_mtime[harness]` answers **`skip-processed`**. That is reachable: a path that already carries a record is restored from a backup or a sync with an **older** timestamp; its changed fingerprint lets it be parsed, the unhardened parser throws, and it is quarantined `parse-threw` with an mtime below the baseline. After a deletion it is then **silently treated as already processed** — the hardened parser never runs, **and** removing the record also removes its line from `reports/warnings.md`, so the user loses the session *and* the notice of having lost it. Measured on the base tree with `baseline_mtime.codex = 2000` and a file at `mtimeMs = 1000`: quarantined → `skip-quarantined`; **after deletion → `skip-processed`**; **converted to `deferred` → `select`**. Conversion works because the baseline sits on the no-record path alone, so keeping *any* matching-fingerprint record bypasses it. Found by the design gate, round 2 (Astra, medium, band A). |
-| A10 | The converted record does not disturb the secret-revert budget — MEASURED | `secretDeferralCount`'s `deferred` arm (`src/core/dream/ledger.js:288-289`) begins `if (rec.reason !== SECRET_REVERT_REASON) return 0;`, so a `deferred` record carrying `reason: 'parse-threw'` and no `deferrals` counts as **0** deferrals — the full budget, not an invented exhaustion. Measured on the base tree: `secretDeferralCount` returns `0` for exactly the record row A1 writes. **This is why row A1 keeps `reason: 'parse-threw'` on the converted record rather than dropping it:** the reason is what makes the record legible to that guard, and it is what tells the next reader why a deferral exists. |
+| A10 | The converted record does not disturb the secret-revert budget — MEASURED | `secretDeferralCount`'s `deferred` arm (`src/core/dream/ledger.js:373-374` on the landed tree) begins `if (rec.reason !== SECRET_REVERT_REASON) return 0;`, so a `deferred` record carrying `reason: 'parse-threw'` and no `deferrals` counts as **0** deferrals — the full budget, not an invented exhaustion. Measured on the base tree: `secretDeferralCount` returns `0` for exactly the record row A1 writes. **This is why row A1 keeps `reason: 'parse-threw'` on the converted record rather than dropping it:** the reason is what makes the record legible to that guard, and it is what tells the next reader why a deferral exists. |
 | A2 | What it must not touch | Every record whose `outcome` is not `'quarantined'`; every quarantined record whose `reason` is anything other than `'parse-threw'` — including `over-ceiling`, `too-many-lines`, `read-error`, `secret-revert`, `secret-revert-exhausted`, a missing `reason`, a non-string `reason` and a reason from a later schema; `baseline_mtime`; and `oversizedExtracts`. The match is a **positive equality test on our own literal**, never a rejection list. |
 | A3 | What happens to a file that still fails | **Nothing new.** The dream's existing `parse-threw` fault boundary re-quarantines it under the same reason, with a fresh `updated_at`, exactly as it would a file it had never seen. No code in this package participates. |
-| A4 | The one-shot gate, and why it costs new state | The sweep must run **once per install**, not nightly: after `WP-transcript-parsers-harden-text-values`, a `parse-threw` can still arise outside the four hardened joins (the metadata path), and re-reading, re-parsing and re-throwing on such a file every night is the repeated cost ADR-0023's quarantine exists to stop. (Row A1's conversion sharpens this rather than softening it: `selectState` answers `'select'` for a `deferred` record on **every** run, so without the gate the sweep would re-arm that retry nightly.) The gate cannot live on the record (that is Table A row A2's promise and the Done spec's row A2). It cannot reuse the schema version either: `readLedger` hard-pins `version: 1` and never reads `obj.version` (`:139-157`). So it is **one new top-level ledger key**, written once — and because `writeLedger` (`:160-177`) serializes an explicit literal, `writeLedger`, `readLedger` and the `Ledger` typedef must all learn it or it is dropped on the next write. Its value is a **marker for this retry**, not a general app-version field: the package introduces exactly one retry, so a later retry needs a later marker and a deliberate decision, never an automatic re-run. |
+| A4 | The one-shot gate, and why it costs new state | The sweep must run **once per install**, not nightly: after `WP-transcript-parsers-harden-text-values`, a `parse-threw` can still arise outside the four hardened joins (the metadata path), and re-reading, re-parsing and re-throwing on such a file every night is the repeated cost ADR-0023's quarantine exists to stop. (Row A1's conversion sharpens this rather than softening it: `selectState` answers `'select'` for a `deferred` record on **every** run, so without the gate the sweep would re-arm that retry nightly.) The gate cannot live on the record (that is Table A row A2's promise and the Done spec's row A2). It cannot reuse the schema version either: `readLedger` hard-pins `version: 1` and never reads `obj.version` (`:163-182`). So it is **one new top-level ledger key**, written once — and because `writeLedger` (`:186-203`) serializes an explicit literal, `writeLedger`, `readLedger` and the `Ledger` typedef must all learn it or it is dropped on the next write. Its value is a **marker for this retry**, not a general app-version field: the package introduces exactly one retry, so a later retry needs a later marker and a deliberate decision, never an automatic re-run. **Two further facts this cell owns, folded in at the done-flip (erratum 6) from where they had been living — Amendment 4's prose and the code — so the cell that decides the gate states them:** (a) **an absent, empty or non-string marker IS NO MARKER and the retry runs.** The serializer carries the key only when its value is a non-empty string (`optionalParseThrewRetry`, `src/core/dream/ledger.js:156`), which is also what keeps a ledger that has never run the retry byte-identical to a version-1 ledger. (b) **The bound is PER MARKER, not global.** The gate compares against `PARSE_THREW_RETRY_MARKER` (`'parse-threw:harden-text-values'`, `:59`), so a different marker value is a different, deliberate retry — and older code that drops the key authorizes one more reconsideration each time it drops it, not one in total. |
 | A5 | Where it runs, and when it persists | Once per `wienerdog dream` invocation, in `src/cli/dream.js`, **after `readLedger` and before `collectExtracts`**, so the same run that converts the records also reconsiders the files. **There is an exact precedent to copy, three lines above the insertion point:** `migrateFromWatermarks` at `src/cli/dream.js:709-711` is a one-time, idempotent ledger migration that returns `{ledger, migrated}`, is applied between `readLedger` (`:708`) and `collectExtracts` (`:712`), and persists with `if (mig.migrated && !dryRun) ledgerLib.writeLedger(…)`. Take that shape. Its own comment (`:705-707`) already states the dry-run rule this row inherits: *"a preview run must not permanently mutate state. On dry-run the migrated ledger is used in-memory only; migration is idempotent, so the next real run re-migrates identically."* |
 | A6 | Idempotence, and what a crashed run leaves behind | Running `wienerdog dream` twice converts records on the first run and **zero** on the second, because the gate is set. This is the template's idempotence criterion, and it is acceptance criterion 4 rather than `N/A`. **A run that dies between the sweep's write and the collection leaves `deferred` `parse-threw` records, and that state is self-healing rather than stuck:** the gate stops the sweep re-running, but `selectState` answers `'select'` for a deferred record anyway, so the next run reconsiders those files once and writes their real outcome. `reports/warnings.md` may lag by one run in that window, which ADR-0023 Amendment 2 already permits in terms — `src/cli/doctor.js:487-493` states that the vault warnings file *"is derived from it and can legitimately lag by one dream run"*. |
 | A7 | ADR status | **Open — owner item 1**, and row A1's conversion strengthens the case rather than weakening it. `WP-dream-collect-parse-throw-quarantine`'s Table A row A12 concluded that `parse-threw` needed no ADR-0023 amendment *because* it introduced "no record field, no counter and no new state". **Two** things now exceed that premise: row A4's ledger-level gate, and row A1's new state transition `quarantined → deferred`, which also produces a record combination the tree has never held — a `deferred` record whose `reason` is not `secret-revert`. That filed spec's row **A2** still holds exactly (no new field, no counter, no stickiness; `recordQuarantined` untouched). Whether this is a lifecycle change ADR-0023 must record is the owner's call. **This package ships the same code either way**; only the ADR file moves, which is why its Deliverables row is conditional. |
@@ -177,11 +342,11 @@ decided.
 
 | Proof id | Criterion | Mutation (exact-substring, in `src/core/dream/ledger.js`) | What it proves |
 |----------|-----------|------------------------------------------------------------|----------------|
-| `rpt-deletion-instead-of-deferral` | 1 | replace Table A row A1's conversion with a deletion of the entry | **the round-2 defect, declared so it cannot come back.** Under the mutation every retry test whose file's `mtimeMs` is ABOVE `baseline_mtime` stays green — deletion selects those — and only the at-or-below-baseline case reddens. It is therefore also the proof that criterion 1's corpus contains such a file; a criterion-1 test built only from above-baseline files would observe nothing here |
+| `rpt-deletion-instead-of-deferral` | 1 | replace Table A row A1's conversion with a deletion of the entry | **the round-2 defect, declared so it cannot come back.** The property this row owns is INTRA-TEST: inside criterion 1's test, the above-baseline assertion stays green — deletion selects those — and the at-or-below-baseline assertion fails. It is therefore also the proof that criterion 1's corpus contains such a file; a criterion-1 test built only from above-baseline files would observe nothing here. **The red SET is wider than that property and is MEASURED in the declaration, never predicted here** — a deletion also destroys the record's existence and its written shape, which other tests in the same `testNamePattern` selection observe (measured: `[LRP-1]`, `[LRP-2]`, `[LRP-3]`). *Done-flip erratum 2: this cell previously read "only the at-or-below-baseline case reddens", an exact set the runner widened. Write a Table B prediction as "at least", or per-test, never as an exact set.* |
 | `rpt-reason-filter-widened` | 2 | widen Table A row A1's reason equality so it matches any quarantined record | the assertion observes **which** records survive, not merely that something was dropped. Under the mutation the retry still "works" for `parse-threw` and silently un-quarantines every sibling reason — including the sticky `secret-revert-exhausted`, which ADR-0023 Amendment 1 made sticky on purpose |
 | `rpt-gate-never-set` | 4 | remove the write of Table A row A4's one-shot marker | the assertion observes the **second** run, not just the first. Without the gate the sweep is correct once and then re-runs nightly, which is the bounded-cost property ADR-0023 exists for |
 | `rpt-gate-not-persisted` | 4 | remove the marker from `writeLedger`'s serialized literal | the gate is set in memory and lost on write — a defect invisible to any single-process test that does not round-trip through the file. This mutation is declared because Current state item 4 says the drop is silent |
-| `rpt-reason-dropped-on-conversion` | 3 | remove `reason: 'parse-threw'` from the record Table A row A1 writes | a `deferred` record with no reason still selects, so a test that only checks "the file was read again" stays green — while `secretDeferralCount`'s guard (`:288-289`) loses the value it keys on and the record stops saying why it is pending. The assertion observes the written record, not just the selection (Table A row A10) |
+| `rpt-reason-dropped-on-conversion` | 3 | remove `reason: 'parse-threw'` from the record Table A row A1 writes | a `deferred` record with no reason still selects, so a test that only checks "the file was read again" stays green — while `secretDeferralCount`'s guard (`:374`) loses the value it keys on and the record stops saying why it is pending. The assertion observes the written record, not just the selection (Table A row A10) |
 
 **`expectRed` sets are MEASURED, never predicted.** The Criterion column is
 authoring intent. Measure each set by hand-applying its mutation and running the
@@ -208,10 +373,17 @@ new mirror found in review is added here on the spot (register-new-mirrors):
 - [ ] **ADR-0023 Amendment 4's prose** (registered in review, PR #307, round 1):
       the amendment this package writes restates Table A rows A1, A2, A4, A5,
       A6, A9 and A10 in sentences, so it is a mirror and defers to that table.
-      Judge it as whole paragraphs, never grep windows — two of its sentences
-      were measured false against the code in the commit that created them
-      (the key's byte-compatibility claim, and "the retry never runs on a
-      preview"), which is the drift owner item 1's overrule cost names
+      Judge it as whole paragraphs, never grep windows — **three** of its
+      sentences were corrected against the code in the commit that created
+      them, which is the drift owner item 1's overrule cost names: *"A ledger
+      that has never needed the retry does not gain the key"* (FALSE — the
+      marker is set unconditionally; the **byte-compatibility** claim is what
+      replaced it, and it is about the serializer omitting the key, not about
+      the ledger never acquiring it), *"older code that drops the key causes at
+      most one extra reconsideration"* (an UNDERSTATEMENT — the bound is per
+      marker, not global: Table A row A4), and *"The retry never runs on a
+      preview"* (FALSE — the sweep runs in memory on `--dry-run`; only the write
+      is suppressed). *Corrected at the done-flip, erratum 5.*
 - [ ] Acceptance criteria that assert its facts — criterion 1 asserts Table A
       rows A1, A5 and **A9** (its at-or-below-baseline file); criterion 2
       asserts Table A row A2; criterion 3 asserts Table A rows A3, A1 and
@@ -227,7 +399,9 @@ new mirror found in review is added here on the spot (register-new-mirrors):
 - [ ] Current-state description — `recordQuarantined`'s field list and the
       absent version (Table A row A4), `selectState`'s arm order, its
       `deferred` arm, and the baseline check that sits on the no-record path
-      ALONE (rows A1, A8, A9), `secretDeferralCount`'s reason guard (row A10), `readLedger`'s pinned `version` and
+      ALONE (rows A1, A8, A9), `secretDeferralCount`'s reason guard (row A10),
+      **and every line cite in that section, re-pinned at the done-flip to
+      `origin/main` at `8b4cbd4c`** (erratum 3), `readLedger`'s pinned `version` and
       `writeLedger`'s explicit literal (row A4), the collector's pre-parse skip
       and its fault boundary (row A3), and the two existing proofs files
       (Implementation notes) — all pinned to base `08de2bc3`
@@ -340,8 +514,10 @@ new mirror found in review is added here on the spot (register-new-mirrors):
       a ledger holding `parse-threw` records reports what it would convert and
       leaves the ledger file byte-identical (Table A row A5).
 - [ ] 6. **The declared RED proofs are `PROVEN`.** The **UNFILTERED**
-      `npm run red-proofs` reports `RUN: PROVEN` for all three Table B
-      declarations **and** for every declaration this package did not write — in
+      `npm run red-proofs` reports `RUN: PROVEN` for **every row of Table B** —
+      the count is Table B's, not this criterion's; it is five (done-flip
+      erratum 1, which corrected "three") — **and** for every declaration this
+      package did not write — in
       particular `pointer-derivation-doctor`, whose `file` is the file this
       package edits — with no `FILTERED`, `VACUOUS`, `UNCONTROLLED`, `FAILED` or
       `ERROR` verdict anywhere.
@@ -402,7 +578,7 @@ assertions are fixed by Table A rows A1, A2, A3 and A6, the mechanics are not.
   `WP-transcript-parsers-harden-text-values` and its own further successor.
 - **`src/cli/doctor.js`, the digest banner and `reports/warnings.md`** — a
   converted record simply stops being an active quarantine —
-  `activeQuarantines` (`src/core/dream/ledger.js:390-399`) selects
+  `activeQuarantines` (`src/core/dream/ledger.js:475-484` on the landed tree) selects
   `outcome === 'quarantined'` only — and the run's own outcome then rewrites it,
   so none of the three needs an edit (Table A rows A6, A8).
 - **Amending ADR-0023 unless owner item 1 says so** (Table A row A7).

@@ -1,7 +1,7 @@
 ---
 id: WP-secret-sink-redact-before-truncate
 title: Scan the whole field value before the 2000-character cap at the three truncate-then-redact sinks
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-secret-sink-wiring-probes]
@@ -10,6 +10,130 @@ epic: secret-lifecycle
 ---
 
 # WP-secret-sink-redact-before-truncate: scan before the cap in `alerts.jsonl` and `run-evidence.jsonl`
+
+> **Errata, 2026-09-21 (post-merge) — two stale spec-prose facts, one new
+> accepted residual, and one recorded-not-swept cite drift. None is a defect in
+> what shipped.**
+>
+> **Landed in PR #303** (merge `42bd4836`, 2026-09-18 22:45:35 UTC), tip
+> `17070f40`. **Branch was `wp/redact-before-truncate`**, not the
+> `wp/secret-sink-redact-before-truncate` this spec's Definition of done item
+> 1(d) names — an orchestrator dispatch error, accepted-and-noted in the gate
+> comment and fixed in the dispatch template for the remaining packages in this
+> stream.
+>
+> **Two gate rounds; the PR carries the round-2 comment only.** Round 2 on
+> `17070f40`: wd-reviewer (spec fidelity) **APPROVE** — the delta
+> `9f5b0b6a..17070f40` mechanically confirmed as comments plus the logbook file
+> (`git diff -U0 -- src/ tests/` minus comment lines is empty); a fresh detached
+> worktree measured `npm test` 2908 / 2896 pass / **0 fail** / 12 skipped,
+> `npm run lint` 0, `boundary-check` 0, this spec's verification script
+> `ALL GATES PASSED`, and the three Table C `find` anchors still occurring
+> exactly once each; round-1 findings 1–5 closed. The independent gate (Codex
+> plugin `review` on `gpt-6-astra`) raised one `[P2]`, adjudicated below as
+> **accepted residual 3** and **not taken in this WP**. CI on `17070f40`: seven
+> checks pass.
+>
+> **Red-proofs verdict.** The implementer's **UNFILTERED** `npm run red-proofs`
+> was run on the round-1 tip `9f5b0b6a`: **106 declared proof(s), 106
+> selected**, `RUN: PROVEN`, with all three of this package's declarations
+> (`alerts-truncate-before-redact`, `run-evidence-argv-truncate-before-redact`,
+> `run-evidence-field-truncate-before-redact`) `PROVEN` and no `ERROR`,
+> `GATE FAIL` or `not ok` line anywhere in the run. It was **not re-run on the
+> merged tip**, and the PR body says so: the `9f5b0b6a..17070f40` delta changes
+> no line of `src/core/alerts.js` or `src/core/run-evidence.js` other than
+> comments and one doc-comment line wrap, so no Table C `find` anchor moved.
+> That is the verdict this record claims — the implementer's log on the round-1
+> tip, carried forward by a measured comment-only delta, not an independent
+> re-run on `17070f40`.
+>
+> **Erratum 1 — Current state (`:89`) pinned a `tests/red-proofs/` count that
+> was already stale when the work started.** *What is wrong:* *"`tests/red-proofs/`
+> holds **24** `*.proofs.json` files (count, do not assume)"*, pinned to `main`
+> at `08de2bc3`. *What is true:* the directory held **26** at the merged tip
+> `17070f40` (the implementer re-derived this at dispatch time and named the two
+> added files), **28** at the merge commit `42bd4836`, and — counted, not
+> assumed — **34** on `origin/main` at `8b4cbd4c` on 2026-09-21, the day this
+> record was written. *Routing:* **corrected in place**, and the sentence now
+> carries the same instruction its own parenthesis already gave: this is a
+> directory-wide total that every sibling package moves, so it is provenance,
+> never a contract. Nothing in this package depended on the number — the two
+> deletions and two creations are named individually in Deliverables.
+> **Class: a spec cell pinning a number it does not own.**
+>
+> **Erratum 2 — `src/core/alerts.js:48` is `:47` in the landed tree, in both of
+> the two places this spec cites it.** *What is wrong:* Table A row A1's
+> anchor cell reads `` `src/core/alerts.js` (`:48`) ``, and the Current-state
+> closure bullet's measured `grep -n 'slice(0' …` output lists `alerts.js:48`.
+> *What is true:* on `origin/main` at `8b4cbd4c` that grep returns
+> `src/core/alerts.js:47`, `src/core/run-evidence.js:64`, `:78` and `:91` — the
+> three `run-evidence.js` numbers are unmoved and only the `alerts.js` one is
+> off by one. *Routing:* **corrected in place, both mirrors in the same edit**,
+> as the Mirrored Surface Checklist's Table A bullet and Current-state bullet
+> require. The construct is what authenticates the site (this spec says so at
+> `:64-65`) and the construct is unchanged; nothing shipped wrong.
+> **Class: a line cite going stale in a file the package itself edits.**
+>
+> **Erratum 3 — a NEW accepted residual: entropy dilution by adjacent
+> same-alphabet padding.** The independent gate's round-2 `[P2]` reported that
+> `'.'.repeat(1968) + '0123456789abcdef0123456789abcdef' + 'F'.repeat(5000)`
+> writes the complete 32-character token through `recordRunEvidence` on this
+> tip, where the pre-fix order redacted it. **Reproduced**, then bounded with
+> controls run on both trees through the public entry point with the artifact
+> read from disk:
+>
+> | value | main `06ccdb95` | tip `17070f40` |
+> |---|---|---|
+> | `'.'×1968 + TOKEN + 'F'×5000` (the reported case) | redacted | **leaks** |
+> | `'.'×1968 + TOKEN` (ends at the cap, no padding) | redacted | redacted |
+> | `TOKEN + 'F'×5000` (same padding, no cap involved) | **leaks** | **leaks** |
+> | `TOKEN + 'F'×100` (132 chars, far under the cap) | **leaks** | **leaks** |
+>
+> `TOKEN` is the 32-character hex run above. Rows 3 and 4 are what make the
+> class pre-existing: a ≥24-character high-entropy token glued to
+> `[A-Za-z0-9+=/]` padding is **not a candidate by the scanner's own
+> definition** — `entropyPass` (`src/core/secret-scan.js:262`) measures Shannon
+> bits over the *maximal* candidate run against
+> `ScanLimits.ENTROPY_MIN_BITS_PER_CHAR` (3.5, `:28`), and the padding dilutes
+> the run below the floor — so it leaks on `main` today at every position except
+> one: when the 2000-character cap happened to fall inside the padding, the
+> pre-fix order severed the padding and the truncated run passed the floor **by
+> accident**. That accidental, cut-position-dependent catch is what the fix
+> loses; it was never a guarantee, and the same token 100 bytes earlier was never
+> protected. *Disposition — not taken in this WP*, for two independent reasons
+> recorded at adjudication: (a) the proposed remedy (a second `redactOnly` over
+> the capped result) contradicts this spec's frozen contract — Table A's three
+> byte-exact expressions, *"the same move … nothing else changes"*, and
+> verification steps AC1/AC2 which grep for exactly those expressions — and
+> would restore only the cap-position accident, not the class, while a second
+> pass can lengthen a field past the 2000-character bound (a short `key=value`
+> rewritten to `key=[REDACTED:generic-secret]`), which then needs a third cut;
+> (b) the defect belongs to the **scanner's entropy rule**, not to sink order.
+> Net: three deterministic labelled-token leaks closed against one accidental
+> entropy catch lost. *Routing:* **recorded as accepted residual 3 below**, with
+> the table above as its threat-model row. **Owner backlog candidate (not a
+> decision taken here): a scanner-side windowed- or run-boundary-entropy rule.**
+> **Class: a pre-existing detector limitation exposed by an order change, not
+> caused by it.**
+>
+> **Recorded, deliberately not swept.** This spec's Current-state bullet for
+> `src/core/secret-scan.js` — *"`ScanLimits.SCAN_MAX_BYTES` is `256 * 1024`
+> (`:22`); `redactOnly` is `:314-316`"* — shifted when
+> `WP-secret-stream-safe-cut-redactor` (PR #306) landed in that file: on
+> `origin/main` at `8b4cbd4c` the constant is `:26` and `redactOnly` is
+> `:325-327`. Both values are unchanged and the file was explicitly **not
+> modified by this WP**, so the drift is recorded in this one sentence rather
+> than swept — the numbers belong to a file this package does not own and will
+> move again.
+>
+> **Non-errata, recorded from the PR body.** The implementer rewrote three test
+> comments its own diff falsified (*"Cut before scan … keeps exactly
+> `PROBE_HEAD`"*, in `tests/unit/alerts.test.js` and `tests/unit/run-evidence.test.js`
+> ×2) to describe the shipped scan-before-cut order; the `Table S row S<n>`
+> provenance lines above each `test(` call were left untouched. Accepted
+> residual 2 stood at merge: this package closed three of the seven known sink
+> defects, and the four `WD-SINK-CHUNK-*` ids were still open — they close with
+> `WP-secret-sink-chunk-fix` (PR #310).
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -78,7 +202,7 @@ cited construct, which is what authenticates it.
   `scrub` it defines at `:78`, so site A3's fix covers that array too; there is
   no fourth truncate-then-redact expression in either file (measured:
   `grep -n 'slice(0' src/core/run-evidence.js src/core/alerts.js` returns
-  `run-evidence.js:64`, `:78`, `:91` and `alerts.js:48`, and `:91` is the
+  `run-evidence.js:64`, `:78`, `:91` and `alerts.js:47`, and `:91` is the
   `.slice(0, 20)` element-count bound on that array, not a character cap).
 - `tests/unit/alerts.test.js` — holds probes P1 (`:427`) and P2 (`:438`), the
   shared fixtures `PROBE`/`PROBE_HEAD`/`PROBE_TAIL`/`MARKER` (`:405-416`),
@@ -86,7 +210,9 @@ cited construct, which is what authenticates it.
   unused.
 - `tests/unit/run-evidence.test.js` — holds probes P3 (`:150`), P4 (`:161`),
   P5 (`:180`) and P6 (`:191`), with the same fixture block at `:124-148`.
-- `tests/red-proofs/` holds **24** `*.proofs.json` files (count, do not assume).
+- `tests/red-proofs/` holds `*.proofs.json` files whose total every sibling
+  package moves — **26** at this package's merged tip `17070f40`, **34** on
+  `origin/main` at `8b4cbd4c` on 2026-09-21 (count, do not assume; see erratum 1).
   Two of them — `secret-sink-wiring-probes-alerts.proofs.json` and
   `secret-sink-wiring-probes-run-evidence.proofs.json` — declare mutations that
   apply **this WP's fix** to prove the pre-fix probes were not vacuous. Once the
@@ -157,7 +283,7 @@ conversions), **C** (the RED declarations).
 
 | # | File | Enclosing construct (grep anchor) | Cap | Line in the literal block below |
 |---|------|-----------------------------------|-----|---------------------------------|
-| A1 | `src/core/alerts.js` (`:48`) | `sanitizeAlert`'s `scrub` | `MAX_FIELD_CHARS` (2000, exported) | the `A1` pair |
+| A1 | `src/core/alerts.js` (`:47`) | `sanitizeAlert`'s `scrub` | `MAX_FIELD_CHARS` (2000, exported) | the `A1` pair |
 | A2 | `src/core/run-evidence.js` (`:64`) | `sanitizeArgv`, per argv element | literal `2000` | the `A2` pair |
 | A3 | `src/core/run-evidence.js` (`:78`) | `sanitizeRecord`'s `scrub`, per scalar field and per `policyHooks.sources` element | literal `2000` | the `A3` pair |
 
@@ -330,6 +456,16 @@ review finding updates the table and all its mirrors **in the same commit**
 2. **This WP fixes three of the seven known sink defects.** The four
    `WD-SINK-CHUNK-*` ids stay open, their probes stay green-because-broken, and
    a green suite after this WP must not be read as "the sinks are safe".
+3. **Entropy dilution by adjacent same-alphabet padding** (added at the
+   done-flip; erratum 3 at the top of this file carries the measurement and its
+   four-case control table). A high-entropy token glued to `[A-Za-z0-9+=/]`
+   padding dilutes the maximal candidate run below
+   `ScanLimits.ENTROPY_MIN_BITS_PER_CHAR`, so `entropyPass` never treats it as a
+   candidate and it is written raw. This is a pre-existing property of the
+   detector, measured on `main` at every position; what this WP's order change
+   loses is the one accidental catch that occurred when the 2000-character cap
+   happened to sever the padding. Not fixable inside this package's frozen
+   Table A contract, and a scanner-side rule is the owner's call.
 
 ## Security checklist
 
