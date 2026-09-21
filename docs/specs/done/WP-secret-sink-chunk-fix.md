@@ -1,7 +1,7 @@
 ---
 id: WP-secret-sink-chunk-fix
 title: Close the whole-credential chunk-boundary leak at the four durable-log stream sinks
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-secret-sink-redact-before-truncate, WP-secret-stream-safe-cut-redactor]
@@ -10,6 +10,213 @@ epic: secret-lifecycle
 ---
 
 # WP-secret-sink-chunk-fix: wire the stream redactor into `brain.js` and `run-job.js`
+
+> **Errata, 2026-09-21 (post-merge) — ONE canonical-extraction pass over the
+> caller-side `logStream` cite, plus six errata. None is a defect in what
+> shipped.**
+>
+> **Landed in PR #310** (merge `391db43f`, 2026-09-19 04:54:27 UTC), tip
+> `983e17f4`, branch `wp/secret-sink-chunk-fix`, base `1d8d4743`. **One gate
+> round plus a LIGHT round 1b.** Round 1 on `17a1ca8f`: wd-reviewer (spec
+> fidelity) **APPROVE** — `npm test` 2992 / **0 fail**; lint; boundary exact
+> (9 Deliverables + this spec); this spec's 52-gate verification block
+> `ALL GATES PASSED`; all four Table Y RED mutations observed = declared; 16
+> sibling declarations across the three touched files unbroken; zero
+> owner-word hits (the only such string in the repo, `OWNER-APPROVED 2026-07-17`
+> in `brain.js`, is *removed* by Table V). **End-to-end with a pre-fix control:**
+> an adversarial child emitting a labelled key split across two flushed writes,
+> a PEM block one line per write with a body canary, `password:` + two blank
+> lines + value, then exactly 1 MiB of ordinary output — through `spawnBrain`
+> with a real on-disk log and through `runjob.run` under a temp HOME; durable
+> logs read from disk showed **zero canaries**, all three markers present, the
+> 1 MiB byte-preserved and `stderrTail` clean, while **the same test with the
+> three `src` files reverted to `1d8d4743` leaks at both sinks.** `end()` was
+> traced on every settle path; the watchdog-kill path was executed with
+> non-killing reap seams; mutating `shutdownTee` to latch-without-flush reddens
+> the new test and mutating `dream.js`'s `shutdown()` call reddens AC2b. The
+> independent gate (Codex plugin `review` on `gpt-6-astra`) raised one `[P2]`:
+> the new integration test read the log after `dream.run()` returned while
+> `logStream.end()` was unawaited — a genuine flake risk, closed in round 1b by
+> a bounded `waitForLog(logFile, AC2B_MARKER, 5000)` that the implementer
+> re-measured **red** under the round-2 defect (the wait expires and that
+> assertion is the red one). CI on `983e17f4`: seven checks pass.
+>
+> **Red-proofs verdict, and exactly what it covers.** The implementer's **bare
+> UNFILTERED** `npm run red-proofs` on the round-1 tip `17a1ca8f`:
+> `RUN: PROVEN`, with
+> `brain-stdout-per-chunk`, `brain-stderr-per-chunk`, `runjob-stdout-per-chunk`
+> and `runjob-stderr-per-chunk` all `PROVEN` (full log 410 lines, no `npm ERR`,
+> verdict on line 365). It was **not re-run for round 1b**; the orchestrator
+> verified mechanically that the `17a1ca8f..983e17f4` delta touches no RED
+> `find` anchor — checked across all 33 declaration files — so round 1's
+> `RUN: PROVEN` stands. That is the verdict this record claims.
+>
+> **With this merge all seven `WD-SINK-*` defects named by
+> `WP-secret-sink-wiring-probes` are closed** — three by
+> `WP-secret-sink-redact-before-truncate` (PR #303) and four here — and the
+> done record carries the dated Table Z block plus its directed sweep bullet.
+>
+> ---
+>
+> **CANONICAL-EXTRACTION PASS — the caller-side `logStream`, cited by construct
+> and never by number.** This is the round-1 architect ruling already recorded
+> below under **"PR-gate round 1 ruling (PR #310 review, 2026-09-19)"**, applied
+> to the whole spec at the done-flip rather than to the shipped comment alone.
+>
+> *The problem.* Three facts about the dream caller's log stream — **where it is
+> created**, **that it has no `'error'` listener**, and **that it is ended
+> unawaited after `runBrainWithWatchdog` returns** — were stated as the two line
+> numbers `src/cli/dream.js:922` and `:958`, restated in **four prose mirrors**
+> (Current state's `logStream` bullet, the watchdog-path bullet, the
+> `src/cli/dream.js` Deliverables cell, the Exact-contracts closing sentence and
+> the Discovered-issues residual) **and in the byte-exact `finally` literal the
+> implementer copies into `src/`**. Both numbers were wrong when the spec was
+> written and wrong again at every revision: the gate recorded the cite going
+> stale **three times in three revisions**, and the third time it shipped into a
+> source comment.
+>
+> *Measured.* `:922` and `:958` were pinned to `08de2bc3`. At this package's own
+> base `1d8d4743` the constructs are at **`:945`** and **`:981`**; on
+> `origin/main` at `8b4cbd4c` they are at **`:954`** and **`:990`**. The number
+> has no stable value because every sibling package that lands in `src/cli/dream.js`
+> moves it — including this one, which reindents 135 lines of that file.
+>
+> *The extraction.* The canonical statement of those three facts is **Table W's
+> `Shutdown, dream.js` row**, and it names them by **construct**:
+> the `createLogStreamPrivate(...)` call that opens the dream log for append
+> (`flags: 'a'`) for the creation, and `logStream.end()` inside the dream-log `finally` for the
+> unawaited close. Every mirror — the five prose surfaces and the published
+> literal — now cites the construct, and **no line number for either construct
+> survives anywhere in this spec**. The Mirrored Surface Checklist registers the
+> published `finally` literal as a mirror of that row, which it was not.
+>
+> *Why this and not a re-pin.* A re-pin is what the last three revisions did.
+> The construct is greppable, stable under reindentation, and — unlike the
+> number — cannot be silently falsified by a sibling merge; `docs/runbooks/spec-authoring.md`
+> already says a surface that keeps going stale predicting another surface's
+> content stops predicting and points.
+>
+> ---
+>
+> **Erratum 1 — Current state's `tests/red-proofs/` arithmetic (`:159-162`) is
+> stale in both of its numbers.** *What is wrong:* *"holds **25**
+> `*.proofs.json` files once the two dependencies have landed: 24 today … This
+> WP adds two, for **27**."* *What is true:* counted, not assumed — **31** at
+> this package's base `1d8d4743`, **33** at its merged tip `983e17f4` and at the
+> merge commit `391db43f`, and **34** on `origin/main` at `8b4cbd4c` on
+> 2026-09-21. The arithmetic was correct about the *delta* (+2) and wrong about
+> both endpoints, because the base moved under it. *Routing:* **corrected in
+> place**, and the sentence now states the delta as the contract and the totals
+> as dated provenance. **Class: a spec cell pinning a number it does not own.**
+>
+> **Erratum 2 — AC2's `shutdown` gate is a WHOLE-FILE budget, and it forced a
+> documentation defect.** *What is wrong:* the verification block asserts
+> `grep -c 'shutdown' src/core/dream/brain.js == 1`, labelled *"brain.js returns
+> shutdown (one definition site)"*. *What is true:* `grep -c` over a file counts
+> **every line** containing the string, so the budget silently forbids naming
+> `shutdown` in a JSDoc or a comment as well as at a second call site. Measured
+> on `origin/main` at `8b4cbd4c`: `src/core/dream/brain.js` contains the string
+> on exactly one line, `:611` — `return { child, done, shutdown: flushAndLatch };`
+> — and `spawnBrain`'s `@returns` consequently **under-describes** its own
+> return value, because documenting the third field would have broken the gate.
+> The reviewer found the under-description and attributed it correctly to this
+> spec, not to the implementer. *Routing:* **corrected in place** — the gate
+> becomes `grep -cF 'shutdown: flushAndLatch'` at 1, which pins the **one
+> definition site** the label always claimed to pin and leaves the JSDoc free,
+> and the criterion now requires `@returns` to name all three fields.
+> **Class: a verification command whose subject is wider than its label.**
+>
+> **Erratum 3 — AC10's ceiling is looser than the compliant diff, and the
+> compliant diff is not the number the step echoes.** *What is wrong:* the AC10
+> step allows `DREAM_ADD <= 12` and echoes *"(measured +9/-1 against the literal
+> block)"*. *What is true:* a ceiling three lines above compliance lets three
+> unrelated added lines through a gate whose whole purpose is that
+> `src/cli/dream.js`'s change is exactly the three edits of the literal block.
+> **And 9 is no longer the compliant value:** re-measured with
+> `git diff -w --numstat`, the churn is **+9/-1** at the round-1 tip `17a1ca8f`
+> and **+10/-1** at the merged tip `983e17f4` and at `origin/main` — round 1b's
+> construct-named cite (the extraction pass above) wrapped that comment onto one
+> more line. *Routing:* **corrected in place to `<= 10`**, with the echoed
+> measurement re-derived to `+10/-1` and dated, and with the rule stated once:
+> **this ceiling is the compliant value, not a margin above it — re-measure it
+> whenever the literal block changes.** `DREAM_DEL == 1` was right and is
+> unchanged. **Class: a bound set above the thing it bounds, and then measured
+> at the wrong tip.**
+>
+> **Erratum 4 — Table Z calls its published block "byte-exact" and the block
+> that shipped is not it.** *What is wrong:* Table Z's `Inserted text` cell
+> reads *"the fenced block published in full below, byte-exact"*, and the
+> published block has four bullets and no leading separator. *What is true:*
+> what landed in `docs/specs/done/WP-secret-sink-wiring-probes.md` differs in two
+> deliberate ways, both forced by constraints this same spec imposes. (i) **A
+> non-blank separator line precedes it** —
+> `<!-- a second, later errata block follows; the 2026-09-17 one ends above -->`
+> plus a blank line — because inserting a blockquote immediately after an
+> existing one trips markdownlint **MD028** through the file's own pre-existing
+> blank line, and Table Z's *"zero deletions"* diff constraint forbids removing
+> that blank line. AC9 requires lint to pass, so the separator is the only
+> available fix. (ii) **The block carries a fifth bullet**,
+> *"**Also superseded, swept in this same block:**"*, the directed sweep of that
+> record's `:484-486` count sentence and its `:892` verification-script hardcode
+> of R1's old `expectRed` test name — both falsified by PR #303 and routed here
+> by that PR's gate, because this is the package that owns the one dated block.
+> *Routing:* **corrected in place** — the published block is replaced by the
+> block as it shipped, separator included, and the cell now says *byte-exact
+> including the separator line*. **Class: a canonical "byte-exact" cell that was
+> written before two of its own constraints were applied.**
+>
+> **Erratum 5 — Table V row V1's range leaves two stale sentences inside the
+> comment it rewrites.** *What is wrong:* row V1 names
+> `src/core/dream/brain.js` `(:504-508)` as the sentence to remove. *What is
+> true:* the sentences immediately above that range — on `origin/main` at
+> `8b4cbd4c`, `brain.js:501-503`: *"so every chunk is redacted BEFORE it reaches
+> the durable log or the stderr tail. Per-chunk scanning is bounded (a chunk is
+> at most the OS pipe buffer; `scanAndRedact` self-bounds at
+> `SCAN_MAX_BYTES`)."* — describe the **withdrawn** per-chunk mechanism and were
+> outside the row's range, so they were **retired in place rather than edited**.
+> The shipped comment therefore reads the old claim and then corrects it four
+> lines later (*"The scan is no longer PER CHUNK, though."*), which is accurate
+> but is two readings of one mechanism in one comment. *Routing:* **recorded,
+> not swept.** `src/core/dream/brain.js` is not in this filing's boundary and
+> the shipped text is not false; Table V row V1's range is corrected here to name
+> the sentences it should have covered, so the next package to touch that comment
+> knows what it inherits. **Class: a canonical range drawn one sentence too
+> narrow.**
+>
+> **Erratum 6 — AC2a's clauses (b) and (c) are not executable as the criterion
+> gates them.** *What is wrong:* AC2a requires, after the teardown, that *"(b) no
+> `'error'` is emitted on either `logStream` and the process does not exit
+> abnormally; (c) anything the surviving child writes after the teardown adds
+> nothing to the log."* AC2b repeats both. *What is true:* **Node silently drops
+> a `write()` into an already-destroyed stream** — no `'error'`, no append —
+> verified on v25.9.0. So on the run-job sink, and on AC2b's caller path, clause
+> (c) passes identically whether or not the latch exists, and clause (b) cannot
+> discriminate a latch after `autoDestroy` either: both are satisfied by the
+> stream's own teardown. The latch is genuinely present and its **flush** half is
+> proven at all three sites; what is unprovable from the log file alone is the
+> *no-write-after-latch* half. *Routing:* **corrected in place.** Clause (c)
+> becomes an assertion on **the accounting the same `emit` step performs** —
+> `stderrTail` on the brain path — which is deterministic and does redden, and
+> clause (b) is narrowed to what it can establish (the run does not exit
+> abnormally). The PR body disclosed this for the run-job sink; the disclosure
+> is extended here to AC2b, where the reviewer measured the same vacuity.
+> **Class: an acceptance criterion asserting a negative the runtime makes
+> unobservable.**
+>
+> **Also re-derived at this filing, recorded not swept.** Table W's
+> `Shutdown, dream.js` row and Current state's watchdog bullet cite
+> `runBrainWithWatchdog`'s interior by number (`:376-541`, the spawn call
+> `:396-403`, the reap `finally` `:481-539`, the pidfile block `:410-447` and
+> its two throws `:434` / `:442`, the watchdog `try` `:461`, the accumulators
+> `:388` / `:390`, the return `:541`). Those were pinned to `08de2bc3` and are
+> **off by up to one line** at this package's base `1d8d4743`, where
+> `runBrainWithWatchdog` opens at `:376`, `sawUnknownCommand` is `:388`, `reap`
+> is `:390`, the `spawnBrain` destructure is `:396` and the return is `:541`;
+> on `origin/main` the wrap this package added moves the return to `:550`.
+> Every one of those constructs is named beside its number and the numbers are
+> not load-bearing for any gate, so they are recorded here rather than swept —
+> unlike the two `logStream` cites, which the extraction pass above removes
+> because they had already shipped into `src/` once.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -95,10 +302,14 @@ it.
     (isBareUnknownCommand(stdoutHead) || (stdoutHead stripped of ANSI trims to
     '' && isBareUnknownCommand(stderrTail)))`. `stdoutTotalLen` counts
     **post-redaction characters**.
-  - `logStream` is created by the caller at `src/cli/dream.js:922`
-    (`createLogStreamPrivate`, `flags: 'a'`), passed in at `:941`/`:402`, and
-    ended **unawaited** at `src/cli/dream.js:958`. **It carries no `'error'`
-    listener.**
+  - `logStream` is created by the caller in `src/cli/dream.js`, at its
+    `createLogStreamPrivate(path.join(logDir, …), { flags: 'a', core: paths.core })`
+    call in the dream-log block, passed into `spawnBrain`, and ended
+    **unawaited** by the `logStream.end()` in that block's `finally`. **It
+    carries no `'error'` listener.** *Cited by CONSTRUCT, never by line number
+    (done-flip canonical-extraction pass): both numbers went stale three times
+    in three revisions and once shipped into a source comment. Table W's
+    `Shutdown, dream.js` row is canonical for these two constructs.*
 - **`src/cli/dream.js`, the watchdog path** — `runBrainWithWatchdog` spans
   `:376-541`. It calls `spawnBrain` at `:402`, races `done` against a timeout at
   `:462`, and the timeout branch reaps and **rejects** at `:456-457`; that
@@ -109,7 +320,8 @@ it.
   those two throws unwind straight past the reap `finally`. That asymmetry is the
   round-2 design finding and it is why Table W's shutdown wrap is an **outer**
   `try`/`finally` rather than a statement inside the existing one. On both paths
-  `:958`'s `logStream.end()` runs after the function returns or throws. **The
+  the caller's unawaited `logStream.end()` runs after the function returns or
+  throws. **The
   pipes may never emit `'end'` before the log closes**,
   because the reap can legitimately return `{ reaped: false }` (`:508-509`,
   verdict `:529-539`) and a surviving group member still holds the inherited
@@ -156,11 +368,12 @@ it.
   fail-loud email body carries no raw log tail — one of the four compensating
   controls the comment this WP rewrites names); `tests/integration/dream.test.js:1328`
   (pins the dream log's append semantics via `startsWith('legacy line\n')`).
-- `tests/red-proofs/` holds **25** `*.proofs.json` files once the two
-  dependencies have landed: 24 today, minus the two
-  `WP-secret-sink-redact-before-truncate` deletes, plus the two it creates, plus
-  the one `WP-secret-stream-safe-cut-redactor` creates. Count, do not assume.
-  This WP adds two, for 27.
+- `tests/red-proofs/` — **the contract is the DELTA: this WP adds exactly two
+  `*.proofs.json` files** (Table Y). The totals are dated provenance, not a
+  contract, because every sibling package moves them: counted, **31** at this
+  package's base `1d8d4743`, **33** at its merged tip `983e17f4`, and **34** on
+  `origin/main` at `8b4cbd4c` on 2026-09-21 (done-flip erratum 1, which
+  corrected "25 … for 27"). Count, do not assume.
 - `npm test` is `node tests/run.js`; `npm run lint` is `node scripts/lint.js`;
   `npm run red-proofs` is `node tests/with-temp-root.js scripts/red-proofs.js`.
 
@@ -170,7 +383,7 @@ it.
 |--------|------|-------|
 | modify | src/core/dream/brain.js | sites W1 and W2 per Table W, plus the shutdown step of Table W's `Shutdown` rows (which adds `shutdown` to `spawnBrain`'s return) and the comment correction of Table V row V1 |
 | modify | src/cli/run-job.js | sites W3 and W4 per Table W, plus the shutdown step and the comment correction of Table V row V2 |
-| modify | src/cli/dream.js | ONE construct only, per Table W's `Shutdown, dream.js` row and the literal block under "Exact contracts": add `shutdown` to the `spawnBrain` destructure and wrap the whole post-spawn body of `runBrainWithWatchdog` in an outer `try { … } finally { shutdown(); }`. The enclosed lines move by two spaces of indentation and **nothing else in the file changes** — not the existing reap `finally`, not the `logStream` creation at `:922`, not the missing `'error'` listener, not the unawaited `.end()` at `:958` |
+| modify | src/cli/dream.js | ONE construct only, per Table W's `Shutdown, dream.js` row and the literal block under "Exact contracts": add `shutdown` to the `spawnBrain` destructure and wrap the whole post-spawn body of `runBrainWithWatchdog` in an outer `try { … } finally { shutdown(); }`. The enclosed lines move by two spaces of indentation and **nothing else in the file changes** — not the existing reap `finally`, not the `createLogStreamPrivate` call that makes the dream log, not the missing `'error'` listener, not the unawaited `logStream.end()` in that block's `finally` |
 | modify | tests/integration/dream.test.js | append the AC2b regression only, reusing the file's existing pidfile-failure harness (`:1554-1610`); edit no existing test |
 | modify | tests/unit/dream-brain.test.js | convert probes P8 and P11 per Table X; add `LEAK_MSG`; delete `DEFECT_MSG` once unused; add the AC5 ordering test |
 | modify | tests/unit/scheduler-runjob.test.js | convert probes P13 and P15 per Table X; add `LEAK_MSG`; delete `DEFECT_MSG` once unused |
@@ -213,7 +426,7 @@ sufficient on its own.** This is ADR-0043 decision 7 and it is the round-1 desig
 finding (HEAVY 2). The dream watchdog can reject **while the child survives and
 still holds the pipe**: `runBrainWithWatchdog` rejects at
 `src/cli/dream.js:457`, its rejection unwinds through the reap `finally` at `:481-539`,
-and `src/cli/dream.js:958` then calls `logStream.end()` — all before the pipe
+and the caller's unawaited `logStream.end()` then runs — all before the pipe
 ever emits `'end'`. With `'end'`-only flushing, a partial line buffered **before**
 the timeout would be lost, and the later `'end'` would write into an ended stream
 that has no `'error'` listener. Today that line is written the moment it arrives,
@@ -248,17 +461,18 @@ so `'end'`-only flushing would be a regression, not a residual. Hence:
   //    and before the blank line preceding `return { sawUnknownCommand, reap };`
   } finally {
     // ADR-0043 decision 7: flush every buffered region and latch the tee closed
-    // before the CALLER ends the log (dream.js:958, unawaited, no 'error'
-    // listener). This finally must enclose the pidfile write and its failure
+    // before the CALLER ends the log (the unawaited logStream.end() the caller
+    // runs after this returns, no 'error' listener). This finally must enclose
+    // the pidfile write and its failure
     // reaping too — those throw before the watchdog try opens.
     shutdown();
   }
   ```
 
-  Lines `:405` through `:539` gain two spaces of indentation and change in no
-  other way. Nothing else in `dream.js` changes: the `logStream` creation at
-  `:922`, the absence of an `'error'` listener and the unawaited `.end()` at
-  `:958` all stay exactly as they are.
+  The enclosed lines gain two spaces of indentation and change in no other way.
+  Nothing else in `dream.js` changes: the `createLogStreamPrivate` call that
+  makes the dream log, the absence of an `'error'` listener and the unawaited
+  `logStream.end()` in that block's `finally` all stay exactly as they are.
 - **run-job.js** — the same latch, reached from the outer `finally`: flush and
   latch immediately **before** the `:1120` failure-message write, so the log's
   byte order is unchanged (teed output first, the failure line last) and a
@@ -331,7 +545,7 @@ Additional rows that are contract, not sites:
 | Fact / rule | Value |
 |-------------|-------|
 | Shutdown, brain | `spawnBrain` returns `{ child, done, shutdown }`. Redactors are flushed on each stream's `'end'` event and again inside `child.on('exit', …)` before the resolved object at `src/core/dream/brain.js:558-566` is constructed. `shutdown()` is synchronous and idempotent: flush every redactor through its `emit`, then latch closed |
-| Shutdown, dream.js | `runBrainWithWatchdog` captures `shutdown` at the `spawnBrain` call (`src/cli/dream.js:396-403`) and wraps its **whole post-spawn body** — `:405` through the close of the existing reap `finally` at `:539` — in a new outer `try { … } finally { shutdown(); }`, published literally under "Exact contracts". **The existing reap `finally` at `:481-539` is not the right home and putting `shutdown()` there is a defect**: the pidfile block at `:410-447` handles and throws at `:434` and `:442` **before** that `try` opens at `:461`, so a failed hand-up write with unsuccessful reaping never reaches it (round 2, measured: `shutdownCalls = 0`). The outer `finally` encloses the pidfile write, its failure reaping, the watchdog construction and the race, and it runs **after** the inner reap `finally` (inner before outer), so the reap verdict is computed first and the flush lands last — always before `:958`'s `logStream.end()`. `sawUnknownCommand` (`:388`) and `reap` (`:390`) are declared before the spawn, so the `return` at `:541` stays outside the wrap and no scope changes |
+| Shutdown, dream.js | `runBrainWithWatchdog` captures `shutdown` at the `spawnBrain` call (`src/cli/dream.js:396-403`) and wraps its **whole post-spawn body** — `:405` through the close of the existing reap `finally` at `:539` — in a new outer `try { … } finally { shutdown(); }`, published literally under "Exact contracts". **The existing reap `finally` at `:481-539` is not the right home and putting `shutdown()` there is a defect**: the pidfile block at `:410-447` handles and throws at `:434` and `:442` **before** that `try` opens at `:461`, so a failed hand-up write with unsuccessful reaping never reaches it (round 2, measured: `shutdownCalls = 0`). The outer `finally` encloses the pidfile write, its failure reaping, the watchdog construction and the race, and it runs **after** the inner reap `finally` (inner before outer), so the reap verdict is computed first and the flush lands last — always before the caller's unawaited `logStream.end()`. **This row is canonical for the two caller-side constructs — the `createLogStreamPrivate(...)` call that makes the dream log and the `logStream.end()` that closes it unawaited, with no `'error'` listener — and they are cited by construct, never by line number (done-flip canonical-extraction pass).** `sawUnknownCommand` (`:388`) and `reap` (`:390`) are declared before the spawn, so the `return` at `:541` stays outside the wrap and no scope changes |
 | Shutdown, run-job | the same latch, reached from the outer `finally`: flush and latch immediately **before** the `:1120` failure-message write, and therefore before `endStream` at `:1125` |
 | After the latch | every `emit` is a no-op: no write, no accounting, no touch of `logStream`. This is what makes a surviving child's later `'data'`/`'end'` safe on the dream path, whose `logStream` has no `'error'` listener |
 | Per-stream order | **is a contract.** Within one stream, every byte reaches the log in input order, exactly once, and every byte passes through `redactOnly` as part of a region |
@@ -353,7 +567,7 @@ other prose in either block.
 
 | # | File | Sentence to remove | What the replacement must say |
 |---|------|--------------------|-------------------------------|
-| V1 | `src/core/dream/brain.js` (`:504-508`) | the `V1 REMOVE` block below | that per-chunk redaction was withdrawn by ADR-0043 because a split secret landed **whole and contiguous** in the durable log, not partially redacted; that the transform now buffers to an accepted cut point, bounded by `ScanLimits.STREAM_REGION_MAX`, which is what answers the WP-118 OOM/DoS surface; and that the remaining residual is a forced cut inside a single logical line longer than that bound. It must **not** claim any owner approval, acceptance or ratification of anything |
+| V1 | `src/core/dream/brain.js` (`:501-508` — *widened at the done-flip, erratum 5: the row named `:504-508`, leaving the two sentences above it ("so every chunk is redacted BEFORE it reaches the durable log or the stderr tail. Per-chunk scanning is bounded …") outside the range, so they were retired in place rather than edited and the shipped comment carries both readings*) | the `V1 REMOVE` block below | that per-chunk redaction was withdrawn by ADR-0043 because a split secret landed **whole and contiguous** in the durable log, not partially redacted; that the transform now buffers to an accepted cut point, bounded by `ScanLimits.STREAM_REGION_MAX`, which is what answers the WP-118 OOM/DoS surface; and that the remaining residual is a forced cut inside a single logical line longer than that bound. It must **not** claim any owner approval, acceptance or ratification of anything |
 | V2 | `src/cli/run-job.js` (`:1048-1052`) | the `V2 REMOVE` block below — **the whole five-line comment**, because the wrong sentence begins and ends mid-line (`:1050` also carries `attacker-influenceable.`, `:1051` also carries `The tee`), so a two-line removal cannot be located literally | the same content minus the withdrawn residual: keep the EP3 attribution (`audit A5 / ADR-0024 / WP-124`), keep the attacker-influenceable framing, keep the `{ end:false }` note, and replace the per-chunk sentence by reference to ADR-0043 |
 
 The two blocks, byte-exact as they stand at `08de2bc3`; the `# V<n> …` lines are
@@ -456,13 +670,20 @@ declaration total.
 |-------------|-------|
 | File | `docs/specs/done/WP-secret-sink-wiring-probes.md` |
 | Anchor | the line whose entire content is `<!-- errata above; the spec as it shipped follows -->`. The block is inserted **immediately before** it, after the existing 2026-09-17 errata block, followed by one blank line |
-| Inserted text | the fenced block published in full below, byte-exact |
+| Inserted text | the fenced block published in full below, **byte-exact including its leading separator line**. The separator — `<!-- a second, later errata block follows; the 2026-09-17 one ends above -->` plus one blank line — is not decoration: inserting a blockquote immediately after an existing one trips markdownlint **MD028** through the file's own pre-existing blank line, and the zero-deletion rule in the row below forbids removing that blank line, so a non-blank separator is the only fix AC9 permits. *(Done-flip erratum 4: this cell said "byte-exact" of a block that had neither the separator nor the sweep bullet.)* |
 | Diff constraint | **zero deletions and zero modified lines in that file.** Table P's rows, Table S's rows and Table R keep their shipped text: the file is the record of what shipped, and the inserted block is what says which of its facts are now superseded |
 | Why it lands here and not earlier | it records all **seven** defects as closed, which is only true once this WP merges; `WP-secret-sink-redact-before-truncate` records its three flips in a `docs/specs/logbook/` entry, which this block cites |
 
 The block, byte-exact:
 
+**This is the block as it SHIPPED** (done-flip erratum 4): it carries the MD028
+separator line and the fifth bullet, the directed sweep of two further surfaces
+that `WP-secret-sink-redact-before-truncate` (PR #303) falsified and that PR's
+gate routed here, because this is the package that owns the one dated block.
+
 ```markdown
+<!-- a second, later errata block follows; the 2026-09-17 one ends above -->
+
 > **Post-fix record, 2026-09-18 — all seven KNOWN DEFECTS are CLOSED, and the
 > facts below are superseded.** Nothing in the spec text is edited; this block is
 > the pointer.
@@ -485,6 +706,16 @@ The block, byte-exact:
 >   S1–S3 (`truncate-then-redact`) and S5–S8 (`per-chunk`); the "nine CORRECT and
 >   seven DEFECT" count; "Accepted residuals" items 1 and 2; and owner item 2's
 >   open question, which ADR-0043 answers.
+> - **Also superseded, swept in this same block:** two further surfaces this
+>   record carries, both falsified by `WP-secret-sink-redact-before-truncate`
+>   (PR #303) before this package landed. (i) The count sentence at `:484-486`
+>   — "Sixteen probes across five files: nine CORRECT … and seven DEFECT (P2,
+>   P4, P6, P8, P11, P13, P15)" — became twelve CORRECT and four DEFECT at that
+>   merge and is **sixteen CORRECT and zero DEFECT** now. (ii) The verification
+>   script at `:892` hardcodes R1's `expectRed[0].test[0]` as P2's OLD name
+>   (the `… is NOT redacted in alerts.jsonl` form); Table R's declaration files
+>   were deleted and replaced by that spec's Table C, so the whole R1 check
+>   there is a record of what shipped, not a gate to re-run.
 > - **Not superseded:** Table S's inventory of nine call sites and its closure
 >   claim, the nine CORRECT probes' behaviour, and this spec's 2026-09-17 errata.
 ```
@@ -503,6 +734,11 @@ review finding updates the table and all its mirrors **in the same commit**
       `tests/integration/dream.test.js` row (AC2b only); the two unit-test rows'
       probe lists (X1, X2 / X3, X4); the two declaration rows' row assignments
       (Table Y); the `done/` row's anchor and zero-deletion rule (Table Z).
+- [ ] **The published `finally` literal under "Exact contracts"** — its comment
+      names the caller-side `logStream.end()` construct, mirroring Table W's
+      `Shutdown, dream.js` row. It is a mirror that ships **into `src/`**, so a
+      cite that goes stale here goes stale in the product. *Registered at the
+      done-flip with the canonical-extraction pass.*
 - [ ] **Acceptance criteria** — AC1 (no `redactOnly` chunk call survives), AC2
       (one redactor per stream, both flushes, the idempotent latch), AC2a (the
       shutdown regression for both sinks) and AC2b (the caller-level pidfile
@@ -581,8 +817,9 @@ review finding updates the table and all its mirrors **in the same commit**
 
 Neither is fixed here and neither widens this WP.
 
-1. **The dream `logStream` has no `'error'` listener** (`src/cli/dream.js:922`,
-   ended unawaited at `:958`), while the run-job one does
+1. **The dream `logStream` has no `'error'` listener** (created by
+   `src/cli/dream.js`'s `createLogStreamPrivate` call in the dream-log block and
+   ended unawaited by that block's `logStream.end()`), while the run-job one does
    (`src/cli/run-job.js:1031-1034`). On the watchdog-timeout path a surviving
    brain-group member still holds the inherited pipe, so a write after
    `logStream.end()` becomes an unhandled `'error'` and takes the process down.
@@ -646,13 +883,24 @@ Neither is fixed here and neither widens this WP.
       `'end'` event and again at its sink's shutdown step (Table W); a flush that
       has nothing buffered writes nothing; `shutdown()` is idempotent and, once
       it has run, every later `emit` writes nothing and records nothing.
+      `spawnBrain`'s `@returns` names **all three** returned fields, including
+      `shutdown` — *done-flip erratum 2: the verification step's `shutdown`
+      budget was a whole-file `grep -c` and forbade documenting it; it now pins
+      the definition site (`grep -cF 'shutdown: flushAndLatch'`) instead.*
 - [ ] **AC2a** — **The shutdown regression, for both sinks.** A child writes a
       partial line with no trailing newline (so it is buffered, not written),
       the run is then torn down while that child survives and still holds the
       pipe, and afterwards: (a) the partial line **is** in the log, redacted;
-      (b) no `'error'` is emitted on either `logStream` and the process does not
-      exit abnormally; (c) anything the surviving child writes after the
-      teardown adds nothing to the log. In
+      (b) the run does not exit abnormally; (c) anything the surviving child
+      writes after the teardown is not **accounted** — asserted through the
+      accounting the same `emit` step performs (`stderrTail` on the brain path),
+      not through the log file's contents. *Done-flip erratum 6: (b) previously
+      also required that no `'error'` be emitted on either `logStream`, and (c)
+      was an assertion on the log file. Node silently drops a `write()` into an
+      already-destroyed stream — no `'error'`, no append (verified on v25.9.0) —
+      so both passed identically with and without the latch. The flush half is
+      provable from the log; the no-write-after-latch half is only provable from
+      the accounting.* In
       `tests/unit/scheduler-runjob.test.js` this is driven through the real
       watchdog timeout; in `tests/unit/dream-brain.test.js`, which drives
       `spawnBrain` directly, it is driven by calling the returned `shutdown()`
@@ -664,9 +912,11 @@ Neither is fixed here and neither widens this WP.
       `reapGroup` seam that reports `{ reaped: false }` on both attempts, and a
       brain that wrote a partial line with no trailing newline before the failure.
       After `runBrainWithWatchdog` throws and the caller has ended the log:
-      (a) the partial line **is** in the dream log, redacted; (b) no `'error'` is
-      emitted on that `logStream` and the process does not exit abnormally;
-      (c) anything the surviving child writes afterwards adds nothing to the log.
+      (a) the partial line **is** in the dream log, redacted; (b) the run does
+      not exit abnormally; (c) anything the surviving child writes afterwards is
+      not accounted — same accounting-based observation as AC2a, and for the
+      same reason (done-flip erratum 6; the reviewer measured the log-file form
+      vacuous here too).
       **AC2a cannot cover this**: it drives `spawnBrain` directly and never runs
       the caller path where the miss lives. Round 2 measured the prescribed
       wiring's predecessor at `shutdownCalls = 0` on exactly this path.
@@ -699,8 +949,10 @@ Neither is fixed here and neither widens this WP.
       **except** this spec file (status flip), `package-lock.json`,
       `memory/lessons/inbox.md` and `docs/specs/logbook/`. **Ignoring whitespace**
       (`git diff -w`), `src/cli/dream.js`'s diff is exactly the three edits of
-      the literal block under "Exact contracts" and nothing else; with
-      whitespace it additionally reindents `:405-539` by two spaces.
+      the literal block under "Exact contracts" and nothing else — **+10 added
+      and exactly 1 deleted non-whitespace line, which is the compliant value
+      and therefore the ceiling, not a margin above it** (done-flip erratum 3);
+      with whitespace it additionally reindents the enclosed body by two spaces.
 - [ ] **AC11** — Idempotency: `N/A — this WP rewires four in-process stream
       handlers. It ships no command and writes nothing outside the repo.`
 
@@ -734,7 +986,10 @@ need "$(grep -c "on('end'" src/cli/run-job.js      || true)" 2 "two 'end' flushe
 
 # AC2/AC2a/AC2b — the shutdown step exists in all three source files and
 # dream.js is bounded to the three edits of the "Exact contracts" literal block.
-need "$(grep -c 'shutdown' src/core/dream/brain.js || true)" 1 "brain.js returns shutdown (one definition site)"
+# Done-flip erratum 2: this was `grep -c 'shutdown'`, a WHOLE-FILE budget that
+# silently forbade naming the symbol in a JSDoc too — which is why spawnBrain's
+# @returns under-described its own return value. Pin the definition site.
+need "$(grep -cF 'shutdown: flushAndLatch' src/core/dream/brain.js || true)" 1 "brain.js returns shutdown (one definition site)"
 need "$(grep -c 'shutdown()' src/cli/dream.js      || true)" 1 "dream.js calls shutdown() exactly once"
 need "$(grep -cF 'const { child, done, shutdown } = spawnBrain({' src/cli/dream.js || true)" 1 "dream.js destructures shutdown"
 # AC10 — dream.js is bounded to the three edits of the "Exact contracts" literal
@@ -743,9 +998,14 @@ need "$(grep -cF 'const { child, done, shutdown } = spawnBrain({' src/cli/dream.
 # differ only in whitespace.
 DREAM_ADD="$(git diff -w --numstat main... -- src/cli/dream.js | awk '{print $1+0}')"
 DREAM_DEL="$(git diff -w --numstat main... -- src/cli/dream.js | awk '{print $2+0}')"
-[ "${DREAM_ADD:-0}" -le 12 ] || {
+# The ceiling IS the compliant value, not a margin above it: at 12 a gate whose
+# whole purpose is "exactly the three edits" lets three unrelated lines through.
+# Re-measure it whenever the literal block changes (done-flip erratum 3:
+# +9/-1 at the round-1 tip 17a1ca8f, +10/-1 at the merged tip 983e17f4 and on
+# origin/main at 8b4cbd4c, the extra line being the construct-named cite's wrap).
+[ "${DREAM_ADD:-0}" -le 10 ] || {
   echo "GATE FAIL: src/cli/dream.js added ${DREAM_ADD} non-whitespace lines, more than the three edits need"; exit 1; }
-echo "ok: src/cli/dream.js non-whitespace churn +${DREAM_ADD}/-${DREAM_DEL} (measured +9/-1 against the literal block)"
+echo "ok: src/cli/dream.js non-whitespace churn +${DREAM_ADD}/-${DREAM_DEL} (measured +10/-1 against the literal block, 2026-09-21)"
 # Exactly one source line is replaced — the destructure. Read it from NUMSTAT,
 # never by counting `^-` in the diff body: a unified diff also carries the
 # `--- a/src/cli/dream.js` header, so `grep -cE '^-'` returns 2 on a compliant

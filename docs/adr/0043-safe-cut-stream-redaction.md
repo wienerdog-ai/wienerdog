@@ -8,8 +8,11 @@ Date: 2026-09-18
 > forward by `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`:
 > the architect records a recommendation with the cost of overruling it, the
 > session may dispatch under it, and the owner reverses it by dated amendment.
-> **Nothing in this repo records the owner approving, accepting or ratifying this
-> ADR**, and this ADR asserts no such acceptance. Narrows the *mechanism* of
+> **The owner signed this ADR on 2026-09-18**, as the Status line above records:
+> the ruling is `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`
+> ("2026-09-18 — owner ruling, evening"), and the Status-line edit is the owner's
+> own working-tree change, committed unchanged in `a8ea9dab` (PR #296). Narrows
+> the *mechanism* of
 > ADR-0024's enforcement point EP3; ADR-0024's own text ("a bounded sanitizing
 > transform") is unchanged and is not amended here. Constrained by ADR-0004
 > (Wienerdog is just files).

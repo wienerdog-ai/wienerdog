@@ -1,7 +1,7 @@
 ---
 id: WP-secret-stream-safe-cut-redactor
 title: Give the detector a bounded stream redactor that cuts only where no rule can match across
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-secret-sink-wiring-probes]
@@ -10,6 +10,164 @@ epic: secret-lifecycle
 ---
 
 # WP-secret-stream-safe-cut-redactor: `createStreamRedactor()` in `src/core/secret-scan.js`
+
+> **Errata, 2026-09-21 (post-merge) — five stale spec-prose facts, plus four
+> quality observations recorded rather than dropped. None is a defect in what
+> shipped.**
+>
+> **Landed in PR #306** (merge `1d8d4743`, 2026-09-19 03:32:39 UTC), tip
+> `b9c78fde`, branch `wp/secret-stream-safe-cut-redactor`. **FIVE gate rounds
+> plus a LIGHT round 5b**, the longest gate this stream has run, and the full
+> record — every gate comment reproduced line for line — is
+> `docs/specs/logbook/2026-09-19-secret-stream-safe-cut-pr306-gates.md`.
+> Rounds 1 and 2 each found a real leak in the cut predicate (an overlapping
+> sensitive-value opener, two different spellings of the same mistake); rounds
+> 3, 4 and 5 found **no leak and no contract violation** — every finding in them
+> was in one dimension, **cost**, which Table B did not pin. Round 5 was the
+> freeze, and its one blocking item was a canonical cell contradicted by the
+> code it pins, written by the architect pass itself; round 5b fixed it
+> mechanically. CI on `b9c78fde`: seven checks pass.
+>
+> **The closing round's verdicts.** Round 5's independent gate (Codex plugin
+> `review` on `gpt-6-astra`, orchestrator-run, detached worktree, porcelain
+> identical) returned *"No actionable defects were found. All 49 targeted tests
+> passed, and an additional 30,000-case differential check found no mismatches
+> between chunked and whole-input redaction."* Round 5's wd-reviewer measured,
+> among much else: `npm test` 2927 / **0 fail**; lint; boundary exact; this
+> spec's verification script 20 `ok:` lines; all four RED declarations observed
+> = declared with their signals, D1 non-vacuous **through the fast path** (raw
+> emission measured under the mutation); the retention probe 32.13 MiB control →
+> **0.16 MiB** on the tip, `end()` residue 0.13 MiB, four-instance worst case
+> 1.12 MiB matching the memory row; the load guard firing with its named message
+> under the filler mutation, and 2000 instances × adversarial pushes with **0**
+> throws; both `RULES` mutations (JSON separator, PEM filler) reddening the
+> exactness fuzz; `decomp-fuzz.js` **120 129 positions, 0 mismatches**; the
+> 30 000-case leak fuzz 0; 17 overlap shapes × 1003 deliveries 0; no owner
+> claim. Round 5b's delta `4512b736..b9c78fde` was verified mechanically by the
+> orchestrator on a detached worktree at the tip: `src/core/secret-scan.js`
+> changed **in JSDoc only** (no non-comment line in the diff, so the four RED
+> anchors stand), `tests/unit/secret-scan.test.js` 49 / 49 / **0 fail**, and the
+> retention probe after a 32 MiB push leaving a 100-character remainder
+> **0.16 MiB**.
+>
+> **Red-proofs verdict, and exactly what it covers.** The implementer's
+> **UNFILTERED** `npm run red-proofs`: `RUN: PROVEN`, `EXIT=0`, with all four of
+> this package's declarations (`stream-cut-s1-no-buffering`,
+> `stream-cut-s2-open-binder`, `stream-cut-s3-open-quoted`,
+> `stream-cut-s4-open-pem`) `PROVEN`. It was measured on the round-5 tip
+> `4512b736` and **not re-run for round 5b**, and the PR body says so: `src/`
+> moved only in JSDoc, so no declaration's `find` anchor moved. That is the
+> verdict this record claims.
+>
+> **What the gate established, and what it did not.** Five rounds, **no leak**:
+> the cut predicate is exact against an independent `RULES`-derived reference at
+> 120 129 candidate positions, and the four Table D declarations are measured
+> rather than predicted. All four `WD-SINK-CHUNK-*` probes were still
+> green-because-broken at this merge — this package ships a `src/` export with
+> no caller, by owner item 2 — and they close with `WP-secret-sink-chunk-fix`
+> (PR #310).
+>
+> **Erratum 1 — Current state (`:99`) pins a `tests/red-proofs/` count three
+> revisions stale.** *What is wrong:* *"`tests/red-proofs/` holds **24**
+> `*.proofs.json` files (count, do not assume)"*, pinned to `08de2bc3`. *What is
+> true:* counted, not assumed — **27** at the merged tip `b9c78fde`, **31** at
+> the merge commit `1d8d4743`, and **34** on `origin/main` at `8b4cbd4c` on
+> 2026-09-21. The gate reported this number stale in all five rounds. *Routing:*
+> **corrected in place**, and the sentence now says what its own parenthesis
+> implies: a directory-wide total is provenance, never a contract, because every
+> sibling package moves it. **Class: a spec cell pinning a number it does not
+> own.**
+>
+> **Erratum 2 — Current state (`:77`) pins the detector's size and its export
+> line, both of which this package itself more than doubled.** *What is wrong:*
+> *"`src/core/secret-scan.js` — the detector, **325 lines**. Module exports at
+> `:325`"*. *What is true:* on `origin/main` at `8b4cbd4c` the file is **802
+> lines** and `module.exports` begins at **`:795`** — measured, and identical at
+> the merged tip `b9c78fde`, because nothing has landed in that file since.
+> (The gate watched this number climb round by round: 562 → ~624 → ~734 → 755 →
+> 799 → 802.) *Routing:* **corrected in place**, with the construct named beside
+> the number, because the number is a property of a file every sibling in this
+> epic edits. **Class: a line cite in the file the package grows.**
+>
+> **Erratum 3 — Table D row D1's `testNamePattern` cell, as written, can never
+> satisfy observed-equals-declared.** *What is wrong:* the cell fixes
+> `split across two pushes`. *What is true:* that substring also selects **D4**'s
+> name, `stream-redactor: a private-key block split across two pushes is
+> redacted whole`, so the S1 mutation reddens both while the declaration names
+> only D1 — and this spec's own runner rule requires the observed failing set to
+> **equal** the declared set. The gate byte-confirmed the double selection in
+> round 1. The implementer used the field's own escape hatch (the fixed-fields
+> table says the implementer *"may narrow"* the pattern) and shipped the
+> narrowed form; measured on `origin/main` at `8b4cbd4c`,
+> `tests/red-proofs/secret-stream-safe-cut.proofs.json` carries
+> `"a labelled secret split across two pushes"` for `stream-cut-s1-no-buffering`.
+> *Routing:* **corrected in place to the narrowed form that shipped.**
+> **Class: a canonical cell fixing a value that the contract beside it forbids.**
+>
+> **Erratum 4 — the AC9 boundary command reads a local `main` ref.** *What is
+> wrong:* the verification block runs
+> `git diff --name-only main... | grep -cvE …` and requires 0. *What is true:*
+> `main...` resolves through the **local** `main` ref, which silently lags the
+> branch base in a fresh worktree — and every file merged into `origin/main`
+> since then is then counted as this branch's, so the check reads extra files
+> and can fail for a reason that has nothing to do with the diff (or, with the
+> lag in the other direction, read fewer). The implementer hit exactly this and
+> recorded it as a lesson. *Routing:* **corrected in place** to
+> `git diff --name-only origin/main...HEAD`, with a `git fetch` and an assertion
+> that `main`, `origin/main` and the merge base agree before the count is
+> trusted. **Class: a verification command whose subject is not the thing it
+> names.**
+>
+> **Erratum 5 — the Dispatch-precondition owner item 1 is stale: ADR-0043 IS
+> owner-signed.** *What is wrong:* owner item 1 recommends carrying ADR-0043
+> with *"`Status: ACCEPTED under standing authorization 2026-09-18 — owner
+> signature pending` until the owner signs it"*, and the preamble above it says
+> *"Nothing in this repo records the owner approving, accepting or ratifying
+> either"*; Definition of done item 1(b) repeats the same claim for ADR-0043.
+> *What is true:* the owner signed it before this package was dispatched.
+> `docs/adr/0043-safe-cut-stream-redaction.md:3` reads `Status: **ACCEPTED under
+> standing authorization 2026-09-18 — owner-signed 2026-09-18.**`, the ruling is
+> recorded verbatim in
+> `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md` under
+> *"2026-09-18 — owner ruling, evening"*, and the Status-line edit is the
+> owner's own working-tree change committed unchanged in **`a8ea9dab`**
+> (PR #296). *Routing:* **corrected in place** — owner item 1 is recorded as
+> **CLOSED by the owner's signature**, and the standing-form disclaimer is
+> narrowed to owner item 2, which remains open. This errata pass also aligned
+> two maintainer-owned surfaces that the same signature had left behind: that
+> ADR's own block quote still said nothing recorded the owner approving it, and
+> `docs/adr/README.md`'s `0043` row still said *"owner signature pending"*. Both
+> now read what the Status line and `a8ea9dab` record, and nothing beyond what
+> `a8ea9dab` itself records is claimed anywhere. **Class: a standing-authorization
+> disclaimer outliving the signature it was waiting for.**
+>
+> **Quality observations, recorded rather than dropped** (round 5; none is a
+> defect, and none was routed back to the implementer). (a) The test corpus
+> filter hand-spells the private-key opener as its own regex —
+> `const PEM_OPEN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/` at
+> `tests/unit/secret-scan.test.js:787` on `origin/main`, used at `:852` — a
+> third spelling of a rule the module already owns; a `RULES`-derived filter
+> would not drift. (b) `pemParts(CUT_PEM_OPEN, 'private-key opener')` is called
+> **twice at module load** (`src/core/secret-scan.js:437` and `:438`) for the
+> two halves of one split. (c) `detached()` rests on a V8 implementation detail
+> (`String.prototype.slice` returning a view), and the tripwire test that would
+> catch its removal exists and is what makes that acceptable. (d) **The load-time
+> guard's blast radius is a deliberate fail-closed choice that this spec never
+> wrote down:** `pemParts` (`:425-436`) throws **at module load** if either
+> private-key rule stops reading as `<head><filler><tail>`, so a `RULES` edit
+> that breaks the cut layer's one structural assumption takes the whole detector
+> down at `require` time rather than leaving `PEM_TAIL` `undefined` and throwing
+> out of `push`. That is the right direction — `push` must never throw — and it
+> is recorded here because the spec's Table S obligations did not price it.
+>
+> **Process finding recorded with this filing.** Three of five rounds were spent
+> on a resource dimension the contract did not state: Table B priced memory and
+> said *"bounded work"* with no per-byte number and no chunk-size envelope, so
+> rounds 1–3 each landed a cost finding with nothing in the contract to check
+> against. **A spec that ships a bounded-work claim must ship its per-byte
+> ceiling and its chunk envelope with it.** The round-4 architect ruling added
+> exactly that as a Table B cost row, and the round-5 pass registered its
+> suite-side mirrors.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -74,8 +232,12 @@ state dies with the call that created it.
 Measured on `main` at **`08de2bc3`**. Line numbers disambiguate; grep for the
 cited construct, which is what authenticates it.
 
-- `src/core/secret-scan.js` — the detector, 325 lines. Module exports at `:325`:
-  `{ scanAndRedact, redactOnly, hasHardFinding, ScanLimits, SEVERITY }`.
+- `src/core/secret-scan.js` — the detector. At base `08de2bc3` it was 325
+  lines with `module.exports` at `:325`, exporting
+  `{ scanAndRedact, redactOnly, hasHardFinding, ScanLimits, SEVERITY }`; on the
+  landed tree (`origin/main` at `8b4cbd4c`) it is **802 lines** with
+  `module.exports` at **`:795`**, this package having added the whole cut layer
+  (done-flip erratum 2). Grep for `module.exports`, not for the number.
   Relevant private constants this WP's predicate must be **derived from, never
   restate**: `ScanLimits` (`:21-26`, with `SCAN_MAX_BYTES: 256 * 1024` at `:22`
   and `ENTROPY_CTX_FILLER_MAX: 20` at `:25`), `SENSITIVE_KEYS` (`:43-44`, the
@@ -96,8 +258,10 @@ cited construct, which is what authenticates it.
   synchronous file reader — and this WP adds no dependency on either.
 - `tests/unit/secret-scan.test.js` — the detector's existing unit suite.
   **Extend it; add no new test file and no new helper module.**
-- `tests/red-proofs/` holds **24** `*.proofs.json` files (count, do not assume).
-  This WP adds one, per Table D.
+- `tests/red-proofs/` holds `*.proofs.json` files whose total every sibling
+  package moves — **27** at this package's merged tip `b9c78fde`, **34** on
+  `origin/main` at `8b4cbd4c` on 2026-09-21 (count, do not assume; done-flip
+  erratum 1). This WP adds one, per Table D.
 - `npm test` is `node tests/run.js`; `npm run lint` is `node scripts/lint.js`;
   `npm run red-proofs` is `node tests/with-temp-root.js scripts/red-proofs.js`.
 
@@ -231,7 +395,7 @@ suite's names, shapes and fixtures are the implementer's.
 
 | # | Test name (exact) | What the test feeds | Mutation (semantics) | `testNamePattern` |
 |---|-------------------|---------------------|----------------------|-------------------|
-| D1 | `stream-redactor: a labelled secret split across two pushes is redacted whole` | `push(head)` then `push(tail + '\n')` where `head + tail` is one `sk-ant-…` key | make `push` emit its input immediately instead of buffering to an accepted cut (i.e. defeat S1 — every position becomes a cut) | `split across two pushes` |
+| D1 | `stream-redactor: a labelled secret split across two pushes is redacted whole` | `push(head)` then `push(tail + '\n')` where `head + tail` is one `sk-ant-…` key | make `push` emit its input immediately instead of buffering to an accepted cut (i.e. defeat S1 — every position becomes a cut) | `a labelled secret split across two pushes` — the NARROWED form. *Done-flip erratum 3: this cell read `split across two pushes`, which also selects D4's name, so observed could never equal declared.* |
 | D2 | `stream-redactor: a sensitive key whose value arrives on a later line is redacted whole` | **all four measured shapes**, each as two or more pushes split at a `\n`: `password:` ⏎ value; `password:` ⏎ ⏎ value; `password` ⏎ `:` ⏎ value; and the CRLF form of the second | drop Table S row S2 from the predicate | `value arrives on a later line` |
 | D3 | `stream-redactor: a quoted sensitive JSON value left open across a line break is redacted whole` | `push('"client_secret":\n  "abc\n')` then `push('defghijkl"\n')` | drop Table S row S3 from the predicate | `left open across a line break` |
 | D4 | `stream-redactor: a private-key block split across two pushes is redacted whole` | the `-----BEGIN`/body/`-----END` lines split across two pushes | drop Table S row S4 from the predicate | `private-key block split` |
@@ -560,7 +724,14 @@ process.exit(bad ? 1 : 0);
 JS
 
 # AC9 — permission boundary.
-need "$(git diff --name-only main... | grep -cvE '^(src/core/secret-scan\.js|tests/unit/secret-scan\.test\.js|tests/red-proofs/secret-stream-safe-cut\.proofs\.json|docs/specs/WP-secret-stream-safe-cut-redactor\.md|docs/specs/logbook/.+\.md|package-lock\.json|memory/lessons/inbox\.md)$' || true)" 0 \
+# Done-flip erratum 4: this read `main...`, which resolves through the LOCAL
+# `main` ref. In a fresh worktree that ref lags the branch base, and every file
+# merged into origin/main since is then counted as this branch's. Fetch, assert
+# the three agree, and diff against `origin/main...HEAD`.
+git fetch origin >/dev/null 2>&1 || true
+need "$(git rev-parse main origin/main "$(git merge-base HEAD origin/main)" | sort -u | grep -c . || true)" 1 \
+     "main == origin/main == merge-base"
+need "$(git diff --name-only origin/main...HEAD | grep -cvE '^(src/core/secret-scan\.js|tests/unit/secret-scan\.test\.js|tests/red-proofs/secret-stream-safe-cut\.proofs\.json|docs/specs/WP-secret-stream-safe-cut-redactor\.md|docs/specs/logbook/.+\.md|package-lock\.json|memory/lessons/inbox\.md)$' || true)" 0 \
      "files outside the permission boundary"
 
 npm run red-proofs    # AC6 — the bare unfiltered run; must exit 0
@@ -593,24 +764,36 @@ and **violating** (→ red).
 
 ## Dispatch precondition — owner items
 
-Two items. **Neither was ruled on directly.** Each is **a recommendation adopted
-under standing authorization, not a direct ruling** — the standing process is
-recorded in `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`
+Two items, dispatched as **recommendations adopted under standing
+authorization** — the standing process is recorded in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`
 ("Owner items inside those packages"), carried forward from
 `2026-09-05-owner-rulings-git-env-pinning-queue.md`: the architect records a
 recommendation with the cost of overruling it, the session may dispatch under it,
-and **the owner reverses it by dated amendment.** Nothing in this repo records
-the owner approving, accepting or ratifying either, and this spec asserts no such
-acceptance.
+and **the owner reverses it by dated amendment.**
+
+**Item 1 is CLOSED by the owner's own signature (done-flip erratum 5);
+item 2 remains open in the standing form, and nothing in this repo records the
+owner approving, accepting or ratifying item 2.**
 
 1. **Does ADR-0043 reverse an owner decision that needs the owner, rather than a
    dated amendment?** The 2026-07-17 record — *"deliberately NOT buffered across
    chunks"* — exists only as a code comment (`src/core/dream/brain.js:504-508`,
    echoed at `src/cli/run-job.js:1048-1052`). ADR-0043 reverses the mechanism it
    approves.
-   *Recommendation: proceed under standing authorization, with ADR-0043 carrying
-   `Status: ACCEPTED under standing authorization 2026-09-18 — owner signature
-   pending` until the owner signs it.* What the 2026-07-17 record actually
+   **CLOSED — the owner signed ADR-0043 on 2026-09-18, before this package was
+   dispatched.** `docs/adr/0043-safe-cut-stream-redaction.md:3` reads
+   `Status: **ACCEPTED under standing authorization 2026-09-18 — owner-signed
+   2026-09-18.**`; the ruling is recorded verbatim in
+   `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md` under
+   "2026-09-18 — owner ruling, evening", and the Status-line edit is the owner's
+   own working-tree change, committed unchanged in `a8ea9dab` (PR #296). Nothing
+   beyond what that commit records is claimed here. *(Done-flip erratum 5: this
+   item previously read as pending.)*
+   *The recommendation, as dispatched:* proceed under standing authorization,
+   with ADR-0043 carrying `Status: ACCEPTED under standing authorization
+   2026-09-18 — owner signature pending` until the owner signs it. What the
+   2026-07-17 record actually
    defends is the WP-118 OOM/DoS surface, and Table B answers that with a hard
    bound rather than by refusing to buffer; what it describes as the consequence
    is measurably wrong.
@@ -643,9 +826,12 @@ acceptance.
    round-4 section above and in
    `docs/specs/logbook/2026-09-19-secret-stream-safe-cut-pr306-gates.md`; the
    design gate itself remains closed at round 3.
-   **A closed design gate is a review gate, not owner approval**: the owner
-   items below stay open in the standing form, and nothing in this repo records
-   the owner approving, accepting or ratifying any of them or ADR-0043.
+   **A closed design gate is a review gate, not owner approval**: owner item 2
+   stays open in the standing form and nothing in this repo records the owner
+   approving, accepting or ratifying it. **Owner item 1 is closed: ADR-0043 is
+   owner-signed 2026-09-18 (`a8ea9dab`, PR #296) — done-flip erratum 5, which
+   corrected this sentence's earlier claim that nothing recorded the owner
+   signing it.**
    (c) **THE DISPATCHER RE-DERIVES EVERY CITATION.** They are pinned to `main` at
    **`08de2bc3`**; every `src/core/secret-scan.js` line number in Current state
    and Table S must be re-confirmed by grepping for the construct, not by the
