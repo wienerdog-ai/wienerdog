@@ -7,8 +7,8 @@
       "criterion": "1",
       "why": "Criteria 1 and 4 each assert that a shelf file SURVIVES, which is the most vacuity-prone shape in this repo's measured catalogue: a file also survives when the fixture never created it, when the sweep ran against a different paths.state, when the classification short-circuited, and when the function threw before reaching state/. Without this declaration nothing separates 'the carve-out worked' from 'the deletion never ran'. The mutation restores the pre-round-1 shape exactly — one recursive rmSync over paths.state.",
       "file": "src/core/manifest.js",
-      "find": "      disposeStateTree(paths, /** @type {any} */ (prot), removed, preservedQuarantine);",
-      "replace": "      /* RP_MUT_QUSE_CARVE_OUT_DROPPED */ if (isDir(paths.state)) { fs.rmSync(paths.state, { recursive: true, force: true }); removed.push(paths.state); }",
+      "find": "      disposeStateTree(paths, prot, removed, preservedQuarantine, !dryRun);",
+      "replace": "      /* RP_MUT_QUSE_CARVE_OUT_DROPPED */ if (!dryRun && isDir(paths.state)) { fs.rmSync(paths.state, { recursive: true, force: true }); removed.push(paths.state); }",
       "marker": "RP_MUT_QUSE_CARVE_OUT_DROPPED",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -60,6 +60,12 @@
             "[SG-12] AC7 (X13/Y10): an ordinary mechanics failure still PROPAGATES while a shelf ENOTEMPTY does not"
           ],
           "signal": "SG12-mechanics-failure-propagates"
+        },
+        {
+          "test": [
+            "[SG-13] AC8 (X15): --dry-run PLANS BY READING, and performs ZERO mutating filesystem calls"
+          ],
+          "signal": "SG13-dry-run-plans-by-reading-only"
         },
         {
           "test": [
@@ -117,9 +123,21 @@
         },
         {
           "test": [
+            "[SG-27] round 3 P1 (X17′): a NON-ASCII case alias is the kernel’s answer, on EITHER volume"
+          ],
+          "signal": "SG27-non-ascii-case-alias-is-the-kernels"
+        },
+        {
+          "test": [
             "[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded"
           ],
           "signal": "SG28-relative-entry-path-is-anchored"
+        },
+        {
+          "test": [
+            "[SG-34] round 4 P2 (X15′): the planner applies the SAME retention as the live sweep"
+          ],
+          "signal": "SG34-planner-applies-retention"
         }
       ]
     },
@@ -189,8 +207,8 @@
       "criterion": "8",
       "why": "Round 7. Criterion 8's populated arm asserts that the plan does NOT predict removal — an absence assertion over one line of output, which goes green whenever the fixture's shelf was empty, the wrong stream was captured, or the plan was never printed. The other horn (skip the syscalls, never predict <state>) is caught by criterion 3's byte-identity; this declaration covers the horn nothing else reaches.",
       "file": "src/core/manifest.js",
-      "find": "        const shelfClean = plan.entries === 0 && plan.unreadable.length === 0;",
-      "replace": "        const shelfClean = true; /* RP_MUT_QUSE_DRY_RUN_PLANS_BY_ASSUMING */",
+      "find": "      const leftovers = level === state\n        ? names.filter((n) => asciiFold(n) !== QUARANTINE_DIRNAME && !removableChildren.includes(n))\n        : names.filter((n) => asciiFold(n) !== QUARANTINE_REDACTED_DIRNAME);",
+      "replace": "      const leftovers = []; /* RP_MUT_QUSE_DRY_RUN_PLANS_BY_ASSUMING */ void names;",
       "marker": "RP_MUT_QUSE_DRY_RUN_PLANS_BY_ASSUMING",
       "occurrences": 1,
       "testNamePattern": "\\[SG-",
@@ -256,6 +274,18 @@
             "[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded"
           ],
           "signal": "SG28-relative-entry-path-is-anchored"
+        },
+        {
+          "test": [
+            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+          ],
+          "signal": "SG31-relative-target-traversed-raw"
+        },
+        {
+          "test": [
+            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+          ],
+          "signal": "SG32-traversed-directory-is-a-chain-node"
         }
       ]
     },
@@ -371,15 +401,21 @@
         },
         {
           "test": [
-            "[SG-29] round 3 P2 (X16″): an out-of-root TARGET is not admitted by an in-root SPELLING"
-          ],
-          "signal": "SG29-out-of-root-target-is-not-guarded"
-        },
-        {
-          "test": [
             "[SG-30] round 3 P2 (X4′): a preserved report is RECONCILED, so an emptied case alias never blocks"
           ],
           "signal": "SG30-preserved-report-is-reconciled"
+        },
+        {
+          "test": [
+            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+          ],
+          "signal": "SG31-relative-target-traversed-raw"
+        },
+        {
+          "test": [
+            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+          ],
+          "signal": "SG32-traversed-directory-is-a-chain-node"
         }
       ]
     },
@@ -406,6 +442,12 @@
             "[SG-4] AC1 round 14 (X17 (1a)): the TWO-HOP chain is protected — the intermediate link, then its directory, then the bytes"
           ],
           "signal": "SG4-chain-closure-protects-the-intermediate-link"
+        },
+        {
+          "test": [
+            "[SG-27] round 3 P1 (X17′): a NON-ASCII case alias is the kernel’s answer, on EITHER volume"
+          ],
+          "signal": "SG27-non-ascii-case-alias-is-the-kernels"
         }
       ]
     },
@@ -502,6 +544,18 @@
             "[SG-18] AC9 round 13 (X20): a `symlink` entry on a protected shelf’s chain is preserved — the alias first, then the original"
           ],
           "signal": "SG18-symlink-entry-on-the-chain-is-preserved"
+        },
+        {
+          "test": [
+            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+          ],
+          "signal": "SG31-relative-target-traversed-raw"
+        },
+        {
+          "test": [
+            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+          ],
+          "signal": "SG32-traversed-directory-is-a-chain-node"
         }
       ]
     },
@@ -522,6 +576,42 @@
             "[SG-6] AC2 round 15 (X17 (1a) class split): on a SYMLINKED CORE the credentials are still removed"
           ],
           "signal": "SG6-chain-node-does-not-protect-its-descendants"
+        },
+        {
+          "test": [
+            "[SG-9] AC5 (X10/Y9): a symlinked <state> is NEVER DESCENDED, and the ordinary alias layout still completes"
+          ],
+          "signal": "SG9-symlinked-state-is-never-descended"
+        },
+        {
+          "test": [
+            "[SG-17] AC9 round 17 (X17 (1a)): a HYPOTHETICAL shelf root keeps FULL class (i) reach — the physical path is covered too"
+          ],
+          "signal": "SG17-hypothetical-root-keeps-subtree-reach"
+        },
+        {
+          "test": [
+            "[SG-18] AC9 round 13 (X20): a `symlink` entry on a protected shelf’s chain is preserved — the alias first, then the original"
+          ],
+          "signal": "SG18-symlink-entry-on-the-chain-is-preserved"
+        },
+        {
+          "test": [
+            "[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long valid chain never blocks forever"
+          ],
+          "signal": "SG26-hop-budget-does-not-leak-between-roots"
+        },
+        {
+          "test": [
+            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+          ],
+          "signal": "SG31-relative-target-traversed-raw"
+        },
+        {
+          "test": [
+            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+          ],
+          "signal": "SG32-traversed-directory-is-a-chain-node"
         }
       ]
     },
@@ -644,6 +734,18 @@
             "[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the canonical cwd and guarded"
           ],
           "signal": "SG28-relative-entry-path-is-anchored"
+        },
+        {
+          "test": [
+            "[SG-31] round 4 P1 \\#1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain"
+          ],
+          "signal": "SG31-relative-target-traversed-raw"
+        },
+        {
+          "test": [
+            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+          ],
+          "signal": "SG32-traversed-directory-is-a-chain-node"
         }
       ]
     },
@@ -708,26 +810,6 @@
       ]
     },
     {
-      "id": "quse-dot-dot-name-read-as-traversal",
-      "wp": "WP-uninstall-shelf-deletion-guards",
-      "criterion": "1",
-      "why": "PR-gate round 2, finding 3. Criterion 1's containment arms assert that bytes under `<core>/logs` SURVIVE, and every one of them uses an ordinary directory name — so the predicate's `startsWith('..')` shortcut is invisible to all of them. Only a component literally NAMED `..recovery` separates \\\"the target is inside\\\" from \\\"the relative path merely begins with two dots\\\", and under the mutation that name reads as an escape out of `<core>/logs`, the guard permits the recursive delete, and the copy goes with it. Declared because a predicate bug is exactly the shape a survival assertion cannot see.",
-      "file": "src/core/manifest.js",
-      "find": "  return !rel.split(path.sep).includes('..');",
-      "replace": "  return !rel.startsWith('..'); /* RP_MUT_QUSE_DOT_DOT_NAME_READ_AS_TRAVERSAL */",
-      "marker": "RP_MUT_QUSE_DOT_DOT_NAME_READ_AS_TRAVERSAL",
-      "occurrences": 1,
-      "testNamePattern": "\\[SG-",
-      "expectRed": [
-        {
-          "test": [
-            "[SG-25] round 2 finding 3 (X18): a component NAMED `..recovery` is not parent traversal"
-          ],
-          "signal": "SG25-dot-dot-prefixed-name-is-not-traversal"
-        }
-      ]
-    },
-    {
       "id": "quse-relative-entry-not-anchored",
       "wp": "WP-uninstall-shelf-deletion-guards",
       "criterion": "9",
@@ -750,6 +832,112 @@
             "[SG-FUZZ] X17′ exactness: walkChain agrees with the kernel over randomised layouts"
           ],
           "signal": "SGFUZZ-walkchain-equals-realpath-native"
+        }
+      ]
+    },
+    {
+      "id": "quse-link-target-collapsed-before-traversal",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "1",
+      "why": "PR-gate round 4, Astra P1 #1. Criterion 1's chain arms all name targets WITHOUT a `..`, so a lexical collapse of the target string is invisible to every one of them. Under the mutation `state -> app/jump/../logs` never visits `app/jump`, the link is removed by an ordinary replay, `<state>` dangles, and the next sweep's rebuilt anchors no longer cover the copy. The revert is one substring.",
+      "file": "src/core/manifest.js",
+      "find": "        target.absolute ? target.raw : rawJoin(path.dirname(here), target.raw),",
+      "replace": "        target.absolute ? target.raw : path.join(path.dirname(here), target.raw), /* RP_MUT_QUSE_LINK_TARGET_COLLAPSED_BEFORE_TRAVERSAL */",
+      "marker": "RP_MUT_QUSE_LINK_TARGET_COLLAPSED_BEFORE_TRAVERSAL",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+          ],
+          "signal": "SG32-traversed-directory-is-a-chain-node"
+        }
+      ]
+    },
+    {
+      "id": "quse-traversed-directory-not-a-chain-node",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "1",
+      "why": "PR-gate round 4, Astra P1 #2. Every other chain assertion in this package protects a LINK, so a rule that records only links passes all of them. Only a DIRECTORY traversed inside a target string — `app` in `state -> app/../logs` — separates 'the chain is its links' from 'the chain is the traversal'; removing `app` makes the link dangle just as surely.",
+      "file": "src/core/manifest.js",
+      "find": "    if (insideTarget) {\n      const node = canonicalise(here);\n      if (node !== null) ctx.chain.add(node);\n    }",
+      "replace": "    /* RP_MUT_QUSE_TRAVERSED_DIRECTORY_NOT_A_CHAIN_NODE */",
+      "marker": "RP_MUT_QUSE_TRAVERSED_DIRECTORY_NOT_A_CHAIN_NODE",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-32] round 4 P1 \\#2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node"
+          ],
+          "signal": "SG32-traversed-directory-is-a-chain-node"
+        }
+      ]
+    },
+    {
+      "id": "quse-planner-ignores-retention",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "8",
+      "why": "PR-gate round 4, Astra P2 (X15′). Criterion 8 asserts the plan's CONTENT for absent/empty/unreadable shelves, none of which involves a retained `<state>` alias — so a planner that ignores retention passes all of them while telling the user a directory will be removed that the live command cannot remove. The mutation restores exactly that.",
+      "file": "src/core/manifest.js",
+      "find": "      disposeStateTree(paths, prot, removed, preservedQuarantine, !dryRun);",
+      "replace": "      if (!dryRun) disposeStateTree(paths, prot, removed, preservedQuarantine, true); else removed.push(paths.state); /* RP_MUT_QUSE_PLANNER_IGNORES_RETENTION */",
+      "marker": "RP_MUT_QUSE_PLANNER_IGNORES_RETENTION",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-13] AC8 (X15): --dry-run PLANS BY READING, and performs ZERO mutating filesystem calls"
+          ],
+          "signal": "SG13-dry-run-plans-by-reading-only"
+        },
+        {
+          "test": [
+            "[SG-34] round 4 P2 (X15′): the planner applies the SAME retention as the live sweep"
+          ],
+          "signal": "SG34-planner-applies-retention"
+        }
+      ]
+    },
+    {
+      "id": "quse-out-of-root-target-guarded",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "9",
+      "why": "PR-gate round 3, X16″. Every other guard assertion measures something being PRESERVED; this is the one direction where over-guarding is the defect — an entry whose SPELLING is in-root but whose TARGET is not enters `shelfGuarded` and blocks the uninstall forever over a path no deleter reaches. The mutation restores the literal-boundary admission.",
+      "file": "src/core/manifest.js",
+      "find": "      if (shelfGuardBound(admitPath)) {",
+      "replace": "      if (shelfGuardBound(admitPath) || shelfGuardBound(entry.path)) { /* RP_MUT_QUSE_OUT_OF_ROOT_TARGET_GUARDED */",
+      "marker": "RP_MUT_QUSE_OUT_OF_ROOT_TARGET_GUARDED",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-29] round 3 P2 (X16″): an out-of-root TARGET is not admitted by an in-root SPELLING"
+          ],
+          "signal": "SG29-out-of-root-target-is-not-guarded"
+        }
+      ]
+    },
+    {
+      "id": "quse-preserved-report-not-reconciled",
+      "wp": "WP-uninstall-shelf-deletion-guards",
+      "criterion": "10",
+      "why": "PR-gate round 3, X4′. A report naming a directory the sweep ALREADY REMOVED makes Table W row W10 block on a path the user cannot clear — a permanent refusal, which every 'something was preserved' assertion in this package reads as success. Only an arm that asserts the uninstall COMPLETES can see it.",
+      "file": "src/core/manifest.js",
+      "find": "  return { removed, skippedForVault, preservedQuarantine: stillThere };",
+      "replace": "  return { removed, skippedForVault, preservedQuarantine }; /* RP_MUT_QUSE_PRESERVED_REPORT_NOT_RECONCILED */",
+      "marker": "RP_MUT_QUSE_PRESERVED_REPORT_NOT_RECONCILED",
+      "occurrences": 1,
+      "testNamePattern": "\\[SG-",
+      "expectRed": [
+        {
+          "test": [
+            "[SG-30] round 3 P2 (X4′): a preserved report is RECONCILED, so an emptied case alias never blocks"
+          ],
+          "signal": "SG30-preserved-report-is-reconciled"
         }
       ]
     }

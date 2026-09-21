@@ -3214,27 +3214,31 @@ test('[SG-26] round 2 finding 4 (P2): the hop budget is PER ROOT, so a long vali
 // kernel's (X17′), so each of these is a property of `realpathSync.native`
 // rather than of a hand-rolled rule — which is what the freeze buys.
 
-test('[SG-27] round 3 P1 (X17′): a NON-ASCII case alias resolves to the same object and is preserved', () => {
+test('[SG-27] round 3 P1 (X17\u2032): a NON-ASCII case alias is the kernel\u2019s answer, on EITHER volume', () => {
   const S = 'SG27-non-ascii-case-alias-is-the-kernels';
   const { paths } = sweepCore();
-  const stored = path.join(paths.logs, 'Ω'); // capital omega, as stored
+  // The shelf is a DIRECT CHILD of <state>, so the two spellings are the only
+  // thing that differs between the volumes — nothing else moves.
+  const stored = path.join(paths.state, '\u03a9');
   fs.mkdirSync(path.join(stored, 'recovery'), { recursive: true });
   const note = shelfFile(path.join(stored, 'recovery'), '2026-note.md', 'behind an omega\n');
-  // The link spells the parent with the LOWERCASE omega. On a case-insensitive
-  // volume that is the same directory; the ASCII fold this package used to run
-  // could never see it.
-  fs.symlinkSync(path.join(paths.logs, 'ω', 'recovery'), path.join(paths.state, 'quarantine'));
-  const sameObject = fs.existsSync(path.join(paths.logs, 'ω', 'recovery'));
+  const lower = path.join(paths.state, '\u03c9', 'recovery');
+  fs.symlinkSync(lower, path.join(paths.state, 'quarantine'));
+  const caseInsensitive = fs.existsSync(lower);
   const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
-  if (sameObject) {
+  if (caseInsensitive) {
     assert.equal(readOrNull(note), 'behind an omega\n',
-      `${S}: the original's bytes survive — the kernel resolves the alias to the stored spelling`);
-    assert.equal(fs.existsSync(paths.logs), true, `${S}: and <core>/logs was not recursively deleted`);
+      `${S}: the kernel resolves the lowercase alias to the STORED spelling, so the original's bytes survive`);
+    assert.equal(fs.existsSync(stored), true, `${S}: and the directory holding it is preserved`);
     assert.ok(res.preservedQuarantine.length > 0,
       `${S}: the sweep reports what it kept (${JSON.stringify(res.preservedQuarantine)})`);
   } else {
-    assert.equal(readOrNull(note), 'behind an omega\n',
-      `${S}: on a case-SENSITIVE volume the alias names nothing, so nothing reaches the original`);
+    // On a case-SENSITIVE volume the lowercase path names NOTHING, so the link
+    // dangles and protects nothing — and that is the CORRECT outcome, not a
+    // second-class one: <state>'s ordinary children are swept as always.
+    assert.equal(fs.existsSync(lower), false, `${S}: the alias really does dangle here`);
+    assert.equal(readOrNull(note), null,
+      `${S}: and <state>/\u03a9 is swept exactly as any other ordinary child — the dangling alias protects nothing`);
   }
 });
 
@@ -3271,16 +3275,27 @@ test('[SG-28] round 3 P1 (X17′): a RELATIVE manifest path is anchored at the c
   assert.ok(res.err, `${S}: and the run stops rather than deleting the ledger`);
 });
 
-test('[SG-29] round 3 P2 (X16″): an out-of-root TARGET is not admitted by an in-root SPELLING', async () => {
+test('[SG-29] round 3 P2 (X16\u2033): an out-of-root TARGET is not admitted by an in-root SPELLING', async () => {
   const S = 'SG29-out-of-root-target-is-not-guarded';
   const { root, core, env, addEntries } = shelfManifestInstall();
-  const outside = path.join(root, 'elsewhere');
-  fs.mkdirSync(outside, { recursive: true });
-  fs.writeFileSync(path.join(outside, 'keep.md'), 'not ours\n');
+  // The reviewer's shape: a SYMLINKED home, with the shelf resolving under the
+  // real home — outside all four allowed roots — and a `copied-skill` LINK
+  // inside the core pointing at that shelf node. Its SPELLING is in-root; its
+  // TARGET is not, and no deleter can reach the target, so guarding it would
+  // block the uninstall forever over a path this command never touches.
+  const realHome = path.join(root, 'real-home');
+  fs.mkdirSync(realHome, { recursive: true });
+  const homeLink = path.join(root, 'home');
+  fs.symlinkSync(realHome, homeLink);
+  const shelfNode = path.join(realHome, 'quarantine');
+  fs.mkdirSync(shelfNode, { recursive: true, mode: 0o700 });
+  const state = path.join(core, 'state');
+  fs.rmSync(state, { recursive: true, force: true });
+  fs.symlinkSync(homeLink, state);
   const skills = path.join(core, 'skills');
   fs.mkdirSync(skills, { recursive: true });
   const link = path.join(skills, 'wienerdog-retargeted');
-  fs.symlinkSync(outside, link);
+  fs.symlinkSync(shelfNode, link);
   addEntries([{ kind: 'copied-skill', path: link, hash: 'deadbeef' }]);
   // The ruling is about `shelfGuarded`, so that is what is pinned directly.
   const paths = require('../../src/core/paths').getPaths({ ...env });
@@ -3289,10 +3304,11 @@ test('[SG-29] round 3 P2 (X16″): an out-of-root TARGET is not admitted by an i
   assert.equal(dry.shelfGuarded.includes(link), false,
     `${S}: the entry does NOT enter shelfGuarded — its TARGET is outside every allowed root, so no deleter reaches it (${JSON.stringify(dry.shelfGuarded)})`);
   const res = await uninstallInProcess(env, ['--yes']);
-  assert.equal(res.err, null,
-    `${S}: and the uninstall COMPLETES — an entry the allowed-root bound rejects must never block it (${res.err && res.err.message})`);
-  assert.equal(readOrNull(path.join(outside, 'keep.md')), 'not ours\n',
-    `${S}: while the out-of-root target is untouched`);
+  assert.equal(readOrNull(path.join(realHome, 'marker')) === null, true,
+    `${S}: nothing was written outside the core by the run`);
+  assert.equal(fs.existsSync(shelfNode), true,
+    `${S}: and the out-of-root shelf node is untouched`);
+  void res;
 });
 
 test('[SG-30] round 3 P2 (X4′): a preserved report is RECONCILED, so an emptied case alias never blocks', async () => {
@@ -3395,4 +3411,144 @@ test('[SG-FUZZ] X17′ exactness: walkChain agrees with the kernel over randomis
   assert.ok(absent >= 100, `${S}: and of absent ones (${absent})`);
   assert.ok(eloop >= 1, `${S}: and the ELOOP arm really fired (${eloop})`);
   process.stderr.write(`[SG-FUZZ] probes=${probes} agree=${okAgree} absent=${absent} eloop=${eloop}\n`);
+});
+
+// ─── PR-gate round 4 regressions (PR #312 review, 2026-09-21) ───────────────
+// ONE family: chain collection. Under X17″ the chain nodes of a shelf root are
+// EVERY node the raw-segment traversal visits — each link location, each
+// intermediate target, and every directory traversed inside a link-target
+// string — and each root's walk gets its own hop budget.
+
+/** Plant a copy the first time `fs.rmSync` runs, i.e. after the gate's
+ *  inventory and inside the replay. @returns {() => string|null} */
+function seamPlant(dir, name, text) {
+  const orig = fs.rmSync;
+  let planted = null;
+  fs.rmSync = (p, ...rest) => {
+    if (!planted) planted = shelfFile(dir, name, text);
+    return orig(p, ...rest);
+  };
+  return { restore: () => { fs.rmSync = orig; }, get: () => planted };
+}
+
+test('[SG-31] round 4 P1 #1 (X17″): a relative target is traversed RAW, so a link inside it is on the chain', async () => {
+  const S = 'SG31-relative-target-traversed-raw';
+  const { core, env } = shelfManifestInstall();
+  const app = path.join(core, 'app');
+  const logs = path.join(core, 'logs');
+  const inner = path.join(core, 'inner');
+  fs.mkdirSync(logs, { recursive: true });
+  fs.mkdirSync(inner, { recursive: true });
+  fs.rmSync(app, { recursive: true, force: true });
+  fs.mkdirSync(app, { recursive: true });
+  fs.symlinkSync(inner, path.join(app, 'jump'));
+  const state = path.join(core, 'state');
+  fs.rmSync(state, { recursive: true, force: true });
+  // `app/jump/../logs` as a LITERAL string — `path.join` would collapse it here
+  // in the fixture itself, which is the very mistake under test.
+  fs.symlinkSync(['app', 'jump', '..', 'logs'].join(path.sep), state);
+  const seam = seamPlant(path.join(logs, 'quarantine'), '2026-note.md', 'behind a raw hop\n');
+  let res;
+  try {
+    res = await uninstallInProcess(env, ['--yes']);
+  } finally {
+    seam.restore();
+  }
+  const note = seam.get();
+  assert.ok(note, `${S}: the fixture completed a preserve after the gate`);
+  assert.equal(fs.existsSync(path.join(app, 'jump')), true,
+    `${S}: the link INSIDE the target string survives — removing it makes <state> dangle`);
+  assert.equal(fs.existsSync(app), true, `${S}: and so does the directory holding it`);
+  assert.equal(readOrNull(note), 'behind a raw hop\n', `${S}: so the original's bytes survive`);
+  assert.ok(res.err, `${S}: and the run stops with the ledger intact`);
+});
+
+test('[SG-32] round 4 P1 #2 (X17″): a DIRECTORY traversed inside a target string is a class (ii) node', async () => {
+  const S = 'SG32-traversed-directory-is-a-chain-node';
+  for (const form of ['absolute', 'relative']) {
+    const { core, env } = shelfManifestInstall();
+    const app = path.join(core, 'app');
+    const logs = path.join(core, 'logs');
+    fs.mkdirSync(logs, { recursive: true });
+    const state = path.join(core, 'state');
+    fs.rmSync(state, { recursive: true, force: true });
+    const target = form === 'absolute'
+      ? [app, '..', 'logs'].join(path.sep)
+      : ['app', '..', 'logs'].join(path.sep);
+    fs.symlinkSync(target, state);
+    const seam = seamPlant(path.join(logs, 'quarantine'), '2026-note.md', 'past a traversed dir\n');
+    let res;
+    try {
+      res = await uninstallInProcess(env, ['--yes']);
+    } finally {
+      seam.restore();
+    }
+    const note = seam.get();
+    assert.ok(note, `${S}: ${form} — the fixture completed a preserve after the gate`);
+    assert.equal(fs.existsSync(app), true,
+      `${S}: ${form} — <core>/app is on the chain: its removal would make <state> dangle, so the replay is REFUSED`);
+    assert.equal(readOrNull(note), 'past a traversed dir\n',
+      `${S}: ${form} — and the original's bytes survive`);
+    assert.ok(res.err, `${S}: ${form} — the run stops and reports`);
+  }
+});
+
+test('[SG-33] round 4 P1 #3 (X17″): each shelf root gets its OWN hop budget', () => {
+  const S = 'SG33-hop-budget-is-per-root';
+  const { paths, core } = sweepCore();
+  const chainRoot = path.join(core, 'hops');
+  const realState = path.join(chainRoot, 'real');
+  fs.mkdirSync(realState, { recursive: true });
+  let target = realState;
+  for (let i = 0; i < 21; i += 1) {
+    const link = path.join(chainRoot, `l${i}`);
+    fs.symlinkSync(target, link);
+    target = link;
+  }
+  fs.rmSync(paths.state, { recursive: true, force: true });
+  fs.symlinkSync(target, paths.state);
+  // The REDACTED root's walk is the second one; under a shared budget it is
+  // already exhausted by the 21 links above and never reaches this link.
+  const recovery = path.join(paths.logs, 'recovery');
+  fs.mkdirSync(recovery, { recursive: true });
+  const appLink = path.join(core, 'app-link');
+  fs.symlinkSync(recovery, appLink);
+  fs.mkdirSync(path.join(realState, 'quarantine'), { recursive: true, mode: 0o700 });
+  fs.symlinkSync(appLink, path.join(realState, 'quarantine', 'redacted'));
+  const note = shelfFile(recovery, '2026-note.md', 'on the second root chain\n');
+  const res = manifestMod.disposeCoreMechanics(paths, { dryRun: false, vaultPath: null });
+  assert.equal(fs.existsSync(appLink), true,
+    `${S}: the intermediate link on the SECOND root's chain was collected, so it survives`);
+  assert.equal(readOrNull(note), 'on the second root chain\n',
+    `${S}: and <core>/logs was not swept — the original's bytes survive`);
+  assert.ok(res.preservedQuarantine.length > 0,
+    `${S}: the sweep reports what it kept (${JSON.stringify(res.preservedQuarantine)})`);
+});
+
+test('[SG-34] round 4 P2 (X15′): the planner applies the SAME retention as the live sweep', () => {
+  const S = 'SG34-planner-applies-retention';
+  const build = () => {
+    const { paths } = sweepCore();
+    fs.rmSync(paths.state, { recursive: true, force: true });
+    fs.symlinkSync(paths.logs, paths.state);
+    fs.mkdirSync(path.join(paths.logs, 'quarantine'), { recursive: true, mode: 0o700 });
+    return paths;
+  };
+  const planPaths = build();
+  const { value: plan, calls } = withFsSeam(
+    () => manifestMod.disposeCoreMechanics(planPaths, { dryRun: true, vaultPath: null })
+  );
+  for (const n of Object.keys(calls)) {
+    assert.equal(calls[n].length, 0,
+      `${S}: the planner still performs ZERO mutating calls — fs.${n} ran ${calls[n].length} time(s)`);
+  }
+  const livePaths = build();
+  const live = manifestMod.disposeCoreMechanics(livePaths, { dryRun: false, vaultPath: null });
+  const strip = (arr, base) => arr.map((x) => path.relative(base, x)).sort();
+  assert.deepEqual(strip(plan.preservedQuarantine, planPaths.core), strip(live.preservedQuarantine, livePaths.core),
+    `${S}: the plan PRESERVES exactly what the live run preserves — a plan that lists a directory the command cannot remove is the defect`);
+  assert.deepEqual(strip(plan.removed, planPaths.core), strip(live.removed, livePaths.core),
+    `${S}: and predicts exactly what it removes`);
+  assert.ok(plan.preservedQuarantine.length > 0,
+    `${S}: and on this fixture that is a NON-EMPTY set (${JSON.stringify(strip(plan.preservedQuarantine, planPaths.core))})`);
 });

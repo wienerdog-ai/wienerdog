@@ -1835,7 +1835,7 @@ function walkChain(p, ctx) {
   const abs = path.isAbsolute(p) ? p : anchorRelative(p);
   // (a) CHAIN NODES. Best-effort and never decisive: it stops wherever the
   //     lexical walk stops, and the RESOLUTION below does not depend on it.
-  collectChain(abs, ctx);
+  collectChain(abs, ctx, false);
   // THE RESOLUTION IS THE KERNEL'S (X17′) — asked of the whole path first,
   // because the kernel answers shapes an `lstat` walk cannot: `file/..`
   // resolves on some platforms where `lstat` reports ENOTDIR, and that
@@ -1871,7 +1871,7 @@ function walkChain(p, ctx) {
  * anything: it stops at the first component it cannot classify.
  * @param {string} abs @param {{chain: Set<string>, hops: number}} ctx
  */
-function collectChain(abs, ctx) {
+function collectChain(abs, ctx, insideTarget) {
   const { root, segs } = rawSegments(abs);
   const at = (i) => root + segs.slice(0, i + 1).join(path.sep);
   for (let i = 0; i < segs.length; i += 1) {
@@ -1882,17 +1882,30 @@ function collectChain(abs, ctx) {
     } catch {
       return; // absent or unreadable — nothing further to collect
     }
+    // X17″: EVERY node the traversal visits INSIDE a link-target string is a
+    // chain node, not only the links. For `state -> app/../logs` the real `app`
+    // is on the chain because removing it makes the link dangle — PR-gate
+    // round 4, Astra P1 #2.
+    if (insideTarget) {
+      const node = canonicalise(here);
+      if (node !== null) ctx.chain.add(node);
+    }
     if (!st.isSymbolicLink()) continue;
     const parent = canonicalise(i === 0 ? root : at(i - 1));
     if (parent === null) return;
     ctx.chain.add(path.join(parent, segs[i])); // the link LOCATION
     const via = canonicalise(here);
-    if (via !== null) ctx.chain.add(via); // the intermediate TARGET
+    if (via !== null) ctx.chain.add(via); // the fully-resolved intermediate TARGET
     const target = readLinkTarget(here);
-    if (target.path !== null && ctx.hops < MAX_LINK_HOPS) {
+    if (target.raw !== null && ctx.hops < MAX_LINK_HOPS) {
       ctx.hops += 1;
-      collectChain(path.isAbsolute(target.path) ? target.path
-        : anchorRelative(target.path), ctx);
+      // RAW concatenation against the LINK's own directory: `path.join` here is
+      // exactly the collapse round 4 found.
+      collectChain(
+        target.absolute ? target.raw : rawJoin(path.dirname(here), target.raw),
+        ctx,
+        true
+      );
     }
   }
 }
@@ -1919,16 +1932,26 @@ function canonicalise(p) {
   }
 }
 
-/** One link's target, absolutised against the LINK's own directory.
- *  @param {string} link @returns {{path:string|null, code:string|null}} */
+/** One link's RAW target string, plus whether it is absolute. **PR-gate round 4,
+ *  Astra P1 #1: this used to return `path.join(dirname(link), raw)`, which
+ *  COLLAPSED the target's `..` lexically before its components were ever
+ *  visited — so for `state -> app/jump/../logs` the traversal never saw
+ *  `app/jump` and the link could be removed out from under the shelf.**
+ *  @param {string} link @returns {{raw:string|null, absolute:boolean, code:string|null}} */
 function readLinkTarget(link) {
   let raw;
   try {
     raw = fs.readlinkSync(link);
   } catch (e) {
-    return { path: null, code: (e && /** @type {any} */ (e).code) || 'UNKNOWN' };
+    return { raw: null, absolute: false, code: (e && /** @type {any} */ (e).code) || 'UNKNOWN' };
   }
-  return { path: path.isAbsolute(raw) ? raw : path.join(path.dirname(link), raw), code: null };
+  return { raw, absolute: path.isAbsolute(raw), code: null };
+}
+
+/** Concatenate without normalising, so `.`/`..` survive to the kernel.
+ *  @param {string} a @param {string} b @returns {string} */
+function rawJoin(a, b) {
+  return a.endsWith(path.sep) ? a + b : a + path.sep + b;
 }
 
 /** One resolution, with a throwaway chain: the protected set must never be
@@ -2003,6 +2026,11 @@ function shelfProtection(paths) {
     }
   }
   for (const r of roots) {
+    // PR-gate round 4, Astra P1 #3: the round-1 fix made the budget per
+    // `walkChain` CALL, but `ctx` is reused across the roots here, so a long
+    // chain on the first root still starved the second. Reset it per ROOT; the
+    // node set stays shared, which is what X17 (1a) needs.
+    ctx.hops = 0;
     const res = walkChain(r, ctx);
     if (res.state === 'unanswerable') {
       note(/** @type {string} */ (res.dir), /** @type {string} */ (res.code));
@@ -2049,9 +2077,13 @@ function shelfBlocks(target, prot, recursive) {
  * @param {import('./paths').WienerdogPaths} paths
  * @param {ReturnType<typeof shelfProtection>} prot the set from step 0a
  * @param {string[]} removed @param {string[]} preservedQuarantine
+ * @param {boolean} mutate false ⇒ Table X row **X15′**'s READ-ONLY PLANNER: the
+ *   SAME retention decisions, no filesystem write, and the bottom-up climb
+ *   PREDICTED by an emptiness read — the one place an emptiness test belongs,
+ *   because a planner has no deletion to race.
  * @returns {void}
  */
-function disposeStateTree(paths, prot, removed, preservedQuarantine) {
+function disposeStateTree(paths, prot, removed, preservedQuarantine, mutate) {
   const state = paths.state;
   // (0b) CLASSIFY WITH lstat — never statSync, never the isDir helper (X10).
   let st;
@@ -2090,13 +2122,25 @@ function disposeStateTree(paths, prot, removed, preservedQuarantine) {
       preservedQuarantine.push(state);
       return;
     }
-    fs.unlinkSync(state);
+    if (mutate) fs.unlinkSync(state);
     removed.push(state); // X4: the whole of <state> is gone
     return;
   }
   if (!st.isDirectory()) return; // not a directory at all — do nothing
-  // (1) ENUMERATE. A failure here PROPAGATES, exactly as before (X13).
-  const children = fs.readdirSync(state);
+  const before = preservedQuarantine.length;
+  /** @type {string[]} */ const removableChildren = [];
+  // (1) ENUMERATE. A failure here PROPAGATES on the LIVE arm, exactly as
+  //     before (X13); the PLANNER reports it instead (X15′/K4).
+  let children;
+  try {
+    children = fs.readdirSync(state);
+  } catch (e) {
+    if (!mutate) {
+      preservedQuarantine.push(state);
+      return;
+    }
+    throw e;
+  }
   // (2) Remove every non-shelf child, each gated by X16's symmetric check (X18).
   for (const name of children) {
     const child = path.join(state, name);
@@ -2116,7 +2160,8 @@ function disposeStateTree(paths, prot, removed, preservedQuarantine) {
       preservedQuarantine.push(child);
       continue;
     }
-    fs.rmSync(child, { recursive: true, force: true }); // a failure PROPAGATES (X13)
+    removableChildren.push(name);
+    if (mutate) fs.rmSync(child, { recursive: true, force: true }); // failure PROPAGATES (X13)
   }
   // (3) VALIDATE TOP-DOWN, THEN REMOVE BOTTOM-UP — two passes, opposite
   //     directions (X11). lstat classifies only a path's FINAL component, so
@@ -2143,8 +2188,30 @@ function disposeStateTree(paths, prot, removed, preservedQuarantine) {
     }
     validated.push(level);
   }
+  const preservedSoFar = preservedQuarantine.length > before;
   for (let i = validated.length - 1; i >= 0; i -= 1) {
     const level = validated[i];
+    if (!mutate) {
+      // X15′: PREDICT the same outcome by reading emptiness. Anything this walk
+      // already preserved keeps every ancestor alive, exactly as ENOTEMPTY would.
+      let names;
+      try {
+        names = fs.readdirSync(level);
+      } catch (e) {
+        if (isAbsentCode((e && /** @type {any} */ (e).code) || 'UNKNOWN')) continue;
+        preservedQuarantine.push(level);
+        return;
+      }
+      const leftovers = level === state
+        ? names.filter((n) => asciiFold(n) !== QUARANTINE_DIRNAME && !removableChildren.includes(n))
+        : names.filter((n) => asciiFold(n) !== QUARANTINE_REDACTED_DIRNAME);
+      if (preservedSoFar || leftovers.length > 0) {
+        preservedQuarantine.push(level);
+        return;
+      }
+      if (level === state) removed.push(state);
+      continue;
+    }
     try {
       // rmdirSync IS the whole mechanism: it removes a directory if and only if
       // it is empty, atomically, in the kernel — so the emptiness test and the
@@ -2233,8 +2300,10 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   //      before step 3. Computing them later leaves the checks with nothing to
   //      check (X18) or lets the unlink erase the evidence they derive from
   //      (X19). The LIVE arm takes no inventory and holds no snapshot (X2).
-  const prot = dryRun ? null : shelfProtection(paths);
-  const plan = dryRun ? quarantineInventory(paths) : null;
+  // X15′: the PLANNER computes the SAME protected set and applies the SAME
+  // retention decisions, so a plan can never list a directory the live command
+  // cannot remove. It still performs no mutating filesystem call at all.
+  const prot = shelfProtection(paths);
   for (const dir of mechanics) {
     const isState = dir === paths.state;
     // `<state>` is classified by Table X row X1 step 0b, with `lstat`, INSIDE
@@ -2253,32 +2322,13 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
       continue;
     }
     if (isState) {
-      if (plan) {
-        // X15's READ-ONLY PLANNER. `<state>` is predicted removed IFF the shelf
-        // is ABSENT or EMPTY and every level validated; otherwise the levels
-        // that would be preserved are named instead. Being wrong costs a line
-        // of output, never a byte — a planner has no deletion to race.
-        if (!isDir(dir)) continue;
-        const shelfClean = plan.entries === 0 && plan.unreadable.length === 0;
-        if (shelfClean) {
-          removed.push(dir);
-        } else {
-          for (const r of plan.roots) if (r.entries > 0) preservedQuarantine.push(r.dir);
-          for (const u of plan.unreadable) {
-            if (!preservedQuarantine.includes(u.dir)) preservedQuarantine.push(u.dir);
-          }
-          for (const b of plan.blockers || []) {
-            if (!preservedQuarantine.includes(b)) preservedQuarantine.push(b);
-          }
-        }
-        continue;
-      }
-      disposeStateTree(paths, /** @type {any} */ (prot), removed, preservedQuarantine);
+      disposeStateTree(paths, prot, removed, preservedQuarantine, !dryRun);
       continue;
     }
-    if (prot) {
-      // X18/Table V: this recursive rmSync is NOT an exemption — `<core>/logs`
-      // can be a real directory a shelf symlink resolves into.
+    // X18/Table V: this recursive rmSync is NOT an exemption — `<core>/logs`
+    // can be a real directory a shelf symlink resolves into. The PLANNER runs
+    // the identical gate (X15′), so plan and act agree by construction.
+    {
       const res = resolveOne(dir);
       if (
         res.state === 'unanswerable'
@@ -2328,4 +2378,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault, preservedQuarantine: stillThere };
 }
 
-module.exports = { __walkChainForTest: (p) => walkChain(p, { chain: new Set(), hops: 0 }), load, record, save, reverse, disposeCoreMechanics, quarantineInventory, discoverSchedulesOnDisk, DISCOVERED_DISPOSITION, R9_LOGIN_RELOAD_WARNING, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, linkIdentity, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
+module.exports = { __shelfProtectionForTest: shelfProtection, __walkChainForTest: (p) => walkChain(p, { chain: new Set(), hops: 0 }), load, record, save, reverse, disposeCoreMechanics, quarantineInventory, discoverSchedulesOnDisk, DISCOVERED_DISPOSITION, R9_LOGIN_RELOAD_WARNING, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, linkIdentity, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
