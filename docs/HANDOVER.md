@@ -43,6 +43,145 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-22 #20 (the 2026-09-19 "go" ruling, executed end to end — all NINE Ready specs implemented, gated and merged; the backlog of Ready work is EMPTY.)**
+> Measured on `main` at `032696f7`, not transcribed.
+>
+> **STATUS IN ONE PARAGRAPH.** The owner's go landed the whole queue. **Nine
+> packages merged** (#303–#310, #312), **all seven `WD-SINK-*` defects are
+> closed**, and `wienerdog uninstall` can no longer destroy the secret
+> quarantine — neither through the disposer's sweeps nor through the manifest
+> replay. Two done-flip PRs filed the records: **#311** (`d0982301`, eight
+> specs, three canonical-extraction passes) and **this one** (the ninth spec,
+> plus the X17 extraction). **`grep '^status: Ready' docs/specs/*.md` now
+> returns nothing.** What remains on `main` is four Drafts and one In-Review
+> with no PR — every one of them an owner decision, not work waiting to be
+> dispatched.
+>
+> **THE OWNER'S OPEN DECISIONS — nothing moves without these.**
+>
+> 1. **Three ADR amendments await a signature.** Measured, all three reading
+>    `Status: **ACCEPTED under standing authorization 2026-09-18 — owner
+>    signature pending.**`: **ADR-0041** (`docs/adr/0041-…:336`, scheduler
+>    replay), **ADR-0019** (`docs/adr/0019-…:88`, the uninstall carve-out) and
+>    **ADR-0023 Amendment 4** (`docs/adr/0023-…:520`, `quarantined → deferred`).
+>    Each was drafted inside its spec and arrived with the implementation.
+>    **Nothing in this repository records the owner approving, accepting,
+>    ratifying or signing any of them**, and the phrase to look for is exactly
+>    *"owner signature pending"* — never anything else.
+> 2. **The filter's privacy call** — `WP-dream-primary-dialogue-filter` is Draft
+>    and parked, and its offline evaluation needs the owner to decide whether
+>    **real transcripts may be projected into a disposable vault and judged**.
+> 3. **Delete or keep `WP-ep2-retention-prune-timing-test`** (Draft). Genuinely
+>    orphaned since #273 — nothing depends on it and its anchors are gone.
+> 4. **`WP-vault-write-cas-window`** (Draft) — the backlog stub #297 left behind,
+>    now unblocked: the deletion guards have landed.
+> 5. **`WP-a10-windows-reap`** (Draft) — still blocked on a **Windows runner**,
+>    which is a purchase, not a spec.
+> 6. **`WP-contract-reference-tables`** — still **In-Review with no traceable
+>    PR**, carried unresolved since pass #12.
+> 7. **Standing owner items travelling with Done specs**, each reversible by
+>    dated amendment and none a direct ruling: the gate package's **2 and 3**
+>    (its item 1 shipped), the scheduler package's **1 and 3** (its item 2
+>    shipped), and the deletion guards' **item 4** (refuse whenever any symlink
+>    exists under `<core>` — recommended against, with its cost stated).
+>
+> **CLOSED since #19, so you can stop looking for it:** `docs/adr/README.md:51`
+> no longer contradicts ADR-0043's own Status line. #311 made **two alignments
+> to the owner's own signing commit `a8ea9dab`** — the README row now reads
+> *"OWNER-SIGNED 2026-09-18"*, and ADR-0043's preamble no longer says nothing
+> records the owner approving it, because `a8ea9dab` does.
+>
+> **THE NINE, IN MERGE ORDER.** Round counts and finding counts are read off the
+> gate comments on each PR; merge SHAs re-derived with `git log`.
+>
+> | # | Spec | PR | Merge | Rounds | Independent-gate findings | What closed it |
+> |---|------|----|-------|--------|---------------------------|----------------|
+> | 1 | `WP-transcript-parsers-harden-text-values` | **#304** | `6eff5186` | 1 | 0 | Both gates clean on the first round. A non-string `text` value is now **declined**, not thrown on and not invented into dialogue. |
+> | 2 | `WP-quarantine-only-copy-shelf` | **#305** | `06ccdb95` | 1 | 0 — fidelity states *"No band-A findings. No band-B findings against the implementation"* | Tests-only. Four declarations and their tests matched the frozen spec byte for byte; nine findings were all spec-side mirror drift, routed not fixed. |
+> | 3 | `WP-secret-sink-redact-before-truncate` | **#303** | `42bd4836` | 2 | 1 `[P2]` at round 2 (round 1's comment is not on the PR, so its count is not measurable from the thread) | The `[P2]` read as a regression and was **not one**: four control cases across `main` and the tip showed a pre-existing scanner limitation (entropy dilution by same-alphabet padding) that the old cut position had masked. Recorded as **accepted residual 3**, not fixed. |
+> | 4 | `WP-ledger-retry-parse-threw-on-upgrade` | **#307** | `c73676bf` | 1 | 0 | Traced that conversions and the one-shot marker share **one ledger object and one serializer**, so no state can persist a conversion without its marker and a crash before the write is idempotently re-converted. |
+> | 5 | `WP-scheduler-replay-manifest-independent` | **#308** | `86f8669a` | 3 | **3 `[P1]` + 1 `[P2]`**; round 1's pair adjudicated *"Both HEAVY"*, round 2's fidelity finding 1 HEAVY and spec-side | Two ruling revisions: **R-B′** (each discovered path disclosed **exactly once**, by its owning record's own line — R-B had made `--dry-run` say `0 item(s) would be removed` while `--yes` removed one) and **R-C′** (act-time recheck asserts identity, `res.real === item.real`, instead of re-deriving containment). |
+> | 6 | `WP-secret-stream-safe-cut-redactor` | **#306** | `1d8d4743` | 5 **+ 5b** | **2 `[P1]` + 5 `[P2]`**; rounds 1 and 2 each adjudicated HEAVY | Every per-push scan made **prefix-determined and region-bounded**, which killed the quadratic-cost family outright — plus an architect ruling giving Table B a **cost and memory envelope** so the last rounds had a criterion to check cost findings against instead of open-ended judgement. |
+> | 7 | `WP-secret-sink-chunk-fix` | **#310** | `391db43f` | 1 **+ 1b** | 1 `[P2]`, adjudicated **"No product defect"** | The test was fixed, not the product: a bounded wait for the redacted marker before the teardown snapshot. The flush-and-latch contract was already proven by a **pre-fix control** that leaks at both sinks on `1d8d4743`. **This merge closed the last four `WD-SINK-CHUNK-*` defects.** |
+> | 8 | `WP-adr-0019-quarantine-uninstall-gate` | **#309** | `8b4cbd4c` | 3 **+ 3b** | **9 `[P2]`** (3+3+3), one adjudicated HEAVY — a Y1 contract violation on the error path | **R-Y1** (an unreadable object is reported by its **shelf root**, never by its own path — the filename leak), **R-K/R-K′** (track the actual on-disk blocker paths so the printed remedy is correct), **R-W4-win32/R-QU7′** (host-specific remedy lines with every PowerShell quote delimiter escaped; RED fixtures made platform-independent). |
+> | 9 | `WP-uninstall-shelf-deletion-guards` | **#312** | `032696f7` | **6 + 4b/5b/6b** | **14 `[P1]` + 8 `[P2]`** — 3+1, 2+2, 3+1, 1+2, 2+1, 3+1 | Round 3's **X17′** handed *"what does this path canonically resolve to"* to the kernel and **froze the resolver**, after five hand re-derivations each of which the next round falsified. Round 6's verdict was that its four items were **one recorded ruling not yet landed at four more sites**, so 6b applied them mechanically and no seventh round ran. |
+>
+> **The wave was interrupted and nothing was lost.** The last commit of 09-19 is
+> `391db43f` at **06:54 CEST**; the next is `3cbb611c` at **2026-09-21 10:13
+> CEST** — a weekly usage limit stopped the session with **#309 in flight on its
+> branch**. It resumed on its own branch tip and merged. No work was redone and
+> no gate verdict was carried across the gap.
+>
+> **COUNTS.** **24 numbered external PR-gate rounds** across the ten PRs of this
+> wave (1 + 1 + 2 + 1 + 3 + 5 + 1 + 3 + 6 for the nine, plus **1** for the
+> done-flip #311), **plus six LIGHT sub-rounds** (#306 5b, #309 3b, #310 1b,
+> #312 4b/5b/6b). Every round ran on the Codex plugin with `gpt-6-astra`, in a
+> detached worktree, raw committed before adjudication. That sits **on top of
+> the 48 Astra design rounds of 2026-09-18** (`ls
+> docs/specs/logbook/2026-09-18-*-astra-raw.json` = 48), so the nine packages
+> carry **72 external review rounds between design and merge**. Independent-gate
+> findings this wave: **at least 19 `[P1]` and 25 `[P2]`** — a floor, because
+> #303's round-1 comment is not on the PR.
+>
+> **OWNER BACKLOG CANDIDATES from this wave — recorded, never decided.** Nothing
+> here records the owner approving, accepting or scheduling any of them.
+> (1) **A canonical-extraction pass over X17** — **DONE in this PR**: Table R,
+> sixteen rows, with X17 shrunk to a pointer and every site registered as a
+> mirror. (2) **A generator-based fuzz that produces aliases INTO the quarantine
+> and copies arriving after the gate** — the deletion-guard family was found one
+> shape per round for eight rounds, because each round's fuzz generated only
+> what the previous round had imagined. (3) **`npm run red-proofs` is in no CI
+> workflow** — measured: `.github/workflows/` holds `ci.yml`,
+> `install-smoke.yml`, `scenarios.yml`, and `grep -rn red-proofs` over them
+> returns nothing, so every RED verdict this repository has ever recorded is a
+> local run. (4) **A scanner-side windowed-entropy rule**, from #303's accepted
+> residual 3. (5) **A Table B authoring rule — predict per-test or say "at
+> least"**: five of #312's twenty designed `expectRed` cells predicted an extent
+> and every one was wrong low (one said two and measured **29**).
+>
+> **PROCESS FINDINGS FOR THE RUNBOOK — all seven unspecced.**
+> (a) **A gate that passes round 5 without closing must trigger a mandatory
+> "freeze or split" decision.** Recommended in pass #19 off two design gates;
+> **this wave applied it three times and it worked every time** — #306's round-5
+> freeze, #312's round-3 resolver freeze and its round-6 surface freeze.
+> (b) **A spec that ships a "bounded work" claim ships its per-byte ceiling and
+> its chunk envelope with it** — three of #306's five rounds went on a resource
+> dimension the contract never stated.
+> (c) **"Refuse" is not fail-closed when the fallback is a forced cut.** Name
+> what happens next and check that *it* is safe.
+> (d) **A ruling that changes a disclosure surface must be checked against the
+> FATE of every case class before it is written** (#308's R-B: consent obtained
+> for less than was done).
+> (e) **An independent-gate "regression" claim needs control cases on BOTH trees
+> before it is classed HEAVY** (#303: real, and one quarter the size the report
+> implied).
+> (f) **An implementer's measured performance attribution must be reproduced by
+> the reviewer before it is believed** (#306: the bound a comment justified made
+> plain blank lines 220× slower).
+> (g) **The dispatch template must name the branch from the spec's own
+> Definition of done**, not from a short slug — #303 and #305 both landed on
+> branches their specs did not name.
+>
+> **MERGED TREE.** `npm run lint` **re-run on this branch this pass — passed**.
+> `npm test` and red-proofs were **not** re-run here and no new counts are
+> claimed: `git diff --stat 624b82f8 032696f7 -- src tests` is **empty**, so the
+> implementer's measurement on the merged tip stands — **tests 3080 / pass 3068
+> / fail 0 / skipped 12** on darwin and **3080 / 3057 / 0 / 23** on ubuntu, with
+> all 47 `[SG-*]` tests running there. Unfiltered `npm run red-proofs` on that
+> tip: **`RUN: PROVEN`, 179/179**, zero `FAILED`/`VACUOUS`/`UNCONTROLLED`/
+> `FILTERED`/`ERROR` — and 179 is re-derived this pass as the declaration count
+> across the 35 files in `tests/red-proofs/`. CI on `624b82f8`: seven checks
+> pass.
+>
+> **NO NPM RELEASE HAS BEEN CUT.** The nine packages of this wave — including
+> every `WD-SINK-*` fix and the whole uninstall carve-out — are on `main` and
+> **not on the installed app**, so tonight's dream carries none of them.
+>
+> **Next in the queue:** (1) the **three signatures**; (2) the **filter's
+> privacy call**; (3) an **npm release** carrying this wave; (4) the four Draft
+> decisions and `WP-contract-reference-tables`; (5) the five owner backlog
+> candidates above.
+>
 > **Status pass, 2026-09-18/19 #19 (same session, evening–night — wave 2 of the owner's "mature them" ruling: four Draft stubs went through design gates, two reached Ready, one was superseded, one split in two. Every design round ran on the Codex plugin with `gpt-6-astra`; every raw was committed before adjudication.)**
 > Measured on `main` at `b3d13dda`, not transcribed.
 >
