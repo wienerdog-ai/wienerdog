@@ -2,7 +2,7 @@
 id: WP-short-slug        # kebab slug — becomes the filename WP-short-slug.md
 title: <verb-first, e.g. "Implement vault skeleton generator">
 status: Draft            # Draft | Ready | In-Progress | In-Review | Done | Superseded
-model: sonnet            # recommended implementer tier: sonnet | opus
+model: opus              # implementer tier: opus, run at high effort (ADR-0005 Amendment 1); sonnet is legacy
 size: S                  # S (<1h session) | M (one session) — L is forbidden; split it
 depends_on: []           # e.g. [WP-vault-skeleton]
 adrs: []                 # e.g. [ADR-0004] — decisions this WP must respect

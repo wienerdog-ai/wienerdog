@@ -1,7 +1,7 @@
 ---
 name: wd-researcher
 description: Use this agent for time-boxed investigations that feed specs - provider TOS and rate-limit realities, Claude Code / Codex CLI hook and skill format changes, launchd/systemd/schtasks behaviors, competitor analysis (OpenClaw, Hermes Agent), library evaluation. Examples - architect needs the current Codex config format → launch wd-researcher; "has Claude Code changed the hooks schema?" → launch wd-researcher.
-model: sonnet
+model: opus
 color: green
 ---
 
