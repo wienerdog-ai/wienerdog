@@ -66,6 +66,34 @@ Evaluated in this order; the first rule that matches decides.
    spec's Verification steps: a machinery finding is fixed within that surface
    or accepted, never answered with more machinery.
 
+## 1. Template conformance — round zero (architect's self-report)
+
+`docs/runbooks/codex-review.md` requires this conformance read to come from a
+**clean-context executor** given only the spec and the template. The table
+below is the author's own check, recorded so that executor has something to
+confirm or contradict. It does not replace that read.
+
+| `_TEMPLATE.md` section | In the spec | Note |
+|---|---|---|
+| frontmatter: `id`, `title`, `status`, `model`, `size`, `depends_on`, `adrs`, `epic` | present | `status: Draft`, `size: S`, `epic: dream-primary-dialogue` |
+| `# WP-<slug>: <title>` | present | matches the frontmatter title |
+| authoring-rules bullet | present | verbatim |
+| `## Context (read this, nothing else)` | present | includes the argument against the Done spec's heuristic ruling, the exchange consequence and provenance |
+| `## Current state` | present | re-derived at `8117e221`; §3 below |
+| `## Deliverables (permission boundary — touch ONLY these)` | present | 16 rows, boundary comment kept |
+| `### Exact contracts` | present | predicate behaviour, the JSDoc, sweeps S1–S3, E0–E5 |
+| `## Contract reference` | present | the trigger fires on three of seven |
+| `### Contract table(s)` | present | Table H (canonical) as H4, plus an evidence table marked non-canonical |
+| `### Mirrored Surface Checklist` | present | 7 bullets |
+| `## Implementation notes & constraints` | present | includes the RED-proof register P1–P4 |
+| `## Security checklist` | present | three bullets |
+| `## Acceptance criteria` | present | AC1–AC7 plus the idempotence line as `N/A — …` |
+| `## Verification steps` | present | three H3 subsections: current-state, implementation, local re-measurement |
+| `## Out of scope (do NOT do these)` | present | |
+| `## Definition of done` | present | items 0–5 |
+| *(extra)* `## Dispatch precondition — owner items` | present | not a template section; three items; placed before Definition of done as in the cas-window spec |
+| *(extra)* package note under the title | present | not a template section |
+
 ## 2. Measurements added by this design round
 
 Run by the architect on the owner's machine (darwin 25.5.0, Node v25.9.0,
@@ -213,6 +241,11 @@ Of the 84 accepted `<command-name>`/`<command-message>` echoes on the corpus
 a non-empty `<command-args>` value was false on all 84 (82 with no `origin`, 2
 with `origin.kind: "human"`).
 
+The eight `!`-command records split by their leading tag (printed only when it
+matched `/^<([a-z][a-z-]*)/`, the harness's markup name) into 4 `bash-input`
+(the command the person typed) and 4 `bash-stdout` (its output), all with no
+`promptSource` and no `origin`.
+
 ### 2.6 What the implemented rule does to the corpus (simulated)
 
 A copy of the tree at `8117e221` (scratchpad, `.git` excluded) was given the
@@ -244,3 +277,161 @@ order. Declining the harness records changes no assistant message and no
 in Table H row H1 or H2, and every typed, queued, suggestion-accepted and
 `sdk` prompt accepted before is still accepted (the counts per state match
 §2.3 line for line).
+
+## 3. Current state — citations checked at both ends
+
+Every `file:line` range in the spec was printed at both ends by a scratch
+helper (`ranges.js`, not committed), against `8117e221`:
+
+| Citation | First line | Last line | Verdict |
+|---|---|---|---|
+| Done spec `:146-150` | `**What this package builds.** …` | `Harness-authored … not dialogue. There is` | OK |
+| Done spec `:457`, `:458`, `:461`, `:462`, `:468` | rows A1, A2, A5, A5b, A5e | — | OK |
+| Done spec `:562-563` | `sides. **There is therefore no field …` | `… from a human one.** Do` | OK |
+| Done spec `:563-567` | `… from a human one.** Do` | `be worse than the known limitation. …` | OK (the ruling begins at the line's last word) |
+| Done spec `:14-102`, `:102`, `:104` | the 2026-09-18 errata block; its last line; the `errata above` comment | — | OK |
+| Done spec `:150`, `:343` | the E1 and E5 anchors | — | OK |
+| `primary-dialogue.js:3-11` | `// THE PRIMARY-DIALOGUE PROJECTION …` | `// structure only (spec Table A).` | OK |
+| `primary-dialogue.js:10-11` | `// call here and no heuristic over message CONTENT …` | `// structure only (spec Table A).` | **corrected from the stub's `:9-11`**, whose first line is the preceding sentence |
+| `primary-dialogue.js:177-178`, `:179-202`, `:183-193`, `:194-200`, `:243-307` | JSDoc; `acceptClaude`; user branch; assistant branch; `record` | each construct's closing line | OK |
+| `primary-dialogue.js:184`, `:185`, `:186`, `:187`, `:191-192`, `:305` | `isMeta`; `message.role`; `content`; string return; array join and return; the flag | — | OK |
+| `primary-dialogue.js:264-283`, `:285-294`, `:296-306` | the STEP 2, STEP 3, STEP 4 comments | the closing `}` / `});` | OK |
+| `claude.js:141` | `if (observer) observer.record(obj);` | — | OK |
+| `dream-collect.test.js:37-56`, `:44-50`, `:965-971` | `function writeClaude(…) {`; `JSON.stringify({`; `const line = JSON.stringify({` | `}`; `})`; `});` | OK |
+| `dream-collect.test.js:283`, `:957` | the two test titles | — | OK |
+| `SKILL.md:53`; ADR-0020 `:404-407` | the primary-dialogue sentence; the amendment's Decision | — | OK |
+
+The five erratum anchors (E1–E5) each occur exactly once in the Done spec
+(`grep -c`, and the simulation in §4 refuses any anchor that does not).
+
+## 4. Internal coherence pass — round zero
+
+### 4.1 What was executed (not just read)
+
+All on a copy of the tree at `8117e221` in the session scratchpad (`sim`,
+`.git` excluded), Node v25.9.0. The draft predicate was a `Set` of the three
+H1 values plus `promptSource === 'sdk' && origin === undefined`, placed
+between `:185` and `:186`.
+
+- **Which tests depend on Claude user acceptance.** Predicate in place, no
+  fixture change: `npm test` → 3,083 tests, **41 fail** (39
+  `primary-dialogue:`, plus `dream-collect: newest complete extract wins; …`
+  and `sink-probe: transcripts — …`). Predicate replaced by an unconditional
+  decline, fixtures swept: **41 fail, and the failing-identity list is
+  byte-identical** to the first run (`diff` of the sorted `✖` lines). So those
+  41 are exactly the tests that read Claude user acceptance, and no other test
+  in `npm test` does. Baseline at `8117e221`: 3,083 tests, 0 fail.
+- **The sweep repairs them without an expectation change.** Sweeps S1 (five
+  `claude-*.jsonl`, `taint-cases.json` in its escaped form), S2 (four inline
+  records) and S3 (`writeClaude`, the sink-probe record) applied with `sed` and
+  one scripted insertion: `npm test` → 3,083 tests, **0 fail**.
+- **The existing RED lanes on the swept tree.**
+  `npm run red-proofs -- --wp WP-dream-primary-dialogue-projection` → all ten
+  `pdp-*` `PROVEN` (run twice: before and after the new fixture file was
+  added, because the invariant tests loop over every committed fixture);
+  `--wp WP-dream-primary-dialogue-collection` → three `PROVEN`;
+  `--wp WP-dream-collect-parse-throw-quarantine` → four `PROVEN`. Each run
+  ends `RUN: FILTERED`, as a `--wp` run does.
+- **The acceptance criteria are satisfiable and the RED shapes discriminate.**
+  Draft tests `[HUR-AC1]`–`[HUR-AC3]` written to the AC text (every case AC1
+  and AC2 list, including `"constructor"`), and a draft fixture for AC3 (a
+  typed request; an `end_turn` reply; a `"system"`/`task-notification`
+  record; an `end_turn` reply that must read `false`; a record with neither
+  field; a `tool_use`; a `tool_result`; an `"sdk"`/`task-notification`
+  record; an `end_turn` reply that must read `true`): `npm test` → 3,086
+  tests, 0 fail. The four draft declarations P1–P4 against the draft code:
+  `npm run red-proofs -- --wp WP-dream-projection-harness-user-records` → **P1,
+  P2, P3, P4 `PROVEN`; criteria AC1, AC2, AC3 `PROVEN`**. The draft `find`
+  strings name the draft code, so the spec marks the sets DERIVED.
+- **The erratum, applied from the spec's own text.** `simulate-erratum.js`
+  (scratch) extracts E0–E5 from the spec's fenced blocks and their anchors
+  from the spec's prose, refuses an anchor that does not occur exactly once,
+  and applies them to a copy of the Done spec. `diff -U0` shows exactly six
+  hunks: `@@ -102,0 +103,39 @@` (E0), and one each at `:150`, `:343`, `:458`,
+  `:462`, `:563`. markdownlint on the result: **0 errors** (after R0-c).
+- **The verification lines, three states.** `checks.sh` (scratch) runs the
+  spec's erratum, sweep and test-file lines with `git show`/`git diff`
+  replaced by the `8117e221` files:
+
+  ```text
+  == SIMULATED  → PASS erratum, PASS sweep (all ten files), PASS test files
+  == SHIPPED    → FAIL erratum, FAIL sweep (ten mismatches), PASS test files
+  == ABSENT     → FAIL erratum, FAIL sweep, FAIL test files
+  == VIOLATING  (one expected value edited) → FAIL test files
+  ```
+
+  The test-file line is green on the shipped tree by design: it asserts that
+  nothing but S2 was removed, which an unchanged file satisfies; the sweep
+  line is what detects a missing sweep.
+- **The local re-measurement line** (the spec's command, verbatim, `--days 5`):
+  on the shipped tree it prints the command-echo, notification and marker-less
+  rows and no final line (exit 1); on the simulated tree it prints `every
+  accepted user message is in H1 or H2` (exit 0), with the assistant digest
+  `a61a19dad1e1cc75` equal on both.
+- **The boundary check** over all 16 Deliverables paths plus a logbook path →
+  exit 0; over `src/core/transcripts/claude.js` → exit 1.
+- **Not executable here:** the real implementation's `find` strings and red
+  sets (the code does not exist); the scenario harness (it spends model quota);
+  any transcript set but this machine's.
+
+### 4.2 Findings and dispositions
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| R0-a | The brief's first candidate, `promptSource ∈ {typed, queued, suggestion_accepted, sdk}`, re-admits 101 task notifications (747,334 characters) that carry `promptSource: "sdk"` inside headless sessions. The five-day sample has none, so it could not show this | A (harness text reaching the dream flagged `false`) | HEAVY | **Fixed before drafting.** Table H row H2 requires `sdk` **and** no `origin`; the Evidence table carries the 101; RED proof P3 pins the clause |
+| R0-b | The alternative human arm, `origin.kind === "human"`, accepts two slash-command echoes | C | HEAVY (a Table H row) | **Decided:** H1 reads `promptSource`; the Evidence table records why |
+| R0-c | E0 as first drafted (a separate blockquote before the `errata above` comment) fails markdownlint MD028: a blank line between two blockquotes | B | LIGHT | **Fixed.** E0 continues the existing blockquote after a `>` line; the simulation and lint re-run clean |
+| R0-d | The local re-measurement filter as first drafted matched every line containing a pipe, including the header and the assistant summary, so it could never pass | B | LIGHT | **Fixed**, and caught by running it: the filter now reads only `msgs` rows |
+| R0-e | The Deliverables had no row for the four scenario fixtures, whose premise is a user-role statement; without the sweep the real-brain harness would project no user text. `npm test` cannot see this | B | HEAVY (the Deliverables) | **Fixed.** Four rows, sweep S1, and the sweep-equality loop covers them |
+| R0-f | The fixture sweep, if applied only to records a test expects accepted, would let the `isMeta` and `isSidechain` tests pass because Table H declined the record first | B | HEAVY (the sweep rule) | **Fixed.** S1 sweeps every Claude `user` record in the named files; the Implementation notes say why |
+| R0-g | Context first said the fail-closed cost was "zero typed, queued or suggestion records lost" — true by construction and so evidence of nothing | C | LIGHT | **Fixed.** The claim is now that every record accepted today without `promptSource` is a harness kind (§2.2–§2.3) |
+| R0-h | Context first counted "2 slash-command invocations" as the person-originated loss; all 84 `<command-name>`/`<command-message>` echoes are commands the person invoked. A clause about slash commands expanding into `isMeta` records was unmeasured | C | LIGHT | **Fixed.** 84 stated with §2.5's no-arguments measurement; the unmeasured clause removed |
+| R0-i | Context first said "714 real prompts"; 9 of the 714 untagged records are compaction and interruption records | C | LIGHT | **Fixed:** 705 prompts, 240,048 characters (the simulated total, §2.6) |
+| R0-j | Out of scope called the filter "parked"; it is superseded | C | LIGHT | **Fixed** |
+| R0-k | Two inline code spans with leading spaces failed MD038 | C | LIGHT | **Fixed** by stating the indentation in words |
+| R0-l | The stub's cite `primary-dialogue.js:9-11` for the "no heuristic over message CONTENT" sentence starts one line early | C | LIGHT | **Fixed** to `:10-11` |
+
+## 5. What the round found that the stub did not know
+
+- **The structural discriminator exists** (the stub's formulation C, left
+  unmeasured): `promptSource` and `origin` separate every harness class from
+  every prompt on 334 files and 25 harness versions. Formulations A and B
+  (text-opening tests) are not needed, and the Done spec's heuristic ruling is
+  not engaged.
+- **The Done spec's A5b premise was measured on field names**, so its "no
+  field can tell a routine prompt from a human one" is false by value —
+  Erratum 8.
+- **The stub's question 2 dissolves into a statement.** Row A2's assistant
+  test never looks back at user records, so no "concluding reply" moves; the
+  corpus digest confirms it. No positional rule is needed or taken.
+- **The stub's question 3 has a measured answer for the corpus** — every
+  notification arrives already tainted — and a structural answer for the
+  package — declining is taint-neutral. The residual question moves to owner
+  item 3 with both costs.
+- **The stub's question 4 dissolves**: the test reads no text, so it sits
+  before `message.content` is read and covers both returns at one site.
+- **41 existing tests and four scenario fixtures depend on a field no fixture
+  carried.** The stub sized the package without them.
+- **The worked example's mixed record is a constructed shape** (0 of 11,884) —
+  Erratum 9.
+
+## 6. Discovered, not fixed (routing)
+
+- **The scenario fixtures' assistant records carry no `stop_reason`**
+  (`tests/scenarios/fixtures/claude-day1.jsonl` and siblings), so row A2
+  already declines every assistant reply in them and the real-brain scenario
+  dream reads user text only. Pre-existing since the projection landed; not
+  this package's surface. Routed to the orchestrator as a candidate fix to the
+  scenario fixtures.
+- **`tests/fixtures/dream/transcripts/*.jsonl`** carry human `user` records
+  with no `promptSource`; after this package they project no user text. No
+  assertion depends on it (§4.1), so they are left; a later package that
+  starts asserting on their dialogue must sweep them.
+
+## 7. Rounds
+
+Filled in by the orchestrator. Each round row cites the raw file's path and the
+SHA of the commit that introduced it.
+
+| Round | Tip | Raw file | Raw commit | Product findings | Outcome under §0 |
+|---|---|---|---|---|---|
