@@ -1,0 +1,64 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 41c2baf1",
+    "baseRef": "41c2baf1",
+    "explicit": true
+  },
+  "threadId": "01a0de3c-70aa-7751-8374-23461c0f0cc7",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 41c2baf1 from merge-base 41c2baf1bc906fb70150dfabc31dffeb8822b18c."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not ship this design yet. The create arm can silently leave a second vault file, and the spec understates a security change when the staging name is substituted.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A/HEAVY] A failed staging-name removal is silently treated as success\",\n      \"body\": \"Table X4 requires success after linkSync succeeds even if removing the staging name fails. That leaves a second, unreported file in the vault. The existing H7 contract identifies an unreported staging file as dangerous because a later wholesale git add -A can commit it; this design creates that state on a successful call, including when no directory unwind runs. A crash between link and removal leaves the same duplicate. Calling the bytes approved for the target does not approve a second path.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 418,\n      \"line_end\": 421,\n      \"confidence\": 0.94,\n      \"recommendation\": \"Make the surviving name observable to callers and keep it out of vault-wide staging, or choose a publish mechanism that cannot leave a second name.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A/HEAVY] Source-symlink substitution can publish external file contents\",\n      \"body\": \"X6 acknowledges the measured Darwin behavior: linkSync follows a symlink substituted at the staging name and makes the target a regular hard link to its referent. It then calls this the same capability class as the shipped rename. That conclusion is unsupported: the shipped rename would place a symlink at the target, while the proposed link can place the referenced file's contents there as a regular vault file. Inference: a later vault commit can capture those contents, and an editor writing the target can alter the referenced inode. The seven acceptance tests do not exercise this case.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 420,\n      \"line_end\": 420,\n      \"confidence\": 0.84,\n      \"recommendation\": \"Treat this as a new H3 security consequence and test it. Do not claim the class is unchanged; retain rename publishing unless the link source can be bound to the staged inode through the publish.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[B/LIGHT] Verification cannot enforce the required disclosure text\",\n      \"body\": \"AC8 requires D1–D4 verbatim, but the literal commands check only the first lines of D1 and D4. The promote.js command prints a diff hunk without asserting its count or location. A finished tree could retain stale D2 or D3 window claims, or omit most of D1 or D4, while these checks pass. On this tree the seven new positive text checks are red as expected; the standalone production-caller absence check is green, with its positive barrier check red.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 629,\n      \"line_end\": 645,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Add assertions for each complete D1–D4 block and make the one-hunk check assert exactly one hunk at the specified location.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise Tables K and X and the owner items for the two create-arm risks, then move every affected disclosure and Done-spec erratum together.\",\n    \"Rerun the design review and the literal verification commands after the revision.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not ship this design yet. The create arm can silently leave a second vault file, and the spec understates a security change when the staging name is substituted.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "[A/HEAVY] A failed staging-name removal is silently treated as success",
+        "body": "Table X4 requires success after linkSync succeeds even if removing the staging name fails. That leaves a second, unreported file in the vault. The existing H7 contract identifies an unreported staging file as dangerous because a later wholesale git add -A can commit it; this design creates that state on a successful call, including when no directory unwind runs. A crash between link and removal leaves the same duplicate. Calling the bytes approved for the target does not approve a second path.",
+        "file": "docs/specs/WP-vault-write-cas-window.md",
+        "line_start": 418,
+        "line_end": 421,
+        "confidence": 0.94,
+        "recommendation": "Make the surviving name observable to callers and keep it out of vault-wide staging, or choose a publish mechanism that cannot leave a second name."
+      },
+      {
+        "severity": "high",
+        "title": "[A/HEAVY] Source-symlink substitution can publish external file contents",
+        "body": "X6 acknowledges the measured Darwin behavior: linkSync follows a symlink substituted at the staging name and makes the target a regular hard link to its referent. It then calls this the same capability class as the shipped rename. That conclusion is unsupported: the shipped rename would place a symlink at the target, while the proposed link can place the referenced file's contents there as a regular vault file. Inference: a later vault commit can capture those contents, and an editor writing the target can alter the referenced inode. The seven acceptance tests do not exercise this case.",
+        "file": "docs/specs/WP-vault-write-cas-window.md",
+        "line_start": 420,
+        "line_end": 420,
+        "confidence": 0.84,
+        "recommendation": "Treat this as a new H3 security consequence and test it. Do not claim the class is unchanged; retain rename publishing unless the link source can be bound to the staged inode through the publish."
+      },
+      {
+        "severity": "medium",
+        "title": "[B/LIGHT] Verification cannot enforce the required disclosure text",
+        "body": "AC8 requires D1–D4 verbatim, but the literal commands check only the first lines of D1 and D4. The promote.js command prints a diff hunk without asserting its count or location. A finished tree could retain stale D2 or D3 window claims, or omit most of D1 or D4, while these checks pass. On this tree the seven new positive text checks are red as expected; the standalone production-caller absence check is green, with its positive barrier check red.",
+        "file": "docs/specs/WP-vault-write-cas-window.md",
+        "line_start": 629,
+        "line_end": 645,
+        "confidence": 0.97,
+        "recommendation": "Add assertions for each complete D1–D4 block and make the one-hunk check assert exactly one hunk at the specified location."
+      }
+    ],
+    "next_steps": [
+      "Revise Tables K and X and the owner items for the two create-arm risks, then move every affected disclosure and Done-spec erratum together.",
+      "Rerun the design review and the literal verification commands after the revision."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Do not ship this design yet. The create arm can silently leave a second vault file, and the spec understates a security change when the staging name is substituted.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A/HEAVY] A failed staging-name removal is silently treated as success\",\n      \"body\": \"Table X4 requires success after linkSync succeeds even if removing the staging name fails. That leaves a second, unreported file in the vault. The existing H7 contract identifies an unreported staging file as dangerous because a later wholesale git add -A can commit it; this design creates that state on a successful call, including when no directory unwind runs. A crash between link and removal leaves the same duplicate. Calling the bytes approved for the target does not approve a second path.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 418,\n      \"line_end\": 421,\n      \"confidence\": 0.94,\n      \"recommendation\": \"Make the surviving name observable to callers and keep it out of vault-wide staging, or choose a publish mechanism that cannot leave a second name.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A/HEAVY] Source-symlink substitution can publish external file contents\",\n      \"body\": \"X6 acknowledges the measured Darwin behavior: linkSync follows a symlink substituted at the staging name and makes the target a regular hard link to its referent. It then calls this the same capability class as the shipped rename. That conclusion is unsupported: the shipped rename would place a symlink at the target, while the proposed link can place the referenced file's contents there as a regular vault file. Inference: a later vault commit can capture those contents, and an editor writing the target can alter the referenced inode. The seven acceptance tests do not exercise this case.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 420,\n      \"line_end\": 420,\n      \"confidence\": 0.84,\n      \"recommendation\": \"Treat this as a new H3 security consequence and test it. Do not claim the class is unchanged; retain rename publishing unless the link source can be bound to the staged inode through the publish.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[B/LIGHT] Verification cannot enforce the required disclosure text\",\n      \"body\": \"AC8 requires D1–D4 verbatim, but the literal commands check only the first lines of D1 and D4. The promote.js command prints a diff hunk without asserting its count or location. A finished tree could retain stale D2 or D3 window claims, or omit most of D1 or D4, while these checks pass. On this tree the seven new positive text checks are red as expected; the standalone production-caller absence check is green, with its positive barrier check red.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 629,\n      \"line_end\": 645,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Add assertions for each complete D1–D4 block and make the one-hunk check assert exactly one hunk at the specified location.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise Tables K and X and the owner items for the two create-arm risks, then move every affected disclosure and Done-spec erratum together.\",\n    \"Rerun the design review and the literal verification commands after the revision.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
