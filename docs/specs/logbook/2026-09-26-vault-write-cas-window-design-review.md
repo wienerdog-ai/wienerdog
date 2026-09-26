@@ -430,3 +430,73 @@ publishes the staged object itself, or fails, with no second name. The memo's
 §2 records that none is reachable today. Retaining a link publish with both
 round-2 residuals accepted is the **owner's** call, not the architect's. It is
 recorded as the re-cut spec's owner item 1, with its cost.
+
+### The re-cut — what changed, and the mechanical checks re-run on it
+
+The spec was rewritten as a **docs-and-tests package, size S**.
+
+- **Removed:** every link-publish element — Tables K and X, the fallback code
+  list, the win32 branch, the identity check, `[CAS-3]`–`[CAS-8]` as they were,
+  P1–P6, the H7 count change, D2/D3/D5 of the link design, and E4–E9.
+- **Kept or added:**
+  - one canonical table, **Table W**: W1 the create arm and W2 the overwrite
+    arm (each with what is lost and the measured reason it is not closed), and
+    W3 the barrier. ADR-0031 still fires on two of seven: (i) the signature
+    gains `beforePublish`, and (vii) the facts recur in D1, D3, E0–E2, the ACs
+    and the checker;
+  - the `beforePublish` barrier;
+  - three tests: `[CAS-1]` pins the create arm as a residual, `[CAS-2]` pins
+    the overwrite arm as a residual, `[CAS-3]` covers the barrier contract;
+  - three RED proofs, P1–P3;
+  - code texts D1 (limit B, both arms), D2 (one sentence on the ordering
+    invariant) and D3 (`promote.js:1601-1604`, both arms);
+  - Erratum 1 as E0–E3: E1 on H5 names both arms, E2 on Out of scope records
+    the create arm's measured reason, E3 records the seam in the signature.
+- **Not edited, and kept true:** R4, `vault-write.js:420-423` and `:448-450`,
+  and the H7 count (four).
+- **Owner items, re-derived:** (1) retaining a link publish, with round 2's
+  two findings as its cost; (2) candidate 1 as a successor. The win32,
+  no-hard-link, crash-sweep and `fsync` items fell away with the link publish.
+
+**Checks re-run on the re-cut:**
+
+- **Text checker** (retargeted to D1–D3 and E0–E3). On a tree built from the
+  spec's own blocks (a scratch `simulate3.js`) it reports `ALL PASS`, exit 0,
+  13 checks. On the shipped tree it exits 1, and on an empty tree it exits 1.
+- **Hunk shape.** `git diff --no-index -U0` from shipped to simulated
+  `promote.js` gives exactly one hunk, `@@ -1601,4 +1601,6 @@`. The draft had
+  guessed `-1601,3`; running the check caught it and the spec now asserts
+  `@@ -1601,4`. The simulated Done spec passes markdownlint with 0 errors.
+- **RED declarations parse.** A draft of P1–P3 run through `validateProof`
+  gives `parsed 3 proofs, 3 valid, unique ids: true`.
+- **Both-ends ranges** for the re-cut's new citations: `vault-write.js:175-204`
+  (the JSDoc), `:207-221` (argument validation), `:451-452` (the rename),
+  `:476` (the `WienerdogError` re-throw); the Done spec's `:155-199` (Exact
+  contracts through the closing fence) and `:248-256`. All resolve.
+- **Template conformance**, re-walked by the author: every template section is
+  still present, plus the extra `## Dispatch precondition — owner items`. A
+  clean-context re-read is the orchestrator's call.
+- `npm run lint`: passed.
+
+### STOP CRITERION — restated at the head of round 3
+
+The re-cut changes what the implementer builds, so it is **HEAVY** and owes
+**one fresh external round** (rule 4). For round 3:
+
+- **Rule 0.** A band-A finding is HEAVY.
+- **Rule 1 (re-aimed).** The fallback has now been taken. There is no smaller
+  shape of this package left: candidate 0 is the floor. A HEAVY finding that
+  says the **re-cut itself** is wrong goes to the **owner** as input to owner
+  item 1 — "keep the re-cut" versus "retain the link publish" — and is not
+  patched.
+- **Rule 2.** A HEAVY finding on Table W's W1 or W2 means the re-disclosure
+  misstates the window. Fix it once. If a second consecutive round lands on
+  W1/W2, that is a design question for the owner.
+- **Rule 3.** Unmeasurable platform facts, or disagreement with an owner item,
+  go to the owner.
+- **Rule 4.** Any other HEAVY finding: fix, re-check, fresh round.
+- **Rule 5.** A round of only LIGHT findings closes the loop.
+
+The verification surface is **frozen** at three tests, three RED proofs, the
+text checker, the one-hunk check and the production-caller check. A machinery
+finding is fixed within that surface or accepted as a residual.

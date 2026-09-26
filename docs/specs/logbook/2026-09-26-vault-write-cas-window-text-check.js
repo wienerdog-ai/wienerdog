@@ -2,9 +2,9 @@
 'use strict';
 /**
  * Text checker for WP-vault-write-cas-window's disclosure texts and Done-spec
- * erratum (acceptance criteria AC9 and AC10).
+ * erratum (acceptance criteria AC4 and AC5).
  *
- * It reads the spec's OWN fenced literal blocks (D1–D5, E0–E9) and requires
+ * It reads the spec's OWN fenced literal blocks (D1–D3, E0–E3) and requires
  * each to appear VERBATIM in the file it belongs to, requires every shipped
  * sentence those blocks replace to be gone, and requires each erratum marker
  * `(Erratum 1, E<n>)` exactly once. It reads the blocks from the spec, not
@@ -62,9 +62,8 @@ const report = (ok, what) => {
 
 // 1. Every literal block is present verbatim where it belongs.
 const placed = [
-  ['D1 —', VW], ['D2 —', VW], ['D3 —', VW], ['D4 —', PR], ['D5 —', PR],
-  ['E1 —', DONE], ['E2 —', DONE], ['E3 —', DONE], ['E4 —', DONE], ['E5 —', DONE],
-  ['E6 —', DONE], ['E7 —', DONE], ['E8 —', DONE], ['E9 —', DONE],
+  ["D1 —", VW], ["D2 —", VW], ["D3 —", PR],
+  ["E1 —", DONE], ["E2 —", DONE], ["E3 —", DONE],
 ];
 for (const [label, file] of placed) {
   const text = read(file);
@@ -72,27 +71,19 @@ for (const [label, file] of placed) {
 }
 // E0 carries a <DATE> placeholder: both halves verbatim, and a real date.
 {
-  const e0 = block('E0:');
-  const [before, after] = e0.split('<DATE>');
+  const e0 = block("E0:");
+  const [before, after] = e0.split("<DATE>");
   const text = read(DONE);
   report(text !== null && text.includes(before) && text.includes(after), `E0 verbatim (around <DATE>) in ${DONE}`);
-  const heading = /^## Erratum 1 \(20\d{2}-\d{2}-\d{2}\) — the create arm's window is closed where hard links exist$/m;
+  const heading = /^## Erratum 1 \(20\d{2}-\d{2}-\d{2}\) — why the compare→publish window stays open on both arms$/m;
   report(text !== null && heading.test(text), `E0 heading carries a real date in ${DONE}`);
 }
 
 // 2. Every shipped sentence a block replaces is gone. An absent file FAILS
 //    here, so a missing deliverable can never read green.
 const gone = [
-  [VW, ' *      still lost. Narrowed, not closed.'],
-  [VW, '    // The last acts before the rename, in this order and as close to it as'],
-  [VW, '    // The rename is the publish. A reader of the target sees the previous'],
-  [PR, '      // The compare→promote window is NARROWED, not closed: a vault change'],
-  [PR, '              // untouched, the complete record goes to the caller, and the'],
-  [DONE, '- [ ] Named residual: the compare→publish window is narrowed, not closed (H5).\n'],
-  [DONE, '**NARROWED, not closed:** a write landing between the check and the publish is still lost'],
-  [DONE, '**FOUR bounded cases, not two,'],
-  [DONE, '**four**, owned by the H7 acceptance criterion'],
-  [DONE, '**No surface may call the compare→publish window "closed",'],
+  [VW, " *      still lost. Narrowed, not closed."],
+  [PR, "      // The compare→promote window is NARROWED, not closed: a vault change"],
 ];
 for (const [file, old] of gone) {
   const text = read(file);
@@ -102,7 +93,7 @@ for (const [file, old] of gone) {
 // 3. Each erratum marker exactly once.
 {
   const text = read(DONE);
-  for (let n = 1; n <= 9; n += 1) {
+  for (let n = 1; n <= 3; n += 1) {
     const count = text === null ? 0 : text.split(`(Erratum 1, E${n})`).length - 1;
     report(count === 1, `marker (Erratum 1, E${n}) exactly once in ${DONE} (found ${count})`);
   }
