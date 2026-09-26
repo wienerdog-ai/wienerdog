@@ -62,6 +62,18 @@ maintainer's.
 | Codex Astra | `…-eval-record-r4-astra-raw.json`, committed `0eb04883` | needs-attention | 1 **B** the harm summary said "mild dilution, not errors" and "four places" while Findings B counts the wrong-task citation as an unsupported claim and the list names five instances → **fix**: Findings C now states the harm once — five instances in four notes, four dilution and one low-severity error — and the decision rule, the spec block and the handover reference it instead of restating |
 | wd-reviewer | report in the session | **APPROVE** | round-3 C1–C5 verified fixed; two optional C nits → **fix**: the squash-cost sentence now names each later round's raw commit; this note records that prior-round disposition cells (round 2, wd-reviewer row) were amended in round 4 with the reachability wording — findings columns were never changed |
 
-## Round 5 — tip filled after the round
+## Round 5 — tip `fc984a3b` — CLOSED
 
-Pending.
+| gate | raw | verdict | findings (band → disposition) |
+|---|---|---|---|
+| Codex Astra | `…-eval-record-r5-astra-raw.json`, committed `8aca6493` | **approve** | no findings |
+| wd-reviewer | report in the session | **APPROVE** | 1 **C** the record gave two answers for where the dilutions came from ("two of the four" vs "the dilution … came from the machine-authored sessions") → **fix** (LIGHT, closes without a fresh external round per the runbook's weighted closure): checked against the judge's verdict — all five harm instances come from rows 4, 6, 7; stated once in Findings C, mirrors corrected |
+
+Both gates approved the same tip, `fc984a3b`. The commit after it carries only
+this round's rows, the LIGHT fix above and the handover's merge-state line.
+The loop ran five rounds on a documentation record; every finding after round
+1 was a summary sentence disagreeing with its own source, and the fix that
+converged was to state each measured fact once and reference it — the
+runbook's "delete the restatement rather than patch it" move. Merge method:
+squash, under the session's merge authorization, for the reason the handover
+gives; the branch deleted at merge.

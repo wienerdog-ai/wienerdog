@@ -264,7 +264,7 @@ a newly found mirror is registered here on the spot.
 > through as `user` records — removable by a fixed rule against the
 > projection's Done contract, nothing kept lost; the filter's remaining
 > target is **20.8 %**: the three machine-authored sessions whole (11.1 %,
-> behind two of the dilutions and the one error) and interim replies inside the
+> the source of all five harm instances) and interim replies inside the
 > human-driven sessions (9.6 %) that left no trace in the notes. The evidence leans to the *not material* branch but
 > the number is not negligible, so this spec **stays `Draft`**; the record
 > proposes *Superseded* plus the deterministic strip as a projection fix, and

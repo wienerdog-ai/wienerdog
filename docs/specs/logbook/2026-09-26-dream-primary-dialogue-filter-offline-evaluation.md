@@ -159,8 +159,10 @@ sections recording the scheduled runs. One is an **error**: the sentence
 citing a session for the wrong task, which Findings B lists as a
 low-severity unsupported claim and which low-value input caused. So the
 low-value material's measured harm is *mild dilution plus one low-severity
-error*, no medium or high consequence. The interim-status and notification
-blocks of the long sessions *left no trace in the notes*.
+error*, no medium or high consequence. **All five instances came from the
+three machine-authored sessions (rows 4, 6, 7)** — checked against the
+judge's verdict, which names the source session of each. The interim-status
+and notification blocks of the long sessions *left no trace in the notes*.
 
 **D. Verdict, quoted in substance.** Faithful: *partly* in round 1 (three high
 losses); after round 2 no high loss and no high unsupported claim remain.
@@ -203,7 +205,7 @@ lost. It closes 39.9 % of the low-value characters with no model call.
 input, 24.9 % of what remains** — in two distinct kinds. **(a)** The three
 machine-authored sessions (rows 4, 6, 7) whole: 4 prompts (2,657 characters)
 and their 4 concluding replies (8,273), 10,930 characters = 11.1 % — the
-material behind two of the four dilutions and the one error in Findings C.
+material behind all five harm instances in Findings C.
 **(b)** Inside
 the human-driven sessions: 34 interim assistant replies (8,947 characters) and
 3 short user lines (520), 9,467 characters = 9.6 % — the material the judge
@@ -215,8 +217,7 @@ ruling; "drop every reply whose nearest preceding user record is a
 notification" removes 43,840 with 23,430 from KEEP blocks, because the reply
 after a notification is often the synthesis. The interim replies are therefore
 the filter's genuine target — and the judge found the interim replies *left no
-trace in the notes*; the dilution it did find came from the machine-authored
-sessions in kind (a).
+trace in the notes*; the harm it did find is attributed in Findings C.
 
 ## Applying the decision rule
 

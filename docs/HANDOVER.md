@@ -60,8 +60,9 @@ resuming it.
 > record). Record:
 > `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`
 > (identities, counts, verdicts — no transcript or note substance; the repo is
-> public). The result block at the spec's entry condition points to it. **MERGE DECISION FOR THE
-> OWNER (PR #319 is not merged):** its first commit (`97e45ff0`) carried
+> public). The result block at the spec's entry condition points to it. **MERGED BY SQUASH under this
+> session's merge authorization; one residual decision is the owner's.** PR
+> #319's first commit (`97e45ff0`) carried
 > item-level topic phrases from the sampled sessions and the 09-24 daily log
 > (about a dozen; no verbatim transcript or note text); the gates caught it
 > and the text is gone from the tip. The session's permission layer refused a history
@@ -73,10 +74,10 @@ resuming it.
 > the repository (only GitHub Support purges it). Its cost: the three Codex
 > raw commits the round record cites as proof-before-adjudication are then
 > provable only off `main` (the raw files still land in the squash commit).
-> A **merge commit** carries `97e45ff0` into `main` as well. Removing the
-> published material is a separate decision — a rewrite and force-push plus
-> a Support request — and the owner's own act. Recommended: squash-merge,
-> then decide separately whether the exposure warrants the removal request. The
+> A **merge commit** carries `97e45ff0` into `main` as well. The branch was
+> deleted at merge, so the PR ref is the remaining path. Removing the
+> published material is a separate decision — a Support request — and the
+> owner's own act: **decide whether the exposure warrants it.** The
 > evaluation's own two harness transcripts were moved out of
 > `~/.claude/projects/` into `~/wd-eval/harness-transcripts/` so tonight's
 > live dream does not consolidate evaluation artefacts; the live ledger was not
@@ -92,7 +93,7 @@ resuming it.
 > and local-command echoes passing through as `user` records — a fixed rule
 > removes them against the projection's Done contract with nothing kept lost;
 > the filter's remaining target is 20.8 %: the three machine-authored sessions
-> whole (11.1 %, behind two of the dilutions and the one error) and interim replies
+> whole (11.1 %, the source of all five harm instances) and interim replies
 > inside the human-driven sessions (9.6 %) that left no trace in the notes; no
 > positional rule removes the interim replies safely (two were measured). The 16 remaining losses (0 high) are all
 > one first-pass defect — totals and to-dos recorded, the rest scored
