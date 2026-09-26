@@ -490,7 +490,10 @@ precondition"). Item 1 must be ruled before an implementer is dispatched. An
 overrule of item 1 **replaces** this package with a new one; it does not refine
 this one.
 
-1. **Keep the re-cut: no link publish on the create arm.** *Recommendation:*
+1. **Keep the re-cut: no link publish on the create arm.** **OWNER-RULED
+   2026-09-26: keep the re-cut** (verbatim ruling in
+   `docs/specs/logbook/2026-09-26-owner-rulings-cas-window-and-filter.md`);
+   this package is dispatchable. *Recommendation:*
    accept. This is the reversible alternative the design gate named as the
    owner's call, not the architect's. *Cost of overruling* (retaining a
    `fs.linkSync` create-arm publish with its residuals accepted) — the two

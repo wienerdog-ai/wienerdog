@@ -43,7 +43,27 @@ resuming it.
 
 ## The remaining work, in recommended order
 
-> **▶ START HERE — 2026-09-26 night: both queue items are done; TWO OWNER RULINGS and ONE RESIDUAL DECISION are open; nothing is dispatchable without them.**
+> **▶ START HERE — 2026-09-26 late night: the two rulings are IN; `WP-vault-write-cas-window` is dispatched to an implementer; the filter is Superseded with two Draft stubs filed.**
+> Rulings (verbatim in `docs/specs/logbook/2026-09-26-owner-rulings-cas-window-and-filter.md`):
+> **(1) keep the disclose-only re-cut** — written into the spec's owner item 1;
+> dispatch-time re-verification ran against `a0e94aae` (every claim PASS but one
+> citation start, `vault-write.js:175-204` → `:166-204`, fixed by the architect
+> in this PR); the implementer runs on Opus, branch `wp/vault-write-cas-window`,
+> PR title per the spec's Definition of done, then both PR gates. **(2)
+> supersede** — `WP-dream-primary-dialogue-filter` is `Superseded` and lives at
+> `docs/specs/done/WP-dream-primary-dialogue-filter.md`; its replacements are
+> two Draft stubs with no design round yet:
+> `WP-dream-projection-harness-user-records` (the deterministic strip, a fix
+> against the projection's Done contract — the stub records that a prefix
+> literal is a forbidden list and offers three ways to write the rule, chooses
+> none) and `WP-dream-first-pass-novelty` (the consolidation finding; needs an
+> owner product decision as well as a design round). **(3)** the `97e45ff0`
+> phrases were shown to the owner (topic-level session descriptions, no
+> transcript text); the purge request stays undecided and is his.
+> **Housekeeping:** the block below still says the filter is Draft and cites its
+> old path; read it as history.
+>
+> > **▶ START HERE — 2026-09-26 night: both queue items are done; TWO OWNER RULINGS and ONE RESIDUAL DECISION are open; nothing is dispatchable without them.**
 > Measured on `main` at `45e667da`. No agent running, no worktree of this
 > session left. `grep '^status: Ready' docs/specs/*.md` returns exactly one
 > spec, `WP-vault-write-cas-window`, parked on its owner item 1.
