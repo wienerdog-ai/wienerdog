@@ -94,6 +94,20 @@ confirm or contradict. It does not replace that read.
 | *(extra)* `## Dispatch precondition — owner items` | present | not a template section; three items; placed before Definition of done as in the cas-window spec |
 | *(extra)* package note under the title | present | not a template section |
 
+### Clean-context executor, round zero (orchestrator-run, 2026-09-26)
+
+A fresh general-purpose agent on Sonnet, given exactly `docs/specs/_TEMPLATE.md`
+and this spec at `b27edd44`, walked the template's section list and
+frontmatter keys: **conformant** — every template section PRESENT verbatim in
+order (H1 :12, Context :32, Current state :148, Deliverables :204, Exact
+contracts :233, Contract reference :374, Contract table(s) :382, Mirrored
+Surface Checklist :415, Implementation notes :452, Security checklist :513,
+Acceptance criteria :525, Verification steps :572, Out of scope :630,
+Definition of done :704); every frontmatter key present. Extra headings, all
+allowed: Table H (H4, :384), three H3 subsections under Verification steps
+(:574, :586, :614), `## Dispatch precondition — owner items` (:649). No
+heading text inside a fenced block.
+
 ## 2. Measurements added by this design round
 
 Run by the architect on the owner's machine (darwin 25.5.0, Node v25.9.0,
