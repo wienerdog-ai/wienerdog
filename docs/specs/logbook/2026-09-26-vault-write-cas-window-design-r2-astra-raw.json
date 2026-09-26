@@ -1,0 +1,53 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 41c2baf1",
+    "baseRef": "41c2baf1",
+    "explicit": true
+  },
+  "threadId": "01a0de4e-48d8-7571-9ac9-622d2407de09",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 41c2baf1 from merge-base 41c2baf1bc906fb70150dfabc31dffeb8822b18c."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship. The round-1 findings are addressed on paper, and the checker reports the expected 35 failures on this unchanged tree. The revised design still permits an unauthorized file’s contents to appear at a vault path, and its published-but-refused outcome has no effective cleanup path.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A, HEAVY] The identity check detects foreign content only after readers can see it\",\n      \"body\": \"On macOS, the measured source-symlink substitution makes linkSync create a regular vault hard link to the referent. Table K then checks the target with lstat. During that interval a reader can see the referent’s bytes, contradicting K1 and D3’s claim that readers see only absence or the complete approved payload. On mismatch, X6 deliberately leaves that hard link in the vault after returning a refusal. The named reason and the fact that the dream commit uses returned bytes do not contain other vault readers or later user operations. The same-user capability argument fits the threat model’s exclusion of arbitrary native malware, but does not make the H4 content claim true.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 502,\n      \"line_end\": 502,\n      \"confidence\": 0.96,\n      \"recommendation\": \"Do not claim H4 for this link path while source substitution is possible. Choose a publish mechanism that binds the staged descriptor, or take the documented rename fallback and disclose its window; require an explicit owner decision if retaining the foreign-link residual.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A, HEAVY] X4 leaves a published duplicate that the promised retry cannot clear\",\n      \"body\": \"X4 returns written:false after the target has received the payload and the staging hard link remains. The unchanged warnings caller surfaces only the reason; on its next refresh it reads the now-correct target, returns a quiet no-op, and never removes the staging name. Thus dream.js’s message that the failed update 'is retried on the next run' is false for this outcome. For promoted notes, the refusal is likewise omitted from the commit while both vault names remain. Naming the duplicate in a one-run refusal does not provide recovery from a persistent extra vault file.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 518,\n      \"line_end\": 518,\n      \"confidence\": 0.91,\n      \"recommendation\": \"Specify a durable, safe cleanup or reconciliation path for a published target with retained staging name, and give callers a typed partial-publish outcome so retries and reports describe the actual state.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve the two Table K/X design questions before dispatch, then rerun the design gate.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No ship. The round-1 findings are addressed on paper, and the checker reports the expected 35 failures on this unchanged tree. The revised design still permits an unauthorized file’s contents to appear at a vault path, and its published-but-refused outcome has no effective cleanup path.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "[A, HEAVY] The identity check detects foreign content only after readers can see it",
+        "body": "On macOS, the measured source-symlink substitution makes linkSync create a regular vault hard link to the referent. Table K then checks the target with lstat. During that interval a reader can see the referent’s bytes, contradicting K1 and D3’s claim that readers see only absence or the complete approved payload. On mismatch, X6 deliberately leaves that hard link in the vault after returning a refusal. The named reason and the fact that the dream commit uses returned bytes do not contain other vault readers or later user operations. The same-user capability argument fits the threat model’s exclusion of arbitrary native malware, but does not make the H4 content claim true.",
+        "file": "docs/specs/WP-vault-write-cas-window.md",
+        "line_start": 502,
+        "line_end": 502,
+        "confidence": 0.96,
+        "recommendation": "Do not claim H4 for this link path while source substitution is possible. Choose a publish mechanism that binds the staged descriptor, or take the documented rename fallback and disclose its window; require an explicit owner decision if retaining the foreign-link residual."
+      },
+      {
+        "severity": "high",
+        "title": "[A, HEAVY] X4 leaves a published duplicate that the promised retry cannot clear",
+        "body": "X4 returns written:false after the target has received the payload and the staging hard link remains. The unchanged warnings caller surfaces only the reason; on its next refresh it reads the now-correct target, returns a quiet no-op, and never removes the staging name. Thus dream.js’s message that the failed update 'is retried on the next run' is false for this outcome. For promoted notes, the refusal is likewise omitted from the commit while both vault names remain. Naming the duplicate in a one-run refusal does not provide recovery from a persistent extra vault file.",
+        "file": "docs/specs/WP-vault-write-cas-window.md",
+        "line_start": 518,
+        "line_end": 518,
+        "confidence": 0.91,
+        "recommendation": "Specify a durable, safe cleanup or reconciliation path for a published target with retained staging name, and give callers a typed partial-publish outcome so retries and reports describe the actual state."
+      }
+    ],
+    "next_steps": [
+      "Resolve the two Table K/X design questions before dispatch, then rerun the design gate."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship. The round-1 findings are addressed on paper, and the checker reports the expected 35 failures on this unchanged tree. The revised design still permits an unauthorized file’s contents to appear at a vault path, and its published-but-refused outcome has no effective cleanup path.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A, HEAVY] The identity check detects foreign content only after readers can see it\",\n      \"body\": \"On macOS, the measured source-symlink substitution makes linkSync create a regular vault hard link to the referent. Table K then checks the target with lstat. During that interval a reader can see the referent’s bytes, contradicting K1 and D3’s claim that readers see only absence or the complete approved payload. On mismatch, X6 deliberately leaves that hard link in the vault after returning a refusal. The named reason and the fact that the dream commit uses returned bytes do not contain other vault readers or later user operations. The same-user capability argument fits the threat model’s exclusion of arbitrary native malware, but does not make the H4 content claim true.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 502,\n      \"line_end\": 502,\n      \"confidence\": 0.96,\n      \"recommendation\": \"Do not claim H4 for this link path while source substitution is possible. Choose a publish mechanism that binds the staged descriptor, or take the documented rename fallback and disclose its window; require an explicit owner decision if retaining the foreign-link residual.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A, HEAVY] X4 leaves a published duplicate that the promised retry cannot clear\",\n      \"body\": \"X4 returns written:false after the target has received the payload and the staging hard link remains. The unchanged warnings caller surfaces only the reason; on its next refresh it reads the now-correct target, returns a quiet no-op, and never removes the staging name. Thus dream.js’s message that the failed update 'is retried on the next run' is false for this outcome. For promoted notes, the refusal is likewise omitted from the commit while both vault names remain. Naming the duplicate in a one-run refusal does not provide recovery from a persistent extra vault file.\",\n      \"file\": \"docs/specs/WP-vault-write-cas-window.md\",\n      \"line_start\": 518,\n      \"line_end\": 518,\n      \"confidence\": 0.91,\n      \"recommendation\": \"Specify a durable, safe cleanup or reconciliation path for a published target with retained staging name, and give callers a typed partial-publish outcome so retries and reports describe the actual state.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve the two Table K/X design questions before dispatch, then rerun the design gate.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
