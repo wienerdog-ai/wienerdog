@@ -1,7 +1,7 @@
 ---
 id: WP-vault-write-cas-window
 title: Pin the vault write's check-to-publish window as a tested residual on both arms, and say why it stays open
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: [WP-dream-vault-write-primitive]
@@ -10,6 +10,13 @@ epic: dream-promotion
 ---
 
 # WP-vault-write-cas-window: the check-to-publish window stays open on both arms — pin it, test it, say why
+
+> Implemented in PR #323 (merge `0aa633ee`, 2026-09-26), tip `c3e99e4e`. Both
+> PR gates clean on that tip (Codex Astra `review`: no actionable defects, tests
+> unverifiable in its sandbox; wd-reviewer: APPROVE, band C only). The measured
+> `expectRed` sets equalled the DERIVED ones, so no sentence below was corrected.
+> Table W's line numbers are the ones of the tree the spec was written against
+> (`main` at `41c2baf1`); re-derive on the tree you read.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.

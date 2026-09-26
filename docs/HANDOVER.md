@@ -43,7 +43,28 @@ resuming it.
 
 ## The remaining work, in recommended order
 
-> **▶ START HERE — 2026-09-26 late night: the two rulings are IN; `WP-vault-write-cas-window` is dispatched to an implementer; the filter is Superseded with two Draft stubs filed.**
+> **▶ START HERE — 2026-09-26, session close: `WP-vault-write-cas-window` is DONE (PR #323, merge `0aa633ee`); the queue of Ready work is EMPTY; the specs root holds four Drafts and nothing else dispatchable.**
+> Measured on `main` after this PR. `grep '^status: Ready' docs/specs/*.md`
+> returns nothing. Drafts: `WP-dream-projection-harness-user-records` (a fix
+> against the projection's Done contract; needs a design round — the stub
+> records three ways to write the rule and chooses none),
+> `WP-dream-first-pass-novelty` (needs an owner product decision AND a design
+> round), `WP-a10-windows-reap` (Windows runner), plus the `Superseded` stubs
+> still in the root (housekeeping). **What ran end to end tonight:** the
+> implementer on Opus built the disclose-only package (a `beforePublish` test
+> seam, three disclosure texts, three tests with RED proofs AC1–AC3 all PROVEN
+> with measured `expectRed` = declared, a four-part erratum to the Done
+> primitive spec); Codex Astra `review` found no actionable defect; wd-reviewer
+> approved after re-running every verification and five deliberately-red
+> variants; CI green; merged; spec filed Done in `done/`; fourteen lessons
+> appended to `memory/lessons/inbox.md`.
+> **OWNER, one open call:** whether to ask GitHub Support to purge PR #319's
+> first commit `97e45ff0` (the phrases were shown; topic-level only).
+> **NEXT when the owner returns:** rule on `WP-dream-first-pass-novelty`'s
+> product question, then design rounds for the two stubs in that order or the
+> reverse (the harness-records fix is the smaller and measured one).
+>
+> > **▶ START HERE — 2026-09-26 late night: the two rulings are IN; `WP-vault-write-cas-window` is dispatched to an implementer; the filter is Superseded with two Draft stubs filed.**
 > Rulings (verbatim in `docs/specs/logbook/2026-09-26-owner-rulings-cas-window-and-filter.md`):
 > **(1) keep the disclose-only re-cut** — written into the spec's owner item 1;
 > dispatch-time re-verification ran against `a0e94aae` (every claim PASS but one
