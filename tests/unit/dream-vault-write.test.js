@@ -1003,3 +1003,189 @@ test('dream-vault-write: idempotence is N/A — the `expect` guard is what ships
   assert.match(second.reason, /no longer holds the bytes this write was decided against/);
   assert.equal(fs.readFileSync(target, 'utf8'), 'body');
 });
+
+// ===========================================================================
+// WP-vault-write-cas-window — the check-to-publish window, pinned on both arms
+// ===========================================================================
+//
+// These tests ASSERT THE LOSS, NOT A GUARANTEE. The window between the premise
+// check and the rename is open on both arms (Table W rows W1 and W2), and each
+// residual test below passes BECAUSE a concurrent act inside it is lost. The
+// concurrent act is placed at the `beforePublish` test seam (row W3) — never by
+// patching `fs.renameSync` or `fs.readFileSync`.
+//
+// If one of them fails because someone narrowed or closed the window, that is
+// not a regression to be "fixed" here: W1 or W2, and every surface in its
+// "Stated at" cell (vault-write.js limit B, the promote.js refusal comment, the
+// Done spec's Erratum 1), must move in the same commit. A test that pins the
+// residual is what forces the text change.
+
+test('dream-vault-write: [CAS-1] RESIDUAL — on the create arm, a file created inside the window is overwritten (W1)', () => {
+  // Asserts the LOSS (W1), not a guarantee. If this fails because the create
+  // arm's window was narrowed or closed, W1 and every surface in its "Stated
+  // at" cell move in the same commit.
+  const vault = makeVault();
+  const target = path.join(vault, 'notes', 'x.txt');
+
+  const result = writeIntoVault({
+    vaultDir: vault,
+    rel: 'notes/x.txt',
+    bytes: Buffer.from('the call’s bytes'),
+    admit: ADMIT_ALL,
+    // The concurrent writer: the existence check has already passed, and a
+    // file appears at the target before the rename.
+    beforePublish: () => fs.writeFileSync(target, 'created concurrently'),
+  });
+  assert.equal(result.written, true, 'CAS-1 residual: the concurrent create is overwritten (the call publishes)');
+  assert.equal(
+    fs.readFileSync(target, 'utf8'),
+    'the call’s bytes',
+    'CAS-1 residual: the concurrent create is overwritten (the target holds the call’s bytes)'
+  );
+  assert.deepEqual(fs.readdirSync(path.join(vault, 'notes')), ['x.txt'], 'nothing else is left behind');
+});
+
+test('dream-vault-write: [CAS-2] RESIDUAL — on the overwrite arm, a save inside the window is overwritten, in place or by rename (W2)', () => {
+  // Asserts the LOSS (W2), not a guarantee. If this fails because the
+  // overwrite arm's window was narrowed or closed, W2 and every surface in its
+  // "Stated at" cell move in the same commit.
+  const vault = makeVault();
+  const target = path.join(vault, 'notes', 'x.txt');
+
+  // 1. An editor that saves IN PLACE (Obsidian desktop, VS Code): same file,
+  //    new bytes, after the compare against `expect` passed.
+  fs.writeFileSync(target, 'decided-against');
+  const inPlace = writeIntoVault({
+    vaultDir: vault,
+    rel: 'notes/x.txt',
+    bytes: Buffer.from('published'),
+    admit: ADMIT_ALL,
+    expect: Buffer.from('decided-against'),
+    beforePublish: () => fs.writeFileSync(target, 'saved in place'),
+  });
+  assert.equal(inPlace.written, true, 'CAS-2 residual: the in-place save is overwritten (the call publishes)');
+  assert.equal(
+    fs.readFileSync(target, 'utf8'),
+    'published',
+    'CAS-2 residual: the in-place save is overwritten (the target holds the call’s bytes)'
+  );
+
+  // 2. An editor that REPLACES the file (vim's default, TextEdit, Syncthing):
+  //    a new file is renamed over the name after the compare passed.
+  fs.writeFileSync(target, 'decided-against');
+  const replaced = writeIntoVault({
+    vaultDir: vault,
+    rel: 'notes/x.txt',
+    bytes: Buffer.from('published again'),
+    admit: ADMIT_ALL,
+    expect: Buffer.from('decided-against'),
+    beforePublish: () => {
+      const side = path.join(vault, 'notes', 'x.txt.editor-save');
+      fs.writeFileSync(side, 'saved by replacing the file');
+      fs.renameSync(side, target);
+    },
+  });
+  assert.equal(replaced.written, true, 'CAS-2 residual: the replace-by-rename save is overwritten (the call publishes)');
+  assert.equal(
+    fs.readFileSync(target, 'utf8'),
+    'published again',
+    'CAS-2 residual: the replace-by-rename save is overwritten (the target holds the call’s bytes)'
+  );
+  assert.deepEqual(fs.readdirSync(path.join(vault, 'notes')), ['x.txt'], 'nothing else is left behind');
+});
+
+test('dream-vault-write: [CAS-3] the `beforePublish` barrier — once per publish, never on a refusal, a throw is a refusal (W3)', () => {
+  const vault = makeVault();
+  fs.writeFileSync(path.join(vault, 'notes', 'kept.txt'), 'kept');
+
+  /** @returns {(() => void) & {calls:number}} */
+  const counter = () => {
+    const fn = Object.assign(
+      () => {
+        fn.calls += 1;
+      },
+      { calls: 0 }
+    );
+    return fn;
+  };
+
+  // Called exactly once on a publishing call, on each arm.
+  const onCreate = counter();
+  const created = writeIntoVault({
+    vaultDir: vault,
+    rel: 'notes/new.txt',
+    bytes: Buffer.from('new'),
+    admit: ADMIT_ALL,
+    beforePublish: onCreate,
+  });
+  assert.equal(created.written, true);
+  assert.equal(onCreate.calls, 1, 'the barrier runs exactly once on a create-arm publish');
+
+  const onOverwrite = counter();
+  const overwritten = writeIntoVault({
+    vaultDir: vault,
+    rel: 'notes/kept.txt',
+    bytes: Buffer.from('kept'),
+    admit: ADMIT_ALL,
+    expect: Buffer.from('kept'),
+    beforePublish: onOverwrite,
+  });
+  assert.equal(overwritten.written, true);
+  assert.equal(onOverwrite.calls, 1, 'the barrier runs exactly once on an overwrite-arm publish');
+
+  // Never called on a call that refuses first.
+  /** @type {Array<{why:string, o:object}>} */
+  const refusals = [
+    { why: 'a policy refusal', o: { rel: 'notes/other.txt', admit: () => 'no' } },
+    { why: 'an `expect` mismatch', o: { rel: 'notes/kept.txt', admit: ADMIT_ALL, expect: Buffer.from('stale') } },
+    { why: 'a create-arm "already exists" refusal', o: { rel: 'notes/kept.txt', admit: ADMIT_ALL } },
+  ];
+  for (const { why, o } of refusals) {
+    const barrier = counter();
+    const result = writeIntoVault({ vaultDir: vault, bytes: Buffer.from('attempt'), beforePublish: barrier, ...o });
+    assert.equal(result.written, false, `expected a refusal for: ${why}`);
+    assert.equal(barrier.calls, 0, `the barrier is not called on ${why}`);
+  }
+
+  // A throw of ANY type from the barrier is a refusal with W3's text, and the
+  // unwind runs — the parent chain this call created included. Each call is
+  // wrapped so that a throw which ESCAPES fails an assertion rather than
+  // erroring the test.
+  /** @type {Array<[string, Error]>} */
+  const throwables = [
+    ['a plain Error', new Error('barrier says no')],
+    ['a WienerdogError', new WienerdogError('barrier says no')],
+  ];
+  for (const [kind, thrown] of throwables) {
+    const before = snapshot(vault);
+    let result;
+    try {
+      result = writeIntoVault({
+        vaultDir: vault,
+        rel: 'notes/fresh/deeper/x.txt',
+        bytes: Buffer.from('attempt'),
+        admit: ADMIT_ALL,
+        beforePublish: () => {
+          throw thrown;
+        },
+      });
+    } catch (e) {
+      assert.fail('CAS-3 a throw from the barrier is a refusal: ' + (e && e.message));
+    }
+    assert.equal(result.written, false, `${kind} from the barrier is a refusal`);
+    assert.equal(result.reason, 'the write failed unexpectedly (barrier says no)', `${kind}: W3's text`);
+    assert.deepEqual(snapshot(vault), before, `${kind}: the vault is byte-identical to its pre-call state`);
+  }
+
+  // Present and not a function is a caller-contract violation, thrown before
+  // the vault is touched.
+  const before = snapshot(vault);
+  for (const bad of [null, 'not a function', {}]) {
+    assert.throws(
+      () => writeIntoVault({ vaultDir: vault, rel: 'notes/y.txt', bytes: Buffer.from('x'), admit: ADMIT_ALL, beforePublish: bad }),
+      WienerdogError,
+      `a non-function beforePublish throws: ${JSON.stringify(bad)}`
+    );
+  }
+  assert.deepEqual(snapshot(vault), before, 'a non-function beforePublish touches nothing');
+});

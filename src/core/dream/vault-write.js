@@ -45,9 +45,16 @@
  *      editor is a live vault writer throughout — that is precisely why the
  *      conditional publish exists — so a spec cannot rely on that concurrency
  *      in one place and deny it in another.
- *   B. CHECK-TO-PUBLISH WINDOW. The conditional publish compares immediately
- *      before the rename, so the window is small; a write landing inside it is
- *      still lost. Narrowed, not closed.
+ *   B. CHECK-TO-PUBLISH WINDOW — BOTH ARMS, NARROWED, NOT CLOSED
+ *      (WP-vault-write-cas-window, Table W). The premise check runs immediately
+ *      before the rename: on the overwrite arm the compare against `expect`, on
+ *      the create arm the check that nothing is at the target. A save landing
+ *      between the check and the rename is still lost, whether it writes in
+ *      place or replaces the file, and on the create arm a file created there
+ *      is overwritten. No portable Node call closes it: none replaces a file
+ *      only if it is unchanged, and the create-or-fail publishes either show a
+ *      partial file (an exclusive open) or cannot be bound to the staged object
+ *      (a link). Tests pin this as a residual.
  *   C. UNWIND IDENTITY. A refusal removes the directories this call created and
  *      that are still empty. The removal is by PATH, and portable Node cannot
  *      bind it to the object the call created, so a directory concurrently
@@ -174,7 +181,7 @@ function resolveParent(vaultReal, dirSegments) {
  *
  * @param {{vaultDir:string, rel:string, bytes:Buffer,
  *          admit:(resolvedRel:string)=>string|null,
- *          expect?:Buffer}} o
+ *          expect?:Buffer, beforePublish?:()=>void}} o
  *   vaultDir the vault root
  *   rel      vault-relative candidate path, segment-validated before use
  *   bytes    the content to publish
@@ -189,6 +196,13 @@ function resolveParent(vaultReal, dirSegments) {
  *            because it reads as either "must be absent" or "check nothing",
  *            and the second reading turns an intended create-only publish into
  *            an overwrite
+ *   beforePublish  TEST SEAM, never passed by a production caller. Called with
+ *            no arguments exactly once on a call that reaches the publish:
+ *            after every check this call makes on the target and immediately
+ *            before the rename (Table W row W3). Never called on a call that
+ *            refuses first. A throw of ANY type from it is a refusal (H7) and
+ *            the unwind runs. Present and not a function is a caller-contract
+ *            violation and throws, exactly as a missing `admit` does
  * @returns {{written:true, bytes:Buffer, sha256:string}
  *          |{written:false, reason:string}}
  *   bytes  the exact buffer published — the caller acts on THESE, never on a
@@ -200,7 +214,8 @@ function resolveParent(vaultReal, dirSegments) {
  * and `expect` failure — and every unexpected filesystem error — yields
  * `{written:false, reason}`. The only throw is a caller-contract violation: a
  * `rel` that is not segment-valid, a missing `admit`, a `bytes` that is not a
- * Buffer, an `expect` that is present and is not a Buffer.
+ * Buffer, an `expect` that is present and is not a Buffer, a `beforePublish`
+ * that is present and is not a function.
  */
 function writeIntoVault(o) {
   const opts = o || {};
@@ -218,6 +233,9 @@ function writeIntoVault(o) {
     throw new WienerdogError(
       'vault write: `expect` must be a Buffer or be OMITTED — omission is how a caller says the target must not exist'
     );
+  }
+  if (opts.beforePublish !== undefined && typeof opts.beforePublish !== 'function') {
+    throw new WienerdogError('vault write: `beforePublish` must be a function or be OMITTED (it is a test seam)');
   }
   const segments = splitRel(opts.rel);
 
@@ -445,6 +463,17 @@ function writeIntoVault(o) {
       return refuse(`${resolvedRel} already exists and this write asserted it would not`);
     }
 
+    // The test seam (Table W row W3): after every check, immediately before the
+    // rename, on both arms. Wrapped HERE so that a throw of any type, a
+    // `WienerdogError` included, is an ordinary refusal and the unwind runs.
+    if (opts.beforePublish !== undefined) {
+      try {
+        opts.beforePublish();
+      } catch (e) {
+        return refuse(`the write failed unexpectedly (${(e && e.code) || (e && e.message)})`);
+      }
+    }
+
     // The rename is the publish. A reader of the target sees the previous
     // content or the complete new content, never a prefix: the bytes are all in
     // the temp object before the name ever points at it.
@@ -473,6 +502,9 @@ function writeIntoVault(o) {
     // creation and that stops being true: the throw would then escape past the
     // unwind, leaving directories behind and handing the caller a second
     // failure shape H7 says it does not have.
+    // The one other piece of caller code, the `beforePublish` test seam, runs
+    // after the chain creation; its call converts any throw, WienerdogError
+    // included, into a refusal itself, so nothing it throws reaches here.
     if (e instanceof WienerdogError) throw e;
     return refuse(`the write failed unexpectedly (${(e && e.code) || (e && e.message)})`);
   }
