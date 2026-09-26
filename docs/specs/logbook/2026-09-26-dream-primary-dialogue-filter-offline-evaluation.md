@@ -219,15 +219,12 @@ The spec's rule: *not material* (output faithful, surviving input mostly worth
 reading) → `Superseded`; *material* → the number justifies the filter. Read
 against the measurements:
 
-1. **Faithful, with gaps — the judge's own phrase:** after round 2, no
-   high-severity loss and no high-severity unsupported claim. The 16 remaining
-   losses split two ways: **12** (rows 1 and 5) are the repeat-pass behaviour
-   described above, an artefact of this setup; **4** (three medium, one low)
-   come from sessions new to the baseline — rows 2 and 3 — and are ordinary
-   first-pass omissions: the dream read a ruling or an open commitment and did
-   not write it. Those four are the live exposure this evaluation measured.
-   None of the 16 sits in a low-value block, so a filter cannot touch either
-   group; both are one consolidation-quality observation, not an input one.
+1. **Faithful, with gaps — the judge's own phrase.** Assessed against all
+   16 production first-pass omissions described in Findings A (0 high,
+   9 medium, 7 low; 12 made by the live 09-24 dream, 4 by this run): no
+   high-severity loss and no high-severity unsupported claim. None of the 16
+   sits in a low-value block, so a filter cannot touch them; they are one
+   consolidation-quality observation, not an input one.
 2. **Mostly worth reading:** 65 % by the judge's own count; harm from the rest
    is mild dilution in four places, none of it from the interim replies.
 3. **The filter's real target** after the safe deterministic strip is 20.8 % of

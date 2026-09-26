@@ -34,15 +34,27 @@ present sizes).
 
 | gate | raw | verdict | findings (band → disposition) |
 |---|---|---|---|
-| Codex Astra | `…-eval-record-r2-astra-raw.json`, committed `f3a12438` | needs-attention | 1 **B** the decision analysis attributed all 16 remaining losses to the repeat-pass artefact although 4 came from sessions new to the baseline → **fix**: the two groups separated (12 repeat-pass; 4 first-pass omissions, 3 medium + 1 low), faithfulness restated as "faithful, with gaps", a second consolidation finding registered; handover aligned |
-| wd-reviewer | report in the session | REQUEST-CHANGES | round-1 items 1–6 verified fixed (7 pending in the PR body); new: 1 **B** `npm run lint` failed on this record's own placeholder (MD036) → **fix**; 2 **B** the same misattribution the Codex gate found, plus the registered finding framed around the setup instead of the production defect → **fix**: one finding, "a first pass records totals and to-dos and scores the rest near-zero novelty on an unchecked assumption"; 3 **B** the round-1 paraphrases remain in branch history and this repo merges with merge commits → **owner**: the session's permission layer refused a history rewrite (`reset --hard` + force-push), so the branch keeps `97e45ff0`; the maintainer chooses at merge time — squash-merge keeps that commit out of `main` (the PR ref still reaches it), a rewrite is his own act; stated in the handover; 4 **C** the 20.8 % residual mislabelled machine-session concluding replies as interim replies → **fix**: split 11.1 % machine sessions whole / 9.6 % interim replies, exact; nit: "or none" for `thread_source` → **fix** |
+| Codex Astra | `…-eval-record-r2-astra-raw.json`, committed `f3a12438` | needs-attention | 1 **B** the decision analysis attributed all 16 remaining losses to the repeat-pass artefact although 4 came from sessions new to the baseline → **fix**: the two groups separated (12 repeat-pass; 4 first-pass omissions, 3 medium + 1 low), faithfulness restated as "faithful, with gaps", the one consolidation finding reframed as the production first-pass defect; handover aligned |
+| wd-reviewer | report in the session | REQUEST-CHANGES | round-1 items 1–6 verified fixed (7 pending in the PR body); new: 1 **B** `npm run lint` failed on this record's own placeholder (MD036) → **fix**; 2 **B** the same misattribution the Codex gate found, plus the registered finding framed around the setup instead of the production defect → **fix**: one finding, "a first pass records totals and to-dos and scores the rest near-zero novelty on an unchecked assumption"; 3 **B** the round-1 paraphrases remain in branch history and this repo merges with merge commits → **owner**: the session's permission layer refused a history rewrite (`reset --hard` + force-push), so the branch keeps `97e45ff0`; the maintainer chooses at merge time — squash-merge keeps that commit out of `main` but retracts nothing already published (the remote branch and the PR ref still reach it), a rewrite plus a removal request to GitHub is his own act; stated in the handover; 4 **C** the 20.8 % residual mislabelled machine-session concluding replies as interim replies → **fix**: split 11.1 % machine sessions whole / 9.6 % interim replies, exact; nit: "or none" for `thread_source` → **fix** |
 
 **No history rewrite was made.** The raw commits cited above (`bdb17bba`,
 `f3a12438`) were made before adjudication, as the runbook requires, and stay
-where they are. A squash-merge would leave them reachable only through the
-PR's ref; a merge commit would carry `97e45ff0` into `main`. That trade is
-the maintainer's.
+where they are. A squash-merge would leave them reachable through the remote
+branch (until deleted) and the PR's ref (which persists for the life of the
+repository; only GitHub Support purges it) — **at a cost this record names:**
+the runbook wants each raw-commit SHA cited as proof the raw preceded
+adjudication, and under a squash those SHAs are provable only off `main`
+(the raw files themselves still land on `main` inside the squash commit). A
+merge commit would carry `97e45ff0` into `main`. That trade is the
+maintainer's.
 
-## Round 3 — tip filled after the round
+## Round 3 — tip `d00aee11`
+
+| gate | raw | verdict | findings (band → disposition) |
+|---|---|---|---|
+| Codex Astra | `…-eval-record-r3-astra-raw.json`, committed `a8f2823e` | needs-attention | 1 **B** the handover's squash-merge guidance understated the published commit's reachability (remote branch, PR ref; no basis for "until GitHub drops it") → **fix**: stated accurately, removal named as a separate owner decision; 2 **B** the decision-rule item still called the twelve live omissions an artefact → **fix**: the restatement deleted, the item now assesses faithfulness against all 16 production omissions as Findings A describes them (repeat rule: third round on the same sentence family, so the sentence was removed rather than patched) |
+| wd-reviewer | report in the session | **APPROVE** (C-only) | round-2 items 1–4 verified fixed; C1 decision-rule item still contradicted Findings A → **fix** (the restatement deleted, see the Codex row); C2 this record said "a second consolidation finding" in one row and "one" elsewhere → **fix**; C3 merge text: the PR ref persists for the life of the repository (Support-only purge), the branch stays reachable until deleted, and a squash costs the on-`main` provability of the raw-commit SHAs → **fix**: all three stated; C4 the handover understated what `97e45ff0` holds → **fix**: "item-level topic phrases (about a dozen) from the sessions and the 09-24 daily log; no verbatim transcript or note text"; C5 advisory: state the 12/4 split once → **done** with C1 |
+
+## Round 4 — tip filled after the round
 
 Pending.

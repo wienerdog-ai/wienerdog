@@ -62,15 +62,21 @@ resuming it.
 > (identities, counts, verdicts — no transcript or note substance; the repo is
 > public). The result block at the spec's entry condition points to it. **MERGE DECISION FOR THE
 > OWNER (PR #319 is not merged):** its first commit (`97e45ff0`) carried
-> category-level descriptions of what the sampled sessions were about
-> (subject headings, no transcript text); the gates caught it and the text is
-> gone from the tip. The session's permission layer refused a history
-> rewrite, so the commit is still in the branch. **Squash-merge** keeps it out
-> of `main` (it then stays reachable only by SHA and through the PR ref, until
-> GitHub drops it; the two Codex raw commits the round record cites become
-> reachable the same way); a **merge commit** carries it into `main` for
-> good; a rewrite and force-push is the owner's own act. Recommended:
-> squash-merge. The
+> item-level topic phrases from the sampled sessions and the 09-24 daily log
+> (about a dozen; no verbatim transcript or note text); the gates caught it
+> and the text is gone from the tip. The session's permission layer refused a history
+> rewrite, so the commit is still in the branch, **and it is already
+> published**: it is reachable through the remote branch
+> `docs/filter-offline-evaluation-2026-09-26` and through the PR's ref.
+> **Squash-merge** only keeps it out of `main`; it retracts nothing: the
+> branch reaches it until deleted, and the PR ref persists for the life of
+> the repository (only GitHub Support purges it). Its cost: the three Codex
+> raw commits the round record cites as proof-before-adjudication are then
+> provable only off `main` (the raw files still land in the squash commit).
+> A **merge commit** carries `97e45ff0` into `main` as well. Removing the
+> published material is a separate decision — a rewrite and force-push plus
+> a Support request — and the owner's own act. Recommended: squash-merge,
+> then decide separately whether the exposure warrants the removal request. The
 > evaluation's own two harness transcripts were moved out of
 > `~/.claude/projects/` into `~/wd-eval/harness-transcripts/` so tonight's
 > live dream does not consolidate evaluation artefacts; the live ledger was not
