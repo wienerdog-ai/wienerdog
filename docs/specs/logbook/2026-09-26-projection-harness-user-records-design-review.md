@@ -766,3 +766,36 @@ draft attached to option (i) of the owner's question; the measurement script
 and every number stay; Errata 8 and 9 against the Done projection spec — true
 today whatever the owner decides — are routed as findings for a separate
 docs package.
+
+### The re-cut, applied (after the escalation entry above)
+
+The spec was re-cut to candidate 0 in the commit after `6d8b8db9`:
+`status: Draft`, size S, no `src/` change, Deliverables `N/A`. Tables H and G
+stay as RECORDED DESIGN, with R3-1 written into G1; ADR-0023 Amendment 5
+stays as a draft attached to option (i) and to option (ii)'s first package;
+the measurement script and every number stay; the last complete contract is
+cited as `f051e24a`.
+
+**One deviation from §0 rule 1's candidate 0, decided and stated:** no test
+pinning today's acceptance of a harness-authored record is written. It would
+assert as expected behaviour the exact contract violation the Done spec's
+`:150` sentence rules out, and every successor would have to delete it
+first; the residual is recorded by the Done-spec docs package instead.
+
+**The Done-spec errata are routed**, not applied: a separate S docs package,
+filed after the owner answers, because Erratum 7's wording depends on the
+answer; Erratum 8 (field names versus the `promptSource` value) and the
+true-today half of Erratum 9 (0 of 11,884) hold whatever the answer, and
+Erratum 8 may land alone sooner.
+
+**The owner items are replaced by one product question** — (i) build the rule
+and its net together, (ii) the net first on both harnesses and then the rule,
+(iii) build nothing — with the architect's recommendation (iii) now plus a
+separately commissioned, narrower provenance design (flag positively
+labelled task notifications as untrusted rather than decline them; no design
+round yet), and the cost of overruling it. One new measurement backs the
+question: all 240 Codex rollouts that project replies without requests are
+already marked processed on this install's ledger (`selectState` →
+`skip-processed`; `updated_at` 2026-09-20 for 191, 2026-09-21 for 47,
+2026-09-01 for 2), read by a scratch probe that printed outcomes, dates and
+counts only.
