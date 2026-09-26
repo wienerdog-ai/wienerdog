@@ -1,0 +1,44 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 67359a5e",
+    "baseRef": "67359a5e",
+    "explicit": true
+  },
+  "threadId": "01a0dfe3-1acf-7dd2-82e3-83ab04e44925",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate-nt",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 67359a5e from merge-base 67359a5ec9d8e87f5f6353e7a821866afc6256d8."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Round 2’s present-but-undefined defect is closed. Round 3 found one A/HEAVY conflict with the fail-open guarantee.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"A/HEAVY: inherited-key rule can taint every unlabeled session\",\n      \"body\": \"N4 promises that an unlabeled record changes no ledger verdict, but N7 checks inherited properties on an ordinary gate extract. If Object.prototype acquires task_notification, every extract reads as tainted even when no record has the label or an own gate key. Newly counted clean sessions would then be refused as trusted. This is a conditional in-process prototype-pollution scenario; no pollution source was established in this review.\",\n      \"file\": \"docs/specs/WP-dream-projection-notification-taint.md\",\n      \"line_start\": 548,\n      \"line_end\": 551,\n      \"confidence\": 0.86,\n      \"recommendation\": \"Make produced gate extracts immune to global prototype pollution, for example with a null prototype, and test an unlabeled session while Object.prototype carries task_notification. Apply the round-3 STOP CRITERION before revising Table N.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve the N4/N7 conflict under the pinned round-3 criterion before dispatch.\",\n    \"Keep the four listed owner items for owner ruling; the design record does not decide them.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Round 2’s present-but-undefined defect is closed. Round 3 found one A/HEAVY conflict with the fail-open guarantee.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "A/HEAVY: inherited-key rule can taint every unlabeled session",
+        "body": "N4 promises that an unlabeled record changes no ledger verdict, but N7 checks inherited properties on an ordinary gate extract. If Object.prototype acquires task_notification, every extract reads as tainted even when no record has the label or an own gate key. Newly counted clean sessions would then be refused as trusted. This is a conditional in-process prototype-pollution scenario; no pollution source was established in this review.",
+        "file": "docs/specs/WP-dream-projection-notification-taint.md",
+        "line_start": 548,
+        "line_end": 551,
+        "confidence": 0.86,
+        "recommendation": "Make produced gate extracts immune to global prototype pollution, for example with a null prototype, and test an unlabeled session while Object.prototype carries task_notification. Apply the round-3 STOP CRITERION before revising Table N."
+      }
+    ],
+    "next_steps": [
+      "Resolve the N4/N7 conflict under the pinned round-3 criterion before dispatch.",
+      "Keep the four listed owner items for owner ruling; the design record does not decide them."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"Round 2’s present-but-undefined defect is closed. Round 3 found one A/HEAVY conflict with the fail-open guarantee.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"A/HEAVY: inherited-key rule can taint every unlabeled session\",\n      \"body\": \"N4 promises that an unlabeled record changes no ledger verdict, but N7 checks inherited properties on an ordinary gate extract. If Object.prototype acquires task_notification, every extract reads as tainted even when no record has the label or an own gate key. Newly counted clean sessions would then be refused as trusted. This is a conditional in-process prototype-pollution scenario; no pollution source was established in this review.\",\n      \"file\": \"docs/specs/WP-dream-projection-notification-taint.md\",\n      \"line_start\": 548,\n      \"line_end\": 551,\n      \"confidence\": 0.86,\n      \"recommendation\": \"Make produced gate extracts immune to global prototype pollution, for example with a null prototype, and test an unlabeled session while Object.prototype carries task_notification. Apply the round-3 STOP CRITERION before revising Table N.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve the N4/N7 conflict under the pinned round-3 criterion before dispatch.\",\n    \"Keep the four listed owner items for owner ruling; the design record does not decide them.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

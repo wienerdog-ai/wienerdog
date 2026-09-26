@@ -102,7 +102,7 @@ or note text.
   behaviour of a first pass.
 - **None of the 16 sits in a block the judge marked low-value**, so no input
   filter — including the superseded one and the projection fix
-  `docs/specs/WP-dream-projection-harness-user-records.md` — reaches them.
+  `docs/specs/done/WP-dream-projection-harness-user-records.md` — reaches them.
 - For scale: the same run's diff was otherwise judged *"faithful to the
   dialogue"*, with 8 unsupported claims (0 high, 1 medium, 7 low).
 
@@ -214,7 +214,7 @@ N/A — candidate package; see open question 1.
 ## Out of scope (do NOT do these)
 
 - **The harness-authored user records** —
-  `docs/specs/WP-dream-projection-harness-user-records.md`.
+  `docs/specs/done/WP-dream-projection-harness-user-records.md`.
 - **Any input filter or relevance stage** — the superseded
   `docs/specs/done/WP-dream-primary-dialogue-filter.md`.
 - **Re-feeding consolidated sessions** — the ledger's behaviour is not in

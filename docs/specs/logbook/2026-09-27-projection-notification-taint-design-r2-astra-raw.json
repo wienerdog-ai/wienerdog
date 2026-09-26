@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 67359a5e",
+    "baseRef": "67359a5e",
+    "explicit": true
+  },
+  "threadId": "01a0dfd9-168b-7452-b036-52f59a2c021d",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate-nt",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 67359a5e from merge-base 67359a5ec9d8e87f5f6353e7a821866afc6256d8."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\"verdict\":\"needs-attention\",\"summary\":\"No ship yet. N6/N7 closes the round‑1 path for newly counted sessions, but the specified validator check violates its fail‑closed contract for a malformed gate extract.\",\"findings\":[{\"severity\":\"medium\",\"title\":\"A/HEAVY — a present key with value undefined reads clean\",\"body\":\"N7 says only an absent `task_notification` key reads clean, but the prescribed `!== undefined` check returns false when the key is present with value `undefined`. The current producer writes only `true`; the failure arises if a malformed or version-skewed in-memory extract supplies that value. The ledger could then accept a `false` declaration for a notification-bearing session. AC5 tests other malformed values but misses this one.\",\"file\":\"docs/specs/WP-dream-projection-notification-taint.md\",\"line_start\":350,\"line_end\":355,\"confidence\":0.94,\"recommendation\":\"Check key presence with `Object.hasOwn(extract, 'task_notification')` and add `undefined` to AC5’s malformed-value cases.\"}],\"next_steps\":[\"Correct N7 and rerun the ledger acceptance test and RED proofs.\"]}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No ship yet. N6/N7 closes the round‑1 path for newly counted sessions, but the specified validator check violates its fail‑closed contract for a malformed gate extract.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "A/HEAVY — a present key with value undefined reads clean",
+        "body": "N7 says only an absent `task_notification` key reads clean, but the prescribed `!== undefined` check returns false when the key is present with value `undefined`. The current producer writes only `true`; the failure arises if a malformed or version-skewed in-memory extract supplies that value. The ledger could then accept a `false` declaration for a notification-bearing session. AC5 tests other malformed values but misses this one.",
+        "file": "docs/specs/WP-dream-projection-notification-taint.md",
+        "line_start": 350,
+        "line_end": 355,
+        "confidence": 0.94,
+        "recommendation": "Check key presence with `Object.hasOwn(extract, 'task_notification')` and add `undefined` to AC5’s malformed-value cases."
+      }
+    ],
+    "next_steps": [
+      "Correct N7 and rerun the ledger acceptance test and RED proofs."
+    ]
+  },
+  "rawOutput": "{\"verdict\":\"needs-attention\",\"summary\":\"No ship yet. N6/N7 closes the round‑1 path for newly counted sessions, but the specified validator check violates its fail‑closed contract for a malformed gate extract.\",\"findings\":[{\"severity\":\"medium\",\"title\":\"A/HEAVY — a present key with value undefined reads clean\",\"body\":\"N7 says only an absent `task_notification` key reads clean, but the prescribed `!== undefined` check returns false when the key is present with value `undefined`. The current producer writes only `true`; the failure arises if a malformed or version-skewed in-memory extract supplies that value. The ledger could then accept a `false` declaration for a notification-bearing session. AC5 tests other malformed values but misses this one.\",\"file\":\"docs/specs/WP-dream-projection-notification-taint.md\",\"line_start\":350,\"line_end\":355,\"confidence\":0.94,\"recommendation\":\"Check key presence with `Object.hasOwn(extract, 'task_notification')` and add `undefined` to AC5’s malformed-value cases.\"}],\"next_steps\":[\"Correct N7 and rerun the ledger acceptance test and RED proofs.\"]}",
+  "parseError": null,
+  "reasoningSummary": []
+}

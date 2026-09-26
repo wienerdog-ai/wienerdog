@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 67359a5e",
+    "baseRef": "67359a5e",
+    "explicit": true
+  },
+  "threadId": "01a0dfc0-78d0-70a3-af8a-20bd00eb1f4a",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate-nt",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 67359a5e from merge-base 67359a5ec9d8e87f5f6353e7a821866afc6256d8."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship: the design overstates its protection against task notifications becoming skill learnings.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A/HEAVY] The learnings ledger can still authorize a notification-derived skill revision\",\n      \"body\": \"The spec says a candidate supported by a flagged notification cannot reach Tier 3, but its named residual leaves a separate path open. The ledger validator derives trust from raw `tool_result` roles and does not see the notification's projection flag. A notification inside a skill invocation window can therefore support a ledger entry declared `false` without the validator rejecting it. If that mistaken assertion persists across three sessions, the ledger can authorize a later skill-body revision. This requires the dream pass to misattribute support, but that is the trust error the new flag is meant to contain.\",\n      \"file\": \"docs/specs/WP-dream-projection-notification-taint.md\",\n      \"line_start\": 118,\n      \"line_end\": 129,\n      \"confidence\": 0.88,\n      \"recommendation\": \"Carry notification provenance into the ledger's code-derived trust check, or narrow the Tier-3 protection claim and obtain an explicit owner ruling accepting this skill-revision path before dispatch.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve the ledger path and rerun the design gate before dispatch.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No ship: the design overstates its protection against task notifications becoming skill learnings.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "[A/HEAVY] The learnings ledger can still authorize a notification-derived skill revision",
+        "body": "The spec says a candidate supported by a flagged notification cannot reach Tier 3, but its named residual leaves a separate path open. The ledger validator derives trust from raw `tool_result` roles and does not see the notification's projection flag. A notification inside a skill invocation window can therefore support a ledger entry declared `false` without the validator rejecting it. If that mistaken assertion persists across three sessions, the ledger can authorize a later skill-body revision. This requires the dream pass to misattribute support, but that is the trust error the new flag is meant to contain.",
+        "file": "docs/specs/WP-dream-projection-notification-taint.md",
+        "line_start": 118,
+        "line_end": 129,
+        "confidence": 0.88,
+        "recommendation": "Carry notification provenance into the ledger's code-derived trust check, or narrow the Tier-3 protection claim and obtain an explicit owner ruling accepting this skill-revision path before dispatch."
+      }
+    ],
+    "next_steps": [
+      "Resolve the ledger path and rerun the design gate before dispatch."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship: the design overstates its protection against task notifications becoming skill learnings.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[A/HEAVY] The learnings ledger can still authorize a notification-derived skill revision\",\n      \"body\": \"The spec says a candidate supported by a flagged notification cannot reach Tier 3, but its named residual leaves a separate path open. The ledger validator derives trust from raw `tool_result` roles and does not see the notification's projection flag. A notification inside a skill invocation window can therefore support a ledger entry declared `false` without the validator rejecting it. If that mistaken assertion persists across three sessions, the ledger can authorize a later skill-body revision. This requires the dream pass to misattribute support, but that is the trust error the new flag is meant to contain.\",\n      \"file\": \"docs/specs/WP-dream-projection-notification-taint.md\",\n      \"line_start\": 118,\n      \"line_end\": 129,\n      \"confidence\": 0.88,\n      \"recommendation\": \"Carry notification provenance into the ledger's code-derived trust check, or narrow the Tier-3 protection claim and obtain an explicit owner ruling accepting this skill-revision path before dispatch.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Resolve the ledger path and rerun the design gate before dispatch.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
