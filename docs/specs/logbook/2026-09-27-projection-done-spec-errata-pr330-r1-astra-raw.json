@@ -1,0 +1,17 @@
+{
+  "review": "Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 3b9ad5b8",
+    "baseRef": "3b9ad5b8",
+    "explicit": true
+  },
+  "threadId": "01a0e00e-28dd-7bb2-b77a-5604bf3c1288",
+  "sourceThreadId": "01a0e00e-28dd-7bb2-b77a-5604bf3c1288",
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "The changes match the work package’s specified documentation edits, the cited measurements support the new errata, and lint passes. No actionable defect was found.",
+    "reasoning": []
+  }
+}
