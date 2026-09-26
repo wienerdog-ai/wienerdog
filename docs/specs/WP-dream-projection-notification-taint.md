@@ -14,7 +14,7 @@ epic: dream-primary-dialogue
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 
-> **DRAFT — IN ITS DESIGN ROUND (revision 1, after round 1).** Commissioned
+> **DRAFT — IN ITS DESIGN ROUND (revision 2, after round 2).** Commissioned
 > by the owner on 2026-09-27
 > (`docs/specs/logbook/2026-09-27-owner-ruling-harness-records-option-iii.md`:
 > "option 3, and commission the flag-not-decline design"). The round record is
@@ -22,7 +22,9 @@ epic: dream-primary-dialogue
 > (**the round record**); its §0 STOP CRITERION was committed before this
 > file. Round 1 found that the learnings-ledger gate could still count a
 > notification-bearing session as trusted; revision 1 closes that path in code
-> (Table N rows N6–N7). Only the Codex design gate's outcome and the owner move
+> (Table N rows N6–N7); round 2 found N7 tested a value instead of presence,
+> and revision 2 re-decided its clean state (round record §7). Only the Codex
+> design gate's outcome and the owner move
 > this spec further. **Dispatch additionally waits for the owner's rulings on
 > the four owner items at the end.** Written against `main` at `67359a5e`.
 
@@ -351,10 +353,16 @@ message cap — a notification the cap drops still says the session held one.
 own-result check (`:520`), inside the per-invocation loop:
 
 ```js
-    if (extract.task_notification !== undefined) return true;
+    if ('task_notification' in Object(extract)) return true;
 ```
 
-with a comment naming Table N row N7; the JSDoc's `@param` (`:506`) gains
+with a comment naming Table N row N7 and saying the one clean state is that
+the name is not reachable on the extract at all. This is a **presence** test,
+never a value test: `extract.task_notification !== undefined` would read a key
+present with the value `undefined` as clean (round 2's finding), and
+`Object.hasOwn(extract, …)` would read an inherited property as clean.
+`Object(extract)` boxes a primitive rather than throwing, as today's property
+reads do; the JSDoc's `@param` (`:506`) gains
 `task_notification?:true`; and rule (h)'s refusal text (`:647`) becomes
 exactly
 
@@ -508,7 +516,7 @@ rulings on this package's owner items, from their logbook record.
 
 Status: **ACCEPTED by the owner's rulings of <RULING-DATE> on that package's owner items.**
 
-**Decision.** A `user` record that Claude Code labels as a task notification — its top-level `origin.kind` is exactly `"task-notification"` — carries a subagent's or background task's result, which is external content. From <DATE>: (1) the primary-dialogue message projected from it carries `derived_from_untrusted: true`, and it sets the session's taint state as an external `tool_result` does; the 2026-09-17 amendment's "A user message is `false` by role regardless of what preceded it" holds for every other user message. (2) The text-free gate projection carries `task_notification: true` when the session holds such a record, and the learnings-ledger validator derives every invocation window of that session as untrusted, exactly as it derives a window holding an external `tool_result`; only an absent key reads clean. So a notification can no longer help a session count as a trusted confirmation of a skill learning, and the "Accepted residual after round-5" above now also requires that none of the three sessions held a labelled task notification.
+**Decision.** A `user` record that Claude Code labels as a task notification — its top-level `origin.kind` is exactly `"task-notification"` — carries a subagent's or background task's result, which is external content. From <DATE>: (1) the primary-dialogue message projected from it carries `derived_from_untrusted: true`, and it sets the session's taint state as an external `tool_result` does; the 2026-09-17 amendment's "A user message is `false` by role regardless of what preceded it" holds for every other user message. (2) The text-free gate projection carries `task_notification: true` when the session holds such a record, and the learnings-ledger validator derives every invocation window of that session as untrusted, exactly as it derives a window holding an external `tool_result`; the one clean state is that no property of that name is reachable on the gate projection — a key present with any value, `undefined` included, taints. So a notification can no longer help a session count as a trusted confirmation of a skill learning, and the "Accepted residual after round-5" above now also requires that none of the three sessions held a labelled task notification.
 
 **Why session-level.** A positional marker would have needed the raw parser to report positions, rebased under the message cap — the index geometry round 6 of this ADR's review found exploitable — for a precision that moved no verdict on the owner's corpus: 0 of 42 (session, invoked skill) pairs were clean before this amendment, and 32 of the 42 were in sessions holding a notification.
 
@@ -540,7 +548,7 @@ every other surface cites it.
 | N4 | Fail-open — the central property | A record **not** in N1 — `origin` absent, `null`, a string, an array, an object without `kind`, `kind` any other value (including `"human"`, a re-cased or renamed label), or a labelled record with `isMeta`, `isSidechain` or another `message.role` — is projected **exactly** as the Done contract projects it, adds nothing to the gate extract, and changes no ledger verdict. There is no detector, counter, diagnostic, quarantine, halt or retry, and none may be added under this package. |
 | N5 | Raise-only | The rule never removes, adds, reorders or re-words a message, never changes a `ts`, never lowers a flag, and never changes `intakeBytes`, `parse` or the extract's metadata. The only values it may change are `derived_from_untrusted` values, only from `false` to `true`, and the gate extract, only by row N6's key. |
 | N6 | The gate projection | `parsePrimaryWithOutcome`'s `gateExtract` carries `task_notification: true` exactly when at least one record of the read was in N1 — including one step 2 rejected and one the message cap dropped — and the key is **absent** otherwise. Text-free: it records that a labelled record was seen, never where or what. |
-| N7 | The ledger | `invocationWindowTainted` returns `true` for every invocation of the skill in a gate extract on which the key `task_notification` is **present with any value**; only its absence reads clean. Rule (h) then refuses a newly counted Claude session's `false` declaration exactly as for an external `tool_result`. The Codex path and every other ledger rule are unchanged. |
+| N7 | The ledger | `invocationWindowTainted` returns `true` for every invocation of the skill in a gate extract on which a property named `task_notification` is **reachable at all** — its own or inherited, with any value, `undefined` included. **The one clean state, enumerated: no property of that name is reachable on the extract.** The test is presence, never a value. Rule (h) then refuses a newly counted Claude session's `false` declaration exactly as for an external `tool_result`. The Codex path and every other ledger rule are unchanged. |
 
 ### Mirrored Surface Checklist
 
@@ -591,13 +599,16 @@ every mirror in the same commit:
 - **No new npm dependency, no TypeScript, no build step** (CLAUDE.md). Plain
   Node ≥ 18 with JSDoc.
 - **Enumerate our own good.** N1 names the one label we accept, and N7 names
-  the one clean gate state (the key absent). Do not replace N1 with a
+  the one clean gate state (no property named `task_notification` reachable
+  on the gate extract). Do not replace N1 with a
   negative ("any `kind` that is not `human`"): that flags every future kind
   by default, and a renamed `human` label would then flag every prompt the
   person types `true` — silently ending Tier-3 learning from their words, the
   cost the Done spec's owner item 3 priced (owner item 3 below). Do not
-  replace N7's `!== undefined` with `=== true`: a malformed value would then
-  read clean, against the validator's fail-closed posture (P10).
+  replace N7's presence test with any value test — `!== undefined` reads a
+  present-`undefined` key clean (P10), `=== true` reads every non-`true` value
+  clean — nor with `Object.hasOwn`, which reads an inherited key clean: each
+  is against the validator's fail-closed posture.
 - **Do not read the content.** A text-prefix test (`<task-notification`)
   would find the same records today (round record §2) but defeats N4: with the
   label gone, a record whose text merely looks like a notification — including
@@ -644,8 +655,8 @@ every mirror in the same commit:
   | `nt-p6-codex-guard-dropped` | N1 | `!codex &&` removed | `const notification = !codex && isTaskNotification(obj);` | 4 | NT-AC2 → `nt-ac2 codex` |
   | `nt-p7-notification-declined` | N5 | row A2's user half declines a labelled record | `if (obj.isMeta === true) return null;` | 6 | NT-AC1 → `nt-ac1 :: texts`; NT-AC3 → `nt-ac3 :: roles, texts and timestamps` |
   | `nt-p8-gate-key-dropped` | N6 | the `index.js` line removed | `if (projection.notified()) gateExtract.task_notification = true;` | 2 | NT-AC4 → `nt-ac4 :: gate example`; NT-AC5 → `nt-ac5 labelled false :: refused` |
-  | `nt-p9-ledger-ignores-notification` | N7 | the `validate.js` line removed | `if (extract.task_notification !== undefined) return true;` | 4 | NT-AC5 → `nt-ac5 labelled false :: refused` |
-  | `nt-p10-ledger-reads-truthiness` | N7 | the key read as `=== true` | the same line | 4 | NT-AC5 → `nt-ac5 malformed` |
+  | `nt-p9-ledger-ignores-notification` | N7 | the `validate.js` line removed | `if ('task_notification' in Object(extract)) return true;` | 4 | NT-AC5 → `nt-ac5 labelled false :: refused` |
+  | `nt-p10-ledger-reads-value-not-presence` | N7 | the presence test replaced by the value test `extract.task_notification !== undefined` (round 2's defect) | the same line | 4 | NT-AC5 → `nt-ac5 malformed undefined` |
   | `nt-p11-notified-after-step-2` | N6 | `notified` set only for a record step 2's schema check accepts (`claudeShape(obj).classified`) | `if (notification) notified = true;` | 4 | NT-AC4 → `nt-ac4 step-2 reject (schema)` |
 
   Each `expectRed[].test` is the full test title, e.g.
@@ -709,8 +720,10 @@ every mirror in the same commit:
       `gateExtract` as the session's evidence, the ledger gate refuses the
       entry declaring `false` (the refusal matches `asserted lower than
       derived`) and keeps the one declaring `true`; with the unlabelled gate
-      extract it keeps `false`; and with `task_notification` set to `false`,
-      `"yes"`, `0` or `null` it refuses `false`.
+      extract it keeps `false`; with `task_notification` present and set to
+      `undefined`, `false`, `"yes"`, `0` or `null` it refuses `false`; and
+      with the unlabelled gate extract given a prototype that carries
+      `task_notification: true` it refuses `false`.
 - [ ] **AC6 — Erratum 10 and the amendment:** F0–F5 are in the Done spec
       verbatim, and the amendment is in ADR-0020 directly before `## Future
       work (parked, not specced)`, with `<DATE>` and `<RULING-DATE>`

@@ -643,3 +643,44 @@ the declaration file), Node v25.9.0.
   `SKILL.md:119-121` (**corrected from a first-drafted `:117-122`**, which
   began two lines early); ADR-0020 `:88-100` (the rule begins at `:88`'s last
   words), `:400-471`, `:469-471`, `:473`; Done spec `:476`.
+
+## 9. Revision 2 — after round 2
+
+Applied after the re-decision in §7 was committed (`a36b3b78`).
+
+**Edits, every registered mirror of row N7 walked.** Table N row N7 (the
+clean state enumerated as "no property of that name reachable"); the
+Exact-contracts validator line, now `if ('task_notification' in
+Object(extract)) return true;`, with the reason no value test and no
+`Object.hasOwn` is used; the Implementation note "Enumerate our own good"; AC5
+(`undefined` added to the malformed values, and an inherited-property case);
+the RED register rows P9 (`find` follows the line) and P10 (re-pointed to the
+round-2 defect, renamed `nt-p10-ledger-reads-value-not-presence`); the ADR-0020
+amendment's wording of the clean state; the status banner. **Not changed,
+checked:** F0 and F5 of Erratum 10 state no predicate (F0 says the validator
+"treats every invocation window of that session as tainted"), so neither
+moves; rows N4 and N6 and the Context's ledger paragraph describe the key's
+producer and effect, not the predicate.
+
+**Mechanical checks re-run on the simulated tree** (the revision-1 tree with
+the N7 line, the AC5 assertions and the two declarations changed):
+
+- `npm test` → 3,088 tests, **0 fail**.
+- `npm run red-proofs -- --wp WP-dream-projection-notification-taint` →
+  **P1–P11 `PROVEN`; criteria NT-AC1–NT-AC5 `PROVEN`**, `RUN: FILTERED`. P10
+  (the round-2 defect as a mutation) reddens exactly `nt-ac5 malformed
+  undefined`. `validateProof` accepts all 193 declarations in the repository,
+  and every `find` occurs exactly as declared.
+- The two rejected predicates, run against the new AC5 by hand:
+  `Object.hasOwn(extract, 'task_notification')` fails exactly `nt-ac5
+  inherited :: refused`; `extract.task_notification === true` fails at `nt-ac5
+  malformed undefined :: refused` (the loop's first case). The presence test
+  passes all.
+- The ten lanes whose proofs mutate a file this package edits (§8.3's list)
+  → only `PROVEN` lines, no `FAILED`.
+- `coherence.js` → 74 checks, all PASS (the validator block now verbatim).
+- Erratum 10 and the amendment re-applied from the spec's own text → the
+  spec's check prints `erratum 10 and the ADR-0020 amendment: exact`; `npm
+  run lint` over both results → 0 errors. The check's body is unchanged since
+  §8.3, whose absent and violating states stand.
+- `npm run lint` on the branch → passes.
