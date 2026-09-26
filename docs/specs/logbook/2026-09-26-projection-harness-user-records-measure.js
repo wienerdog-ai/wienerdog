@@ -19,6 +19,11 @@
 // is printed only as a count, a character total and a SHA-256 digest, so two
 // runs (before and after a change) can be compared without reading any of it.
 //
+// EXIT STATUS: 1 when any file projects at least one assistant reply and no
+// user message ("replies without requests" — the state a harness field change
+// would put every session in; revision 1 of the design round), else 0. The
+// last line says which.
+//
 // It is inert: no dependency, no network, no write; neither `npm test` nor
 // `npm run lint` collects it. Its class labels are a MEASUREMENT device over
 // text prefixes; the product rule (Table H) never reads text.
@@ -79,6 +84,8 @@ const versions = new Set();
 let userRecords = 0;
 let assistantCount = 0;
 let assistantChars = 0;
+let filesWithReplies = 0;
+let repliesWithoutRequests = 0;
 const digest = crypto.createHash('sha256');
 
 for (const { p, size } of files) {
@@ -109,6 +116,10 @@ for (const { p, size } of files) {
     },
   };
   parseClaudeTranscript(p, size, newRunBudget(), observer);
+  if (proj.messages.some((m) => m.role === 'assistant')) {
+    filesWithReplies += 1;
+    if (!proj.messages.some((m) => m.role === 'user')) repliesWithoutRequests += 1;
+  }
 }
 
 const sortedVersions = [...versions].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -132,3 +143,10 @@ for (const c of ['notification', 'command-echo', 'bash-mode', 'other-tag', 'unta
   console.log(`${String(t.accepted).padStart(6)} msgs ${String(t.chars).padStart(9)} chars  ${c}`);
 }
 console.log(`assistant messages ${assistantCount} | chars ${assistantChars} | sha256 ${digest.digest('hex').slice(0, 16)}`);
+console.log(`files with replies ${filesWithReplies} | of them with no user message ${repliesWithoutRequests}`);
+if (repliesWithoutRequests > 0) {
+  console.log('REPLIES WITHOUT REQUESTS: at least one file gives assistant replies and no user message');
+  process.exitCode = 1;
+} else {
+  console.log('no file gives assistant replies without a user message');
+}

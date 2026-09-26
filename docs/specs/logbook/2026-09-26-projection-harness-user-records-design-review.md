@@ -292,6 +292,56 @@ in Table H row H1 or H2, and every typed, queued, suggestion-accepted and
 `sdk` prompt accepted before is still accepted (the counts per state match
 §2.3 line for line).
 
+### 2.7 The guard's trigger, measured (revision 1)
+
+Added for round-1 finding R1-1. Two instruments over the whole corpus: a
+scratch probe running the tree's own `parsePrimaryWithOutcome` per Claude file
+(the collector's path: bounded read, caps), and the committed measurement
+script, whose revision-1 last lines count files that project a reply and no
+user message and set the exit status on it.
+
+```text
+probe, shipped tree        files 334 ok 334 | raw user-role > 0: 334 | projected user = 0: 0   (0 with a reply)
+probe, Table H (simulated) files 334 ok 334 | raw user-role > 0: 334 | projected user = 0: 10  (0 with a reply)
+probe, every user record declined (a simulated field change)
+                           files 334 ok 334 | raw user-role > 0: 334 | projected user = 0: 334 (321 with a reply)
+
+script, shipped tree       files with replies 321 | of them with no user message 0    exit 0
+script, Table H            files with replies 321 | of them with no user message 0    exit 0
+script, field change       files with replies 321 | of them with no user message 321  exit 1
+```
+
+Readings: the ten Table H files with a user-role record and no accepted
+request are all reply-less (slash-command-only sessions), so they project
+nothing and harm nothing — which is why Table G counts **replies without
+requests** and not "user records declined". On that definition the guard's
+trigger is 0 of 321 today and 321 of 321 under a field change: the whole
+corpus separates cleanly, with no threshold to choose.
+
+### 2.8 A Codex instance of the same failure, already shipped
+
+The same "reply, no request" count over the owner's Codex rollouts (the
+collector's discovery, the shipped tree), counts and enum values only:
+
+```text
+409 rollouts discovered, 408 read ok
+  user > 0, assistant > 0 : 84
+  user = 0, assistant > 0 : 240
+  user = 0, assistant = 0 : 84   (subagent / guardian rollouts, row A4)
+the 240: first session_meta thread_source "user" 151, absent 89
+         their 493 role-user message payloads: metadata object present, content_item_kinds ABSENT (493 of 493)
+         cli_version 0.144.1 (230), 0.146.0-alpha.3.1 (2), 0.147.0 (8)
+the 84 healthy: cli_version 0.151.0 .. 0.156.1; content_item_kinds user.text 113, harness kinds as row A3 lists
+```
+
+Row A3 accepts a Codex user message only when `content_item_kinds` is present
+and aligned, and fails closed otherwise. Codex builds before 0.151 did not
+write that field, so every user message of their rollouts is declined and the
+dream receives their final answers with no request — the round-1 finding's
+failure, already real on the other harness, for older rollouts. It is outside
+this package (Claude only) and is routed (§6). It is also why Table G does not
+count Codex: a Codex arm would fire on the first run.
+
 ## 3. Current state — citations checked at both ends
 
 Every `file:line` range in the spec was printed at both ends by a scratch
@@ -405,6 +455,58 @@ between `:185` and `:186`.
 | R0-k | Two inline code spans with leading spaces failed MD038 | C | LIGHT | **Fixed** by stating the indentation in words |
 | R0-l | The stub's cite `primary-dialogue.js:9-11` for the "no heuristic over message CONTENT" sentence starts one line early | C | LIGHT | **Fixed** to `:10-11` |
 
+### 4.3 Revision 1 — the mechanical checks re-run (after round 1)
+
+On the same simulated tree, with the draft Table G (two counters in
+`collectExtracts`, step 7b in `dream.js`, texts copied from the spec's
+"Table G's texts" blocks) added to the draft Table H:
+
+- **New dependents of the guard.** `npm test` → 3,086 tests, **4 fail**:
+  `[PDC-AC4]`, `[PDC-AC4a]`, `[PDC-AC4b]`, `[PDC-AC4c]` in
+  `dream-pipeline.test.js`, all through `plantInvokingTranscript`. Sweep S4
+  (three records) → 0 fail. Nothing else in the suite reaches the guard.
+- **The acceptance criteria and RED shapes, revision 1.** Draft tests for AC3
+  (with the declined `"sdk"` notification now carrying a `tool_result` block),
+  AC8 and AC9 (halt, dry run, mixed run): `npm test` → 3,089 tests, 0 fail.
+  `npm run red-proofs -- --wp WP-dream-projection-harness-user-records` →
+  **P1–P7 all `PROVEN`; criteria AC1, AC2, AC3, AC8, AC9 `PROVEN`**.
+- **Every RED lane whose suite this package edits**, on the revised tree:
+  `WP-dream-primary-dialogue-projection` 10, `WP-dream-primary-dialogue-collection`
+  3, `WP-dream-collect-parse-throw-quarantine` 4,
+  `WP-dream-digest-omits-own-job-alerts` 7, `WP-dream-git-env-pinning` 3,
+  `WP-dream-lock-stale-owner-loud` 4, `WP-show-slot-own-value-kind` 2,
+  `WP-ep2-prune-once-per-run-test` 2 — all `PROVEN`, none otherwise.
+- **Every declared `find` string in the repository** (189 proofs, the 182
+  existing plus the 7 drafts) occurs in its file exactly as often as declared.
+- **The guard under a simulated field change.** With every Claude user record
+  declined, the four `[PDC-AC4*]` pipeline runs and the mixed `[HUR-AC9]` run
+  halt — the guard fires end to end.
+- **The spec's texts are the code's texts.** Both "Table G's texts" blocks,
+  extracted from the spec with `N`/`M` mapped to the two counters, occur
+  verbatim in the draft `dream.js`.
+- **The erratum, re-applied from the revised spec's own text:** six hunks
+  (`@@ -102,0 +103,40 @@` and one each at `:150`, `:343`, `:458`, `:462`,
+  `:563`); markdownlint 0 errors.
+- **The verification lines, three states, revision 1:**
+
+  ```text
+  == SIMULATED  → PASS erratum, PASS sweep (ten files), PASS test files (S2 and S4)
+  == SHIPPED    → FAIL erratum, FAIL sweep, PASS test files (by design)
+  == ABSENT     → FAIL erratum, FAIL sweep, FAIL test files
+  == VIOLATING  (one expected value edited) → FAIL test files
+  local re-measurement: shipped → offending rows, exit 1; Table H → final line, exit 0;
+                        field change → script exit 1
+  ```
+
+- **Citations added in revision 1**, both ends: `scratch.js:77-264`,
+  `:65-75`, `:227-243`, `:246-263`; `dream.js:744-746`, `:867-876`
+  (**corrected from `:866-876`**, which began on a blank line), `:878-890`,
+  `:892`, `:1374-1383`; `dream-pipeline.test.js:2801-2818` (**corrected from
+  `:2801-2819`**, which ended on a blank line), `:2807`, `:2809`, `:2813`;
+  `primary-dialogue.js:292`.
+- **The boundary check** over all 22 Deliverables paths → exit 0; over
+  `src/core/dream/promote.js` → exit 1.
+
 ## 5. What the round found that the stub did not know
 
 - **The structural discriminator exists** (the stub's formulation C, left
@@ -442,6 +544,14 @@ between `:185` and `:186`.
   assertion depends on it (§4.1), so they are left; a later package that
   starts asserting on their dialogue must sweep them.
 
+- **Codex rollouts written before Codex 0.151 project replies with no
+  request** (§2.8): 240 of 408 local rollouts, because row A3 declines user
+  messages without `content_item_kinds`. Pre-existing since
+  `WP-dream-primary-dialogue-projection`; it is the round-1 finding's failure
+  on the other harness, and a Codex arm of Table G belongs with its fix.
+  Routed to the orchestrator as a candidate package (a version-aware A3, or an
+  explicit ruling that pre-0.151 rollouts supply no dialogue).
+
 ## 7. Rounds
 
 Filled in by the orchestrator. Each round row cites the raw file's path and the
@@ -449,3 +559,34 @@ SHA of the commit that introduced it.
 
 | Round | Tip | Raw file | Raw commit | Product findings | Outcome under §0 |
 |---|---|---|---|---|---|
+| 1 | `b27edd44` | `docs/specs/logbook/2026-09-26-projection-harness-user-records-design-r1-astra-raw.json` | `8c02cf0c` | 2 (R1-1 A/HEAVY, R1-2 B/HEAVY) | rule 0 (R1-1 band A) and rule 4 → fixed in revision 1; one fresh round owed |
+
+### Round 1 — adjudication (the orchestrator proposed the dispositions; the architect applied them)
+
+Round zero's clean-context conformance read (`7ebd9077`) was conformant. The
+raw was committed before adjudication (`8c02cf0c`).
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| R1-1 | Owner item 2 recommended no fallback and no diagnostic, although a Claude Code change to `promptSource` would decline every request; the dream would keep replies without requests, the measurement script counted only accepted messages, and its filter passed on zero accepted user messages | A | HEAVY | **Fixed.** New canonical **Table G**: the collector counts Claude sessions written with a reply (G1) and those among them with no user message (G2); `dream.js` prints the count (G3) and, when G2 = G1 ≥ 1, halts before the model runs (G4), so nothing is marked as dreamed over and the scheduler's failure alert reaches the digest banner. Surface chosen over a dream-report section (the run-skips section's six counts are disjoint from the admitted set, row B8, and a new section means `promote.js`), over `reports/warnings.md` (a render of ledger quarantines; a per-file set-aside is permanent for a finished session), and over a doctor-only check (not run nightly, so not visible when it matters). Measured trigger: 0 of 321 today, 321 of 321 under a simulated field change (§2.7). The measurement script now exits 1 on that state and the spec's command fails on it. Owner item 2 is re-cut to what remains the owner's: halt versus report-only versus set-aside. Deliverables +5 (`scratch.js`, `dream.js`, `dream-pipeline.test.js`, two declaration files), sweep S4, AC8, AC9, P5, P6. **Size re-derived: M** |
+| R1-2 | Table H row H3 said a declined record has "no taint" and that its content is never read; steps 2–3 of row A5e validate and scan every record before the decline, and a declined `sdk` notification carrying a `tool_result` block leaves the state tainted, so the prose could lead an implementer to skip the scan for declined records | B | HEAVY (a Table H row's contract) | **Fixed.** H3, the Table H preface, the predicate bullets, Context "Provenance", the Security checklist and Errata 7 and E2 now say the decline adds no taint of its own and steps 2–3 still run on the declined record; only the predicate is content-free. AC3's fixture gains a declined notification carrying a `tool_result` block whose following reply must be `true`, pinned by a new RED proof P7 that restricts step 3's scan to records Table H accepts |
+
+Found while applying them, and fixed in the same pass: the Codex instance of
+R1-1 (§2.8, routed in §6); two citation ranges that began or ended on a blank
+line (§4.3).
+
+**ADR-0031 circuit-breaker, noted for round 2:** round 1 landed on Table H
+(R1-2). If round 2 lands on Table H again, §0 rule 2 fires: no third patch,
+a re-extraction or re-decision recorded here first.
+
+### STOP CRITERION — restated at the head of round 2
+
+Unchanged in its order and outcomes from §0, with two updates. **HEAVY** now
+also covers a Table G row's outcome or texts and the guard's harness scope.
+The **fallback** (rule 1) still re-cuts to candidate 0 if a HEAVY finding lands
+on Table H or Table G at round 3 or later; candidate 0 has no predicate and
+therefore no guard. The **frozen verification surface** (rule 6) is now: tests
+under the five tags `[HUR-AC1]`, `[HUR-AC2]`, `[HUR-AC3]`, `[HUR-AC8]`,
+`[HUR-AC9]`; the seven RED proofs P1–P7 in three declaration files; and the
+commands in the spec's Verification steps. LIGHT closure (rule 5) re-verifies
+with §4.3's checks.
