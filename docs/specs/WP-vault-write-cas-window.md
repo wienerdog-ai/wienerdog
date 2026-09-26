@@ -197,7 +197,7 @@ Nothing else — in particular not `warnings.js`, `docs/GLOSSARY.md`, or R4.
 ### Exact contracts
 
 **The signature gains one optional, test-only field.** The `writeIntoVault` JSDoc
-(`vault-write.js:175-204`) adds `beforePublish?:()=>void` to the parameter type
+(`vault-write.js:166-204`) adds `beforePublish?:()=>void` to the parameter type
 and this paragraph to the parameter list; the return shape does not change.
 
 ```js
