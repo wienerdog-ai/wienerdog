@@ -104,7 +104,7 @@ Three facts, measured on the owner's machine, no content read:
    Keyword counts, git baseline `b817b12` → live working tree:
    `BE.1` 0→2, `V03` 0→36, `porszórt|lakkozott` 0→2, `lamell` 0→4, `Gábor` 0→2,
    `617` 0→1, `196` 0→8, `csempe|parketta` 0→2 in the project note; in
-   `01-Projects/ubs-ea/current-state.md`: `Sander` 0→5, `34 ` 0→8, `57` 0→7,
+   `01-Projects/ubs-ea/current-state.md`: `Sander` 0→5, `34` (the set count) 0→8, `57` 0→7,
    `expir` 0→1, `USDJPY` 0→5.
 
 So when the live 09-24 dream scored those sessions' material as already
