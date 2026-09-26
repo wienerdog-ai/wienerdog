@@ -630,6 +630,7 @@ SHA of the commit that introduced it.
 |---|---|---|---|---|---|
 | 1 | `b27edd44` | `docs/specs/logbook/2026-09-26-projection-harness-user-records-design-r1-astra-raw.json` | `8c02cf0c` | 2 (R1-1 A/HEAVY, R1-2 B/HEAVY) | rule 0 (R1-1 band A) and rule 4 → fixed in revision 1; one fresh round owed |
 | 2 | `3ccf7a65` | `docs/specs/logbook/2026-09-26-projection-harness-user-records-design-r2-astra-raw.json` | `7d9b95ee` | 3 (R2-1 A/HEAVY, R2-2 B/HEAVY, R2-3 B/HEAVY), all on Table G; R1-1 and R1-2 verified closed | rule 0 (R2-1 band A) and rule 4 → revision 2; rules 1 and 2 not yet fired (round 1 landed on Table H, round 2 on Table G); the Table G circuit-breaker is pinned below before any edit |
+| 3 | `f051e24a` | `docs/specs/logbook/2026-09-26-projection-harness-user-records-design-r3-astra-raw.json` | `e15cb581` | 1 (R3-1 A/HEAVY, Table G row G1); R2-1, R2-2 and R2-3 verified closed | **§0 rule 1 fires (the Table G circuit-breaker pinned in `950aaab7`)** → no fourth patch; the package is re-cut to candidate 0 and the product question goes to the owner |
 
 ### Round 1 — adjudication (the orchestrator proposed the dispositions; the architect applied them)
 
@@ -715,3 +716,53 @@ surface** is now tests under the six tags `[HUR-AC1]`, `[HUR-AC2]`,
 `[HUR-AC3]`, `[HUR-AC8]`, `[HUR-AC9]`, `[HUR-AC10]`; the nine RED proofs P1–P9
 in four declaration files; and the commands in the spec's Verification steps.
 LIGHT closure re-verifies with §4.4's checks.
+
+### Round 3 — the finding, and the escalation (recorded before any spec edit)
+
+The raw was committed before adjudication (`e15cb581`).
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| R3-1 | Table G row G1 reads a `user` role in `gateExtract.messages` as proof that the raw session held a request. For an ARRAY-content Claude `user` record the raw parser emits only `tool_result` messages and never a `user` one (`src/core/transcripts/claude.js:153-171`). So a session whose only request is array-content (text beside an image, say), declined by Table H after a harness field change, shows a reply and no user role in either extract: G1 does not fire, the collector admits it, and the dream marks it processed — the request is lost for good. The spec named the residual but leaned on the corpus's array prompts all sharing a file with a string-content record, which does not hold for an array-only session | A | HEAVY (Table G) | **Not patched. §0 rule 1 fires**, as pinned before revision 2: a HEAVY finding on Table G at round 3 re-cuts the package to candidate 0, and Tables H and G go to the owner together as one product question |
+
+**Which rule fired, and why.** Rule 1 — a HEAVY finding at round 3 or later on
+a table the pin names. Rule 2 (two consecutive rounds on Table G) matches as
+well; §0's order makes rule 1 decide.
+
+**Why a fourth patch is refused.** Each round's fix to the guard opened the
+next round's hole, and the pattern is the one ADR-0031's circuit-breaker
+exists to stop: revision 1's **run-level halt** was disabled by one recognised
+session and reached the digest only as a generic alert (round 2); revision
+2's **per-session quarantine** keyed on the gate projection's roles, which
+cannot see an array-content request (round 3). The reviewer's own fix — a
+text-free, pre-cap "request-shaped block present" indication carried from the
+raw parser into the collector — is a change to `claude.js`, to the
+projection's return shape and to Table G's trigger: a fourth design, not a
+patch, and one this loop has not reviewed.
+
+**What three rounds established.**
+
+1. **The predicate (Table H) is sound and measured.** Its accept-set
+   separates every harness class from every prompt on 334 files and 25
+   Claude Code versions; the assistant sequence is unchanged to the digest;
+   the taint rule was settled in round 1 and verified closed. No round found
+   a defect in Table H after round 1.
+2. **The safety net Table H needs against harness drift is not closable
+   inside the projection and the collector alone.** A net that sees every
+   declined request needs a text-free request indicator from the raw parser
+   (`claude.js`), and a net that recovers what it set aside needs the
+   one-time retry of ADR-0023 Amendment 4 to be shipped by whichever later
+   release changes Table H — a binding that no code enforces, only an
+   amendment's words.
+3. **The failure the net guards against is already shipped on the Codex
+   arm, with no net at all.** 240 of the owner's 408 local Codex rollouts
+   (Codex 0.144.1–0.147.0) project replies with no request today, because row
+   A3 declines user messages without `content_item_kinds` (§2.8). Whatever
+   net the owner chooses, that arm is the one losing requests now.
+
+**What the re-cut keeps.** Tables H and G stay in the spec as the RECORDED
+DESIGN, with the round-3 gap written into G1; ADR-0023 Amendment 5 stays as a
+draft attached to option (i) of the owner's question; the measurement script
+and every number stay; Errata 8 and 9 against the Done projection spec — true
+today whatever the owner decides — are routed as findings for a separate
+docs package.
