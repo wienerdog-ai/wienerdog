@@ -43,6 +43,62 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **▶ START HERE — session close 2026-09-26, written for a cold start.**
+> Measured on `main` at `6f66ce7f`. No PR open, no agent running, no worktree of
+> this session left (the `prunable` worktrees under an older session's
+> scratchpad and the `wienerdog-a9a10/` and `wienerdog-felho/` checkouts predate
+> today and were not touched).
+>
+> **STATE.** `wienerdog@0.15.0` is published and installed on the owner's
+> machine; every merged package is in the shipped app. `grep '^status: Ready'
+> docs/specs/*.md` returns nothing. The specs root holds three Drafts
+> (`WP-dream-primary-dialogue-filter` — parked behind its evaluation;
+> `WP-vault-write-cas-window` — backlog stub, unblocked, needs a design round;
+> `WP-a10-windows-reap` — blocked on a Windows runner) and one Superseded stub
+> (`WP-adr-0019-quarantine-uninstall-export`). Every previously pending ADR
+> signature is signed. **Rules in force since today:** architect, implementers
+> and all four project agents run on Opus at high effort (ADR-0005 Amendment 1);
+> both review gates are unchanged (`wd-reviewer` on Opus; Codex plugin on
+> `gpt-6-astra`, design and PR, recipe in pass #19 below and in
+> `docs/runbooks/codex-review.md`).
+>
+> **DO FIRST — the filter's offline evaluation** (owner-ruled YES 2026-09-26,
+> condition: the disposable vault lives only on the user's machine and is
+> accessible to no one else). It is *not* an implementation and has no spec to
+> dispatch; the procedure is the "Entry condition — the offline evaluation"
+> section of `docs/specs/WP-dream-primary-dialogue-filter.md`, with the ruling
+> block above it. Shape: (1) pick a small representative set of the owner's own
+> sessions (decisions with rationale, corrections, an unresolved request,
+> repetitive low-value dialogue, both harnesses); (2) project them with the
+> shipped deterministic projection into a **disposable vault under the owner's
+> home**, never the live vault, never the scheduled dream; (3) give an LLM judge,
+> run through the owner's own subscription harness on that machine, the projected
+> dialogue, the initial notes and the resulting memory diffs, and ask for
+> important losses, unsupported claims, and material left in the input that is
+> not worth remembering; (4) record judge model, input identities, verdict,
+> human disposition and size/time observations in a dated
+> `docs/specs/logbook/` entry — **never the transcripts or the projected notes**;
+> (5) apply the spec's decision rule: not material → file the spec `Superseded`;
+> material → the measured quantity becomes its justification and wd-architect
+> matures it through the design gate. Owner items 1–2 of that spec stay as
+> written.
+>
+> **DO SECOND — `WP-vault-write-cas-window` design round.** wd-architect (Opus,
+> high) turns the stub's two candidate closures and its open questions into a
+> real spec; then the Codex design gate to clean or accepted-residual; then
+> `Ready`, dispatch-time re-verification, implementer on Opus-high, both PR
+> gates. Nothing else in the queue is dispatchable work.
+>
+> **OWNER ITEMS STILL OPEN (none blocks the two above):** the standing items
+> travelling with Done specs (gate package 2–3, scheduler package 1–3, deletion
+> guards 4 — pass #20 item 7); the Windows runner purchase; the five backlog
+> candidates of pass #20 (the `red-proofs`-in-CI gap is the one worth taking
+> first); the two runbook lessons from today's release (`npm whoami` before
+> publish; `npx wienerdog@latest sync` as the post-release update step).
+>
+> *The dated blocks below are the record of how today got here; pass #20 and
+> #19 hold the gate recipe, the counts and the per-PR evidence.*
+>
 > **Ruling, 2026-09-26 — implementer and architect tier.** The owner ruled that
 > architecture planning and coding both run on **Opus at high effort**; Sonnet is
 > no longer dispatched for implementation (`wd-docs` and `wd-researcher` moved to
