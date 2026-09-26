@@ -1,0 +1,53 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c58869bb05f620b034a8e438ebf91d24a5bb8389",
+    "baseRef": "c58869bb05f620b034a8e438ebf91d24a5bb8389",
+    "explicit": true
+  },
+  "threadId": "01a0de03-e965-7af0-bdd5-15c6bb0e037f",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c58869bb05f620b034a8e438ebf91d24a5bb8389 from merge-base c58869bb05f620b034a8e438ebf91d24a5bb8389."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship: the revised counts reconcile, but the decision rule still understates the production losses, and the merge guidance understates the public commit’s reachability.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[B] Squash-merge guidance understates reachability of the private descriptions\",\n      \"body\": \"The first commit contains descriptions learned from private sessions. Squashing keeps that commit out of main, but it remains reachable through the remote branch shown by `git branch -a --contains 97e45ff0`, as well as the PR ref. A SHA is not itself a ref, and the document gives no basis for saying GitHub will drop the object. The owner could mistake squash-merge for removal of the public exposure.\",\n      \"file\": \"docs/HANDOVER.md\",\n      \"line_start\": 64,\n      \"line_end\": 72,\n      \"confidence\": 0.96,\n      \"recommendation\": \"State that squashing only excludes the commit from main; it does not retract the published commit. Present branch and PR refs accurately, and treat any desired removal of the published material as a separate owner decision.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[B] Decision rule still calls twelve live omissions an evaluation artefact\",\n      \"body\": \"Findings A and the disposition now say the twelve losses were made by the live 09-24 first pass and merely re-exposed by the empty ledger. The decision-rule item instead calls those losses repeat-pass behaviour and an artefact, then says only the four new-session losses are the live exposure. That can lead the owner to assess faithfulness using four production omissions when the record identifies sixteen.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 222,\n      \"line_end\": 230,\n      \"confidence\": 0.94,\n      \"recommendation\": \"Distinguish the artificial re-exposure from the twelve live first-pass omissions in the decision rule, then assess faithfulness against all sixteen production omissions.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct the decision-rule wording and merge guidance before asking the owner to rule.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No ship: the revised counts reconcile, but the decision rule still understates the production losses, and the merge guidance understates the public commit’s reachability.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "[B] Squash-merge guidance understates reachability of the private descriptions",
+        "body": "The first commit contains descriptions learned from private sessions. Squashing keeps that commit out of main, but it remains reachable through the remote branch shown by `git branch -a --contains 97e45ff0`, as well as the PR ref. A SHA is not itself a ref, and the document gives no basis for saying GitHub will drop the object. The owner could mistake squash-merge for removal of the public exposure.",
+        "file": "docs/HANDOVER.md",
+        "line_start": 64,
+        "line_end": 72,
+        "confidence": 0.96,
+        "recommendation": "State that squashing only excludes the commit from main; it does not retract the published commit. Present branch and PR refs accurately, and treat any desired removal of the published material as a separate owner decision."
+      },
+      {
+        "severity": "medium",
+        "title": "[B] Decision rule still calls twelve live omissions an evaluation artefact",
+        "body": "Findings A and the disposition now say the twelve losses were made by the live 09-24 first pass and merely re-exposed by the empty ledger. The decision-rule item instead calls those losses repeat-pass behaviour and an artefact, then says only the four new-session losses are the live exposure. That can lead the owner to assess faithfulness using four production omissions when the record identifies sixteen.",
+        "file": "docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md",
+        "line_start": 222,
+        "line_end": 230,
+        "confidence": 0.94,
+        "recommendation": "Distinguish the artificial re-exposure from the twelve live first-pass omissions in the decision rule, then assess faithfulness against all sixteen production omissions."
+      }
+    ],
+    "next_steps": [
+      "Correct the decision-rule wording and merge guidance before asking the owner to rule."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship: the revised counts reconcile, but the decision rule still understates the production losses, and the merge guidance understates the public commit’s reachability.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[B] Squash-merge guidance understates reachability of the private descriptions\",\n      \"body\": \"The first commit contains descriptions learned from private sessions. Squashing keeps that commit out of main, but it remains reachable through the remote branch shown by `git branch -a --contains 97e45ff0`, as well as the PR ref. A SHA is not itself a ref, and the document gives no basis for saying GitHub will drop the object. The owner could mistake squash-merge for removal of the public exposure.\",\n      \"file\": \"docs/HANDOVER.md\",\n      \"line_start\": 64,\n      \"line_end\": 72,\n      \"confidence\": 0.96,\n      \"recommendation\": \"State that squashing only excludes the commit from main; it does not retract the published commit. Present branch and PR refs accurately, and treat any desired removal of the published material as a separate owner decision.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[B] Decision rule still calls twelve live omissions an evaluation artefact\",\n      \"body\": \"Findings A and the disposition now say the twelve losses were made by the live 09-24 first pass and merely re-exposed by the empty ledger. The decision-rule item instead calls those losses repeat-pass behaviour and an artefact, then says only the four new-session losses are the live exposure. That can lead the owner to assess faithfulness using four production omissions when the record identifies sixteen.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 222,\n      \"line_end\": 230,\n      \"confidence\": 0.94,\n      \"recommendation\": \"Distinguish the artificial re-exposure from the twelve live first-pass omissions in the decision rule, then assess faithfulness against all sixteen production omissions.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Correct the decision-rule wording and merge guidance before asking the owner to rule.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
