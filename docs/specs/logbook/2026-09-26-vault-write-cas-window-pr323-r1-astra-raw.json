@@ -1,0 +1,17 @@
+{
+  "review": "Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 754a3e48",
+    "baseRef": "754a3e48",
+    "explicit": true
+  },
+  "threadId": "01a0dedf-b251-78d1-860e-90a917d0d4e4",
+  "sourceThreadId": "01a0dedf-b251-78d1-860e-90a917d0d4e4",
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "I found no actionable defects in the diff. I could not verify the tests: this read-only sandbox blocks their temporary-directory creation with EPERM.",
+    "reasoning": []
+  }
+}
