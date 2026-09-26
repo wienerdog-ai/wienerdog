@@ -500,3 +500,15 @@ The re-cut changes what the implementer builds, so it is **HEAVY** and owes
 The verification surface is **frozen** at three tests, three RED proofs, the
 text checker, the one-hunk check and the production-caller check. A machinery
 finding is fixed within that surface or accepted as a residual.
+
+### Round 3 — tip `f5305fea` — CLOSED
+
+Raw: `2026-09-26-vault-write-cas-window-design-r3-astra-raw.json`, committed
+`e0fe2f7e` before adjudication. Verdict **approve**, no findings: *"the re-cut
+preserves the shipped rename on both arms, states the residual consistently,
+and leaves the H7 count at four; the text checker fails against this
+unimplemented tree as expected."* Rule 6 (DONE): the round found nothing about
+the product and nothing about the machinery. The design gate closed after
+three external rounds; the shape that closed is the fallback the criterion
+pinned before round 1, taken at round 2 under rule 2. What remains before
+`Ready` is the second gate, `wd-reviewer`, on the PR that carries this branch.
