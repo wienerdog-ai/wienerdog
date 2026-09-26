@@ -277,6 +277,10 @@ instead of a blocked session.
   claims were re-run, their results, and **the commit SHA the claims were re-run
   against**. A dispatch that does not say is a dispatch where this gate did not run,
   and it is the orchestrator's to redo.
+- **The dispatch message names the model and effort the implementer runs on** —
+  Opus at `high` effort, per ADR-0005 Amendment 1 (owner-ruled 2026-09-26). A
+  dispatch on a lower tier is not the process; it is a deviation to record and
+  justify, never a default.
 - **The implementer's worktree starts from that SHA** — or, equivalently and often
   simpler, the verification runs *against the already-created worktree* and the
   record carries that worktree's `HEAD`. Either order is fine; what is not fine is a

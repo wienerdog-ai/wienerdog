@@ -43,6 +43,17 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Ruling, 2026-09-26 — implementer and architect tier.** The owner ruled that
+> architecture planning and coding both run on **Opus at high effort**; Sonnet is
+> no longer dispatched for implementation. Both review gates — `wd-reviewer` and
+> the Codex adversarial gate on `gpt-6-astra` — are **unchanged**. Recorded as
+> ADR-0005 Amendment 1 (OWNER-RULED 2026-09-26), `docs/specs/_TEMPLATE.md`
+> (`model: opus`), `.claude/agents/wd-architect.md` (`effort: high`),
+> `docs/specs/README.md` and the dispatch record in
+> `docs/runbooks/codex-review.md`. Verbatim instruction:
+> `docs/specs/logbook/2026-09-26-owner-ruling-opus-high-tier.md`. Nothing on the
+> queue below moved; `main` was still `37b35c37` when this was written.
+>
 > **Status pass, 2026-09-22 #20 (the 2026-09-19 "go" ruling, executed end to end — all NINE Ready specs implemented, gated and merged; the backlog of Ready work is EMPTY.)**
 > Measured on `main` at `032696f7`, not transcribed.
 >
