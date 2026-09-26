@@ -1,7 +1,7 @@
 ---
 id: WP-dream-projection-done-spec-errata
 title: File Errata 7–9 against the Done primary-dialogue projection spec
-status: Draft
+status: Ready
 model: opus
 size: S
 depends_on: [WP-dream-primary-dialogue-projection]
@@ -14,12 +14,24 @@ epic: dream-primary-dialogue
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 
-> **A docs-only package.** It changes one Markdown file and no code, test or
-> fixture. Anyone can implement it as an ordinary docs PR; it needs no design
-> round of its own, because every sentence it adds is a measured fact already
-> recorded in a committed logbook entry, cited in the text. Filed under the
-> owner's ruling of 2026-09-26,
+> **READY — a docs-only package, both review gates closed.** It changes one
+> Markdown file and no code, test or fixture, and anyone can implement it as an
+> ordinary docs PR. Every sentence it adds is a measured fact already recorded
+> in a committed logbook entry, cited in the text. Filed under the owner's
+> ruling of 2026-09-26,
 > `docs/specs/logbook/2026-09-27-owner-ruling-harness-records-option-iii.md`.
+> It went through the same gates as `WP-dream-projection-notification-taint`
+> and left them together with it: the three Codex design rounds named it in
+> every focus text and round 1's coherence pass covered its anchors (none of
+> the three rounds' findings landed on it), and wd-reviewer's two passes —
+> the first found its byte-exact check blind to a changed word inside E0, the
+> check now rebuilds the whole file and was re-verified against mutated
+> states, the second approved (round record
+> `docs/specs/logbook/2026-09-27-projection-notification-taint-design-review.md`,
+> §7 and §10). **It has no owner items, so it is dispatchable as soon as this
+> Ready spec lands on `main`**; `WP-dream-projection-notification-taint`'s
+> dispatch depends on this package being implemented first. Written against `main` at
+> `67359a5e`; re-verify its citations at dispatch.
 
 ## Context (read this, nothing else)
 

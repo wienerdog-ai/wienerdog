@@ -527,7 +527,8 @@ R2-1 closed.
 
 **Who adjudicated, and on what authority.** The band and weight above are the
 **orchestrator's**, made under the owner's standing authority for the night of
-2026-09-27 and recorded here so that **the owner can reverse them**. The
+2026-09-27 (see the addendum below for the dates: the night of 2026-09-26 to 27)
+and recorded here so that **the owner can reverse them**. The
 architect applied them and records that they agree with §0 as pinned:
 
 - **Band B by §0's own definitions.** §0's band A names four consequences —
@@ -609,6 +610,18 @@ incomplete against §0, and the omission is itself the record.
 | Gate | Tip | Verdict | Findings | Disposition |
 |---|---|---|---|---|
 | wd-reviewer | `ac2519cb` | REQUEST-CHANGES | B1 governance, B2–B3 criteria, B4 process; C5–C12 wording and record | all applied in revision 3 (§10), none reopening Table N's behaviour; C5 (the banner) is rewritten when the spec is flipped. A second wd-reviewer pass runs before the flip to `Ready` |
+| wd-reviewer, round 2 | `07c11ac9` | APPROVE | no A or B findings; C5 (the banner) as the one condition of the flip; one optional C (this record's "night of 2026-09-27" line against the addendum's "2026-09-26 to 27") | C5 applied in the flip commit — the banner now states where the package stands; the optional C answered with a pointer from the line to the addendum, the line kept as history |
+
+**Both specs left the gates together.** `WP-dream-projection-done-spec-errata`
+was reviewed alongside this package throughout: the three Codex design rounds
+named it in every focus text, round 1's coherence pass covered its anchors,
+no Codex finding landed on it, and wd-reviewer's two passes covered it — the
+first found its byte-exact check blind to a changed word inside E0 (B2, fixed
+in revision 3 and re-verified against mutated states, §10), the second
+approved. **Both specs are flipped to `Ready` in one commit.** The errata
+package has no owner items and is dispatchable when it lands; this package's
+dispatch waits for it (Erratum 10 anchors on Erratum 9's last line) and for
+the owner's rulings on owner items 1–4.
 
 ## 8. Revision 1 — after round 1
 

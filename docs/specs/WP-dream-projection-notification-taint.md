@@ -1,7 +1,7 @@
 ---
 id: WP-dream-projection-notification-taint
 title: Flag the records Claude Code labels as task notifications as untrusted, in the primary dialogue and the learnings-ledger gate
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-dream-primary-dialogue-projection, WP-dream-projection-done-spec-errata]
@@ -14,19 +14,24 @@ epic: dream-primary-dialogue
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 
-> **DRAFT — IN ITS DESIGN ROUND (revision 2, after round 2).** Commissioned
-> by the owner on 2026-09-26
+> **READY — both review gates closed; dispatch gated on the owner.**
+> Commissioned by the owner on 2026-09-26
 > (`docs/specs/logbook/2026-09-27-owner-ruling-harness-records-option-iii.md`:
 > "option 3, and commission the flag-not-decline design"). The round record is
 > `docs/specs/logbook/2026-09-27-projection-notification-taint-design-review.md`
 > (**the round record**); its §0 STOP CRITERION was committed before this
-> file. Round 1 found that the learnings-ledger gate could still count a
-> notification-bearing session as trusted; revision 1 closes that path in code
-> (Table N rows N6–N7); round 2 found N7 tested a value instead of presence,
-> and revision 2 re-decided its clean state (round record §7). Only the Codex
-> design gate's outcome and the owner move
-> this spec further. **Dispatch additionally waits for the owner's rulings on
-> the four owner items at the end.** Written against `main` at `67359a5e`.
+> file. **The Codex design gate closed at round 3 under §0 rule 5**, with one
+> accepted residual (a polluted `Object.prototype` makes every session read
+> tainted — fail-closed, Table N row N7, owner item 4): round 1 closed the
+> learnings-ledger path in code (rows N6–N7), round 2 re-decided N7's clean
+> state as presence, round 3's finding was adjudicated B/LIGHT by the
+> orchestrator under the owner's standing authority, reversibly. **wd-reviewer
+> approved at its round 2** (round record §7, §10). **Dispatch waits for two
+> things:** the owner's rulings on owner items 1–4 at the end, and
+> `WP-dream-projection-done-spec-errata` landing first — Erratum 10's F0
+> anchors on Erratum 9's last line. The ADR-0020 amendment lands as "owner
+> signature pending". Written against `main` at `67359a5e`; re-verify every
+> citation at dispatch.
 
 ## Context (read this, nothing else)
 
