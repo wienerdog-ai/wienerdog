@@ -1,7 +1,7 @@
 ---
 id: WP-vault-write-cas-window
 title: Pin the vault write's check-to-publish window as a tested residual on both arms, and say why it stays open
-status: Draft
+status: Ready
 model: opus
 size: S
 depends_on: [WP-dream-vault-write-primitive]
@@ -130,8 +130,12 @@ this package re-discloses instead.**
 ## Current state
 
 Re-derived on `main` at `41c2baf1`. `git log c05a575b..41c2baf1` touches none of
-the three files this package edits. Every range below was checked at both ends
-(round record §3).
+the four files this package edits (`vault-write.js`, `promote.js`,
+`tests/unit/dream-vault-write.test.js` and the Done spec). The ranges in the
+primitive and the Done spec were checked at both ends at drafting time (round
+record §3 and the round-2 re-cut checks in §8). Every range below, the
+`promote.js`, `warnings.js` and test-file ranges included, was re-checked at
+both ends by the wd-reviewer gate on `3098cdd0` (round record §8).
 
 - `writeIntoVault` is `src/core/dream/vault-write.js:205-479`. `promote.js`
   calls it through the seam variable `writeFile` (`:1123`).
@@ -182,7 +186,7 @@ the three files this package edits. Every range below was checked at both ends
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/vault-write.js | the `beforePublish` barrier (Table W row W3) and its JSDoc; D1 replaces `:48-50`; D2 is appended to the ordering-invariant comment ending at `:475`. No other change |
+| modify | src/core/dream/vault-write.js | the `beforePublish` barrier (Table W row W3) and its JSDoc; D1 replaces `:48-50`; D2 is appended to the ordering-invariant comment ending at `:475`; the throws list in the `writeIntoVault` JSDoc (`:201-203`) gains one clause, "a `beforePublish` that is present and is not a function". No other change |
 | modify | src/core/dream/promote.js | D3 replaces `:1601-1604`; nothing else |
 | modify | tests/unit/dream-vault-write.test.js | new tests `[CAS-1]`–`[CAS-3]`; no existing test changes |
 | create | tests/red-proofs/vault-write-cas-window.proofs.json | ADR-0042 declarations P1–P3 whose `suite` is `tests/unit/dream-vault-write.test.js` |
@@ -301,7 +305,7 @@ change, and consumers inherit nothing new. One canonical table follows.
 
 | # | Subject | Check, then publish (shipped, unchanged) | What is lost inside the window | Why it is not closed | Stated at (move together) |
 |---|---|---|---|---|---|
-| W1 | **Create arm** (`expect` omitted), every platform | `lstat` at `:424`, "already exists" refusal at `:444-446`, then `fs.renameSync` at `:452` | a file created at the target between the check and the rename is overwritten by the rename and is not recoverable from anything the call produced | a create-or-fail publish reachable from Node either shows a partial target (`'wx'`, `COPYFILE_EXCL`: memo §1–§2) or, as `fs.linkSync`, cannot be bound to the staged object and leaves an uncleanable second name when its removal fails (round record §8, R2-1 and R2-2; darwin symlink-following measured, round record §2). Re-open only with a Node binding for `linkat` from a descriptor, `O_TMPFILE`, or a no-replace rename. Retaining a link publish anyway is owner item 1 | D1, D3; Done spec E0, E1, E2 |
+| W1 | **Create arm** (`expect` omitted), every platform | `lstat` at `:424`, "already exists" refusal at `:444-446`, then `fs.renameSync` at `:452` | a file created at the target between the check and the rename is overwritten by the rename and is not recoverable from anything the call produced | a create-or-fail publish reachable from Node either shows a partial target (`'wx'`, `COPYFILE_EXCL`: memo §1–§2) or, as `fs.linkSync`, cannot be bound to the staged object and, when its staging name cannot be removed, leaves a second name no current caller ever clears (round record §8, R2-1 and R2-2; darwin symlink-following measured, round record §2). Re-open only with a Node binding for `linkat` from a descriptor, `O_TMPFILE`, or a no-replace rename. Retaining a link publish anyway is owner item 1 | D1, D3; Done spec E0, E1, E2 |
 | W2 | **Overwrite arm** (`expect` present), every platform | re-read and compare at `:431-443`, then `fs.renameSync` at `:452` | a save landing between the compare and the rename is lost, whether the writer saves in place (Obsidian desktop, VS Code) or replaces the file (vim's default, TextEdit, Syncthing) — memo §4 | no platform exposes, and Node reaches none of, a "replace only if unchanged" rename (memo §2). A held descriptor detects an in-place loss only afterwards (memo §5e–f) — owner item 2 | D1, D3; Done spec E0, E1 |
 | W3 | **The barrier** `o.beforePublish`, both arms | — | — | Called with no arguments exactly once per call that reaches the rename: **after** every check the call makes on the target, **immediately before** the rename. Not called on a call that refuses first. Its return value is ignored. A throw of **any** type, `WienerdogError` included, is a refusal with the shipped text `` `the write failed unexpectedly (<code or message>)` ``, and the shipped unwind runs. Present and not a function throws a caller-contract `WienerdogError` before the vault is touched. No production caller passes it | the `beforePublish` JSDoc; D2; Done spec E3 |
 
@@ -314,8 +318,8 @@ mirror found in review is registered here on the spot.
       the `promote.js` cell names D3; the test cell names `[CAS-1]`–`[CAS-3]`;
       the proofs cell names P1–P3; the Done-spec cell names E0–E3.
 - [ ] **Exact contracts** — the JSDoc and D2 mirror W3; **D1 and D3 mirror W1
-      and W2** (both arms, narrowed not closed, and why); **E0, E1 and E2 mirror
-      W1–W2**; E3 mirrors W3.
+      and W2** (both arms, narrowed not closed, and why); **E0 and E1 mirror
+      W1–W2; E2 mirrors W1**; E3 mirrors W3.
 - [ ] **Code mirrors kept true, not edited** — `vault-write.js:420-423` and
       `:448-450` (arm-neutral "NARROWED, not closed" and "the rename is the
       publish") and `promote.js:1757-1761` (R4).
@@ -357,12 +361,25 @@ mirror found in review is registered here on the spot.
   `find`/`replace`, runs `npm run red-proofs -- --wp WP-vault-write-cas-window`,
   and corrects each set to what it observes. A correction may falsify this table
   and the RED clauses of AC1–AC3.
+- **The declaration file's shape** (inert JSON, validated by the runner and never
+  executed):
+  - a top-level `suite` (`tests/unit/dream-vault-write.test.js`);
+  - a `proofs` array. Each entry has `id` (a kebab slug), `wp`
+    (`WP-vault-write-cas-window`), `criterion`, `why`, `file`, `find`,
+    `replace` (containing `marker`), `marker`, an optional `occurrences`,
+    `testNamePattern`, and `expectRed`: an array of
+    `{ "test": [<the full test name>], "signal": <a substring of the failing
+    assertion's message> }`.
+  - `criterion` takes the form `"AC1"`–`"AC3"`, as
+    `tests/red-proofs/primary-dialogue.proofs.json` does (some older files use
+    `"2"`).
+  - A shape exemplar: `tests/red-proofs/dream-git-env-pinning.proofs.json`.
 
 | Id | Criterion | The one mutation | `expectRed` (DERIVED) | Signal in the failing assertion's message |
 |---|---|---|---|---|
-| P1 `cas-create-arm-recheck-after-barrier` | AC1 | after the barrier, a second `lstat` of the target that refuses if anything is there | `[CAS-1]` | `CAS-1 residual: the concurrent create is overwritten` |
+| P1 `cas-create-arm-recheck-after-barrier` | AC1 | after the barrier, **on the create arm only** (`!conditional`), a second `lstat` of the target that refuses if anything is there. Scoped so the overwrite-arm publishes in `[CAS-2]` and `[CAS-3]` are untouched | `[CAS-1]` | `CAS-1 residual: the concurrent create is overwritten` |
 | P2 `cas-overwrite-recompare-after-barrier` | AC2 | after the barrier, a second compare of the target against `expect` that refuses on mismatch | `[CAS-2]` | `CAS-2 residual: the in-place save is overwritten` |
-| P3 `cas-barrier-throw-escapes` | AC3 | the barrier's call is no longer wrapped, so a `WienerdogError` it throws escapes past the unwind | `[CAS-3]` | `CAS-3 a throw from the barrier is a refusal` |
+| P3 `cas-barrier-throw-escapes` | AC3 | the barrier's call is no longer wrapped, so a `WienerdogError` it throws escapes past the unwind. `[CAS-3]` must make that an ASSERTION failure: the runner accepts a red only when its code is `ERR_ASSERTION` (`scripts/red-proofs.js:1655-1656`). So each barrier-throw call is wrapped as `try { … } catch (e) { assert.fail('CAS-3 a throw from the barrier is a refusal: ' + (e && e.message)) }` | `[CAS-3]` | `CAS-3 a throw from the barrier is a refusal` |
 
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
@@ -396,15 +413,17 @@ mirror found in review is registered here on the spot.
   - a throw from it — a plain `Error`, and a `WienerdogError` — returns a
     refusal with W3's text, and the vault is byte-identical to its pre-call
     state, including a parent chain the call had created;
-  - a non-function `beforePublish` throws `WienerdogError`.
+  - a non-function `beforePublish` throws `WienerdogError`;
+  - each barrier-throw call is wrapped so an escaping throw fails an assertion
+    carrying P3's signal (see the P3 row).
 - [ ] **AC4 — the code texts are D1–D3 verbatim.** The shipped limit-B sentence
       and the shipped `promote.js:1601` sentence are gone, and `promote.js`
       changes in exactly one hunk (verification steps).
 - [ ] **AC5 — Erratum 1 is in the Done spec verbatim**: E0 with a real date, and
       E1–E3 each present with its marker exactly once (verification steps).
-- [ ] **AC6 —** `npm test`, `npm run lint`, and
-      `npm run red-proofs -- --wp WP-vault-write-cas-window` report every
-      declared criterion `PROVEN`.
+- [ ] **AC6 —** `npm test` and `npm run lint` pass, and
+      `npm run red-proofs -- --wp WP-vault-write-cas-window` reports every
+      declared criterion (AC1–AC3) `PROVEN`.
 - [ ] Idempotence: `N/A — a vault write is not a repeatable command; Table H's
       expect-guard is what the Done spec ships in its place, and this package
       adds no command and no state.`
@@ -436,8 +455,10 @@ test -z "$(grep -rln "beforePublish" src/ | grep -v '^src/core/dream/vault-write
 git diff --check
 ```
 
-- Every step is NEW. Each must be observed **green** on the finished tree and
-  **red** on a deliberately broken one, with both outputs pasted:
+- `npm test`, `npm run lint` and `git diff --check` are the repository's
+  standing gates: paste their green. Every other step is NEW. Each must be
+  observed **green** on the finished tree and **red** on a deliberately broken
+  one, with both outputs pasted:
   - the checker and the hunk check: red with the deliverable absent, and red
     with one block reverted;
   - AC1–AC3: the RED lane's own red.
@@ -463,7 +484,11 @@ git diff --check
 that does not resolve blocks the dispatch.
 
 **Owner items** — each a recommendation with the cost of overruling it. None is
-ratified by this document.
+ratified by this document. **They gate DISPATCH, not `Ready`** (repo precedent:
+specs "Ready and parked on an owner ruling recorded in its Dispatch
+precondition"). Item 1 must be ruled before an implementer is dispatched. An
+overrule of item 1 **replaces** this package with a new one; it does not refine
+this one.
 
 1. **Keep the re-cut: no link publish on the create arm.** *Recommendation:*
    accept. This is the reversible alternative the design gate named as the

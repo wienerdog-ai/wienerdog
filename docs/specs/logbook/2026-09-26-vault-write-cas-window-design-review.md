@@ -9,7 +9,8 @@ The design round that turned the 2026-09-18 backlog stub into a spec. Written
 by wd-architect on branch `docs/wp-vault-write-cas-window`, based on `main` at
 `41c2baf1`. The platform facts are the researcher's memo,
 `docs/specs/logbook/2026-09-26-cas-window-platform-facts.md`, imported on this
-branch (§5). **No external round has run yet.** The rounds table (§8) is filled
+branch (§5). **At drafting time no external round had run** — rounds 1–3 and
+the wd-reviewer gate are recorded in §8. The rounds table (§8) is filled
 in by the orchestrator. Each raw file is committed before it is adjudicated.
 
 ## 0. STOP CRITERION — pinned before round 1
@@ -512,3 +513,43 @@ the product and nothing about the machinery. The design gate closed after
 three external rounds; the shape that closed is the fallback the criterion
 pinned before round 1, taken at round 2 under rule 2. What remains before
 `Ready` is the second gate, `wd-reviewer`, on the PR that carries this branch.
+
+### Second gate — wd-reviewer on `3098cdd0` (PR #320, CI green): APPROVE
+
+| Round | Reviewer | Raw | Commit | Verdict |
+|---|---|---|---|---|
+| 3 | Codex design gate (Astra) | `…-design-r3-astra-raw.json` | `e0fe2f7e` | approve, no findings |
+| gate 2 | wd-reviewer | the PR #320 review | on `3098cdd0` | APPROVE; LIGHT findings only |
+
+Under rule 5 every finding is LIGHT: each is fixed in place and re-verified
+mechanically, and no fresh external round is owed. The orchestrator proposed
+the dispositions; the architect applied them.
+
+| # | Finding | Band | Disposition |
+|---|---|---|---|
+| G2-1 | P3 could not reach PROVEN. The runner accepts a red only as `ERR_ASSERTION` (`scripts/red-proofs.js:1655-1656`), and under P3's mutation a `WienerdogError` escapes as a throw | B | **Fixed.** The P3 row and AC3 now require `[CAS-3]` to wrap each barrier-throw call in `try { … } catch (e) { assert.fail('CAS-3 a throw from the barrier is a refusal: ' + …) }` |
+| G2-2 | P1's mutation was not scoped to the create arm, so the overwrite-arm publishes in `[CAS-2]` and `[CAS-3]` would also redden and the declared set was wrong by construction | B | **Fixed.** The mutation now applies "on the create arm only (`!conditional`)" |
+| G2-3 | One-Document Rule: the proofs file's shape was never given | B | **Fixed.** The Implementation notes name every field and the `criterion` form (`"AC1"`–`"AC3"`, as in `primary-dialogue.proofs.json`), and give `dream-git-env-pinning.proofs.json` as the exemplar |
+| G2-4 | It was unclear whether the JSDoc throws list (`vault-write.js:201-203`) gains the `beforePublish` clause, since the Deliverables cell said "No other change" | C | **Fixed.** Yes, one clause, named in the Deliverables cell |
+| G2-5 | Mirror drift: the checklist said "E0, E1 and E2 mirror W1–W2", while W2's Stated-at cell lists E0 and E1, and E2 is create-arm only | C | **Fixed.** Now "E0 and E1 mirror W1–W2; E2 mirrors W1" |
+| G2-6 | W1's "uncleanable second name" overstated | C | **Fixed.** Now "a second name no current caller ever clears" |
+| G2-7 | "none of the three files" should be four | C | **Fixed.** The four files are named |
+| G2-8 | The both-ends pointer (round record §3) does not cover the `promote.js`, `warnings.js` and test-file ranges | C | **Fixed.** The pointer now names the drafting-time checks and the wd-reviewer's re-check of every range |
+| G2-9 | This record said "No external round has run yet" | C | **Fixed.** It now says "at drafting time" |
+| G2-10 | The text checker checks presence, not position, and reads its blocks from the spec, which is inside the implementer's boundary | C | **Accepted residual — no machinery growth; the surface is frozen.** The implementation PR's review must confirm two things: that the spec's diff is only the `status:` line, and that each D and E block sits at its stated anchor |
+| G2-11 | AC6 said all three commands "report PROVEN", which only the RED runner does, and "Every step is NEW" was untrue of `npm test`, lint and `git diff --check` | C | **Fixed.** AC6 says what each command shows, and the verification note separates the standing gates from the new steps |
+
+**Ready.** Both gates are clean: Codex round 3 approved, and wd-reviewer
+approved with LIGHT findings only, now fixed. The spec's Dispatch precondition
+now states that its owner items gate **dispatch, not `Ready`**, per repo
+precedent: item 1 must be ruled before an implementer is dispatched, and an
+overrule of item 1 replaces this package rather than refining it. The architect
+flips `status: Draft` → `Ready` in the same commit as these fixes.
+
+**Re-run after the fixes:**
+
+- The text checker, rebuilt from the current spec: `ALL PASS` (13/13), exit 0,
+  on the simulated compliant tree; exit 1 on the shipped tree.
+- The hunk assertion on the simulated `promote.js`: `@@ -1601,4`.
+- The RED declarations: P1–P3 are valid through `validateProof`.
+- `npm run lint`: passed.
