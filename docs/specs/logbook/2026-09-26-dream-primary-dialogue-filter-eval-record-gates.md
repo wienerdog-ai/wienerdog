@@ -77,3 +77,10 @@ converged was to state each measured fact once and reference it — the
 runbook's "delete the restatement rather than patch it" move. Merge method:
 squash, under the session's merge authorization, for the reason the handover
 gives; the branch deleted at merge.
+
+**CI lane.** The PR body's `Spec:` line made the `boundary` job run the
+work-package check against the filter spec's Deliverables table, which
+lists neither the handover nor a logbook record; the template says to drop
+that line for a docs-only PR, and it was dropped (the PR body names the spec
+as "Relates to:" instead). This commit exists to re-trigger CI on the
+corrected body.
