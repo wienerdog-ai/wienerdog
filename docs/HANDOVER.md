@@ -84,14 +84,15 @@ resuming it.
 >
 > **RESULT IN ONE PARAGRAPH.** The judge marked 41 of 71 blocks (34.6 % of the
 > projected characters, exact) not worth remembering, found that this material
-> caused only mild dilution (four places), that no loss sits inside it, and
-> rated a block-selection filter **MARGINAL**; with the baseline visible, no
+> caused mild dilution plus one low-severity error (five instances in four
+> notes; the record's Findings C), that no loss sits inside it, and rated a
+> block-selection filter **MARGINAL**; with the baseline visible, no
 > high-severity loss or unsupported claim remained. A prefix count shows
 > 16.4 % of the characters (35 of 132 messages) are harness task notifications
 > and local-command echoes passing through as `user` records — a fixed rule
 > removes them against the projection's Done contract with nothing kept lost;
 > the filter's remaining target is 20.8 %: the three machine-authored sessions
-> whole (11.1 %, behind two of the four mild dilutions) and interim replies
+> whole (11.1 %, behind two of the dilutions and the one error) and interim replies
 > inside the human-driven sessions (9.6 %) that left no trace in the notes; no
 > positional rule removes the interim replies safely (two were measured). The 16 remaining losses (0 high) are all
 > one first-pass defect — totals and to-dos recorded, the rest scored

@@ -152,18 +152,22 @@ the dream wrote are otherwise faithful to the dialogue."*
 extracts, **33,941 of 98,121 characters = 34.6 %**. Per session: the two long
 project sessions about a third each; the short project session and the
 one-request analysis under 5 %; the two scheduled runs and row 7 100 % (row 8
-has no blocks); row 9 0 %. Harm in the diff: *mild dilution, not errors* — four
-places: an entry in an already long project note, another addendum to a
-recurring-pattern note, two daily-log sections recording the scheduled runs,
-and one sentence citing a session for the wrong task. The interim-status and
-notification blocks of the long sessions *left no trace in the notes*.
+has no blocks); row 9 0 %. **Harm in the diff, stated once here and referenced everywhere else:** five
+instances in four notes. Four are dilution — an entry in an already long
+project note, another addendum to a recurring-pattern note, two daily-log
+sections recording the scheduled runs. One is an **error**: the sentence
+citing a session for the wrong task, which Findings B lists as a
+low-severity unsupported claim and which low-value input caused. So the
+low-value material's measured harm is *mild dilution plus one low-severity
+error*, no medium or high consequence. The interim-status and notification
+blocks of the long sessions *left no trace in the notes*.
 
 **D. Verdict, quoted in substance.** Faithful: *partly* in round 1 (three high
 losses); after round 2 no high loss and no high unsupported claim remain.
 Mostly worth reading: the judge said *no* at 34.5 %, which is a 65 % majority
 worth reading — the record notes the arithmetic. Would a block-selection stage
 removing exactly the LOW-VALUE blocks have improved the memory: **MARGINAL** —
-it would have removed the four dilutions and about 34 k characters of reading,
+it would have removed the harm in Findings C and about 34 k characters of reading,
 lost nothing from A, and *not fixed the losses, whose causes are how an
 already-recorded session was handled and what a first pass chose to omit*.
 
@@ -198,8 +202,9 @@ lost. It closes 39.9 % of the low-value characters with no model call.
 **What it leaves:** 20,397 low-value characters — **20.8 % of the original
 input, 24.9 % of what remains** — in two distinct kinds. **(a)** The three
 machine-authored sessions (rows 4, 6, 7) whole: 4 prompts (2,657 characters)
-and their 4 concluding replies (8,273), 10,930 characters = 11.1 % — these are
-the material behind two of the four dilutions the judge found. **(b)** Inside
+and their 4 concluding replies (8,273), 10,930 characters = 11.1 % — the
+material behind two of the four dilutions and the one error in Findings C.
+**(b)** Inside
 the human-driven sessions: 34 interim assistant replies (8,947 characters) and
 3 short user lines (520), 9,467 characters = 9.6 % — the material the judge
 found *left no trace in the notes*.
@@ -226,7 +231,8 @@ against the measurements:
    sits in a low-value block, so a filter cannot touch them; they are one
    consolidation-quality observation, not an input one.
 2. **Mostly worth reading:** 65 % by the judge's own count; harm from the rest
-   is mild dilution in four places, none of it from the interim replies.
+   is as Findings C states it — mild dilution plus one low-severity error —
+   none of it from the interim replies.
 3. **The filter's real target** after the safe deterministic strip is 20.8 % of
    the input, the judge rates removing it MARGINAL, and the runtime it needs
    (a second supervised model call, a new profile, a supervision generalisation,

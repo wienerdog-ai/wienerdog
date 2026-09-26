@@ -255,15 +255,16 @@ a newly found mirror is registered here on the spot.
 > counts and the verdicts — no transcript or note substance:
 > `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`.
 > Measured: the judge marked **41 of 71 blocks, 34.6 %** of the projected
-> characters not worth remembering, found its harm to be mild dilution only,
-> found no loss inside it, and rated a block-selection stage **MARGINAL**;
+> characters not worth remembering, found its harm to be mild dilution plus
+> one low-severity error (the record's Findings C), found no loss inside it,
+> and rated a block-selection stage **MARGINAL**;
 > after the baseline was shown to it, no high-severity loss or unsupported
 > claim remained. A prefix count shows **16.4 %** of the characters (35 of 132
 > messages) are harness task notifications and local-command echoes passing
 > through as `user` records — removable by a fixed rule against the
 > projection's Done contract, nothing kept lost; the filter's remaining
 > target is **20.8 %**: the three machine-authored sessions whole (11.1 %,
-> behind two of the four mild dilutions) and interim replies inside the
+> behind two of the dilutions and the one error) and interim replies inside the
 > human-driven sessions (9.6 %) that left no trace in the notes. The evidence leans to the *not material* branch but
 > the number is not negligible, so this spec **stays `Draft`**; the record
 > proposes *Superseded* plus the deterministic strip as a projection fix, and
