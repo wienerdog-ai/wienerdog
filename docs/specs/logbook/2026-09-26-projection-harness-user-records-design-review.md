@@ -560,6 +560,7 @@ SHA of the commit that introduced it.
 | Round | Tip | Raw file | Raw commit | Product findings | Outcome under §0 |
 |---|---|---|---|---|---|
 | 1 | `b27edd44` | `docs/specs/logbook/2026-09-26-projection-harness-user-records-design-r1-astra-raw.json` | `8c02cf0c` | 2 (R1-1 A/HEAVY, R1-2 B/HEAVY) | rule 0 (R1-1 band A) and rule 4 → fixed in revision 1; one fresh round owed |
+| 2 | `3ccf7a65` | `docs/specs/logbook/2026-09-26-projection-harness-user-records-design-r2-astra-raw.json` | `7d9b95ee` | 3 (R2-1 A/HEAVY, R2-2 B/HEAVY, R2-3 B/HEAVY), all on Table G; R1-1 and R1-2 verified closed | rule 0 (R2-1 band A) and rule 4 → revision 2; rules 1 and 2 not yet fired (round 1 landed on Table H, round 2 on Table G); the Table G circuit-breaker is pinned below before any edit |
 
 ### Round 1 — adjudication (the orchestrator proposed the dispositions; the architect applied them)
 
@@ -590,3 +591,23 @@ under the five tags `[HUR-AC1]`, `[HUR-AC2]`, `[HUR-AC3]`, `[HUR-AC8]`,
 `[HUR-AC9]`; the seven RED proofs P1–P7 in three declaration files; and the
 commands in the spec's Verification steps. LIGHT closure (rule 5) re-verifies
 with §4.3's checks.
+
+### PINNED BEFORE REVISION 2 — the Table G circuit-breaker and its fallback
+
+Written and committed before any revision-2 edit to the spec. Round 2 landed
+three HEAVY findings on Table G. **If round 3 lands a HEAVY finding on Table G
+again**, two rules of §0 match at once — rule 1 (a HEAVY finding at round 3 or
+later) and rule 2 (two consecutive rounds on the same table) — and the order of
+§0 decides: **rule 1 fires. Stop patching and re-cut the package to candidate
+0** as §0 rule 1 defines it (docs and one test, no `src/` change: a dated
+erratum narrowing the Done spec's `:148-150` sentence to what the shipped code
+does, a test pinning today's acceptance of the task-notification shape as a
+named residual). Table H and Table G then go to the owner **together, as one
+product question**: *ship a field-keyed accept rule only with a guard against
+the fields changing, in the shape the rounds converged on — or keep today's
+behaviour, where harness records reach the dream as the person's words.* The
+round record carries both designs and their measured costs to that question.
+No fourth patch round runs on Table G.
+
+A **LIGHT** round-3 finding on Table G closes under rule 5 as usual; a HEAVY
+round-3 finding that lands only on Table H fires rule 1 the same way.
