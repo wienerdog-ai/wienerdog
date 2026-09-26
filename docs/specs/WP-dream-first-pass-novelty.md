@@ -11,6 +11,18 @@ epic: dream-primary-dialogue
 
 # WP-dream-first-pass-novelty: Stop a first dream pass from dropping material on an unchecked "already written elsewhere" assumption
 
+> **Pilot result, 2026-09-26 (late night) — the measured finding below is
+> largely an evaluation artefact.** A paired pilot of candidate (i)
+> (`docs/specs/logbook/2026-09-26-first-pass-novelty-paired-pilot.md`) showed
+> the variant recovers everything on the re-shown case at 2.7× cost — but that
+> case was artificial: the dream reads the vault's working tree, the sessions
+> had written their own notes there uncommitted, and the git-commit baseline
+> excluded them; every "recovered" item is in the live notes today. On a
+> genuine first pass the variant recovered 1 medium and 4 low items, newly lost
+> 1 medium, added duplicates, at 1.1× cost. Recommendation in the record: no
+> design round on this evidence. The "measured finding" section below is kept
+> as written, as history; read it with the record's "The doubt, checked".
+
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 

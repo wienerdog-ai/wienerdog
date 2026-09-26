@@ -6,6 +6,15 @@ related_wps: [WP-dream-primary-dialogue-filter, WP-dream-primary-dialogue-projec
 
 # The filter's offline evaluation (2026-09-26)
 
+> **Erratum, 2026-09-26 (late night).** Findings A's "12 made by the live
+> 09-24 dream" and the consolidation finding built on them are largely an
+> artefact of this evaluation's baseline: the dream reads the vault's
+> working tree, the sessions had written their own notes there uncommitted, and
+> the git commit `b817b12` used as the baseline excluded them — the live pass
+> saw material this evaluation could not. Measured and recorded in
+> `2026-09-26-first-pass-novelty-paired-pilot.md`, "The doubt, checked".
+> The 4 first-pass losses on rows 2 and 3 stand. Nothing below is edited.
+
 This is the entry condition of `docs/specs/WP-dream-primary-dialogue-filter.md`
 ("Entry condition — the offline evaluation"), run under the owner's ruling of
 2026-09-26 (`2026-09-26-owner-rulings-queue.md`, sentence 5): real transcripts

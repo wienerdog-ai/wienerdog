@@ -43,7 +43,24 @@ resuming it.
 
 ## The remaining work, in recommended order
 
-> **▶ START HERE — 2026-09-26, session close: `WP-vault-write-cas-window` is DONE (PR #323, merge `0aa633ee`); the queue of Ready work is EMPTY; the specs root holds four Drafts and nothing else dispatchable.**
+> **▶ START HERE — 2026-09-26, very late: the paired pilot for `WP-dream-first-pass-novelty` ran and OVERTURNED the finding behind it; one owner call is open (keep the stub parked, or supersede it).**
+> Rulings tonight, verbatim in the logbook: "no purge needed" (`97e45ff0`
+> stays as is); "I accept the advisor's three recommendations" (the Astra
+> product memo, `…-first-pass-novelty-product-advice-astra.md`). The pilot
+> (`…-first-pass-novelty-paired-pilot.md`): two arms, shipped skill vs a
+> read-before-dismiss prose variant, two pairs. Genuine first pass: 1.1× cost,
+> 1 medium + 4 low recovered, 1 medium newly lost, more duplicates. Re-shown
+> case: everything recovered at 2.7× — **but artificial**: the dream reads the
+> working tree, the sessions had written their own notes there uncommitted, the
+> git baseline excluded them, and every "recovered" item is in the live notes
+> today. The evaluation record carries a dated erratum; the stub carries the
+> pilot result. **Recommendation: no design round on this evidence; the real
+> lesson is the evaluation method (baseline = working-tree snapshot, never a
+> commit).** Also new tonight: `WP-vault-write-cas-window` Done (#323/#324),
+> the filter Superseded with two stubs (#322), the advice memo (#325).
+> **Ready queue: empty.** Drafts: the two stubs and the Windows reap.
+>
+> > **▶ START HERE — 2026-09-26, session close: `WP-vault-write-cas-window` is DONE (PR #323, merge `0aa633ee`); the queue of Ready work is EMPTY; the specs root holds four Drafts and nothing else dispatchable.**
 > Measured on `main` after this PR. `grep '^status: Ready' docs/specs/*.md`
 > returns nothing. Drafts: `WP-dream-projection-harness-user-records` (a fix
 > against the projection's Done contract; needs a design round — the stub
