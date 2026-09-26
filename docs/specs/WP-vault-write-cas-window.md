@@ -28,15 +28,16 @@ an owner item or a named residual.
 
 **Size: M, re-derived.** It is not S: the stub's own condition for S was "the
 create arm alone, with a one-call substitution and **no new outcome rows**", and
-this design adds outcome rows (Table X rows X1, X2, X4 and X5), a fallback
-accept-list, an explicit platform branch and a test seam. It is not L: one
-function changes in `src/`, plus one comment in a second file. Every
+this design adds outcome rows (Table X rows X1, X2, X4, X5 and X6), an
+identity check after the link, a fallback accept-list, an explicit platform
+branch and a test seam. It is not L: one
+function changes in `src/`, plus two comments in a second file. Every
 deliverable, the disclosure texts and the Done-spec erratum included, has a
 literal verification command below. It is **not split**. The disclosure texts
 and the erratum must land in the same commit as the behaviour they describe
 (ADR-0031: no commit in which a canonical fact and its mirror disagree), and the
 barrier has no consumer other than the race tests. A split would edit the same
-four comments and the same Done-spec cells twice.
+five comments and the same Done-spec cells twice.
 
 ## Context (read this, nothing else)
 
@@ -63,8 +64,9 @@ rows this package touches, quoted or summarized:
   overwrite. **NARROWED, not closed:** a write landing between the check and the
   publish is still lost …"*
 - **H7** — every failure returns `{written:false, reason}`; nothing of the call's
-  making survives a refusal, except bounded cases the refusal reason NAMES (four,
-  counted by that spec's H7 acceptance criterion).
+  making survives a refusal, except bounded cases the refusal reason NAMES (four
+  today, counted by that spec's H7 acceptance criterion; six after this
+  package's Erratum 1).
 - **H9** — missing parent directories are created by the call, and a refusal
   removes the ones it created that are still empty.
 
@@ -103,7 +105,15 @@ RENAME_SWAP)` and `FileRenameInfo` have no binding and no constant in `fs`
 **The decision, per arm (Table K is canonical).**
 
 - **Create arm: CLOSED where a hard link can be made.** Off win32, the publish
-  becomes `fs.linkSync(staging, target)` followed by removing the staging name.
+  becomes `fs.linkSync(staging, target)`. The call then checks that the target
+  is the very object it wrote (device and inode of its still-open staging
+  descriptor), and only then removes the staging name. The check exists because
+  darwin's `link(2)` follows a symlink substituted at the staging name. If the
+  check fails, the call refuses and leaves the target as found, named (Table X
+  row X6). It never removes the target, which could be a user's save that
+  replaced it right after the link. If the staging name cannot be removed, the
+  call refuses and its reason says the target already holds the bytes (row X4).
+  A second vault name is never reported as a clean success.
   On a filesystem without hard links (the link fails `ENOTSUP` or `EPERM`) the
   call falls back to the shipped rename, and on win32 it never tries the link;
   in both places the shipped narrowed window remains and is disclosed.
@@ -125,20 +135,24 @@ RENAME_SWAP)` and `FileRenameInfo` have no binding and no constant in `fs`
    K1–K3 (create) and K4 (overwrite).
 2. **What does the closed form do when it refuses?** Table X, whose rows are
    members of H7's refusal taxonomy. The Done spec's H7 row cites Table X
-   (Erratum 1, E2). H9's unwind is unchanged on every refusal row, and the H7
-   criterion's count stays at **four**.
+   (Erratum 1, E2). H9's unwind is unchanged on every refusal row. The H7
+   criterion's count of refusals that cannot restore the vault moves from four
+   to **six**: case (e) is row X4 and case (f) is row X6 (Erratum 1, E7 and
+   E8).
 3. **How is the race tested deterministically?** At the `beforePublish` barrier
    (Table K row K5). The race tests (`[CAS-1]`, `[CAS-2]`) never patch
    `fs.renameSync`, `fs.readFileSync` or `fs.linkSync` (Implementation notes).
 4. **Do the disclosure sites retire or get rewritten?** Rewritten, in the same
-   commit as the behaviour change: four code texts (Exact contracts D1–D4)
-   and six Done-spec surfaces (Erratum 1, E1–E6). `promote.js`'s row R4 text is **not** edited,
-   because it stays true (next item).
+   commit as the behaviour change: five code texts (Exact contracts D1–D5)
+   and nine Done-spec surfaces (Erratum 1, E1–E9). D5 amends one sentence of
+   `promote.js`'s row R4 (next item).
 5. **Is `promote.js`'s R4 still reachable?** Yes, on both arms. On the create
    arm (R1, no report for the date), a report that appears between
    `readVaultNow` and the publish now refuses with `EEXIST` (Table X row X1)
    instead of the pre-check. On the overwrite arm (R2/R3), a compare mismatch
-   refuses as today. R4 keeps its reason. Nothing retires.
+   refuses as today. Nothing retires. R4's sentence "The vault object is left
+   untouched" stops being true after the new refusals X4 and X6, and after the
+   pre-existing NFS mis-report X7, so D5 names all three there.
 
 ## Current state
 
@@ -183,15 +197,19 @@ still resolve. Every range below was checked at both ends
   - `promote.js:1757-1761` — row **R4**, which describes the **detected** case
     ("the file mutated between the read and the publish, or the primitive refused
     for any other reason. The vault object is left untouched"). It does not
-    state the residual, and it stays true under this design. It is a registered
-    mirror that is **not edited**.
+    state the residual. Under this design it stays true except after the
+    refusals X4, X6 and X7 (Table X), so D5 amends that one sentence.
   - Done spec `docs/specs/done/WP-dream-vault-write-primitive.md`: the H5 row
     (`:217`); the Security checklist's named residual (`:295`, which the stub
     mislabelled as "its acceptance checklist line"); and the Mirrored Surface
     Checklist's prohibition "No surface may call the compare→publish window
     'closed'" (`:248-256`). Its "Out of scope" (`:522-523`) declines the closure.
     The H5 **acceptance criterion** (`:376-379`) states no residual and stays
-    true.
+    true. Three more Done-spec surfaces are touched only because of the create
+    arm's new outcomes: the H3 row (`:215`, substitution at the staging name),
+    the H7 criterion (`:429-455`, which counts the refusals that cannot restore
+    the vault as four) and the Mirrored Surface Checklist's restatement of that
+    count (`:262`).
 - **The callers, per arm.** `promote.js:1592-1599` sets `expect` only when the
   decision carries bytes, so a new note takes the create arm. The report's
   second write (`:1686-1696`, Table Y) always takes the overwrite arm. The
@@ -225,11 +243,11 @@ still resolve. Every range below was checked at both ends
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/vault-write.js | Table K rows K1–K5 and Table X rows X1–X5; disclosure texts D1–D3 replace `:48-50`, `:420-423`, `:448-450`; the `beforePublish` JSDoc; one added sentence in the ordering-invariant comment (`:467-475`) |
-| modify | src/core/dream/promote.js | disclosure text D4 replaces `:1601-1604` and nothing else: no behaviour change, R4 (`:1757-1761`) untouched |
-| modify | tests/unit/dream-vault-write.test.js | new tests `[CAS-1]`–`[CAS-7]` (Acceptance criteria). One existing test changes, and only this much: the H6 "IMMEDIATELY AFTER the publish" test (`:474-512`) seeds the target and passes `expect`, so its `fs.renameSync` patch still sits on the publish (Current state) |
-| create | tests/red-proofs/vault-write-cas-window.proofs.json | ADR-0042 declarations P1–P5 whose `suite` is `tests/unit/dream-vault-write.test.js` |
-| modify | docs/specs/done/WP-dream-vault-write-primitive.md | dated Erratum 1: section E0 plus in-place amendments E1–E6, verbatim from Exact contracts |
+| modify | src/core/dream/vault-write.js | Table K rows K1–K5 and Table X rows X1–X6; disclosure texts D1–D3 replace `:48-50`, `:420-423`, `:448-450`; the `beforePublish` JSDoc; one added sentence in the ordering-invariant comment (`:467-475`) |
+| modify | src/core/dream/promote.js | disclosure texts D4 (replaces `:1601-1604`) and D5 (replaces row R4's comment, `:1757-1761`) and nothing else: two comment hunks, no behaviour change |
+| modify | tests/unit/dream-vault-write.test.js | new tests `[CAS-1]`–`[CAS-8]` (Acceptance criteria). One existing test changes, and only this much: the H6 "IMMEDIATELY AFTER the publish" test (`:474-512`) seeds the target and passes `expect`, so its `fs.renameSync` patch still sits on the publish (Current state) |
+| create | tests/red-proofs/vault-write-cas-window.proofs.json | ADR-0042 declarations P1–P6 whose `suite` is `tests/unit/dream-vault-write.test.js` |
+| modify | docs/specs/done/WP-dream-vault-write-primitive.md | dated Erratum 1: section E0 plus in-place amendments E1–E9, verbatim from Exact contracts |
 
 Nothing else. In particular, **`src/core/dream/warnings.js` and
 `docs/GLOSSARY.md` are not touched**. The warnings file takes the new create arm
@@ -298,9 +316,12 @@ D3 — `vault-write.js:448-450` becomes:
 
 ```text
     // The publish, per arm (Table K). CREATE ARM off win32: link the staging
-    // object to the target, then remove the staging name. A reader of the
-    // target sees nothing or the complete new content, never a prefix: every
-    // byte was written and the staging descriptor closed before the name ever
+    // object to the target; check that the target is the very object this
+    // call wrote (device and inode of the still-open staging descriptor) and,
+    // on a mismatch, leave the target as found and refuse; then remove the
+    // staging name, and if that fails refuse with a reason saying the target
+    // already holds the bytes. A reader of the target sees nothing or the complete new
+    // content, never a prefix: every byte was written before the name ever
     // points at them. OVERWRITE ARM, and the create arm wherever it publishes
     // by rename: a reader sees the previous or the complete new content.
 ```
@@ -319,11 +340,25 @@ D4 — `promote.js:1601-1604` becomes:
       // the primitive's stated residual, inherited here unchanged.
 ```
 
+D5 — `promote.js:1757-1761` (row R4's comment) becomes:
+
+```text
+              // R4 — the file mutated between the read and the publish, or the
+              // primitive refused for any other reason. The vault object is left
+              // untouched, except after the primitive's Table X rows X4, X6 and
+              // X7 (WP-vault-write-cas-window), whose refusal reason itself says
+              // what the target now holds. The complete record goes to the
+              // caller, and the refusal NAMES ITS REASON. In this narrow window
+              // an overwrite would be the worse failure: it would clobber the
+              // user's edit.
+```
+
 **Erratum 1 to `docs/specs/done/WP-dream-vault-write-primitive.md` — copy
 verbatim.** `<DATE>` is the `YYYY-MM-DD` date of the implementation commit that
 adds it. E0 is a new section inserted between the `**Dispatch precondition.**`
-paragraph (ending at `:38`) and `## Context`. E1–E6 are in-place edits, each
-carrying its own marker `(Erratum 1, E<n>)`. No other byte of that file changes.
+paragraph (ending at `:38`) and `## Context`. E1–E9 are in-place edits, each
+carrying its own marker `(Erratum 1, E<n>)` exactly once. No other byte of that
+file changes.
 
 E0:
 
@@ -332,15 +367,15 @@ E0:
 
 **Filed by `WP-vault-write-cas-window`, whose Tables K and X are canonical for
 everything this erratum restates.** That package publishes the create arm
-(`expect` omitted) by a link from the staging object to the target, which fails
-if anything is at the name, so on that arm the check and the publish are one
-act. It keeps the shipped rename, and the narrowed window, on the overwrite arm
-everywhere, and on the create arm on win32 and on a filesystem without hard
-links. Six surfaces in this file are amended in place, each carrying its marker. The
-H5 acceptance criterion and the H7 criterion's count of four are unchanged,
-because every refusal the new code produces unwinds exactly as an existing
-refusal does (row H7's amendment E2 says where the one exception, an NFS
-mis-report, is stated).
+(`expect` omitted) by a link from the staging object to the target. The link
+fails if anything is at the name, so on that arm the check and the publish are
+one act. The call then checks that the target is the object it wrote. It keeps
+the shipped rename, and the narrowed window, on the overwrite arm everywhere,
+and on the create arm on win32 and on a filesystem without hard links. Nine
+surfaces in this file are amended in place, each carrying its marker. The H5
+acceptance criterion is unchanged. The H7 criterion's count of refusals that
+cannot restore the vault moves from four to six: the link publish adds cases
+(e) and (f).
 ```
 
 E1 — in the H5 row (`:217`), replace the sentence beginning `**NARROWED, not
@@ -354,7 +389,7 @@ E2 — at the end of the H7 row's third cell (`:221`, after `never on a policy
 refusal`), append:
 
 ```text
-. **Publish-step outcomes (Erratum 1, E2):** the create arm's link publish adds `WP-vault-write-cas-window`'s Table X rows X1–X7 to this taxonomy. None adds a case to the H7 criterion's count: X1, X2, X3 and X5 are refusals that unwind exactly as an existing refusal does; X4 — a staging name surviving a SUCCESSFUL publish — is not a refusal and is a named residual there; X6 restates this spec's substitution residual; and X7 names a refusal that does NOT restore the vault — an NFS server that performed the link, or the shipped rename, and reported failure — which exists for the shipped rename too, is outside the count because the count covers filesystems that report their own results truthfully, and is stated there rather than here
+. **Publish-step outcomes (Erratum 1, E2):** the create arm's link publish adds `WP-vault-write-cas-window`'s Table X rows X1–X7 to this taxonomy. X1, X2, X3 and X5 are refusals that unwind exactly as an existing refusal does. X4 (the staging name cannot be removed after the link) and X6 (the target is not the object the call staged, and is left as found) are refusals that cannot restore the vault; they are cases (e) and (f) of the H7 criterion. X7 names a refusal that also does not restore the vault — an NFS server that performed the link, or the shipped rename, and reported failure. That case exists for the shipped rename too, and is outside the count, because the count covers filesystems that report their own results truthfully
 ```
 
 E3 — the Security checklist line (`:295`) becomes:
@@ -367,7 +402,7 @@ E4 — at the end of the Security checklist item that ends `is not a contract
 here.` (`:302-305`), append:
 
 ```text
-      Under the create arm's link publish the consequence changes form, not class: on darwin `link(2)` follows a symlink substituted at the staging name, so the target becomes a second name for the object it points at (measured 2026-09-26; `WP-vault-write-cas-window` Table X row X6) (Erratum 1, E4).
+      Under the create arm's link publish, substitution at the staging name — by a symlink or by a hard link — is DETECTED, not prevented. On darwin `link(2)` follows a symlink at its source, so after the link the call compares the target's device and inode with its still-open staging descriptor. On a mismatch it refuses and leaves the target as found, named in the reason. It never removes the target, because the same mismatch is what a user's save replacing the target right after the link looks like (measured 2026-09-26; `WP-vault-write-cas-window` Table X row X6) (Erratum 1, E4).
 ```
 
 E5 — in the Mirrored Surface Checklist (`:250`), replace `**No surface may call
@@ -384,41 +419,106 @@ layer.` (`:523`), append:
   (Erratum 1, E6) The create arm is closed by `WP-vault-write-cas-window` wherever a hard link can be made; the overwrite arm stays open for exactly the reason stated here.
 ```
 
+E7 — the H7 acceptance criterion, from `- [ ] **H7 — refusal is total` through
+`(a), (b) and (d) are stated in H9, (c) in H7.` (`:429-455`), becomes:
+
+```text
+- [ ] **H7 — refusal is total, and wherever it is not, it says so.** After
+      every refusal path the target is unchanged and the target directory holds
+      no leftover FILE of this call's making, EXCEPT cases (c), (e) and (f)
+      below — none of which is silent. Directories are H9's side and are
+      enumerated below too. The throw-with-target-already-replaced
+      carve-out is gone with the mechanism that required it (round 4, F9'').
+      **SIX bounded cases, not two, where a refusal does not restore the
+      vault byte-for-byte — enumerated here because this criterion is the ONE
+      surface that counts them, and every other surface defers to this count
+      instead of restating it (round 10; cases (c) and (d) added 2026-08-28
+      from the shipped implementation's own measurements; cases (e) and (f)
+      added with the create arm's link publish (Erratum 1, E7)):**
+      **(a)** a directory this call created that acquired content before
+      removal is RETAINED.
+      **(b)** a concurrently substituted empty directory can be
+      REMOVED while the directory the call actually created survives under its
+      new name.
+      **(c)** the call's own STAGING OBJECT can be unremovable — with
+      its parent directory made unwritable between the staging and the refusal,
+      the removal fails and the staged bytes stay in the vault.
+      **(d)** a directory this call created can be unremovable for a platform
+      reason that is NOT non-emptiness — the same physical cause as (c),
+      applied to a directory instead of a file — and is then RETAINED.
+      **(e)** the create arm's link has published the target, and the staging
+      name then cannot be removed — the physical cause of (c), one step later.
+      The target holds the payload AND the staging name survives, and the call
+      refuses rather than report a clean publish (`WP-vault-write-cas-window`
+      Table X row X4).
+      **(f)** the check after the link found that the target is not the object
+      the call staged — it was substituted before the publish, or replaced
+      right after it. The target is left as found and named, and never
+      removed (Table X row X6).
+      **(a), (b) and (d) are H9's; (c), (e) and (f) are H7's own.** Earlier
+      forms of this criterion said "one bounded case", then "two", then "four" —
+      each time arithmetic left behind when a residual was added, which is why
+      this criterion names itself as the counting surface. None of the six is
+      carved out: (a), (b) and (d) are stated in H9, (c) in H7, (e) and (f) in
+      `WP-vault-write-cas-window` Table X. (e) and (f) each leave objects in
+      the vault, and each names them in the refusal `reason`, under the next
+      criterion's rule exactly as (a), (c) and (d) do.
+```
+
+E8 — in the Mirrored Surface Checklist's "Every surface that COUNTS" item
+(`:262`), replace `**four**, owned by the H7 acceptance criterion` with:
+
+```text
+**six** (four before Erratum 1) (Erratum 1, E8), owned by the H7 acceptance criterion
+```
+
+E9 — at the end of the H3 row's third cell (`:215`, after `this row states only
+that it must happen`), append:
+
+```text
+. **The staging name too (Erratum 1, E9):** on the create arm's link publish, `link(2)` on darwin follows a symlink substituted at the staging name. So the call checks after the link that the target is the object it wrote. Otherwise it refuses and leaves the target as found, named in the reason (`WP-vault-write-cas-window` Table X row X6). DETECTED, not prevented, like the rest of this row
+```
+
 ## Contract reference (optional — mark N/A if this WP is not contract-dense)
 
-The ADR-0031 trigger fires on six of seven: (i) the signature gains
-`beforePublish`; (ii) the H7 outcome taxonomy gains rows; (iv) error,
-fallback and precedence behaviour change (`EEXIST` vs the fallback codes vs
-every other code); (v) authority boundary — the primitive decides publish
-outcomes, `promote.js` and `warnings.js` interpret them, and the Done spec owns
-Table H; (vi) two consumer modules, with three kinds of write, inherit the
-contract; (vii) the same facts
-appear in four code texts, six Done-spec surfaces, the acceptance criteria and
-the verification greps.
+The ADR-0031 trigger fires on six of seven:
+
+- (i) the signature gains `beforePublish`;
+- (ii) the H7 outcome taxonomy gains rows;
+- (iv) error, fallback and precedence behaviour change (`EEXIST` vs the
+  fallback codes vs every other code; the identity check);
+- (v) an authority boundary — the primitive decides publish outcomes,
+  `promote.js` and `warnings.js` interpret them, and the Done spec owns Table H;
+- (vi) two consumer modules, with three kinds of write, inherit the contract;
+- (vii) the same facts appear in five code texts, nine Done-spec surfaces, the
+  acceptance criteria and the verification checker.
 
 ### Contract table(s)
 
 #### Table K — the publish step, per arm (canonical)
 
 | # | Arm and condition | Premise check | Publishing act | Window after this package | Why H4 holds | Stated at (move together) |
-|---|---|---|---|---|---| --- |
-| K1 | **Create arm** (`expect` omitted), `process.platform !== 'win32'`, evaluated on each call | the shipped checks at `:424-430` and `:444-446`, **retained unchanged** as the early refusal and the source of the symlink and non-regular reasons | `fs.linkSync(tmp, targetLexical)`; on success `tmp` is cleared at once, then the staging name is removed. **From the moment the link succeeds no path returns a refusal** (Table X row X4) | **CLOSED.** The link fails `EEXIST` if anything is at the name — regular file (APFS, HFS+) and dangling symlink (APFS), memo §5; directory and live symlink (APFS), round record §2 — so the premise is re-asserted by the act itself. `EEXIST` → X1. Any code in `LINK_UNSUPPORTED_CODES` → K2. Any other code → X2 | the target name is created only by the link, pointing at the object whose every byte was written and whose descriptor was closed before the call (memo §5d: same inode, full content). A reader sees no file or the complete content. Between the link and the removal the object has two names; the staging name is never handed to anyone | D1, D2, D3, D4 (closed); Done spec E0, E1, E3, E5, E6 |
-| K2 | Create arm, K1's link failed with a code in `LINK_UNSUPPORTED_CODES` = {`ENOTSUP`, `EPERM`} — **exactly these two**; `EEXIST` is **never** a member (on FAT32/exFAT a link onto an existing name returns `EEXIST`, memo §5, so `EEXIST` says nothing about link support) | none added: the call goes straight to the rename | `fs.renameSync(tmp, targetLexical)` — the shipped publish and its shipped failure reason | **OPEN, re-disclosed**: the shipped narrowed window, from the `:424` check to the rename, now including one failed link call. Membership rests on measurement for `ENOTSUP` (darwin FAT32/exFAT) and on link(2)'s documented meaning for `EPERM` (linux; that vfat emits it is recalled, not measured) — owner item 1 | rename, as shipped | D1, D2, D3, D4 (open); E0, E1, E3 |
+|---|---|---|---|---|---|---|
+| K1 | **Create arm** (`expect` omitted), `process.platform !== 'win32'`, evaluated on each call | the shipped checks at `:424-430` and `:444-446`, **retained unchanged** as the early refusal and the source of the symlink and non-regular reasons | In this order. **(1)** The staging descriptor stays **open** from its creation until step 3 (on every other row it closes where the shipped code closes it, `:414-418`); `fstat` of it gives the staged `(dev, ino)`. **(2)** `fs.linkSync(tmp, targetLexical)`. **(3) Identity check:** `lstat(targetLexical)` must be a regular file with the staged `dev` and `ino`; otherwise → X6. **(4)** Remove the staging name; a failure → X4. **(5)** Close the descriptor; return `written:true`. Between (2) and (5) nothing else runs, and every return between them is X4 or X6 | **CLOSED.** The link fails `EEXIST` if anything is at the name — regular file (APFS, HFS+) and dangling symlink (APFS), memo §5; directory and live symlink (APFS), round record §2 — so the premise is re-asserted by the act itself. `EEXIST` → X1. Any code in `LINK_UNSUPPORTED_CODES` → K2. Any other code → X2 | the target name is created only by the link, pointing at the object whose every byte was written before the call (memo §5d: same inode, full content), and step 3 confirms it is that object. A reader sees no file or the complete content. Between the link and the removal the object has two names; the staging name is never handed to anyone | D1, D2, D3, D4 (closed); Done spec E0, E1, E3, E5, E6, E9 |
+| K2 | Create arm, K1's link failed with a code in `LINK_UNSUPPORTED_CODES` = {`ENOTSUP`, `EPERM`} — **exactly these two**; `EEXIST` is **never** a member (on FAT32/exFAT a link onto an existing name returns `EEXIST`, memo §5, so `EEXIST` says nothing about link support) | none added: the call goes straight to the rename | close the descriptor, then `fs.renameSync(tmp, targetLexical)` — the shipped publish and its shipped failure reason | **OPEN, re-disclosed**: the shipped narrowed window, from the `:424` check to the rename, now including one failed link call. Membership rests on measurement for `ENOTSUP` (darwin FAT32/exFAT) and on link(2)'s documented meaning for `EPERM` (linux; that vfat emits it is recalled, not measured) — owner item 1 | rename, as shipped | D1, D2, D3, D4 (open); E0, E1, E3 |
 | K3 | Create arm, `process.platform === 'win32'` | the shipped checks | `fs.renameSync`, as shipped. **No link is attempted.** Stated as an explicit platform branch, not hidden behind an error code | **OPEN, re-disclosed.** Nothing on win32 is measured (no Windows runner exists; the non-NTFS link error code and a staging-name removal under another process's handle are both UNVERIFIED, memo §1–§2) — owner item 2 | rename, as shipped | D1, D2, D3, D4 (open); E0, E1, E3 |
-| K4 | **Overwrite arm** (`expect` present), every platform | the shipped checks at `:424-443`, unchanged | `fs.renameSync`, as shipped | **OPEN, re-disclosed (candidate 0).** A save landing between the compare and the rename is lost, whether the writer saves in place (Obsidian desktop, VS Code) or by replacing the file (vim's default, TextEdit, Syncthing) — memo §4. No reachable call replaces only an unchanged file (memo §2) | rename, as shipped | D1, D2, D3, D4 (open); E0, E1, E3, E6. R4 (`promote.js:1757-1761`) stays true unedited |
+| K4 | **Overwrite arm** (`expect` present), every platform | the shipped checks at `:424-443`, unchanged | `fs.renameSync`, as shipped | **OPEN, re-disclosed (candidate 0).** A save landing between the compare and the rename is lost, whether the writer saves in place (Obsidian desktop, VS Code) or by replacing the file (vim's default, TextEdit, Syncthing) — memo §4. No reachable call replaces only an unchanged file (memo §2) | rename, as shipped | D1, D2, D3, D4 (open); E0, E1, E3, E6 |
 | K5 | **The barrier** `o.beforePublish`, every arm and platform | — | called with no arguments exactly once per call that reaches K1, K3 or K4's publishing act: **after** every check the call makes on the target and **before** the publishing act. Not called on a call that refuses first. **K2 does not call it again**, since the barrier has already run before K1's link. Its return value is ignored. A throw of **any** type, `WienerdogError` included, → X5. Present and not a function → caller-contract `WienerdogError`, thrown before the vault is touched. No production caller passes it | — | — | the `beforePublish` JSDoc (Exact contracts) |
 
 #### Table X — publish-step outcomes (members of Table H row H7's taxonomy; canonical)
 
+H7-criterion case letters (a)–(d) are the Done spec's; (e) and (f) are added by
+Erratum 1, E7.
+
 | # | When | Returned | Reason text | What survives in the vault | H9 unwind |
 |---|---|---|---|---|---|
-| X1 | K1's link fails `EEXIST` | refusal | `` `${resolvedRel} already exists and this write asserted it would not` `` — byte-identical to the pre-check's, so every caller sees one reason for "the create arm's premise failed", whichever check caught it | the object at the target, untouched; nothing of this call's making except H7 cases (a), (c), (d) exactly as the Done spec's H7 criterion counts them (for example the racer's file sits in a directory this call created, which is then retained and named) | runs as today |
+| X1 | K1's link fails `EEXIST` | refusal | `` `${resolvedRel} already exists and this write asserted it would not` `` — byte-identical to the pre-check's, so every caller sees one reason for "the create arm's premise failed", whichever check caught it | the object at the target, untouched; nothing of this call's making except H7 cases (a), (c), (d) as the Done spec counts them (for example: the racer's file sits in a directory this call created, which is then retained and named) | runs as today |
 | X2 | K1's link fails with any code **not** `EEXIST` and not in `LINK_UNSUPPORTED_CODES` — `EACCES`, `EIO`, `EMLINK`, `EXDEV` (reachable only through residual A's component swap), an unknown code | refusal | `` `${resolvedRel} could not be published (<code or message>)` `` — the shipped publish-failure text | as X1 | runs as today |
 | X3 | K2, K3 or K4's rename fails | refusal, as shipped | as shipped | as shipped | as shipped |
-| X4 | K1's link succeeded and removing the staging name then fails | **`{written:true, bytes, sha256}`** — never a refusal. The target holds the published bytes, and a refusal would claim the vault object untouched, which is false, and the caller would then account for a promotion as not having happened | none | **named residual, unreported:** the staging name, a second name for the bytes this call just published (not a refused payload), in the target's own parent directory — at most one per call. Owner item 4 | none — the call succeeded |
+| X4 | K1's identity check passed, and removing the staging name then fails. Measured: in a directory made unwritable after the link, removing either name fails `EACCES` (round record §2), so undoing the publish is not attempted — it would fail for the same reason | **refusal** — never `written:true`, because a success would hide a second vault name holding the payload. Case **(e)** | `` `${resolvedRel} holds this write's bytes, but the write could not remove its staging name (<code>), so it is reported as refused` ``, followed by the shipped suffix that names the retained staging object (`refuse()`'s first bucket, `:293-295`) | the target holding the payload, **and** the staging name — a second name for the same bytes — both named in the reason. A caller treats the path as refused. In `promote.js` that means the note is not in the dream's commit and a preserved original's remediation reads "delete". For a redacted note that is still safe, because the only bytes the original has beyond the published note are the redacted spans | runs; a directory this call created now holds the target and is retained and named, as in case (a) |
 | X5 | `beforePublish` throws | refusal | `` `the write failed unexpectedly (<code or message>)` `` — the shipped text of the outer catch | as X1 | runs, including for a `WienerdogError` thrown by the seam (the shipped outer catch re-throws that type, so the seam's call must convert it itself) |
-| X6 | the staging object is **substituted** between its creation and K1's link (the Done spec's existing named residual, `:302-305`) | unchanged in class | — | on darwin `link(2)` follows a symlink at its source (`man 2 link`; measured in round record §2), so the target becomes a second name for the object the symlink points at. Under the shipped rename, the target became the planted symlink. Either way a same-user actor who can substitute inside the vault gets the target bound to an object of their choosing, so the capability class is unchanged | — |
-| X7 | (a) the process dies between K1's link and the removal; (b) on NFS, K1's link — or K2/K3/K4's rename — is performed by the server but reported as failed | (a) no return; (b) a refusal | (b) X1's, X2's or X3's text | (a) the staging name holding the **published** bytes — the class a crash at any point after staging already leaves (today: the unpublished staging object). (b) the target holding the payload **while the call reports a refusal**: a refusal that does not restore the vault. link(2) documents that NFS can return the wrong code, and rename(2) documents the same for the shipped rename, so (b) exists today and is not new. It is **not** added to the Done spec's H7 count of four, which covers filesystems that report their own results truthfully (Erratum 1, E2 says so) | (a) none; (b) runs, and removes the staging name |
+| X6 | K1's identity check fails: the target is not a regular file with the staged `(dev, ino)`, or cannot be `lstat`ed. Two causes produce this, and the call **cannot tell them apart**. **(i) Substitution** of the staging object before the link — by a symlink, which darwin's `link(2)` follows at its source (`man 2 link`; measured, round record §2), or by a hard link — so the target is bound to another existing file. **(ii) A concurrent save** that replaced the target by rename, or removed it, between the link and the check | **refusal** — case **(f)** | `` `${resolvedRel} is not the object this write staged (it was substituted before the publish or replaced right after it); it was left as found` `` | the target **left as found, and named** — never removed. Removing it would delete the user's save in cause (ii), since that save's only name is the target. In cause (i) the target stays a second name for the other file until the user acts on the reason. That is exactly the state a same-user actor able to write inside the vault could make directly with one `ln`, without racing the dream. The dream's own commit never carries the other file's bytes: it commits the call's returned bytes (row H6), and a refused path returns none | runs; the staging name (the substituted object in (i), the call's own object in (ii)) is removed by `refuse()` |
+| X7 | (a) the process dies between K1's link and the removal; (b) on NFS, K1's link — or K2/K3/K4's rename — is performed by the server but reported as failed | (a) no return; (b) a refusal | (b) X1's, X2's or X3's text | (a) the staging name holding the **approved** payload — the same bytes, under the same kind of name, that a crash anywhere after staging already leaves today, unreported because no process survives to report. The link changes only whether the target holds them too. (b) the target holding the payload **while the call reports a refusal**. link(2) documents that NFS can return the wrong code, and rename(2) documents the same for the shipped rename, so (b) exists today and is not new. It is **not** added to the H7 count, which covers filesystems that report their own results truthfully (Erratum 1, E2 says so). A sweep of stale staging names at the next run would cover (a) for both publishes: owner item 4 | (a) none; (b) runs |
 
 ### Mirrored Surface Checklist
 
@@ -426,35 +526,35 @@ A review finding updates the table **and every mirror below in the same
 commit**; a newly found mirror is registered here on the spot. Where a mirror
 and a table disagree, the table is right and the mirror is the bug.
 
-- [ ] **Deliverables-table cells** — the `vault-write.js` cell names K1–K5 and
-      X1–X5; the `promote.js` cell names D4 and R4's non-edit; the test cell
-      names `[CAS-1]`–`[CAS-7]` and the one H6 fixture edit that K1 forces; the
-      proofs cell names P1–P5; the Done-spec cell names E0–E6.
+- [ ] **Deliverables-table cells** — the `vault-write.js` cell names K1–K5,
+      X1–X6 and D1–D3; the `promote.js` cell names D4 and D5; the test cell names
+      `[CAS-1]`–`[CAS-8]` and the one H6 fixture edit K1 forces; the proofs cell
+      names P1–P6; the Done-spec cell names E0–E9.
 - [ ] **Exact contracts** — the `beforePublish` JSDoc mirrors K5 and X5;
-      `LINK_UNSUPPORTED_CODES` mirrors K2; **D1–D4 mirror K1–K4** (arm by arm:
-      closed only on K1; open on K2, K3, K4); **E0, E1, E3, E5, E6 mirror
-      K1–K4**, and **E2 and E4 mirror Table X** (E2: X1–X7, and the count of
-      four; E4: X6).
+      `LINK_UNSUPPORTED_CODES` mirrors K2. **D1–D4 mirror K1–K4** (arm by arm:
+      closed only on K1; open on K2, K3, K4), and D3 also mirrors K1's steps and
+      X4/X6. **D5 mirrors X4, X6 and X7.** **E0, E1, E3, E5, E6 mirror K1–K4.**
+      **E2, E4, E7, E8 and E9 mirror Table X** (E2: X1–X7; E4 and E9: X6; E7:
+      cases (e) = X4 and (f) = X6; E8: the count, six).
 - [ ] **Code mirrors outside this spec, edited by this package** —
       `vault-write.js` limit B (D1), the section comment (D2), the publish
-      comment (D3), `promote.js:1601-1604` (D4).
-- [ ] **Code mirror outside this spec, NOT edited, kept true** —
-      `promote.js:1757-1761` (R4): it describes the detected case, and it stays
-      reachable on both arms (Context, open question 5).
-- [ ] **Done-spec mirrors, amended by Erratum 1** — H5 (E1), H7 (E2),
-      Security checklist `:295` (E3) and `:302-305` (E4), the Mirrored Surface
-      Checklist's prohibition (E5), Out of scope (E6). **Registered and verified
-      unchanged:** H4 (`:216`, which states a property and not a mechanism), the
-      H5 criterion (`:376-379`), and the H7 criterion's count of four
-      (`:429-455`).
+      comment (D3), `promote.js:1601-1604` (D4), `promote.js:1757-1761` (D5,
+      row R4).
+- [ ] **Done-spec mirrors, amended by Erratum 1** — H3 (E9), H5 (E1), H7 row
+      (E2), Security checklist `:295` (E3) and `:302-305` (E4), the Mirrored
+      Surface Checklist's prohibition (E5) and its count (E8), Out of scope (E6),
+      the H7 criterion (E7). **Registered and verified unchanged:** H4 (`:216`,
+      which states a property, not a mechanism) and the H5 criterion
+      (`:376-379`).
 - [ ] **Acceptance criteria** — AC1 (K1, X1; K2's `EEXIST` exclusion), AC2
       (K4), AC3 (X4), AC4 (K2, X2), AC5 (K5, X5), AC6 (K1's H4 argument), AC7
-      (K3), AC8 (D1–D4), AC9 (E0–E6).
-- [ ] **Verification commands** — the D1/D4 greps, the one-hunk check on
-      `promote.js`, the E-marker loop, the `beforePublish` production-caller
-      grep, `npm run red-proofs -- --wp WP-vault-write-cas-window`.
+      (K3), AC8 (K1 step 3, X6), AC9 (D1–D5), AC10 (E0–E9).
+- [ ] **Verification commands** — the text checker (every D and E block
+      verbatim, every replaced shipped line gone), the two-hunk check on
+      `promote.js`, the `beforePublish` production-caller check,
+      `npm run red-proofs -- --wp WP-vault-write-cas-window`.
 - [ ] **RED proofs** — P1 (K1), P2 (K2's `EEXIST` exclusion), P3 (X4), P4
-      (K2), P5 (K4).
+      (K2), P5 (K4), P6 (X6).
 - [ ] **Current state** — the shipped sequence (the K rows' "as shipped"
       cells) and the disclosure-site list (the D and E items).
 - [ ] **Operative prose** — the Context's decision paragraph and "Open
@@ -489,18 +589,35 @@ and a table disagree, the table is right and the mirror is the bug.
     comment (`:467-475`) warns about. So the barrier's call is wrapped
     locally and converted to a refusal (X5), and the ordering invariant
     comment is extended by one sentence saying so.
-  - **Clear `tmp` as soon as the link succeeds.** If it is cleared later, any
-    throw in between reaches `refuse()`, which returns a refusal for a publish
-    that happened (X4).
+  - **Keep `tmp` set until the staging name is removed** (K1 step 4). X4 and X6
+    both return through `refuse()`, whose first bucket already removes and
+    names the staging object. Nothing but the identity check and the removal
+    runs between the link and step 5, so no unexpected throw can reach the
+    outer `catch` in that span.
+  - **Never remove the target on an identity mismatch** (X6). The mismatch looks
+    the same whether an attacker substituted the staging object or the user's
+    editor replaced the target by rename right after the link. In the second
+    case the target is the user's only copy.
+  - **Hold the staging descriptor open on K1 only.** Its open lifetime is what
+    keeps the staged `(dev, ino)` from being reused by another file before the
+    identity check. On K2, K3 and K4 it closes where the shipped code closes
+    it: whether a rename works while the process holds the file open on win32
+    is UNVERIFIED (memo §2), so those rows do not change.
 - **The race tests anchor on the barrier, never on a filesystem call.** `[CAS-1]`
-  and `[CAS-2]` inject their concurrent write inside `beforePublish`. `[CAS-3]`,
-  `[CAS-4]` and `[CAS-7]` do patch filesystem calls, and that is legitimate:
-  their subject is the link publish itself, which Table K names as the mechanism.
-  `[CAS-3]` must stay name-agnostic — it patches **both** `fs.unlinkSync` and
-  `fs.rmSync` to fail for any path under the target's parent other than the
-  target, and asserts that the fault was actually reached. A probe that never
-  fires proves nothing (the shipped suite's `plantSymlinkAtEveryCreateOpen`
-  comment records the same lesson).
+  and `[CAS-2]` inject their concurrent write inside `beforePublish`. So does
+  `[CAS-8]`: it finds the staging object as the one directory entry the call
+  added — a directory listing taken before the call compared with one taken
+  inside the barrier, never a guessed name — and replaces it, once with a
+  symlink and once with a hard link, each pointing at a victim file outside the
+  target's directory. `[CAS-3]`, `[CAS-4]`, `[CAS-7]` and `[CAS-8]`'s
+  concurrent-save control do patch filesystem calls, and that is legitimate:
+  their subject is the link publish itself, which Table K names as the
+  mechanism, and the control's instant — after the link, before the check —
+  lies past the barrier. `[CAS-3]` must stay name-agnostic — it
+  patches **both** `fs.unlinkSync` and `fs.rmSync` to fail `EACCES` for any path
+  under the target's parent other than the target, and asserts that the fault
+  was actually reached. A probe that never fires proves nothing (the shipped
+  suite's `plantSymlinkAtEveryCreateOpen` comment records the same lesson).
 - **`[CAS-6]` is H4 on the create arm, proven RED in-test** (the shipped suite's
   `assertDiscriminates` pattern): at every point where the target name exists
   during the call, it holds the complete payload. The in-test control is an
@@ -517,27 +634,34 @@ and a table disagree, the table is right and the mirror is the bug.
   and **corrects `expectRed` to the observed set**. A correction may falsify
   prose, so these are the sentences that depend on it: the proofs cell of the
   Deliverables table, the table below, this bullet, and the RED clause of each of
-  AC1–AC4.
+  AC1–AC4 and AC8.
 
 **RED proofs** (ADR-0042; one mutation per row, ADR-0036 A3; markers
 `RP_MUT_CAS_P<n>`; each proof's `testNamePattern` is `\[CAS-`):
 
 | Id | Criterion | The one mutation | `expectRed` (DERIVED) | Signal the assertion message carries |
 |---|---|---|---|---|
-| P1 `cas-create-arm-publishes-by-rename` | AC1 | K1's link publish (link plus staging-name removal) replaced by the shipped `fs.renameSync(tmp, targetLexical)` | `[CAS-1]`, `[CAS-3]`, `[CAS-4]` | `CAS-1 the concurrent file survives`; `CAS-3 the removal fault was reached`; `CAS-4 the link was attempted` |
+| P1 `cas-create-arm-publishes-by-rename` | AC1 | K1's link publish (steps 2–4) replaced by the shipped `fs.renameSync(tmp, targetLexical)` | `[CAS-1]`, `[CAS-3]`, `[CAS-4]`, `[CAS-8]` | `CAS-1 the concurrent file survives`; `CAS-3 the removal fault was reached`; `CAS-4 the link was attempted`; `CAS-8 the substitution is refused` |
 | P2 `cas-eexist-falls-back` | AC1 | `'EEXIST'` added to `LINK_UNSUPPORTED_CODES` | `[CAS-1]` | `CAS-1 the concurrent file survives` |
-| P3 `cas-removal-failure-refuses` | AC3 | a failed staging-name removal after the link returns a refusal | `[CAS-3]` | `CAS-3 a publish is never reported as a refusal` |
+| P3 `cas-removal-failure-reported-as-success` | AC3 | a failed staging-name removal after the link returns `written:true` | `[CAS-3]` | `CAS-3 a second vault name is never a clean success` |
 | P4 `cas-no-fallback` | AC4 | `LINK_UNSUPPORTED_CODES` emptied | `[CAS-4]` | `CAS-4 ENOTSUP publishes by rename` |
 | P5 `cas-overwrite-rechecks-after-barrier` | AC2 | a second compare of the target against `expect`, placed after the barrier and refusing on mismatch | `[CAS-2]` | `CAS-2 residual: the in-place save is overwritten` |
+| P6 `cas-identity-check-removed` | AC8 | K1 step 3 deleted: the call removes the staging name and succeeds without comparing the target with the staged `(dev, ino)` | `[CAS-8]` | `CAS-8 the substitution is refused` |
 
 - **Considered and rejected**, so the reasons are not re-argued. `'wx'` or
-  `COPYFILE_EXCL` as the publish (breaks H4). For the overwrite arm, "rename
-  the target aside, compare, then link" — the target is absent in the middle,
-  which an editor's file watcher or a sync agent can read as a deletion, and a
-  save already in flight still writes into the moved-aside object. The stub's
-  candidate 1 (owner item 3). An `fsync` (owner item 5). A post-link identity
-  check against substitution, which the Done spec leaves to the implementer's
-  choice and which this package does not add.
+  `COPYFILE_EXCL` as the publish (breaks H4). For the overwrite arm, "rename the
+  target aside, compare, then link" — the target is absent in the middle, which
+  an editor's file watcher or a sync agent can read as a deletion, and a save
+  already in flight still writes into the moved-aside object. The stub's
+  candidate 1 (owner item 3). An `fsync` (owner item 5). **Removing the target
+  on an identity mismatch**, as round 1 of the design gate suggested: it would
+  delete a user's save that replaced the target right after the link (X6, and
+  the trap above). **Undoing the publish when the staging name cannot be
+  removed** (X4): the only failures that cause it — a directory made unwritable,
+  a read-only remount, an I/O error — fail the target's removal the same way
+  (measured, round record §2). **Reporting X4 as `written:true` with an extra
+  field**: every caller would need new code to see it, while the refusal reason
+  is a channel all three callers already print.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -547,6 +671,15 @@ and a table disagree, the table is right and the mirror is the bug.
       unchanged (Table H rows H1–H3). The link does not follow a symlink at the
       target: it fails `EEXIST` and the symlink is left as it was (measured on
       APFS for a live and a dangling symlink; K1).
+- [ ] **Substitution at the staging name is detected, not prevented (X6).** On
+      darwin `link(2)` follows a symlink at its source. K1's identity check
+      refuses any publish whose target is not the very object the call staged.
+      The target is left as found and named, never removed — which leaves a
+      substituted binding in place until the user acts on the reason. A
+      same-user actor able to write inside the vault can make that binding
+      directly with one `ln`, so it grants no capability. The dream's own commit
+      never carries the other file's bytes (row H6; a refused path returns none).
+      Tested by `[CAS-8]`.
 - [ ] `beforePublish` is a test seam. No file under `src/` other than
       `vault-write.js` names it (verification step). A throw from it cannot escape
       past the unwind (K5, X5).
@@ -556,10 +689,14 @@ and a table disagree, the table is right and the mirror is the bug.
       loudly, with the code in the reason — it never degrades silently. The
       fallback is the shipped publish, and its window is the shipped one plus
       one failed link call (K2).
+- [ ] **No second vault name is reported as a clean success.** X4 refuses and
+      names both the target and the retained staging name. The one unreported
+      leftover is a crash between the link and the removal (X7 (a)), which
+      leaves the same approved bytes under the same kind of name as a crash
+      anywhere after staging does today (owner item 4).
 - [ ] Named residuals, each canonical in its row: the overwrite arm's window
       (K4); the create arm's window on win32 (K3) and without hard links (K2);
-      the unreported staging name after a successful publish (X4); substitution
-      now followed by the link on darwin (X6); crash and NFS leftovers (X7).
+      a substituted binding left in place (X6); crash and NFS leftovers (X7).
 
 ## Acceptance criteria
 
@@ -577,10 +714,12 @@ and a table disagree, the table is right and the mirror is the bug.
       `written:true` and the target holds the call's bytes. The test's name says
       RESIDUAL, and its comment says that if it ever fails because the window
       closed, D1–D4 and E1/E3/E5/E6 must move with it. **RED:** P5.
-- [ ] **AC3 — a publish is never reported as a refusal (X4).** `[CAS-3]`: a
+- [ ] **AC3 — a second vault name is never a clean success (X4).** `[CAS-3]`: a
       create-arm write where removing the staging name fails `EACCES`. The call
-      returns `written:true`, `bytes` equals the payload, the target holds it,
-      and the probe asserts that the fault was reached. Skipped on win32.
+      returns `written:false`. Its reason contains X4's text and names the
+      retained staging object with the shipped "a file this write staged could
+      not be removed and was left in the vault" suffix. The target holds the
+      payload. The probe asserts that the fault was reached. Skipped on win32.
       **RED:** P3.
 - [ ] **AC4 — the fallback is exactly the accept-list (K2, X2).** `[CAS-4]`,
       with `fs.linkSync` patched to fail (asserting that the link was attempted).
@@ -601,13 +740,26 @@ and a table disagree, the table is right and the mirror is the bug.
 - [ ] **AC7 — win32 never links (K3).** `[CAS-7]`: with `process.platform`
       stubbed to `'win32'` and `fs.linkSync` patched to record calls and fail, a
       create-arm write publishes and `fs.linkSync` is never called.
-- [ ] **AC8 — the four code texts are D1–D4 verbatim**, the shipped limit-B
-      sentence is gone, and `promote.js` changes in exactly one hunk, the one at
-      `:1601` (verification steps).
-- [ ] **AC9 — Erratum 1 is present in the Done spec**: the E0 heading with a
-      real date, markers E1–E6 each exactly once, and the shipped `:295` line
-      gone (verification steps).
-- [ ] **AC10 —** `npm test`, `npm run lint`, and
+- [ ] **AC8 — substitution at the staging name is refused, and the target is
+      never removed (K1 step 3, X6).** `[CAS-8]`: inside `beforePublish` the
+      staging object is replaced by (a) a symlink to a victim file and (b) a hard
+      link to it. In both cases the call returns `written:false` with X6's
+      reason. The victim's bytes are unchanged. The target exists and is left as
+      found — in case (a) it is a second name for the victim, and the test
+      asserts that as the named residual, not as a defect. The staging name is
+      gone. **Also, as a control:** a save that replaces the target by rename
+      right after the link must never be removed. The test injects it by
+      wrapping `fs.linkSync` to perform the real link and then the rename, and
+      the call must refuse with X6's reason while the save's bytes survive at
+      the target. Skipped on win32. **RED:** P6.
+- [ ] **AC9 — the five code texts are D1–D5 verbatim**, every shipped sentence
+      they replace is gone, and `promote.js` changes in exactly two hunks, at
+      `:1601` (D4, four lines) and `:1759` (D5 keeps R4's first two lines,
+      so git's hunk starts at the third) (verification steps).
+- [ ] **AC10 — Erratum 1 is in the Done spec verbatim**: E0 with a real date,
+      E1–E9 each present and each marker exactly once, and every replaced
+      shipped sentence gone (verification steps).
+- [ ] **AC11 —** `npm test`, `npm run lint`, and
       `npm run red-proofs -- --wp WP-vault-write-cas-window` report every
       declared criterion `PROVEN`.
 - [ ] Idempotence: `N/A — a vault write is not a repeatable command; Table H's
@@ -618,38 +770,35 @@ and a table disagree, the table is right and the mirror is the bug.
 
 ```bash
 # Deliverables exist. A --test-name-pattern matching zero tests exits 0, so the
-# seven test names are checked for BEFORE the pattern run (absent → red).
+# eight test names are checked for BEFORE the pattern run (absent → red).
 test -f tests/red-proofs/vault-write-cas-window.proofs.json
-bash -c 'for n in 1 2 3 4 5 6 7; do grep -q "dream-vault-write: \[CAS-$n\]" tests/unit/dream-vault-write.test.js || { echo "MISSING [CAS-$n]"; exit 1; }; done; echo "CAS-1..7 present"'
+bash -c 'for n in 1 2 3 4 5 6 7 8; do grep -q "dream-vault-write: \[CAS-$n\]" tests/unit/dream-vault-write.test.js || { echo "MISSING [CAS-$n]"; exit 1; }; done; echo "CAS-1..8 present"'
 npm test -- --test-name-pattern "\[CAS-" tests/unit/dream-vault-write.test.js
 npm test
 npm run lint
 npm run red-proofs -- --wp WP-vault-write-cas-window
 
-# AC8 — the disclosure texts (D1 and D4 by their first line; the old limit-B
-# sentence gone; promote.js touched in exactly one hunk, at :1601).
-grep -q "B. CHECK-TO-PUBLISH WINDOW — PER ARM (WP-vault-write-cas-window, Table K)." src/core/dream/vault-write.js
-test -f src/core/dream/vault-write.js && ! grep -q "still lost. Narrowed, not closed." src/core/dream/vault-write.js
-grep -q "The compare→promote window depends on the arm (the primitive's Table K," src/core/dream/promote.js
-git diff -U0 "$(git merge-base HEAD main)" -- src/core/dream/promote.js | grep '^@@'   # expect exactly one line, starting "@@ -1601,4 "
+# AC9 and AC10 — every D and E block verbatim, every replaced sentence gone,
+# every erratum marker exactly once. The checker reads the blocks from THIS
+# spec, so it cannot drift from it. It is the architect's: if it is wrong,
+# report that in the PR — never edit it.
+node docs/specs/logbook/2026-09-26-vault-write-cas-window-text-check.js
+
+# AC9 — promote.js changes in exactly the two prescribed hunks. Expected value
+# measured with git diff -U0 on a tree built from D4 and D5 (round record §4).
+test "$(git diff -U0 "$(git merge-base HEAD main)" -- src/core/dream/promote.js | grep -o '^@@ -[0-9]*,[0-9]*' | tr '\n' ' ')" = "@@ -1601,4 @@ -1759,3 " && echo "promote.js: exactly the two prescribed hunks"
 
 # K5 — the barrier exists and no production file passes it.
 grep -q "beforePublish" src/core/dream/vault-write.js
 test -z "$(grep -rln "beforePublish" src/ | grep -v '^src/core/dream/vault-write.js$')" && echo "no production caller"
-
-# AC9 — Erratum 1 in the Done spec.
-D=docs/specs/done/WP-dream-vault-write-primitive.md
-grep -Eq "^## Erratum 1 \(20[0-9]{2}-[0-9]{2}-[0-9]{2}\) — the create arm's window is closed where hard links exist$" "$D"
-bash -c 'D=docs/specs/done/WP-dream-vault-write-primitive.md; for n in 1 2 3 4 5 6; do c=$(grep -c "(Erratum 1, E$n)" "$D"); [ "$c" = 1 ] || { echo "E$n count $c"; exit 1; }; done; echo "E1..E6 once each"'
-test -f "$D" && ! grep -qx -- "- \[ \] Named residual: the compare→publish window is narrowed, not closed (H5)." "$D"
 git diff --check
 ```
 
 - Every step above is NEW. Each must be observed **green** on the finished tree
   and **red** on a deliberately broken one, and both outputs pasted. The broken
-  states: for the greps, the deliverable absent and the old text restored. For
-  AC1–AC4, the RED-proof lane's own red. For AC5–AC7, a revert of that row's
-  behaviour, named in the PR.
+  states: for the checker and the hunk check, the deliverable absent and one
+  block reverted to its shipped text. For AC1–AC4 and AC8, the RED-proof lane's
+  own red. For AC5–AC7, a revert of that row's behaviour, named in the PR.
 
 ## Out of scope (do NOT do these)
 
@@ -693,7 +842,7 @@ is ratified by this document.
    are possible, both loud rather than silent: if the non-NTFS error code is
    `EISDIR`, create-arm writes on those volumes refuse; and a staging-name
    removal blocked by another process's open handle (antivirus, indexer) could
-   make X4's leftover common.
+   make X4 refusals common.
 3. **The overwrite arm is re-disclosed, not narrowed (K4, candidate 0).**
    *Recommendation:* accept, because nothing portable closes it. *Cost of
    overruling (commission candidate 1 as a successor):* Obsidian desktop, the
@@ -703,20 +852,29 @@ is ratified by this document.
    caller and to the dream report, would do nothing about vim, TextEdit or
    Syncthing, and on win32 holding the descriptor may itself make the rename
    fail (UNVERIFIED). That is an M package at least.
-4. **A staging name that survives a successful publish is a named residual,
-   not reported (X4).** *Recommendation:* accept. The leftover is a hidden
-   (dot-named) second name for bytes the call has just published, not a refused
-   payload. It is reachable only when the removal fails right after a link that
-   needed write permission on the same directory. *Cost of overruling:* a new
-   field on the success return, plus reporting code in `promote.js` and
-   `warnings.js`, for a duplicate of content that was already approved.
+4. **A publish that cannot remove its staging name refuses (X4). A crash
+   between the link and the removal leaves an unreported staging name (X7
+   (a)).** *Recommendation:* accept both. *Revised after design-gate round 1,
+   which found the first draft's "success, unreported" answer for X4 to be a
+   band-A defect.* X4 uses the channel every caller already surfaces:
+   `promote.js` puts refusal reasons into the dream report, and `dream.js`
+   prints the warnings file's. The reason names both the target and the
+   retained name. The crash leftover is the class a crash anywhere after
+   staging already leaves today, under either publish, holding approved bytes.
+   *Cost of overruling:* (i) reporting X4 as a success with a new return field
+   means a return-shape change plus reporting code in `promote.js`,
+   `warnings.js` and the dream report. (ii) Closing the crash leftover means a
+   sweep of stale `.wienerdog-vault-write.*.tmp` names at the next run — a
+   successor package, which must prove it never removes a staging object a
+   live call still owns.
 5. **H4 does not speak to power loss; no `fsync` is added.** *Recommendation:*
    accept, and route durability to its own package if it is wanted. The
    primitive fsyncs nothing today (memo §0). ext4's `auto_da_alloc` is
    documented for replace-by-rename, which means the overwrite arm here, and —
-   by the memo's reading of that documentation — not for a link (memo §3). Whether it covers today's create-arm rename to a new name is
-   the memo's inference ("arguably not"), so this item makes no claim that the
-   create arm loses crash protection it had. *Cost of overruling:* an
+   by the memo's reading of that documentation — not for a link (memo §3).
+   Whether it covers today's create-arm rename to a new name is the memo's
+   inference ("arguably not"), so this item makes no claim that the create arm
+   loses crash protection it had. *Cost of overruling:* an
    `fsync` per vault write, plus a directory `fsync` for the new name to be
    durable, in a package whose subject is the concurrent-writer window.
 

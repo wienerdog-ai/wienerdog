@@ -135,6 +135,31 @@ Readings:
   This backs the Implementation-notes trap "never rename the staging name over
   the target after linking".
 
+**Added in the round-1 revision** (same machine, same session). The staging
+descriptor was held open across the publish, and its `fstat` was compared with
+an `lstat` of the target:
+
+```text
+honest: target isFile true dev+ino match true
+symlink-substituted: target isFile true dev+ino match false reads "SECRET"
+after unlink(target): target exists false victim "SECRET" victim nlink 1
+hardlink-substituted: dev+ino match false
+staging removal in unwritable dir -> EACCES
+target removal in unwritable dir -> EACCES
+```
+
+Readings:
+
+- An identity check against the staged `(dev, ino)` tells an honest link from a
+  link bound to a substituted object, both a symlink and a hard link. This
+  backs K1 step 3 and X6.
+- When the staging name cannot be removed because the directory became
+  unwritable, removing the target fails the same way. So "undo the publish"
+  is not a way out of X4, and X4 refuses instead.
+- The `unlink(target)` line is recorded because round 1 proposed it. The
+  revision rejects removing the target (X6): that same mismatch is what a
+  user's replace-by-rename save right after the link looks like.
+
 ## 3. Current state — citations checked at both ends
 
 Every `file:line` range in the spec was printed at both ends by a scratch helper
@@ -273,4 +298,61 @@ changed:
 
 | Round | Reviewer | Raw | Commit | Verdict |
 |---|---|---|---|---|
-| — | *(none yet — the orchestrator runs the Codex design gate and wd-reviewer on this branch)* | | | |
+| 0 | clean-context conformance executor (Sonnet) | §1, "Clean-context executor, round zero" | `23601732` | conformant |
+| 1 | Codex design gate (Astra) | `docs/specs/logbook/2026-09-26-vault-write-cas-window-design-r1-astra-raw.json`, `…-r1-astra-focus.txt` | `f14c60af` | needs-attention, three findings |
+
+### Round 1 — adjudication (the orchestrator proposed the dispositions; the architect applied them)
+
+The pinned criterion (§0) decides the weights. Rule 0 makes both band-A
+findings HEAVY, and rule 4 then requires a fix, the mechanical re-checks and
+one fresh round. Rule 1's fallback is not triggered: this is round 1. Every
+finding was accepted. None was dispositioned away.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| R1-1 | X4 treated a failed staging-name removal after a successful link as `written:true`, so a second vault name holding the payload went unreported — the state H7 calls dangerous for a refusal, created on a success. A crash between the link and the removal leaves the same state | A | HEAVY | **Fixed.** X4 is now a **refusal**, H7 case **(e)**. Its reason says the target holds the bytes and, through `refuse()`'s shipped first bucket, names the retained staging name — a channel all three callers already surface (`promote.js` into the dream report; `dream.js` prints the warnings file's reason). The revision **does not undo the publish**, and says why: in the only measured cause, an unwritable directory, removing the target fails the same way (§2). Reporting a success with a new return field was rejected because every caller would need new code to see it. The **crash** half is disposed separately: X7 (a) states that a crash anywhere after staging already leaves an approved payload under a staging name today, under either publish. A sweep of stale staging names is owner item 4 (ii), as a successor that must prove it never removes a live call's object. Owner item 4 is **revised**, not routed, per rule 0. Mirrors moved in the same commit: Table X rows X4 and X7, K1 steps 4–5, the Context decision bullet, AC3 and `[CAS-3]`, P3 (now `cas-removal-failure-reported-as-success`), D3, D5, E0, E2, E7 (case (e)), E8 (count four → six), the Security checklist and owner item 4 |
+| R1-2 | X6's claim of "the same capability class as the shipped rename" was unsupported. A rename puts a *symlink* at the target, while the link can make the target a *regular* second name for another file's contents. No test exercised it | A | HEAVY | **Fixed, with a design change the reviewer did not propose, and argued here.** K1 gains an **identity check**. The staging descriptor is held open on K1 only, and after the link `lstat(target)` must be a regular file with the staged `(dev, ino)`. This is measured to catch both symlink and hard-link substitution (§2). On a mismatch the call **refuses and leaves the target as found, named** — X6, H7 case **(f)**. The round-1 suggestion was "unlink the target and refuse", and it is **rejected**. The same mismatch arises when a user's editor replaces the target by rename between the link and the check, and there the target is the user's only copy: removing it would turn a race the design tolerates into data loss. The capability argument is **restated against the right comparison.** A same-user actor who can substitute inside the vault can create the identical binding with one `ln`, without racing the dream. The dream's own commit never carries the other file's bytes (row H6; a refused path returns none). The first draft's comparison with the rename was the wrong comparison, and it is withdrawn. New test `[CAS-8]` covers symlink substitution, hard-link substitution and a concurrent-save control that must never be removed. New proof P6. New Done-spec surface E9 on row H3 ("DETECTED, not prevented"), and E4 rewritten. Mirrors moved in the same commit: Table K row K1 (steps 1–5), Table X row X6, D3, D5, E2, E4, E7 (case (f)), E9, the Security checklist, AC8, the RED table, the Considered-and-rejected list |
+| R1-3 | The verification steps could not enforce AC8: only the first lines of D1 and D4 were grepped, and the `promote.js` hunk command printed without asserting anything | B | LIGHT | **Fixed within the frozen surface.** The greps and the marker loop are **replaced** — not supplemented — by one committed checker, `docs/specs/logbook/2026-09-26-vault-write-cas-window-text-check.js`. It reads every D and E block from the spec itself and requires each **verbatim** in its file, every replaced shipped sentence gone and every erratum marker exactly once. The hunk command now asserts exactly `@@ -1601,4 @@ -1759,3` (plus the trailing space `tr` leaves). That value was measured with `git diff -U0` on a tree built from D4 and D5: D5 keeps R4's first two lines, so git's hunk starts at `:1759`, and the draft's `-1757,5` guess was wrong. That was caught by running the check, not by reading it |
+
+**Re-run after the revision (on this branch, before commit):**
+
+- **The checker, three-state.** On a tree built by applying the spec's own
+  blocks D1–D5 and E0–E9 to the shipped files (a scratch `simulate2.js`, not
+  committed) it reports `ALL PASS`, exit 0, 35 checks. On the shipped tree it
+  reports `35 FAILED`, exit 1. On an empty tree (every deliverable absent) it
+  reports `35 FAILED`, exit 1. Running it caught two marker defects in the
+  revision's own E7 and E8 texts, fixed before commit.
+- **The hunk shape.** `git diff --no-index -U0` from shipped to simulated
+  `promote.js` gives `@@ -1601,4 @@ -1759,3`, the asserted value. The
+  simulated Done spec has one hunk per E-item, and no other line moves. It
+  passes markdownlint with 0 errors.
+- **The RED declarations parse.** A draft of P1–P6 run through the runner's
+  `validateProof` gives `parsed 6 proofs, 6 valid, unique ids: true`.
+- **Both-ends range check** for every citation the revision added:
+  `vault-write.js:293-295` (the `if (staleStaging)` bucket) and `:414-418`
+  (the staging descriptor's close); the Done spec's `:215` (the H3 row),
+  `:262` (`**four**`) and `:429-455` (the H7 criterion). All resolve.
+- `npm run lint`: passed.
+
+### STOP CRITERION — restated at the head of round 2
+
+§0 is unchanged and is restated here as it binds round 2.
+
+- **Rule 0.** A band-A finding is HEAVY.
+- **Rule 1.** A HEAVY finding on Table K or Table X at round 3 or later
+  triggers the pre-pinned fallback: candidate 0 on both arms, size S.
+- **Rule 2.** A second consecutive round landing on the same table is a design
+  question, not a patch. **Round 1 landed on Table X (X4 and X6), so a round-2
+  HEAVY finding on Table X fires this rule.** The design question is then
+  "does the create-arm link still earn its surface?", answered here before any
+  edit. The pre-pinned answer, if it does not, is rule 1's fallback, taken a
+  round early.
+- **Rule 3.** A finding that needs an unmeasurable platform fact, or that argues
+  against an owner item's recommendation, goes to the owner.
+- **Rule 4.** Any other HEAVY finding: fix, re-check, fresh round.
+- **Rule 5.** A round whose findings are all LIGHT closes the loop.
+
+The verification surface is re-frozen at **eight tests, six RED proofs, the
+checker, the hunk check and the production-caller check**. It grew by one test
+and one proof only to guard the new product behaviour, X6. Any machinery
+finding from here on is fixed within that surface or accepted as a residual.
