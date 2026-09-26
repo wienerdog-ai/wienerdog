@@ -517,7 +517,7 @@ introduced. ADR-0004 remains intact.
 
 ### Amendment 4 (2026-09-19) — a quarantine reason whose cause is our own code may be retried once per fix, gated by ledger-level state
 
-Status: **ACCEPTED under standing authorization 2026-09-18 — owner signature pending.**
+Status: **ACCEPTED under standing authorization 2026-09-18 — owner-signed 2026-09-26**
 
 **A quarantine reason can have two kinds of cause, and §2's retry rule only
 covers one of them.** A quarantine is skipped until the file changes, because

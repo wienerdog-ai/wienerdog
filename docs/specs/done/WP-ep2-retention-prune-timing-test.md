@@ -1,7 +1,7 @@
 ---
 id: WP-ep2-retention-prune-timing-test
 title: Give Table N row N2 (the retention prune runs once per run) its missing test
-status: Draft
+status: Superseded
 model: sonnet
 size: S
 depends_on: []
@@ -9,7 +9,22 @@ adrs: [ADR-0004, ADR-0005]
 epic: secret-lifecycle
 ---
 
-> # ⛔ SUPERSEDED-PENDING — DO NOT DISPATCH THIS WORK PACKAGE
+> # ⛔ SUPERSEDED 2026-09-26 — do not implement, do not re-aim this file
+>
+> **Replaced by its two successors, both `Done`:**
+> `docs/specs/done/WP-ep2-n2-rehome.md` (PR #285, merge `862f8277`) re-homed
+> Table N row N2 onto the real locus, and
+> `docs/specs/done/WP-ep2-prune-once-per-run-test.md` (PR #293, merge
+> `85029a8e`) delivered the test this package was filed to deliver — one
+> pipeline-suite test plus one ADR-0042 RED declaration over the pipeline's one
+> prune invocation. The gap this spec named is closed; nothing here is pending.
+> Filed `Superseded` rather than deleted so the 2026-09-18 assessment below and
+> its logbook entry stay findable. Basis:
+> `docs/specs/logbook/2026-09-26-ep2-retention-prune-timing-test-superseded.md`.
+>
+> *(The 2026-09-18 banner follows, preserved.)*
+>
+> # SUPERSEDED-PENDING (2026-09-18) — DO NOT DISPATCH THIS WORK PACKAGE
 >
 > **Assessed 2026-09-18 against `main` at `622ca04b` and found architecturally
 > stale.** The `status:` field still reads `Draft` because moving or deleting a

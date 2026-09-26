@@ -85,7 +85,7 @@ code. No WP may write user knowledge under `~/.wienerdog`.
 
 ## Amendment (2026-09-19) — the secret quarantine is a preserved kind, and the invariant is narrowed to what the core already holds
 
-Status: **ACCEPTED under standing authorization 2026-09-18 — owner signature pending.**
+Status: **ACCEPTED under standing authorization 2026-09-18 — owner-signed 2026-09-26**
 
 **Erratum first, because the invariant above describes an intention rather than
 a property of the tree.** *"Nothing user-authored is ever written under the
