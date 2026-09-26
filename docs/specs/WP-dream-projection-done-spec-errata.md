@@ -1,7 +1,7 @@
 ---
 id: WP-dream-projection-done-spec-errata
 title: File Errata 7–9 against the Done primary-dialogue projection spec
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: [WP-dream-primary-dialogue-projection]
