@@ -333,7 +333,7 @@ review:
 
 ## Amendment (2026-09-19) — R-stripped-manifest-orphan is closed
 
-Status: **ACCEPTED under standing authorization 2026-09-18 — owner signature pending.**
+Status: **ACCEPTED under standing authorization 2026-09-18 — owner-signed 2026-09-26**
 
 `WP-scheduler-replay-manifest-independent` has shipped Option C. `uninstall`'s
 scheduler reversal no longer derives solely from the manifest's entry list: it

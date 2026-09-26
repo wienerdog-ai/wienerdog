@@ -52,8 +52,23 @@ resuming it.
 > (`model: opus`), `.claude/agents/wd-architect.md` (`effort: high`),
 > `docs/specs/README.md` and the dispatch record in
 > `docs/runbooks/codex-review.md`. Verbatim instruction:
-> `docs/specs/logbook/2026-09-26-owner-ruling-opus-high-tier.md`. Nothing on the
-> queue below moved; `main` was still `37b35c37` when this was written.
+> `docs/specs/logbook/2026-09-26-owner-ruling-opus-high-tier.md`.
+>
+> **Later the same day (second ruling, verbatim in
+> `docs/specs/logbook/2026-09-26-owner-rulings-queue.md`):** the owner **signed
+> the three ADR amendments** (0041, 0019, 0023 Am. 4 — his own Status-line
+> edits, committed unchanged), answered the **filter's privacy question YES** on
+> the condition that the disposable vault lives only on the user's machine and
+> is accessible to no one else, and gave the **go to drive the queue**. Executed
+> in the same PR: `WP-contract-reference-tables` filed **Done** (its
+> implementation `609d96b0` had been on `main` since 2026-07-20 via integration
+> merge `66585743`, never a PR — items 1 and 6 of the open-decisions list above
+> are closed); `WP-ep2-retention-prune-timing-test` filed **Superseded** by its
+> two Done successors (item 3 closed). Still open from that list: item 2 is now
+> the evaluation itself, item 4 needs its design round, item 5 the Windows
+> runner, item 7 unchanged. **Next: the 0.15.0 release** (`chore/release-0.15.0`,
+> stacked on this PR), then the filter's offline evaluation and the cas-window
+> design round.
 >
 > **Status pass, 2026-09-22 #20 (the 2026-09-19 "go" ruling, executed end to end — all NINE Ready specs implemented, gated and merged; the backlog of Ready work is EMPTY.)**
 > Measured on `main` at `032696f7`, not transcribed.

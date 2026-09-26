@@ -1,7 +1,7 @@
 ---
 id: WP-contract-reference-tables
 title: Integrate ADR-0031 contract reference tables into the spec template and the two agent duties
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -10,6 +10,19 @@ epic: spec-system
 ---
 
 # WP-contract-reference-tables: ADR-0031 process integration (template + two agent duties)
+
+> **Filed Done 2026-09-26, measured on `main` at `37b35c37`.** The
+> implementation landed on `main` in commit `609d96b0` (2026-07-19), which reached
+> `main` through the integration merge `66585743` (2026-07-20) rather than through
+> a PR of its own — which is why this spec sat `In-Review` "with no traceable PR"
+> from handover pass #12 to #20. No PR-gate record exists for it; the two gates
+> this repository runs today were adopted after that merge. What is measured
+> instead: all three verification checks pass on `37b35c37` (`TEMPLATE OK`,
+> `ARCHITECT OK`, `REVIEWER OK`), `node scripts/check-frontmatter.js` passes, and
+> every one of the three Deliverables carries its ADR-0031 text. The template
+> section has since been exercised by every contract-dense spec in `done/`
+> (Tables A–X across the 2026-08/09 packages), which is the acceptance criterion
+> in practice. Filed on the owner's 2026-09-26 instruction to drive the queue.
 
 ## Context (read this, nothing else)
 

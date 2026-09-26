@@ -247,6 +247,22 @@ a newly found mirror is registered here on the spot.
 
 ## Entry condition — the offline evaluation
 
+> **Owner ruling, 2026-09-26 — the evaluation may use real transcripts.** Asked
+> whether real transcripts may be projected into a disposable vault and judged,
+> the owner answered **yes, on one condition: the disposable vault lives only on
+> the user's machine and is accessible to no one but the user.** Verbatim in
+> `docs/specs/logbook/2026-09-26-owner-rulings-queue.md`. Consequences for the
+> evaluation below: (a) the samples are the owner's own local sessions, projected
+> into a disposable vault under the owner's home, never synced, shared, attached
+> to a PR or committed; (b) the LLM judge runs through the owner's own
+> subscription harness on that machine, so the projected dialogue leaves the
+> machine only as an ordinary model request under the user's account, exactly as
+> a dream run's input does today; (c) what is committed is the logbook record
+> the paragraph below already prescribes — model, input identities, verdict,
+> disposition, sizes — and never the transcripts or the projected notes. The
+> "sanitized examples or owner-authorized local samples" clause below is thereby
+> resolved in favour of owner-authorized local samples.
+
 This is not an acceptance criterion of this package. It runs **before** this
 package is matured, on `WP-dream-primary-dialogue-collection`'s real output, and
 its result decides whether this package is built at all.

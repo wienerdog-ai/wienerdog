@@ -24,11 +24,11 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0016](0016-npm-less-tarball-install-and-update.md) | npm-less install & update via the registry tarball | Accepted (amends 0003, 0006, 0013) |
 | [0017](0017-windows-install-ps1.md) | Windows bootstrap (`install.ps1`) — consent, elevation, testing | Accepted (amends 0006, 0011, 0016) |
 | [0018](0018-windows-scheduled-dreaming.md) | Windows scheduled dreaming via Task Scheduler | Accepted (amends 0014; extends 0013) |
-| [0019](0019-uninstall-disposes-core-mechanics.md) | Uninstall disposes the core's machine-generated mechanics | Accepted |
+| [0019](0019-uninstall-disposes-core-mechanics.md) | Uninstall disposes the core's machine-generated mechanics | Accepted — Amendment (the secret quarantine is a preserved kind) OWNER-SIGNED 2026-09-26 |
 | [0020](0020-skill-revision-lifecycle.md) | Skill revision lifecycle — dream-created-only, recurrence-gated, quarantined learnings | Accepted |
 | [0021](0021-identity-trust-registry.md) | Human-ratified identity memory with an exact-byte trust registry | Accepted |
 | [0022](0022-single-strict-frontmatter-parser.md) | One strict, fail-closed frontmatter parser for security-bearing notes | Accepted |
-| [0023](0023-bounded-transcript-intake-and-quarantine-ledger.md) | Bounded streaming transcript intake and a per-file quarantine ledger | Accepted |
+| [0023](0023-bounded-transcript-intake-and-quarantine-ledger.md) | Bounded streaming transcript intake and a per-file quarantine ledger | Accepted — earlier amendments carry their own owner lines in the file; Amendment 4 (`quarantined → deferred`, retry once per fix) OWNER-SIGNED 2026-09-26 |
 | [0024](0024-layered-secret-lifecycle.md) | Layered secret lifecycle — one shared scanner, four fail-closed persistence gates | Accepted (EP2 amendment and the high-entropy-as-`redact` rejection narrowly superseded by 0034; EP4 unchanged) |
 | [0025](0025-hermetic-runtime-profiles.md) | Hermetic runtime profiles — code-owned capability composition | Accepted |
 | [0026](0026-gws-capability-broker.md) | GWS capability broker — credential-holding per-job stdio broker, fixed verbs | Accepted |
@@ -46,6 +46,6 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0038](0038-untrusted-manifest-fields-narrow-deletion-only.md) | An untrusted manifest field may only narrow a deletion, never widen one | Accepted |
 | [0039](0039-session-start-injects-only-what-the-block-lacks.md) | The SessionStart hook injects the digest only when the managed block does not already carry it | Accepted — OWNER-SIGNED 2026-08-30 |
 | [0040](0040-managed-block-is-a-reference-not-a-copy.md) | The managed block is a reference, not a copy | Withdrawn 2026-08-31 — signed as ADR-0039 pre-fork-adoption; the fork's 0039 (session-start dedup) stands by owner ruling. Carries a salvage note (write rule, refusal banner) |
-| [0041](0041-real-scheduler-mutation-is-opt-in.md) | A real OS-scheduler mutation is permitted only from the home it belongs to; the default is refuse | Accepted — OWNER-SIGNED 2026-08-31 (inverts 0018 decision 2's opt-out guard) |
+| [0041](0041-real-scheduler-mutation-is-opt-in.md) | A real OS-scheduler mutation is permitted only from the home it belongs to; the default is refuse | Accepted — OWNER-SIGNED 2026-08-31 (inverts 0018 decision 2's opt-out guard); Amendment (R-stripped-manifest-orphan closed) OWNER-SIGNED 2026-09-26 |
 | [0042](0042-machine-run-red-proofs.md) | RED evidence for an acceptance criterion is machine-run from a committed declaration, in its own lane, against a disposable copy | Accepted — OWNER-SIGNED 2026-09-02 |
 | [0043](0043-safe-cut-stream-redaction.md) | EP3's durable-log transform cuts the stream only where no detector rule can match across, not at every chunk boundary | ACCEPTED under standing authorization 2026-09-18 — OWNER-SIGNED 2026-09-18 (narrows 0024's EP3 mechanism; supersedes the not-buffered-across-chunks decision recorded only in code comments) |
