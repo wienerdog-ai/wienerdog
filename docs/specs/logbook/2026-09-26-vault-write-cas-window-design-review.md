@@ -356,3 +356,77 @@ The verification surface is re-frozen at **eight tests, six RED proofs, the
 checker, the hunk check and the production-caller check**. It grew by one test
 and one proof only to guard the new product behaviour, X6. Any machinery
 finding from here on is fixed within that surface or accepted as a residual.
+
+| Round | Reviewer | Raw | Commit | Verdict |
+|---|---|---|---|---|
+| 2 | Codex design gate (Astra) | `docs/specs/logbook/2026-09-26-vault-write-cas-window-design-r2-astra-raw.json` | `a9167c2e` | needs-attention, two findings, both band A on Table X |
+
+### Round 2 — findings (recorded before any spec edit)
+
+| # | Finding | Band | Weight | Table |
+|---|---|---|---|---|
+| R2-1 | The identity check detects foreign content only **after** readers can see it. On darwin a symlink substituted at the staging name makes `linkSync` create a regular vault hard link to the symlink's referent. Between the link and the `lstat` check, any reader of the target sees the referent's bytes, contradicting K1's and D3's claim that a reader sees only absence or the complete approved payload (H4). On a mismatch, X6 deliberately leaves that hard link in the vault after refusing. The named reason, and the fact that the dream commits only returned bytes, contain neither other vault readers nor the user's later operations. The same-user capability argument fits the threat model's exclusion of arbitrary native malware, but it does not make the H4 content claim true | A | HEAVY | K1, X6 |
+| R2-2 | X4 leaves a published duplicate that the promised retry cannot clear. X4 returns `written:false` after the target already holds the payload, and the staging hard link stays. The warnings caller surfaces the reason once, then on its next refresh reads the now-correct target and does nothing — the staging name is never removed, so `dream.js`'s "retried on the next run" is false for this outcome. For a promoted note the refusal keeps the path out of the commit while both vault names remain. A one-run refusal that names the duplicate is not recovery from a persistent extra vault file | A | HEAVY | X4 |
+
+### Round 2 — the design question (stop criterion rule 2 fired)
+
+**Which rule fired.** Rule 0 makes both findings HEAVY. Rule 2 decides the
+outcome: round 1 landed on Table X (R1-1 on X4, R1-2 on X6), and round 2 lands
+on Table X again (X4 and X6 again). Two consecutive rounds on the same contract
+family is the ADR-0031 circuit-breaker. The criterion pinned before round 2
+named the question in advance: *does the create-arm link still earn its
+surface?*
+
+**Why a third patch is refused.** Each round-1 fix was reachable only by adding
+new machinery, and each piece of it became the next round's finding. The
+identity check (R1-2's fix) is what makes R2-1 visible. The X4 refusal (R1-1's
+fix) is what makes R2-2 visible. Both round-2 findings point at the same root,
+which no textual patch can reach:
+
+1. **Portable Node cannot bind the link source to the staged descriptor.** There
+   is no `linkat` binding, no `AT_EMPTY_PATH`, no `AT_SYMLINK_NOFOLLOW` control
+   and no `O_TMPFILE`: `fs` exposes only `link(path, path)` (memo §1 and §2,
+   measured `Object.keys(fs)`). So whatever sits at the staging name at the
+   instant of the link is what gets published. On darwin that includes the
+   referent of a substituted symlink (`man 2 link`; measured, round record §2).
+   A check can only run **after** the target name exists, and by then readers
+   can see whatever the link bound. Any link publish therefore either exposes
+   substituted bytes before a check can run, or trusts the staging name
+   unchecked.
+2. **A link publish has a partial-publish state that nothing cleans up.** Between
+   the link and the removal of the staging name there are two vault names for
+   one file. If the removal fails, the caller either hides that (R1-1) or is
+   told once and then never again, because no current caller has a retry path
+   that clears it (R2-2). The honest fix is a typed partial-publish outcome
+   plus a durable cleanup or reconciliation — a new contract in `promote.js`,
+   `warnings.js` and the dream report. That is a package of its own, at least
+   M.
+
+**Decision.** Re-cut to **candidate 0 on both arms**: a docs-and-tests package,
+size **S**. This is the pre-pinned fallback, taken a round early exactly as the
+restated criterion provided. What remains is:
+
+- the `beforePublish` barrier, a test seam;
+- residual race tests on **both** arms;
+- the code disclosure texts and a small Done-spec erratum, both saying
+  "narrowed, not closed" on both arms and citing the reason below;
+- no link publish, no platform branch, no fallback code list, and no new
+  outcome rows in H7 (the H7 count stays four).
+
+**What the two rounds established — the measured reason the create arm stays
+open.** Do not re-open this without new platform facts. With portable Node on
+darwin, linux and win32, the create arm's check-to-publish window can be closed
+only by a create-or-fail publish. Of those:
+
+- `openSync(…, 'wx')` and `copyFileSync(…, COPYFILE_EXCL)` break H4, because
+  the target is visible empty or partial (memo §1 and §2).
+- `fs.linkSync` keeps H4 only while the staging name is trustworthy, and portable
+  Node cannot make it trustworthy.
+
+The facts that would change this are a Node binding for `linkat` with a
+descriptor source (`AT_EMPTY_PATH`) or `O_TMPFILE`, or for
+`renameat2(RENAME_NOREPLACE)` / `renamex_np(RENAME_EXCL)`. Each of those
+publishes the staged object itself, or fails, with no second name. The memo's
+§2 records that none is reachable today. Retaining a link publish with both
+round-2 residuals accepted is the **owner's** call, not the architect's. It is
+recorded as the re-cut spec's owner item 1, with its cost.
