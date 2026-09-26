@@ -38,8 +38,10 @@ reviewers.
 
 - `wd-reviewer` stays on Opus; the Codex adversarial gate (design review and PR
   review, `gpt-6-astra`) runs exactly as before.
-- `wd-docs` and `wd-researcher` keep `model: sonnet`; they are neither
-  architecture nor implementation and the owner's instruction did not name them.
+- ~~`wd-docs` and `wd-researcher` keep `model: sonnet`~~ — **revised the same
+  day**: the owner's second message moved both to `model: opus` (*"Opus 5.5 has
+  much better writing skills than Sonnet 5"*); verbatim in
+  `2026-09-26-owner-rulings-queue.md`. All four agents now declare Opus.
 - `tests/schemas/spec.schema.json` keeps `sonnet` in the `model` enum.
 - The four Draft specs on `main` keep the `model:` value they were filed with;
   the tier they run on is decided by this ruling, not by that field.

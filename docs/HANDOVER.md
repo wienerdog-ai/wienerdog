@@ -45,7 +45,8 @@ resuming it.
 
 > **Ruling, 2026-09-26 — implementer and architect tier.** The owner ruled that
 > architecture planning and coding both run on **Opus at high effort**; Sonnet is
-> no longer dispatched for implementation. Both review gates — `wd-reviewer` and
+> no longer dispatched for implementation (`wd-docs` and `wd-researcher` moved to
+> Opus too, by the owner's follow-up the same day). Both review gates — `wd-reviewer` and
 > the Codex adversarial gate on `gpt-6-astra` — are **unchanged**. Recorded as
 > ADR-0005 Amendment 1 (OWNER-RULED 2026-09-26), `docs/specs/_TEMPLATE.md`
 > (`model: opus`), `.claude/agents/wd-architect.md` (`effort: high`),

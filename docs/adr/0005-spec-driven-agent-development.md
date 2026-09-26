@@ -56,9 +56,11 @@ Decision above as follows; where they disagree, this section wins.
 - **The spec template's `model:` field defaults to `opus`.** It records the tier
   the spec was written for; it no longer selects between tiers. `sonnet` stays a
   valid schema value only so the historical specs in `done/` keep validating.
-- **Out of scope.** `wd-docs` and `wd-researcher` are neither architecture nor
-  implementation and keep their own `model:` lines; changing them is a separate
-  decision.
+- **All four project agents run on Opus.** `wd-docs` and `wd-researcher` were
+  first left on Sonnet as out of scope; the owner's follow-up ruling the same day
+  moved them to Opus too, for its writing quality (verbatim in
+  `docs/specs/logbook/2026-09-26-owner-rulings-queue.md`). `wd-reviewer` was on
+  Opus already.
 
 The Consequences bullet "Cheap parallel implementation with bounded blast radius
 per session" is read as "Parallel implementation with bounded blast radius per

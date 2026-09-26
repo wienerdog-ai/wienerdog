@@ -1,7 +1,7 @@
 ---
 name: wd-docs
 description: Use this agent to write or update user-facing documentation - README, docs pages, template/skill prose, CLI messages, CHANGELOG curation, and the marketing article series. Examples - a merged WP changes the install flow → launch wd-docs to update the README quickstart; "draft the dreaming article" → launch wd-docs.
-model: sonnet
+model: opus
 color: yellow
 ---
 
