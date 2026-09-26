@@ -433,6 +433,80 @@ frozen verification surface** (rule 6) is now: tests under the five tags
 and the commands in the spec's Verification steps. LIGHT closure (rule 5)
 re-verifies with §8.3's checks.
 
+### Round 2 — the finding, and the rule-2 re-decision (recorded before any spec edit)
+
+The raw was committed before adjudication (`8a399c61`). The reviewer verified
+R1-1 closed.
+
+| Round | Tip | Raw file | Raw commit | Product findings | Outcome under §0 |
+|---|---|---|---|---|---|
+| 2 | `d36ee3da` | `docs/specs/logbook/2026-09-27-projection-notification-taint-design-r2-astra-raw.json` | `8a399c61` | 1 (R2-1 A/HEAVY, Table N row N7's predicate); R1-1 verified closed | rule 0 (band A) → **rule 2 fires as written** (second consecutive round on Table N) → re-decision below, recorded before the edit → then rule 4: one fresh round owed |
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| R2-1 | Row N7 says only an ABSENT `task_notification` key reads clean, but the prescribed `extract.task_notification !== undefined` reads a key PRESENT with the value `undefined` as clean. The producer writes only `true`; a malformed or version-skewed in-memory gate extract could carry it, and the ledger would then keep a `false` declaration for a notification-bearing session. AC5 tests `false`, `"yes"`, `0` and `null` but not `undefined` | A | HEAVY (changes `src/` behaviour) | **Re-decided (below), then fixed in revision 2** |
+
+**Which rule, and why the coordinator's reading is not the one applied.** The
+coordinator read rule 2 as not firing, on the ground that R2-1 is a predicate
+defect on the new row while R1-1 was a missing path — different kinds. §0
+rule 2 as pinned does not distinguish kinds: "Two consecutive rounds land
+findings on Table N". Round 1 landed on Table N (the claim N5/N7 were then
+written to close) and round 2 lands on row N7. So rule 2 fires, and its
+prescribed step is this: **do not patch a third time; record a re-decision of
+the class or the rule before any edit.** Rule 1 does not fire first: the fix
+is not a net, and this is round 2, not round 3. The outcome is the one the
+coordinator described either way — N7's predicate restated — but it is
+reached by the rule as written.
+
+**The re-decision — N7's clean state, enumerated.** The defect is that N7
+enumerated its good state in words ("absent") and then tested a *value*.
+Re-decided: **the one clean state is that no property named
+`task_notification` is reachable on the gate extract at all — neither its own
+nor inherited.** Every other state taints: an own property with any value
+(`true`, `false`, `undefined`, `null`, anything), and an inherited one. The
+test is `'task_notification' in Object(extract)`:
+
+- `in` asks the question N7 states — is the name there — and never reads a
+  value, so no value can read clean;
+- it is stricter than the reviewer's `Object.hasOwn(extract, …)`, which would
+  read an **inherited** property clean — the same class of hole one level up;
+  an inherited key can only come from a polluted prototype, which then taints
+  every session: the fail-closed direction;
+- `Object(extract)` boxes a primitive instead of throwing, so a malformed
+  extract that is a truthy primitive (rule (h) already refuses `null` and
+  `undefined` before this point) reads as having no such property — exactly
+  what `Object.hasOwn` and today's property reads do for a primitive, so no
+  new throw is introduced.
+
+**What changes with it, all within the frozen surface (rule 6).** Row N7's
+text; the Exact-contracts validator line; the ADR-0020 amendment's wording of
+the clean state; AC5 gains the `undefined` value and an inherited-property
+case; RED proof P9's `find` follows the new line; RED proof P10 is re-pointed
+from the truthiness mutation (`=== true`) to **the round-2 defect itself**
+(`extract.task_notification !== undefined`), so the proof that reddens is the
+one that reads a present-`undefined` key clean — its `expectRed` names
+`nt-ac5 malformed undefined`. The `=== true` mutant is still caught by the
+same AC5 loop (it reads `false`, `"yes"`, `0`, `null` and `undefined` clean),
+but no longer has a proof of its own; the inherited-property case is asserted
+in AC5 and has no proof of its own. Both are within rule 6: a machinery
+change inside the frozen surface, not new machinery. Tags stay `[NT-AC1]`–
+`[NT-AC5]`, proofs stay eleven.
+
+### STOP CRITERION — restated at the head of round 3
+
+§0 unchanged in order and outcomes, with round 1's and round 2's updates.
+**Round 3 is the pinned boundary: rule 1(b) now binds.** A HEAVY finding on
+Table N at round 3 or later re-cuts the package to the fallback — **level 1**
+(flag the message only, dropping N2 and its proof and assertion) when every
+firing finding lands on row N2 alone; **level 0** (build nothing; the
+provenance path recorded as a named residual in a dated Done-spec erratum;
+the owner told the commissioned design did not close) otherwise. A HEAVY
+finding on rows N6–N7 whose honest fix is positional goes to owner item 4 as
+input (rule 3(b)), as restated for round 2. A round of LIGHT findings closes
+under rule 5 with §8.3's and §9's checks. The frozen verification surface is
+unchanged: tags `[NT-AC1]`–`[NT-AC5]`, RED proofs P1–P11 in one declaration
+file, and the spec's Verification steps.
+
 ## 8. Revision 1 — after round 1
 
 ### 8.1 Measurements
