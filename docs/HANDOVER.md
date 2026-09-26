@@ -43,7 +43,9 @@ resuming it.
 
 ## The remaining work, in recommended order
 
-> **▶ START HERE — 2026-09-26, very late: the paired pilot for `WP-dream-first-pass-novelty` ran and OVERTURNED the finding behind it; one owner call is open (keep the stub parked, or supersede it).**
+> **▶ START HERE — 2026-09-26, last rulings: no design round for `WP-dream-first-pass-novelty` (parked, Draft); GO on the `WP-dream-projection-harness-user-records` design round (wd-architect running on branch `docs/wp-projection-harness-user-records`; gates next); the two Superseded stubs moved to `done/` (this PR). Structural fact measured for that round, field names only: task notifications carry `origin.kind: "task-notification"` + `promptSource: "system"` (203/203), typed human messages `origin.kind: "human"`, slash-command echoes no marker, `claude -p` prompts `promptSource: "sdk"`; 3 of 94 human records carry no marker. Specs root now: two Drafts (harness-records, novelty), the Windows reap, the template, README, MILESTONES.**
+>
+> > **▶ START HERE — 2026-09-26, very late: the paired pilot for `WP-dream-first-pass-novelty` ran and OVERTURNED the finding behind it; one owner call is open (keep the stub parked, or supersede it).**
 > Rulings tonight, verbatim in the logbook: "no purge needed" (`97e45ff0`
 > stays as is); "I accept the advisor's three recommendations" (the Astra
 > product memo, `…-first-pass-novelty-product-advice-astra.md`). The pilot
