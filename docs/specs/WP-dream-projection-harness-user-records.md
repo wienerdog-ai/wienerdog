@@ -1,6 +1,6 @@
 ---
 id: WP-dream-projection-harness-user-records
-title: Decline Claude user records the harness wrote, and halt the dream when no request survives
+title: Decline Claude user records the harness wrote, and set aside sessions left without a request
 status: Draft
 model: opus
 size: M
@@ -9,7 +9,7 @@ adrs: [ADR-0004, ADR-0023, ADR-0031, ADR-0042]
 epic: dream-primary-dialogue
 ---
 
-# WP-dream-projection-harness-user-records: Decline Claude user records the harness wrote, and halt the dream when no request survives
+# WP-dream-projection-harness-user-records: Decline Claude user records the harness wrote, and set aside sessions left without a request
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -24,14 +24,19 @@ epic: dream-primary-dialogue
 > (**the round record**). Written against `main` at `8117e221`. **Three owner
 > items gate DISPATCH, not `Ready`** (see the section of that name).
 >
-> **Size M** (re-derived in revision 1). Two product changes: one predicate at
-> one site in the projection (Table H), and a guard in the collector and the
-> dream command that stops the run when no Claude session with a reply keeps a
-> request (Table G) — the design gate's round-1 finding that a harness field
-> change would otherwise erase every Claude request silently. Everything else
-> is mechanical and specified literally: a one-key fixture sweep checked
-> byte-for-byte, a verbatim erratum, tests under five tags and seven RED proofs whose
-> shapes were run on a simulated tree.
+> **Size M** (re-derived in revision 2). Two product changes: one predicate at
+> one site in the projection (Table H), and a set-aside rule in the collector
+> (Table G) that quarantines, under a new reason `no-request`, a Claude session
+> the dream would otherwise read as replies without any request — the design
+> gate's finding that a harness field change would erase every Claude request
+> silently and for good. The new reason reaches the existing quarantine
+> surfaces through one row each in `ledger.js`, `warnings.js` and `doctor.js`,
+> and an ADR-0023 amendment is copied in verbatim. Everything else is
+> mechanical and specified literally: one-key fixture sweeps checked
+> byte-for-byte, a verbatim erratum, tests under six tags and nine RED proofs
+> whose shapes were run on a simulated tree. It is at the top of M; the split
+> the round record names (§7, revision 2) is available if the orchestrator
+> prefers two S packages.
 
 ## Context (read this, nothing else)
 
@@ -75,7 +80,7 @@ measured the same gap as 16.4 % of a night's projected text
 (`docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`,
 "What the low-value volume is made of").
 
-**What this package does — one predicate, and one guard.** Every Claude
+**What this package does — one predicate, and one set-aside rule.** Every Claude
 `user` record also carries two top-level fields the harness writes about where
 the record came from: `promptSource` (a string) and `origin` (an object with a
 `kind`). Row A2's user half gains one more acceptance condition, decided in
@@ -83,8 +88,8 @@ the record came from: `promptSource` (a string) and `origin` (an object with a
 prompt or a `claude -p` prompt. Everything else is declined at row A5e step 4,
 the decline adds no taint of its own, and the rule never lists what it
 declines. Because that rule depends on fields the harness may change,
-**Table G** adds a guard in the collector and the dream command (see "The
-residual of a structural rule").
+**Table G** adds a set-aside rule in the collector (see "The residual of a
+structural rule").
 
 **Why a source field is not the heuristic the Done spec ruled out.** That
 spec ruled, for routine prompts (`:563-567`): *"Do not add a heuristic (a
@@ -124,14 +129,17 @@ arguments, so what is lost is the command's name, §2.5) and 4 `!`-command
 inputs — commands the person gave the harness, which Table H does not treat as
 dialogue. The price paid later is a cliff: a Claude Code release that renames
 or drops either field declines every Claude user record until Table H is
-updated. **That state is not silent: Table G's guard counts, per run, the
-Claude sessions that gave the dream a reply but no request, prints the count,
-and — when that is every Claude session with a reply — stops the run before
-the model runs, so nothing is marked as dreamed over and the scheduler's
-failure alert reaches the next session's digest banner.** On the whole corpus
-that state occurs in 0 of 321 Claude files with a reply today, and in 321 of
-321 when every user record is declined (round record §2.7); the halt is owner
-item 2.
+updated. **That state is neither silent nor permanent: Table G sets aside,
+one session at a time, every Claude session that would give the dream replies
+while a request-shaped record in it was declined.** The session is not
+consolidated and not marked as dreamed over; it is quarantined under the new
+reason `no-request`, which the console, the dream report, `reports/warnings.md`,
+`wienerdog doctor` and the digest banner already carry for every quarantine;
+and the release that updates Table H retries it once (ADR-0023 Amendment 5).
+A night that mixes older, recognised sessions with newer, unrecognised ones
+consolidates the first and sets the second aside. On the whole corpus that
+state occurs in 0 of 321 Claude files with a reply today, and in 321 of 321
+when every user record is declined (round record §2.7, §2.9); owner item 2.
 
 **The concluding reply of each exchange does not move.** Row A2's assistant
 test reads only the assistant record and the taint state
@@ -216,27 +224,35 @@ was checked at both ends (the round record §3).
 - `skills/wienerdog-dream/SKILL.md:53` (*"the person's requests and
   corrections"*) stays true and is **not** edited — an edit would change the
   dream job's `promptHash`.
-- **The collector and the dream command (Table G's sites).**
-  `src/core/dream/scratch.js:77-264` is `collectExtracts`; its JSDoc `@returns`
-  is `:65-75`; each admitted session is written and pushed at `:227-243`, and
-  the result object is returned at `:246-263`. `src/cli/dream.js:744-746` calls
-  it; step 6 (`:867-876`) throws when nothing was admitted, step 7
-  (`:878-890`) returns when nothing is new, and step 8 (from `:892`) is the
-  dry-run plan. A `WienerdogError` thrown before the model runs leaves every
-  session unmarked (sessions are marked processed only after a successful
-  consolidation), and the `finally` at `:1374-1383` still cleans the scratch
-  directory and releases the lock. On a scheduled run a thrown dream is a
-  failed job, which the scheduler records in `alerts.jsonl` for the digest
-  banner — the path step 6's own throw already takes
-  (`docs/specs/done/WP-dream-report-run-skips.md`, Table A, the coverage row's
-  case (b)).
-- **Four existing pipeline tests reach Table G.** With the guard in place and
-  no fixture change, `[PDC-AC4]`, `[PDC-AC4a]`, `[PDC-AC4b]` and `[PDC-AC4c]`
-  in `tests/unit/dream-pipeline.test.js` halt, because their helper
-  `plantInvokingTranscript` (`:2801-2818`) plants a Claude session whose user
-  records (`:2807`, `:2809`, `:2813`) carry no `promptSource` and whose reply is
-  `end_turn`. Sweep S4 repairs them; nothing else in `npm test` depends on the
-  guard (round record §4.3).
+- **The collector and the quarantine surfaces (Table G's sites).**
+  `src/core/dream/scratch.js:77-264` is `collectExtracts`; inside its
+  per-candidate fault boundary (`:185-226`), `:188-191` quarantines a non-`ok`
+  parse and `:192-195` read-defers an incomplete one, each with `continue`;
+  the `reason` union of its JSDoc `@returns` is `:68`. The dream command
+  already turns every `newlyQuarantined` entry into a console line
+  (`src/cli/dream.js:838-845`: `wienerdog: dream — quarantined
+  <harness>/<name> (<reason>); it will not be retried until it changes.`, or a
+  dry run's "would quarantine" line) and, on a real run, into a ledger record,
+  a regenerated digest and a refreshed `reports/warnings.md` (`:854-865`),
+  before any idle return — so a run that sets every session aside ends as an
+  idle run, not a failure. `src/core/dream/ledger.js:47` lists the
+  INFORMATIONAL reasons, whose digest-banner sentence decays after seven days
+  without a new member (ADR-0023 Amendment 2); its `Ledger` typedef's reason
+  union is `:110-112`; exports start at `:603`. `src/core/dream/warnings.js:108-124`
+  is `GROUPS`, the heading table of `reports/warnings.md`, whose last row
+  (`:123`) is the catch-all "Skipped for a reason this version does not
+  recognize". `src/cli/doctor.js:498` is `quarantineReport`, one counter and
+  one row per reason and a catch-all (`:531-532`, `:572-577`).
+  `tests/unit/ledger.test.js:485` pins the INFORMATIONAL set exactly.
+- **Four existing pipeline tests reach Table G.** With the set-aside in place
+  and no fixture change, `[PDC-AC4]`, `[PDC-AC4a]`, `[PDC-AC4b]` and
+  `[PDC-AC4c]` in `tests/unit/dream-pipeline.test.js` fail, because the
+  session their helper
+  `plantInvokingTranscript` (`:2801-2818`) plants — user records (`:2807`,
+  `:2809`, `:2813`) without `promptSource` and an `end_turn` reply — is set
+  aside instead of consolidated. Sweep S4 repairs them; apart from the
+  INFORMATIONAL-set test (sweep S5), nothing else in `npm test` depends on
+  Table G (round record §4.4).
 - The Done spec's errata block runs `:14-102` and ends before the comment
   `<!-- errata above; the spec as it shipped follows -->` at `:104`; its
   in-place corrections carry `(**corrected post-merge, see Erratum N**)`.
@@ -258,21 +274,28 @@ was checked at both ends (the round record §3).
 | modify | tests/fixtures/primary-dialogue/claude-user-quotes-tool.jsonl | sweep S1 only |
 | modify | tests/fixtures/primary-dialogue/taint-cases.json | sweep S1 in its escaped form only |
 | modify | tests/unit/dream-collect.test.js | sweep S3; a new test tagged `[HUR-AC8]`; no other existing line changes |
-| modify | tests/unit/dream-pipeline.test.js | sweep S4; new tests tagged `[HUR-AC9]`; no other existing line changes |
-| modify | src/core/dream/scratch.js | Table G rows G1–G2: two integers counted over the sessions written and returned by `collectExtracts`, and its JSDoc `@returns` (`:65-75`) naming them; nothing else |
-| modify | src/cli/dream.js | Table G rows G3–G5: the console line and the halt, as step 7b between step 7 and step 8; nothing else |
+| modify | tests/unit/dream-pipeline.test.js | sweep S4; a new test tagged `[HUR-AC9]`; no other existing line changes |
+| modify | tests/unit/dream-warnings.test.js | a new test tagged `[HUR-AC10]`; no existing line changes |
+| modify | tests/unit/doctor.test.js | a new test tagged `[HUR-AC10]`; no existing line changes |
+| modify | tests/unit/ledger.test.js | sweep S5 only |
+| modify | src/core/dream/scratch.js | Table G rows G1–G2: the set-aside, directly after `:192-195`, and `'no-request'` in the `reason` union of the JSDoc `@returns` (`:68`); nothing else |
+| modify | src/core/dream/ledger.js | `NO_REQUEST_REASON` (defined and exported), added to `INFORMATIONAL_QUARANTINE_REASONS` (`:47`) and to the `Ledger` typedef's reason union (`:110-112`); nothing else |
+| modify | src/core/dream/warnings.js | the `GROUPS` row of Exact contracts, directly before the catch-all (`:123`), and the import it needs; nothing else |
+| modify | src/cli/doctor.js | the `no-request` counter, its `total` term and its row of Exact contracts in `quarantineReport`; nothing else |
+| modify | docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md | Amendment 5, verbatim from Exact contracts, appended after Amendment 4; no other byte changes |
 | modify | tests/scenarios/fixtures/claude-day1.jsonl | sweep S1 only |
 | modify | tests/scenarios/fixtures/claude-day2.jsonl | sweep S1 only |
 | modify | tests/scenarios/fixtures/claude-day3-injection.jsonl | sweep S1 only |
 | modify | tests/scenarios/negative/fixtures/hostile-day1.jsonl | sweep S1 only |
 | create | tests/red-proofs/projection-harness-user-records.proofs.json | ADR-0042 declarations P1–P4 and P7, `suite` `tests/unit/primary-dialogue.test.js` |
-| create | tests/red-proofs/projection-harness-user-records-collect.proofs.json | P5, `suite` `tests/unit/dream-collect.test.js` |
-| create | tests/red-proofs/projection-harness-user-records-guard.proofs.json | P6, `suite` `tests/unit/dream-pipeline.test.js` |
+| create | tests/red-proofs/projection-harness-user-records-collect.proofs.json | P5 and P6, `suite` `tests/unit/dream-collect.test.js` |
+| create | tests/red-proofs/projection-harness-user-records-guard.proofs.json | P8, `suite` `tests/unit/dream-pipeline.test.js` |
+| create | tests/red-proofs/projection-harness-user-records-warnings.proofs.json | P9, `suite` `tests/unit/dream-warnings.test.js` |
 | modify | docs/specs/done/WP-dream-primary-dialogue-projection.md | Errata 7–9: E0–E5, verbatim from Exact contracts; no other byte changes |
 
 Nothing else — in particular not `src/core/transcripts/claude.js`,
-`src/core/transcripts/index.js`, `src/core/dream/promote.js` (the dream
-report), `src/core/dream/warnings.js`, `src/core/dream/ledger.js`,
+`src/core/transcripts/index.js`, `src/cli/dream.js` (its quarantine path is
+used as it is), `src/core/dream/promote.js` (the dream report),
 `skills/wienerdog-dream/SKILL.md`, `docs/GLOSSARY.md`, any file under
 `tests/fixtures/transcripts/` or `tests/golden/`, and not
 `tests/red-proofs/primary-dialogue.proofs.json`.
@@ -340,19 +363,50 @@ sweep applied (Verification steps).
   `plantInvokingTranscript` written as `rec({ type: 'user', message: …` becomes
   `rec({ type: 'user', promptSource: 'typed', message: …`.
 
-**Table G's texts — copy verbatim** (`N` and `M` are the two integers of rows
-G1–G2, interpolated as decimal numbers):
+**Table G's code texts — copy verbatim.**
+
+- `src/core/dream/ledger.js`: `const NO_REQUEST_REASON = 'no-request';`,
+  exported; `INFORMATIONAL_QUARANTINE_REASONS` becomes
+  `Object.freeze(['over-ceiling', 'too-many-lines', 'read-error', 'parse-threw', NO_REQUEST_REASON])`.
+  `scratch.js`, `warnings.js` and `doctor.js` import the constant; none of them
+  retypes the string.
+- `src/core/dream/warnings.js`, the `GROUPS` row (a heading and a note, both
+  byte-exact):
 
 ```text
-wienerdog: dream — N of M Claude session(s) with a reply gave this run none of the person's own messages.
+Wienerdog did not recognize any of your own messages in these sessions
 ```
 
 ```text
-dream: stopped before consolidating — none of the M Claude session(s) with a reply gave this run any of the person's own messages, most likely because Claude Code changed how it labels them. Nothing was marked as dreamed over; update Wienerdog, then run the dream again.
+This can happen when Claude Code changes how it labels your messages. If most of your recent sessions are listed here, Wienerdog needs an update to recognize your messages again.
 ```
 
-A dry run prints the second text prefixed with `wienerdog: dream plan (dry-run) —`
-and one space, and returns, exactly as step 6 does for its own message.
+- `src/cli/doctor.js`, a `warn` row after the secret-exhausted row and before
+  the catch-all, `N` being the count:
+
+```text
+N session transcript(s) are being skipped: Wienerdog did not recognize any of your own messages in them
+```
+
+- **S5** (`tests/unit/ledger.test.js:485`): the expected array becomes
+  `['no-request', 'over-ceiling', 'parse-threw', 'read-error', 'too-many-lines']`.
+  It is the ONLY pre-existing expected value this package changes.
+
+**ADR-0023 Amendment 5 — copy verbatim**, appended after Amendment 4 with one
+blank line before it. `<DATE>` is the implementation commit's date;
+`<RULING-DATE>` is the date of the owner's ruling on owner item 2.
+
+```text
+### Amendment 5 (<DATE>) — a session the dream would read without any of the person's messages is set aside, under a reason whose cause may be our own code
+
+Status: **ACCEPTED — owner-ruled <RULING-DATE>** (owner item 2 of `WP-dream-projection-harness-user-records`, whose Table G is canonical for this amendment).
+
+**The case.** The primary-dialogue projection accepts a Claude `user` record as the person's words only when the harness's own source fields say so (Table H of the same package). If a Claude Code release renames or drops those fields, every request is declined, and the dream would receive replies with no request — and a session the dream consumes is marked processed and never read again, so the loss would be permanent.
+
+**The decision.** The collector sets such a session aside instead of admitting it: a Claude session whose projected dialogue holds a reply and no user message, while its raw timeline holds a request-shaped user record, is quarantined with the new reason `no-request`. This supersedes the "no new quarantine reason" of Amendments 3 and 4 for this one reason. In every other respect it is an ordinary quarantine: skipped until the file changes, listed in `reports/warnings.md`, counted by `wienerdog doctor`, and INFORMATIONAL under Amendment 2 — its banner sentence decays, because one stray session must not pin a warning forever, while a harness change that sets sessions aside every night keeps the sentence fresh.
+
+**Its cause may be our own code, so Amendment 4 applies to it.** A release that changes the accept rule ships, with the change, a one-time retry of every `no-request` record under a marker of its own, exactly as Amendment 4 retried `parse-threw`; without that retry, a finished session set aside under an out-of-date rule would never be read. Amendments 1–4 remain in force. No command, flag, runtime dependency or daemon is introduced. ADR-0004 remains intact.
+```
 
 **Errata 7–9 to `docs/specs/done/WP-dream-primary-dialogue-projection.md` —
 copy verbatim.** `<DATE>` is the `YYYY-MM-DD` date of the implementation commit
@@ -441,12 +495,13 @@ E5 — after the anchor `` Source file `/samples/claude-demo.jsonl`, four record
 ## Contract reference (optional — mark N/A if this WP is not contract-dense)
 
 The ADR-0031 trigger fires on four of seven: **(iii)** structured input
-acceptance changes — row A2's user half narrows; **(iv)** a failure behaviour
-is introduced — Table G's halt; **(vi)** a downstream consumer inherits it —
+acceptance changes — row A2's user half narrows; **(iv)** a fallback
+behaviour is introduced — Table G's set-aside, with a new quarantine reason;
+**(vi)** a downstream consumer inherits it —
 `WP-dream-primary-dialogue-collection` feeds this projection's output to the
 dream; **(vii)** the same contracts appear on mirrored surfaces (listed
 below). Two canonical tables: **Table H** (which records are dialogue) and
-**Table G** (the guard).
+**Table G** (which sessions are set aside).
 
 ### Contract table(s)
 
@@ -483,24 +538,24 @@ today). It decides nothing; Table H does.
 | no `promptSource`, no `origin` | 132 + 8 + 9 | command echoes, `!`-command records, compaction summaries and interruption markers → H3 |
 | no `promptSource`, `origin.kind: "human"` | 2 | slash-command echoes with no arguments → H3; the reason H1 reads `promptSource`, not `origin.kind` |
 
-#### Table G — the guard against losing every request (canonical)
+#### Table G — sessions left without a request are set aside (canonical)
 
-The collector and the dream command. Harness scope: **Claude sessions only**
-(the Codex projection is outside this package; Out of scope says why a Codex
-count would fire today).
+The collector. Harness scope: **Claude sessions only** (the Codex projection
+is outside this package; Out of scope says why a Codex arm would fire today).
 
 | Row | Fact | Rule |
 |-----|------|------|
-| G1 | `claudeWithReplies` | the number of **Claude** sessions this run **wrote to scratch** whose written extract holds at least one message with `role` `"assistant"`. Counted in `collectExtracts` at the point the session is written; sessions deferred, oversized, read-deferred or quarantined are not counted. Returned as an integer field of the result |
-| G2 | `claudeRepliesWithoutRequests` | of the sessions G1 counts, the number whose written extract holds **no** message with `role` `"user"`. Returned as an integer field of the result |
-| G3 | The console line | when G2 ≥ 1, `src/cli/dream.js` prints the first text of Exact contracts' "Table G's texts" with `N` = G2 and `M` = G1, on a real run and on a dry run alike, as step 7b — after step 7 (so at least one session was admitted) and before step 8 |
-| G4 | The halt | when G2 ≥ 1 **and** G2 = G1, step 7b then throws a `WienerdogError` whose message is the second text with `M` = G1 — before the model runs, so no session is marked as dreamed over, and after step 5b, so this run's quarantines and size memos are still recorded. A dry run prints that message with the dry-run prefix and returns instead of throwing |
-| G5 | What neither text carries | integers only: no path, no session id, no basename, no transcript text |
-| G6 | What the guard does not do | it does not set a file aside, quarantine it, or write a ledger record; a partial state (G2 < G1) prints G3's line and the run continues. Owner item 2 |
+| G1 | The trigger | a **Claude** candidate whose parse came back `ok` and not read-deferred is in this state when all three hold: its projected extract has at least one message with `role` `"assistant"`; it has **no** message with `role` `"user"`; and its text-free gate projection (`gateExtract.messages`) has at least one message with `role` `"user"` — which the raw parser emits exactly for a `user` record with string content and no `isMeta: true`, a request-shaped record that Table H declined. The test reads roles only, never text |
+| G2 | The disposition | the collector pushes the candidate to `newlyQuarantined` with reason `NO_REQUEST_REASON` (`'no-request'`) and continues with the next candidate, directly after the `runExhausted` check (`scratch.js:192-195`) and inside the per-candidate fault boundary — so it consumes no capacity, writes no scratch file, and enters neither `entries`, `wrote`, `processed` nor the gate map |
+| G3 | Recording | nothing new: `dream.js` prints the existing per-quarantine line (`:838-845`) and, on a real run, records the quarantine, regenerates the digest and refreshes `reports/warnings.md` (`:854-865`); a dry run prints "would quarantine … (no-request)" and persists nothing. A run that sets every session aside ends as an idle run, never a failure |
+| G4 | Lifecycle | an ordinary quarantine: `selectState` skips the file until its fingerprint changes. A session still being appended is re-checked at each change; a finished one is never re-selected — no nightly recurrence, and no other session waits for it. The release that changes Table H's accept-set retries every `no-request` record once, under its own ADR-0023 Amendment 4 marker (Amendment 5 states that obligation); this package ships no retry |
+| G5 | Surfaces | each already exists for every quarantine; this package gives the reason its own text on the two that name reasons: the console line (`… (no-request); it will not be retried until it changes.`); the dream report's run-skips bullet for this run's quarantines, with its pointer to `reports/warnings.md`; `reports/warnings.md`, under the heading and note of Exact contracts; `wienerdog doctor`, with the row of Exact contracts; and the digest banner's informational sentence (a count and the pointer), which renders while any informational quarantine — a `no-request` one included — is less than seven days old, because the reason is INFORMATIONAL. No surface carries transcript text; names go through the existing `displayName` sanitizer |
+| G6 | Not triggered | a Claude session with no request-shaped record at all (for example a continuation holding only tool results and replies) is admitted and consolidated as today; so is any session with an accepted request, and any Codex rollout |
 
-The trigger is measured, not assumed (round record §2.7): on the whole local
-corpus, 0 of 321 Claude files with a reply fall in G2 under Table H; with
-every user record declined — what a renamed field would do — 321 of 321 do.
+The trigger is measured, not assumed (round record §2.7): 0 of 321 Claude
+files with a reply today; 321 of 321 with every user record declined — what a
+renamed field would do. The ten Table H files with a declined request and no
+reply project nothing and are not triggered.
 
 ### Mirrored Surface Checklist
 
@@ -512,27 +567,33 @@ them; a review finding updates the table and every mirror in the same commit
 - [ ] **Deliverables-table cells** — the `primary-dialogue.js` cell (the site
       and "nothing else"); the fixture cells (sweeps S1–S4 exist because every
       Claude user fixture a test depends on must now be in H1 to stay
-      accepted, and a session whose only request is declined now halts the
-      run under G4); the `scratch.js` cell (G1–G2); the `dream.js` cell
-      (G3–G5); the three RED declaration cells (P1–P7).
+      accepted, and a session whose only request is declined is now set aside
+      under G2); the `scratch.js` cell (G1–G2); the `ledger.js`, `warnings.js`
+      and `doctor.js` cells (G5's reason and texts); the `ledger.test.js` cell
+      (S5); the ADR-0023 cell (Amendment 5); the four RED declaration cells
+      (P1–P9).
 - [ ] **Exact contracts** — the predicate's behaviour bullets (H1/H2/H3, the
       two fields, the `origin === undefined` reading, the no-added-taint
-      clause); the `acceptClaude` JSDoc; Table G's two texts; E0's Erratum 7
-      and E2 (they defer to Table H by name, restate none of its values, and
-      state the decline's taint rule); E0's Erratum 8 (restates the H1/H2
-      values as a measurement).
+      clause); the `acceptClaude` JSDoc; Table G's code texts and S5; the
+      ADR-0023 Amendment 5 text (it restates G1, G2, G4 and G5's INFORMATIONAL
+      class and defers to Table G by name); E0's Erratum 7 and E2 (they defer
+      to Table H by name, restate none of its values, and state the decline's
+      taint rule); E0's Erratum 8 (restates the H1/H2 values as a
+      measurement).
 - [ ] **Acceptance criteria** — AC1 asserts H1 and H2; AC2 asserts H3 and the
       content-independence; AC3 asserts H3's taint rule both ways and the
       unchanged assistant sequence; AC4 asserts that the sweeps are the only
-      change to pre-existing tests; AC8 asserts G1–G2; AC9 asserts G3–G5.
+      change to pre-existing tests; AC8 asserts G1, G2 and G6; AC9 asserts G3
+      and G4 end to end; AC10 asserts G5's texts and class; AC11 asserts the
+      amendment text.
 - [ ] **Verification commands** — the predicate grep (`Table H`, `2.1.232`),
-      the sweep-equality loop, the test-file removed-lines check (S2 and S4),
-      the erratum marker counts, and the local re-measurement (its accept-set
-      filter lists H1 and H2's states; its exit status is G2's state over the
-      local corpus).
+      the `NO_REQUEST_REASON` grep, the sweep-equality loop, the test-file
+      removed-lines check (S2, S4, S5), the erratum and amendment marker
+      counts, and the local re-measurement (its accept-set filter lists H1
+      and H2's states; its exit status is G1's state over the local corpus).
 - [ ] **Current-state description** — the site `:185`/`:186`; the collector
-      and dream-command sites; the 41 dependent tests and the four pipeline
-      tests; the scenario fixtures' premise.
+      and quarantine-surface sites; the 41 dependent tests, the four pipeline
+      tests and the INFORMATIONAL-set test; the scenario fixtures' premise.
 - [ ] **Operative prose** — Context's "What this package does", "Why a
       source field is not the heuristic", "The residual", "The concluding
       reply" and "Provenance" paragraphs; the Evidence table; the Table G
@@ -543,7 +604,10 @@ them; a review finding updates the table and every mirror in the same commit
       `skills/wienerdog-dream/SKILL.md:53` (stays true; an edit changes the
       dream job's `promptHash`); the ADR-0020 amendment's "harness-authored
       instructions are not in it" (`docs/adr/0020-skill-revision-lifecycle.md:404-407`,
-      stays true).
+      stays true); `docs/specs/done/WP-dream-report-run-skips.md` Table B row
+      B1, whose definition lists the quarantine causes of its day but whose
+      source column, `sel.newlyQuarantined.length`, is what binds and counts
+      `no-request` unchanged.
 
 ## Implementation notes & constraints
 
@@ -554,15 +618,13 @@ them; a review finding updates the table and every mirror in the same commit
   test to make it pass: if an existing test still reddens after the sweep, the
   predicate is wrong, and that is a finding to report, not to fix in the test.
   The design round ran exactly these sweeps on a simulated tree: with Table H
-  alone `npm test` went from 41 failures to 0, and with Table G added from 4
-  (the pipeline tests Current state names) to 0, with no expectation changed.
-  Every RED lane whose suite this package edits stayed `PROVEN` — the ten
-  `pdp-*` proofs and those of `WP-dream-primary-dialogue-collection`,
-  `WP-dream-collect-parse-throw-quarantine`, `WP-dream-digest-omits-own-job-alerts`,
-  `WP-dream-git-env-pinning`, `WP-dream-lock-stale-owner-loud`,
-  `WP-show-slot-own-value-kind` and `WP-ep2-prune-once-per-run-test` — and
-  every one of the repository's `find` strings still occurred exactly as often
-  as declared (round record §4.3).
+  alone `npm test` went from 41 failures to 0, and with Table G added from 5
+  (the four pipeline tests Current state names, and the INFORMATIONAL-set
+  test S5 changes) to 0, with no other expectation changed. Every RED lane
+  whose suite or mutated file this package edits stayed `PROVEN` — 47 proofs
+  across eleven work packages, listed in the round record §4.4 — and every
+  one of the repository's `find` strings still occurred exactly as often as
+  declared.
 - **Why every swept record gets `"typed"`, including ones that are declined
   anyway.** Without the key, an `isMeta: true` fixture would be declined by
   Table H before `:184` could decline it, and the existing test for `isMeta`
@@ -577,20 +639,37 @@ them; a review finding updates the table and every mirror in the same commit
   record, an `"sdk"`/`task-notification` record, and a record with neither
   field — with synthetic text only. No transcript content from any real
   machine goes into the repository.
-- **Table G sits in the collector and the dream command, not in the
-  projection**, because the harm is a property of a whole session (replies
-  with no request), and the projection sees one record at a time. The counts
-  read only the extract the collector already holds for each written session;
-  no new field crosses `parsePrimaryWithOutcome`'s return shape.
-- **Why the guard halts rather than only reporting, and why only on "every".**
-  A session the dream consumes is marked as dreamed over and never read again,
-  so a report alone would record the loss while making it permanent; stopping
-  before the model runs leaves every session unmarked, and the next run after
-  an update reads them in full. The halt fires only when **every** Claude
-  session with a reply lost its request — the signature of a harness change —
-  so one odd session (measured: none among 321) cannot block the dream; if
-  one did, the next run with any ordinary Claude session clears it. Owner
-  item 2 is the choice.
+- **Table G sits in the collector, not in the projection**, because the harm
+  is a property of a whole session (replies with no request) and the
+  projection sees one record at a time. The trigger reads only the two
+  role lists the collector already holds for each candidate — the projected
+  extract's and the gate projection's; no new field crosses
+  `parsePrimaryWithOutcome`'s return shape, and `dream.js` does not change.
+- **Why a quarantine, and not a halt or a capped deferral.** Revision 1 halted
+  the run; round 2 showed that one recognised session in the same run
+  disables a run-level halt (a mixed-version night), that the scheduled alert
+  carries only the job's generic exit reason, and that one legitimate
+  request-less session would halt every night. A per-session disposition
+  answers all three. Of the two per-session shapes, a capped deferral (the
+  secret-revert shape) is invisible while it lasts — `reports/warnings.md`
+  and `doctor` list quarantines only, never deferrals — and needs a second
+  counter in `ledger.js`; a quarantine reuses the collector's existing arm,
+  is named on every surface from the first night, cannot recur for an
+  unchanged file, and is recovered by the Amendment 4 retry the fixing
+  release ships. Owner item 2 is the choice.
+- **Why the trigger needs a request-shaped record.** Without G1's third
+  clause, a continuation file holding only tool results and replies would be
+  set aside although nothing in it was declined; with it, only a session in
+  which a string-content `user` record reached the projection and no request
+  survived is set aside. The residual is stated: a session whose only
+  requests were array-content (an image beside text) and all declined is not
+  caught — the corpus holds five such prompts in four files, each of which
+  also holds a string-content `user` record (round record §2.9).
+- **Why INFORMATIONAL.** A session anyone can write — a notification and a
+  reply — would otherwise pin a never-decaying banner, the banner-blindness
+  ADR-0023 Amendment 2 exists to prevent (the same argument that classed
+  `parse-threw`). A harness change sets new sessions aside every night, which
+  keeps the sentence fresh for as long as the change lasts.
 - **Why Claude only.** The same count over Codex would fire on the first run:
   240 of the owner's 408 local Codex rollouts, all written by Codex
   0.144.1–0.147.0, project to replies with no request today, because their
@@ -598,9 +677,9 @@ them; a review finding updates the table and every mirror in the same commit
   record §2.8). That is a separate, pre-existing Codex finding, routed rather
   than folded in here.
 - **RED proofs (ADR-0042) — the register. `expectRed` sets and `find` strings
-  are DERIVED:** most of the code they mutate does not exist yet. The seven
+  are DERIVED:** most of the code they mutate does not exist yet. The nine
   shapes below were run on a simulated tree with a draft predicate, a draft
-  guard and draft tests, and each came back `PROVEN` (round record §4.3). The implementer writes
+  set-aside and draft tests, and each came back `PROVEN` (round record §4.4). The implementer writes
   the real `find`/`replace` against the real code, measures each set with
   `npm run red-proofs -- --wp WP-dream-projection-harness-user-records`, and
   corrects the declaration.
@@ -612,19 +691,23 @@ them; a review finding updates the table and every mirror in the same commit
   | P3 `hur-sdk-origin-clause-dropped` | AC2 | H2 without its no-`origin` condition | `[HUR-AC2]` (the `"sdk"` + `origin` cases), `[HUR-AC3]` |
   | P4 `hur-declined-record-taints` | AC3 | a declined record sets the taint state | `[HUR-AC3]` flags only |
   | P7 `hur-declined-record-skips-step3-scan` | AC3 | step 3's `tool_result` scan (`primary-dialogue.js:292`) runs only for records Table H would accept | `[HUR-AC3]` flags only |
-  | P5 `hur-guard-count-disabled` | AC8 | G2 is never incremented (`scratch.js`) | `[HUR-AC8]` |
-  | P6 `hur-guard-halt-removed` | AC9 | G4's condition never holds (`dream.js`) | the `[HUR-AC9]` halt test only |
+  | P5 `hur-set-aside-disabled` | AC8 | the set-aside never happens (`scratch.js`) | `[HUR-AC8]` |
+  | P6 `hur-set-aside-raw-user-clause-dropped` | AC8 | G1 without its request-shaped-record clause | `[HUR-AC8]` (the tool-result continuation is set aside) |
+  | P8 `hur-set-aside-disabled-end-to-end` | AC9 | the same mutation as P5, observed through a dream run | `[HUR-AC9]` |
+  | P9 `hur-no-request-heading-unmapped` | AC10 | the `GROUPS` row's reason no longer matches `NO_REQUEST_REASON` (`warnings.js`) | the `[HUR-AC10]` warnings test |
 
   P1–P4 and P7 live in `projection-harness-user-records.proofs.json` (suite
-  `primary-dialogue.test.js`), P5 in `…-collect.proofs.json` (suite
-  `dream-collect.test.js`), P6 in `…-guard.proofs.json` (suite
-  `dream-pipeline.test.js`), each with `testNamePattern` `"\\[HUR-"`. P7's
+  `primary-dialogue.test.js`), P5 and P6 in `…-collect.proofs.json` (suite
+  `dream-collect.test.js`), P8 in `…-guard.proofs.json` (suite
+  `dream-pipeline.test.js`), P9 in `…-warnings.proofs.json` (suite
+  `dream-warnings.test.js`), each with `testNamePattern` `"\\[HUR-"`. P7's
   `find` is shipped code — the step-3 line at `:292`, which occurs once; the
-  other six are DERIVED. P1 and P2 together are what separate an exclusion
+  other eight are DERIVED. P1 and P2 together are what separate an exclusion
   from a deletion; P4 and P7 are the two directions of the decline's taint
-  rule.
+  rule; P5 and P6 are the set-aside's absence and its over-reach. The doctor
+  row has a test and no RED proof of its own.
   **A correction to a measured set may falsify prose**, so the sentences to
-  re-read in the same pass are: this table, the three Deliverables proofs
+  re-read in the same pass are: this table, the four Deliverables proofs
   cells and AC5. Report any correction in the PR body; a prose change is routed back to
   the architect.
 - **Do not touch** `tests/red-proofs/primary-dialogue.proofs.json`. None of
@@ -652,9 +735,12 @@ them; a review finding updates the table and every mirror in the same commit
       and removes none: steps 2–3 still run on the declined record (Context,
       "Provenance"; AC3). Whether a notification should set the taint state by
       itself is owner item 3; this package does not change the rule.
-- [ ] Table G's console line and halt message carry two integers and fixed
-      text only (row G5): no path, session id or transcript text reaches the
-      console, the alert or the digest banner.
+- [ ] Table G adds no channel of its own: a set-aside session reaches the
+      console, the ledger, `reports/warnings.md`, `doctor` and the digest
+      banner through the existing quarantine path, which renders a sanitized
+      basename (`displayName`) and a code-owned reason, never a path or
+      transcript text (row G5). The trigger reads message roles, never text
+      (row G1).
 - [ ] No untrusted value flows into a path or a shell command; no new write.
 
 ## Acceptance criteria
@@ -691,37 +777,53 @@ them; a review finding updates the table and every mirror in the same commit
       byte for byte; the only lines removed from
       `tests/unit/primary-dialogue.test.js`, `tests/unit/dream-collect.test.js`
       and `tests/unit/dream-pipeline.test.js` are the four S2 records and the
-      three S4 records; and every pre-existing test passes with its expected
+      three S4 records; the only line removed from `tests/unit/ledger.test.js`
+      is S5's; and every other pre-existing test passes with its expected
       values unchanged.
-- [ ] **AC5 — RED proofs.** The three declaration files declare P1–P7, and
-      `npm run red-proofs` (unfiltered) reports `RUN: PROVEN`: each of P1–P7
-      `PROVEN`, criteria AC1, AC2, AC3, AC8 and AC9 `PROVEN`, and every other
-      declared proof in the repository still `PROVEN`.
+- [ ] **AC5 — RED proofs.** The four declaration files declare P1–P9, and
+      `npm run red-proofs` (unfiltered) reports `RUN: PROVEN`: each of P1–P9
+      `PROVEN`, criteria AC1, AC2, AC3, AC8, AC9 and AC10 `PROVEN`, and every
+      other declared proof in the repository still `PROVEN`.
 - [ ] **AC6 — the erratum.** E0–E5 are in the Done spec verbatim, with
       `<DATE>` filled in, and no other byte of that file changes.
 - [ ] **AC7 — nothing outside the boundary moves.** The default parse is
       unchanged (`tests/unit/transcripts.test.js` passes unmodified; nothing
       under `tests/fixtures/transcripts/` changes), `skills/` is unchanged, and
       the boundary check passes.
-- [ ] **AC8 — the guard's counts (Table G rows G1, G2).** For one collector
+- [ ] **AC8 — the set-aside (Table G rows G1, G2, G6).** For one collector
       run over: a Claude session with an H1 request and an `end_turn` reply; a
-      Claude session whose only request is declined and which has an `end_turn`
-      reply; a Claude session with no reply; and a Codex rollout with a
+      Claude session whose only request-shaped record Table H declines and
+      which has an `end_turn` reply; a Claude session holding only a
+      `tool_result` user record and an `end_turn` reply; a Claude session with
+      a declined record and no reply; and a Codex rollout with a
       `final_answer` and no accepted user message — `collectExtracts` returns
-      `claudeWithReplies` 2 and `claudeRepliesWithoutRequests` 1. Tested under
-      `[HUR-AC8]` in `tests/unit/dream-collect.test.js`; RED proof P5.
-- [ ] **AC9 — the console line and the halt (rows G3–G5).** In
-      `tests/unit/dream-pipeline.test.js`: (a) a run whose admitted Claude
-      sessions all have a reply and no accepted request throws a
-      `WienerdogError` whose message is G4's text, prints G3's line with the
-      right `N of M`, and leaves the transcript ledger without a record for any
-      of those sessions; (b) the same input as a dry run does not throw and
-      prints G4's text with the dry-run prefix; (c) a run in which one Claude
-      session with a reply keeps its request and one does not prints G3's line
-      (`1 of 2`) and completes without throwing. Tested under `[HUR-AC9]`; RED
-      proof P6 reddens (a).
+      exactly one `newlyQuarantined` entry, the declined-request session with
+      reason `no-request`, and that session is in none of `entries`, `wrote`
+      and `processed`, while the other four are processed. Tested under
+      `[HUR-AC8]` in `tests/unit/dream-collect.test.js`; RED proofs P5 and P6.
+- [ ] **AC9 — a mixed night, and the next one (rows G3, G4).** In
+      `tests/unit/dream-pipeline.test.js`: a real run over one Claude session
+      with an H1 request and one whose request is declined, both with an
+      `end_turn` reply, completes without throwing, prints the quarantine line
+      naming the second with `(no-request)`, and leaves the transcript ledger
+      with the first `processed` and the second `quarantined` with reason
+      `no-request`; a second run over the same unchanged files completes, does
+      not select the second again (no quarantine line for it), and leaves its
+      record unchanged. Tested under `[HUR-AC9]`; RED proof P8.
+- [ ] **AC10 — the reason's own texts and class (row G5).** `composeWarnings`
+      renders a `no-request` record under Exact contracts' heading and note,
+      and not under the catch-all heading; `wienerdog doctor` prints Exact
+      contracts' row for two `no-request` records and no catch-all row; and
+      `INFORMATIONAL_QUARANTINE_REASONS` holds `no-request` (sweep S5's test).
+      Tested under `[HUR-AC10]` in `tests/unit/dream-warnings.test.js` and
+      `tests/unit/doctor.test.js`; RED proof P9 on the warnings row.
+- [ ] **AC11 — the amendment.** ADR-0023 Amendment 5 is in the ADR verbatim,
+      after Amendment 4, with both dates filled in, and no other byte of the
+      ADR changes.
 - [ ] Idempotence: `N/A` — this package changes what a dream run reads and
-      when it stops; it adds no command and no write outside the repository.
+      what it sets aside; it adds no command and no write outside the
+      repository beyond the ledger records the existing quarantine path
+      already writes.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -746,12 +848,16 @@ test -f tests/fixtures/primary-dialogue/claude-harness-user-records.jsonl
 test -f tests/red-proofs/projection-harness-user-records.proofs.json
 test -f tests/red-proofs/projection-harness-user-records-collect.proofs.json
 test -f tests/red-proofs/projection-harness-user-records-guard.proofs.json
-grep -c 'claudeRepliesWithoutRequests' src/core/dream/scratch.js src/cli/dream.js
+test -f tests/red-proofs/projection-harness-user-records-warnings.proofs.json
+grep -c "NO_REQUEST_REASON" src/core/dream/ledger.js src/core/dream/scratch.js src/core/dream/warnings.js src/cli/doctor.js
+test -f src/core/dream/scratch.js && test -f src/core/dream/warnings.js && test -f src/cli/doctor.js && test "$(grep -c "'no-request'" src/core/dream/ledger.js)" -ge 1 && ! grep -n "'no-request'" src/core/dream/scratch.js src/core/dream/warnings.js src/cli/doctor.js | grep -v -E '^[^:]+:[0-9]+: *\*' && echo "no-request: defined in ledger.js, not retyped in code elsewhere"
+test "$(grep -c '^### Amendment 5 (' docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md)" = 1 && ! grep -q -e '<DATE>' -e '<RULING-DATE>' docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md && echo "amendment: present, dated"
 bad=0; for f in tests/fixtures/primary-dialogue/claude-acceptance.jsonl tests/fixtures/primary-dialogue/claude-demo.jsonl tests/fixtures/primary-dialogue/claude-oversized-line.jsonl tests/fixtures/primary-dialogue/claude-taint-persists.jsonl tests/fixtures/primary-dialogue/claude-user-quotes-tool.jsonl tests/scenarios/fixtures/claude-day1.jsonl tests/scenarios/fixtures/claude-day2.jsonl tests/scenarios/fixtures/claude-day3-injection.jsonl tests/scenarios/negative/fixtures/hostile-day1.jsonl; do git show "origin/main:$f" | sed 's/^{"type":"user",/{"type":"user","promptSource":"typed",/' | cmp -s - "$f" || { echo "SWEEP MISMATCH $f"; bad=1; }; done; git show origin/main:tests/fixtures/primary-dialogue/taint-cases.json | sed 's/{\\"type\\":\\"user\\",/{\\"type\\":\\"user\\",\\"promptSource\\":\\"typed\\",/g' | cmp -s - tests/fixtures/primary-dialogue/taint-cases.json || { echo "SWEEP MISMATCH taint-cases.json"; bad=1; }; test "$bad" -eq 0 && echo "sweep: all ten files exact"
 test -f tests/unit/primary-dialogue.test.js && test -f tests/unit/dream-collect.test.js && test -f tests/unit/dream-pipeline.test.js && test "$(git diff -U0 origin/main...HEAD -- tests/unit/primary-dialogue.test.js tests/unit/dream-collect.test.js tests/unit/dream-pipeline.test.js | grep -E '^-[^-]' | grep -c -v -F -e "JSON.stringify({ type: 'user', timestamp: '2026-09-17T09:00:00.000Z', message: { role: 'user', content:" -e "rec({ type: 'user', message: { role: 'user', content:")" = 0 && echo "test files: only S2 and S4 lines removed"
+test -f tests/unit/ledger.test.js && test "$(git diff -U0 origin/main...HEAD -- tests/unit/ledger.test.js | grep -E '^-[^-]' | grep -c -v -F "assert.deepEqual([...ledgerLib.INFORMATIONAL_QUARANTINE_REASONS].sort(), ['over-ceiling', 'parse-threw', 'read-error', 'too-many-lines']);")" = 0 && echo "ledger test: only the S5 line removed"
 test "$(grep -c 'see Erratum 7' docs/specs/done/WP-dream-primary-dialogue-projection.md)" = 2 && test "$(grep -c 'see Erratum 8' docs/specs/done/WP-dream-primary-dialogue-projection.md)" = 2 && test "$(grep -c 'see Erratum 9' docs/specs/done/WP-dream-primary-dialogue-projection.md)" = 1 && test "$(grep -c 'filed by `WP-dream-projection-harness-user-records`' docs/specs/done/WP-dream-primary-dialogue-projection.md)" = 1 && ! grep -q '<DATE>' docs/specs/done/WP-dream-primary-dialogue-projection.md && echo "erratum: markers exact"
-test -d tests/fixtures/transcripts && [ -z "$(git diff --name-only origin/main...HEAD -- tests/fixtures/transcripts/ tests/golden/ skills/ src/core/transcripts/claude.js)" ] && echo "outside the boundary: unchanged"
-npm test -- tests/unit/primary-dialogue.test.js tests/unit/dream-collect.test.js tests/unit/dream-pipeline.test.js tests/unit/transcripts.test.js
+test -d tests/fixtures/transcripts && [ -z "$(git diff --name-only origin/main...HEAD -- tests/fixtures/transcripts/ tests/golden/ skills/ src/core/transcripts/claude.js src/cli/dream.js)" ] && echo "outside the boundary: unchanged"
+npm test -- tests/unit/primary-dialogue.test.js tests/unit/dream-collect.test.js tests/unit/dream-pipeline.test.js tests/unit/dream-warnings.test.js tests/unit/doctor.test.js tests/unit/ledger.test.js tests/unit/transcripts.test.js
 npm test
 npm run lint
 npm run red-proofs -- --wp WP-dream-projection-harness-user-records
@@ -760,12 +866,13 @@ node scripts/boundary-check.js docs/specs/WP-dream-projection-harness-user-recor
 git diff --check
 ```
 
-The first two greps and the `claudeRepliesWithoutRequests` grep must print a
-number of at least `1` for each file. The filtered `red-proofs` command exits
+The first two greps and the `NO_REQUEST_REASON` grep must print a number of
+at least `1` for each file. The filtered `red-proofs` command exits
 non-zero with `RUN: FILTERED` because `--wp` filters the run (that is the
 runner's contract); what counts there is each selected proof's and
-criterion's `PROVEN` line. The unfiltered run must end `RUN: PROVEN`. The sweep, test-file and erratum lines
-each print their final `echo` only when every part holds, and each fails when
+criterion's `PROVEN` line. The unfiltered run must end `RUN: PROVEN`. The
+sweep, test-file, ledger-test, `no-request`, amendment and erratum lines each
+print their final `echo` only when every part holds, and each fails when
 its file is absent (`cmp` and `grep` on a missing file, and the `test -f`
 guards).
 
@@ -776,15 +883,15 @@ projection over them and prints counts, harness enum values and booleans — no
 text, no path, no session id:
 
 ```bash
-out="$(node docs/specs/logbook/2026-09-26-projection-harness-user-records-measure.js --days 5)"; st=$?; printf '%s\n' "$out"; test "$st" -eq 0 && printf '%s\n' "$out" | grep -q '^files ' && ! printf '%s\n' "$out" | grep -E ' msgs .* \| ' | grep -v -E 'promptSource=(typed|queued|suggestion_accepted) \||promptSource=sdk \| origin=ABSENT \|' && echo "every accepted user message is in H1 or H2, and no file gives replies without a request"
+out="$(node docs/specs/logbook/2026-09-26-projection-harness-user-records-measure.js --days 5)"; st=$?; printf '%s\n' "$out"; test "$st" -eq 0 && printf '%s\n' "$out" | grep -q '^files ' && ! printf '%s\n' "$out" | grep -E ' msgs .* \| ' | grep -v -E 'promptSource=(typed|queued|suggestion_accepted) \||promptSource=sdk \| origin=ABSENT \|' && echo "every accepted user message is in H1 or H2, and no file would be set aside"
 ```
 
 It prints its final line only when every accepted user message row is an H1
-or H2 state **and** the script exited 0. The script exits 1 when any file
-projects an assistant reply and no user message — Table G's G2 state, the
-state a harness field change produces. On the shipped tree the command prints
-the offending accepted rows instead; with every user record declined the
-script exits 1 (the round record §4.3 ran all three). On a machine with no transcripts it prints
+or H2 state **and** the script exited 0. The script exits 1 when any file is
+in Table G row G1's state — the state a harness field change produces, and the
+one the collector sets aside. On the shipped tree the command prints the
+offending accepted rows instead; with every user record declined the script
+exits 1 (the round record §4.4 ran all three). On a machine with no transcripts it prints
 `files 0` and passes vacuously; say so in the PR rather than presenting it as
 evidence.
 
@@ -804,13 +911,13 @@ evidence.
   Codex count would fire on the first run. That pre-existing finding is
   routed as its own candidate package (round record §6), which is where a
   Codex guard belongs.
-- **A dream-report section or a `reports/warnings.md` entry for Table G.** The
-  report's run-skips section is about sessions a run could NOT consolidate and
-  its six counts are disjoint from the admitted set
-  (`docs/specs/done/WP-dream-report-run-skips.md`, Table B row B8), so a
-  consumed-but-degraded session does not belong in it; `reports/warnings.md`
-  renders ledger quarantines, and Table G writes none. Owner item 2 prices a
-  report line.
+- **A new surface for Table G** — a dream-report section, an alert reason, a
+  halt or a new console line. A set-aside session is a quarantine, and every
+  quarantine surface already carries it (row G5); the dream report's
+  run-skips bullet counts it with this run's other quarantines.
+- **The retry of `no-request` records.** The release that changes Table H's
+  accept-set ships it (row G4, ADR-0023 Amendment 5); this package, which
+  introduces the reason, has nothing to retry.
 - **The first-pass novelty finding** — `docs/specs/WP-dream-first-pass-novelty.md`.
 - **Sweeping the other Claude `user` fixtures** (`tests/fixtures/dream/transcripts/`,
   the other inline records in `dream-collect.test.js` and
@@ -842,25 +949,30 @@ precondition — owner items").
    headless sessions whole needs a session-level rule this package does not
    have, and it would also remove the daily digest and other routines from the
    dream's view; that is a separate package and a separate ruling.
-2. **What Table G does when a harness change erases every request.**
-   *Recommendation:* halt (row G4) — stop the run before the model runs, so
-   no session is marked as dreamed over and the scheduler's failure alert
-   reaches the next digest banner; for a partial state print the count and
-   continue (rows G3, G6); set no file aside. The trigger is measured: 0 of
-   321 Claude files with a reply today, 321 of 321 under a simulated field
-   change. *The cost, stated:* after such a change the dream does nothing
-   every night until Wienerdog is updated, and each night's alert says so;
-   Codex sessions admitted alongside are deferred with it. *Cost of the
-   alternatives:* **report-only** (print, consolidate, continue) marks every
-   affected session as dreamed over, so their requests are lost for good
-   even after the update, and the only durable surface for it would be a new
-   dream-report section in `src/core/dream/promote.js` — one more
-   deliverable, and a section outside the run-skips contract (Out of scope).
-   **Setting each affected file aside** (a new quarantine reason) keeps it
-   out of the dream until the file changes — which for a finished session is
-   never — so an update would not bring its requests back, and it would add
-   a ledger reason, a `reports/warnings.md` rendering and ADR-0023's
-   "no new quarantine reason" to amend.
+2. **What happens to a session the dream would read without any of your
+   messages (Table G), and ratifying ADR-0023 Amendment 5.**
+   *Recommendation:* set it aside as a quarantine with the new reason
+   `no-request`, per session, classed INFORMATIONAL; the release that later
+   changes Table H retries those records once (Amendment 4's mechanism).
+   *Why:* it is per session, so one recognised session cannot shield
+   unrecognised ones (round 2, R2-1); it is named on every existing
+   quarantine surface from the first night, with its own text in
+   `reports/warnings.md` and `doctor` (R2-2); it cannot recur for an
+   unchanged file and blocks nothing else (R2-3); and its trigger is 0 of 321
+   today, 321 of 321 under a field change. *The cost, stated:* a legitimate
+   session with no request of any kind that still holds a request-shaped
+   record — a notification and a reply, say — is set aside too and its
+   replies are never dreamed over (none on the corpus); a finished session
+   set aside under a field change is read again only when a Wienerdog release
+   ships the retry; and the ADR gains a reason Amendments 3 and 4 said would
+   not be added. *Cost of the alternatives:* a **capped deferral** (the
+   secret-revert shape) retries automatically for a few nights, but is
+   invisible while it lasts — `reports/warnings.md` and `doctor` list
+   quarantines only — and needs a second counter in `ledger.js`; a
+   **run-level halt** (revision 1) is disabled by any one recognised session,
+   reaches the digest only as the job's generic exit reason, and lets one
+   stray session stop every night; **report-only** marks the sessions as
+   dreamed over, so their requests are lost for good.
 3. **Should a declined task notification set the taint state?**
    *Recommendation:* no, not in this package. Declining is taint-neutral by
    construction (Context, "Provenance"), and on the corpus 1,103 of 1,103

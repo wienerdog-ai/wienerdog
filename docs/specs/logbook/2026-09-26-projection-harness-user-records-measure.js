@@ -19,10 +19,12 @@
 // is printed only as a count, a character total and a SHA-256 digest, so two
 // runs (before and after a change) can be compared without reading any of it.
 //
-// EXIT STATUS: 1 when any file projects at least one assistant reply and no
-// user message ("replies without requests" — the state a harness field change
-// would put every session in; revision 1 of the design round), else 0. The
-// last line says which.
+// EXIT STATUS: 1 when any file is in Table G row G1's state — it projects at
+// least one assistant reply and no user message, while its raw timeline holds
+// a user-role record (a `user` record with string content and no `isMeta`) —
+// the state a harness field change puts every session in, and the one the
+// collector sets aside as `no-request` (revision 2 of the design round);
+// else 0. The last line says which.
 //
 // It is inert: no dependency, no network, no write; neither `npm test` nor
 // `npm run lint` collects it. Its class labels are a MEASUREMENT device over
@@ -86,10 +88,12 @@ let assistantCount = 0;
 let assistantChars = 0;
 let filesWithReplies = 0;
 let repliesWithoutRequests = 0;
+let setAside = 0;
 const digest = crypto.createHash('sha256');
 
 for (const { p, size } of files) {
   const proj = createPrimaryProjection('claude');
+  let rawUser = 0;
   const observer = {
     lost: () => proj.lost(),
     record: (obj) => {
@@ -99,6 +103,7 @@ for (const { p, size } of files) {
       const isUser = obj && typeof obj === 'object' && obj.type === 'user';
       if (isUser) {
         userRecords += 1;
+        if (obj.isMeta !== true && obj.message && typeof obj.message.content === 'string') rawUser += 1;
         if (typeof obj.version === 'string' && /^\d+\.\d+\.\d+$/.test(obj.version)) versions.add(obj.version);
       }
       if (proj.messages.length === before) return;
@@ -118,7 +123,10 @@ for (const { p, size } of files) {
   parseClaudeTranscript(p, size, newRunBudget(), observer);
   if (proj.messages.some((m) => m.role === 'assistant')) {
     filesWithReplies += 1;
-    if (!proj.messages.some((m) => m.role === 'user')) repliesWithoutRequests += 1;
+    if (!proj.messages.some((m) => m.role === 'user')) {
+      repliesWithoutRequests += 1;
+      if (rawUser > 0) setAside += 1;
+    }
   }
 }
 
@@ -143,10 +151,10 @@ for (const c of ['notification', 'command-echo', 'bash-mode', 'other-tag', 'unta
   console.log(`${String(t.accepted).padStart(6)} msgs ${String(t.chars).padStart(9)} chars  ${c}`);
 }
 console.log(`assistant messages ${assistantCount} | chars ${assistantChars} | sha256 ${digest.digest('hex').slice(0, 16)}`);
-console.log(`files with replies ${filesWithReplies} | of them with no user message ${repliesWithoutRequests}`);
-if (repliesWithoutRequests > 0) {
-  console.log('REPLIES WITHOUT REQUESTS: at least one file gives assistant replies and no user message');
+console.log(`files with replies ${filesWithReplies} | of them with no user message ${repliesWithoutRequests} | of those the collector would set aside ${setAside}`);
+if (setAside > 0) {
+  console.log('SET ASIDE AS no-request: at least one file gives assistant replies and none of the person\'s messages');
   process.exitCode = 1;
 } else {
-  console.log('no file gives assistant replies without a user message');
+  console.log('no file would be set aside as no-request');
 }

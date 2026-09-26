@@ -342,6 +342,25 @@ failure, already real on the other harness, for older rollouts. It is outside
 this package (Claude only) and is routed (§6). It is also why Table G does not
 count Codex: a Codex arm would fire on the first run.
 
+### 2.9 The set-aside trigger, measured (revision 2)
+
+Table G's revision-2 trigger adds a third clause — the raw timeline holds a
+user-role message (a string-content `user` record without `isMeta`) — so that
+a session with no request-shaped record at all is never set aside. On the
+whole corpus, counts only:
+
+```text
+committed script (revision 2), shipped tree : files with replies 321 | no user message 0   | would be set aside 0    exit 0
+committed script, Table H (simulated)       : files with replies 321 | no user message 0   | would be set aside 0    exit 0
+committed script, every user record declined: files with replies 321 | no user message 321 | would be set aside 321  exit 1
+probe: files holding an accepted array-content prompt 4 (5 prompts); of them, files with no string-content user record 0
+```
+
+So the third clause changes nothing on today's corpus and nothing under a
+field change; it matters for a continuation file with tool results and
+replies only (AC8's case), and its residual — a session whose only requests
+are array-content — has no instance on the corpus.
+
 ## 3. Current state — citations checked at both ends
 
 Every `file:line` range in the spec was printed at both ends by a scratch
@@ -507,6 +526,56 @@ On the same simulated tree, with the draft Table G (two counters in
 - **The boundary check** over all 22 Deliverables paths → exit 0; over
   `src/core/dream/promote.js` → exit 1.
 
+### 4.4 Revision 2 — the mechanical checks re-run (after round 2)
+
+On the simulated tree, with revision 1's `dream.js` and `scratch.js` drafts
+reverted and the revision-2 drafts added: the set-aside in `scratch.js` after
+the `runExhausted` check, `NO_REQUEST_REASON` in `ledger.js` (INFORMATIONAL,
+typedef), the `GROUPS` row in `warnings.js`, the row in `doctor.js`, and the
+JSDoc unions.
+
+- **Dependents of Table G.** Unswept: `npm test` → **5 fail** — the four
+  `[PDC-AC4*]` pipeline tests (their session is set aside) and the ledger
+  test that pins the INFORMATIONAL set. S4 and S5 → 0 fail. Nothing else.
+- **Acceptance criteria, revision 2.** Draft tests for AC8 (five sessions,
+  one set aside), AC9 (a mixed night, then a second night over the same
+  files: the set-aside session is not selected again and its record is
+  unchanged), AC10 (warnings heading and note, doctor row): `npm test` →
+  3,090 tests, 0 fail.
+- **RED proofs.** `npm run red-proofs -- --wp WP-dream-projection-harness-user-records`
+  → **P1–P9 all `PROVEN`; criteria AC1, AC2, AC3, AC8, AC9, AC10 `PROVEN`**.
+- **Every RED lane whose suite or mutated file this package edits** —
+  `WP-doctor-recognizes-parse-threw` 1, `WP-dream-collect-parse-throw-quarantine`
+  4, `WP-dream-digest-omits-own-job-alerts` 7, `WP-dream-git-env-pinning` 3,
+  `WP-dream-lock-stale-owner-loud` 4, `WP-show-slot-own-value-kind` 2,
+  `WP-dream-primary-dialogue-collection` 3, `WP-ep2-prune-once-per-run-test` 2,
+  `WP-ledger-retry-parse-threw-on-upgrade` 5, `WP-dream-primary-dialogue-projection`
+  10, `WP-quarantine-banner-location` 6 — 47 proofs, all `PROVEN`. All 191
+  declared `find` strings occur exactly as declared.
+- **Under a simulated field change** the four `[PDC-AC4*]` runs and the mixed
+  `[HUR-AC9]` run set their sessions aside end to end; the committed script
+  exits 1 on the corpus (§2.9).
+- **The spec's texts are the code's texts.** The warnings heading, the note
+  and the doctor row, extracted from the spec, occur verbatim in the drafts.
+- **ADR-0023 Amendment 5**, applied from the spec's own fenced block: 0
+  markdownlint errors.
+- **The verification lines, three states and a violation:**
+
+  ```text
+  == SIMULATED  → PASS ledger test, PASS no-request, PASS amendment; erratum, sweep, test files PASS
+  == SHIPPED    → PASS ledger test (by design), FAIL no-request, FAIL amendment
+  == ABSENT     → FAIL ledger test, FAIL no-request, FAIL amendment
+  == VIOLATING  (another ledger expectation edited; a retyped 'no-request'
+                in doctor.js; an undated amendment) → FAIL, FAIL, FAIL
+  ```
+
+- **Citations added in revision 2**, both ends: `scratch.js:185-226`,
+  `:188-191`, `:192-195`, `:68`; `dream.js:838-845`, `:854-865`;
+  `ledger.js:47`, `:110-112`, `:603`; `warnings.js:108-124`, `:123`;
+  `doctor.js:498`, `:531-532`, `:572-577`; `ledger.test.js:485`.
+- **The boundary check** over 20 of the 28 Deliverables paths → exit 0; over
+  `src/cli/dream.js` (no longer a deliverable) → exit 1.
+
 ## 5. What the round found that the stub did not know
 
 - **The structural discriminator exists** (the stub's formulation C, left
@@ -611,3 +680,38 @@ No fourth patch round runs on Table G.
 
 A **LIGHT** round-3 finding on Table G closes under rule 5 as usual; a HEAVY
 round-3 finding that lands only on Table H fires rule 1 the same way.
+
+### Round 2 — adjudication (the orchestrator proposed the dispositions; the architect applied them)
+
+The raw was committed before adjudication (`7d9b95ee`); the Table G
+circuit-breaker was pinned and committed (`950aaab7`) before any edit. R1-1
+and R1-2 were verified closed by the reviewer.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| R2-1 | A run-level halt that fires only when EVERY Claude session with a reply lost its request is disabled by one older, recognised session in the same night: the newer, unrecognised sessions are consolidated and marked processed, never to be retried | A | HEAVY | **Fixed by replacing the halt with a per-session disposition.** Table G now sets each such session aside in the collector as a quarantine with the new reason `no-request` — not consolidated, not marked processed. The mixed night is AC9's test, which also checks the ledger after the run and after a second run |
+| R2-2 | The halt reached the digest banner only as the scheduler's generic "job exited 1" alert, not as Table G's diagnosis | B | HEAVY | **Fixed by the same change: there is no halt, and no alert.** The set-aside reaches every existing quarantine surface — the console line with the reason, the dream report's run-skips bullet and pointer, `reports/warnings.md` under its own heading and note, `wienerdog doctor` under its own row, and the digest banner's informational sentence (a count and the pointer). **Correction to the proposed premise:** `reports/warnings.md` and `doctor` list quarantines only, never deferrals (`warnings.js` `groupQuarantines`, `doctor.js` `quarantineReport`), so a capped deferral would have been invisible there; that is one of the two reasons a quarantine was chosen over the secret-revert deferral shape |
+| R2-3 | One legitimate request-less session (a notification and a reply) would halt every night, with no ledger outcome and Codex sessions waiting | B | HEAVY | **Fixed.** (a) The trigger now requires a request-shaped record (G1's third clause), so a session with no user record at all is consolidated as today (AC8, RED proof P6). (b) A session that has one, and is therefore indistinguishable from a renamed field, is set aside once, named, never re-selected while unchanged and blocking nothing (AC9's second night). (c) `no-request` is INFORMATIONAL, so one stray set-aside retires from the banner after seven days, while a field change keeps it fresh. The legitimate session's cost — its replies are never dreamed over — is stated in owner item 2 |
+
+Consequences, applied in the same pass: `dream.js` is no longer a
+deliverable; `ledger.js`, `warnings.js`, `doctor.js`, their three test files
+and ADR-0023 (Amendment 5, copied verbatim, with the Amendment 4 retry
+obligation for any later change to Table H) are; sweep S5 is the one
+pre-existing expectation changed; RED proofs are now P1–P9 in four files.
+**Size re-derived: M, at its top** (28 Deliverables rows, most of them
+one-key sweeps). A split is available if the orchestrator prefers two S
+packages: first the `no-request` reason and set-aside (inert today — the
+trigger is 0 of 321 on the shipped rule), then Table H depending on it.
+
+### STOP CRITERION — restated at the head of round 3
+
+§0 unchanged in order and outcomes. **HEAVY** also covers a Table G row's
+outcome, the `no-request` texts and class, and ADR-0023 Amendment 5's claims.
+**The Table G circuit-breaker pinned above binds round 3:** a HEAVY finding on
+Table G (or on Table H) at round 3 fires rule 1 — re-cut to candidate 0, and
+the owner receives Table H and Table G together as one product question. A
+round of LIGHT findings closes under rule 5. The **frozen verification
+surface** is now tests under the six tags `[HUR-AC1]`, `[HUR-AC2]`,
+`[HUR-AC3]`, `[HUR-AC8]`, `[HUR-AC9]`, `[HUR-AC10]`; the nine RED proofs P1–P9
+in four declaration files; and the commands in the spec's Verification steps.
+LIGHT closure re-verifies with §4.4's checks.
