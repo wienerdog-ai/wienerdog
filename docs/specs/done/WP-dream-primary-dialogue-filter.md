@@ -25,7 +25,7 @@ epic: dream-primary-dialogue
 > filter reaches. **No relevance stage is built.** Its two replacements, both
 > `Draft` stubs that have been through no design round:
 >
-> - `docs/specs/WP-dream-projection-harness-user-records.md` — the
+> - `docs/specs/done/WP-dream-projection-harness-user-records.md` — the
 >   deterministic strip, as a fix against the Done contract of
 >   `docs/specs/done/WP-dream-primary-dialogue-projection.md`;
 > - `docs/specs/WP-dream-first-pass-novelty.md` — the first-pass novelty

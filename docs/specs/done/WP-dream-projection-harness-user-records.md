@@ -1,7 +1,7 @@
 ---
 id: WP-dream-projection-harness-user-records
 title: Keep harness-authored Claude user records out of the primary dialogue — design recorded, one product question to the owner
-status: Draft
+status: Superseded
 model: opus
 size: S
 depends_on: [WP-dream-primary-dialogue-projection]
@@ -10,6 +10,21 @@ epic: dream-primary-dialogue
 ---
 
 # WP-dream-projection-harness-user-records: Keep harness-authored Claude user records out of the primary dialogue — design recorded, one product question to the owner
+
+> **SUPERSEDED, 2026-09-27.** The owner answered the product question below
+> with option **(iii)** — build nothing on the decline rule — and commissioned
+> the narrower flag-not-decline design (ruling record:
+> `docs/specs/logbook/2026-09-27-owner-ruling-harness-records-option-iii.md`).
+> Nothing in this file is built. Its replacements:
+>
+> - `docs/specs/WP-dream-projection-notification-taint.md` — flag the records
+>   Claude Code labels as task notifications `derived_from_untrusted: true`
+>   instead of declining anything; it starts its own design round.
+> - `docs/specs/WP-dream-projection-done-spec-errata.md` — the Done-spec
+>   errata this file routed (Erratum 8, the measured half of Erratum 9, and
+>   the `:150` sentence as a recorded gap), an S docs package.
+>
+> Everything below is left unedited as the history of the design round.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
