@@ -240,6 +240,12 @@ direction.** The residual — a notification inside a skill's invocation window
 does not taint the ledger's code-derived flag — predates this package and is
 named in the spec's Out of scope.
 
+> **Revision 1 (after round 1).** The paragraph above is round zero's reading,
+> kept as history. Round 1 (§7, R1-1) showed the "named residual" is a path
+> this package's own Tier-3 claim depends on; revision 1 closes it in code
+> (Table N rows N6–N7) and the spec's Context now states the ledger gate's
+> new input. See §8.
+
 Every `file:line` citation in the spec was printed at both ends by a scratch
 helper (`ranges.js`, not committed) against the files at `67359a5e`:
 
@@ -356,10 +362,12 @@ All on the simulated tree (§2) in the session scratchpad, Node v25.9.0.
 
 ## 6. Discovered, not fixed (routing)
 
-- **The ledger gate's code-derived flag does not see a notification inside a
+- ~~**The ledger gate's code-derived flag does not see a notification inside a
   skill's invocation window** (§3). Pre-existing; the model-asserted flag now
   sees it through the flagged message. Routed in the spec's Out of scope as a
-  named residual for a later package, if the owner wants one.
+  named residual for a later package, if the owner wants one.~~ **Withdrawn in
+  revision 1**: round 1 made it this package's finding R1-1, closed by Table N
+  rows N6–N7 (§7, §8).
 - **`primary-dialogue.js:8-9`** still says harness-authored instructions "are
   not dialogue at all" — the same false sentence as the Done spec's `:150`,
   which `WP-dream-projection-done-spec-errata` records as a named gap. A code
@@ -373,3 +381,191 @@ the SHA of the commit that introduced it.
 
 | Round | Tip | Raw file | Raw commit | Product findings | Outcome under §0 |
 |---|---|---|---|---|---|
+| 1 | `89b77eb3` | `docs/specs/logbook/2026-09-27-projection-notification-taint-design-r1-astra-raw.json` | `722b2282` | 1 (R1-1 A/HEAVY, on Table N and the spec's Tier-3 claim) | rule 0 (band A) → rule 4: fixed in revision 1 (§8); one fresh round owed. Rule 1 did not fire (the fix is not a net, and this is round 1); rule 2 not yet (first round on Table N) |
+
+Round zero's clean-context conformance read (`1b83e78d`) found both specs
+conformant. The raw was committed before adjudication (`722b2282`).
+
+### Round 1 — adjudication (the orchestrator proposed the disposition; the architect applied it)
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| R1-1 | The spec claimed a candidate supported by a flagged notification cannot reach Tier 3, but its named residual left a path open: the learnings-ledger validator derives trust from raw `tool_result` roles and never sees the notification's projection flag, so a notification inside a skill's invocation window can support a ledger entry declared `false` without refusal, and three such sessions can authorize a skill-body revision | A | HEAVY | **Fixed in code (route 1 of the reviewer's two).** New Table N rows N6–N7: the gate extract carries the text-free key `task_notification: true` when the session held a labelled record, and `invocationWindowTainted` treats every window of such a session as tainted; only the key's absence reads clean. Session-level rather than positional (§8.2). New deliverables `src/core/transcripts/index.js`, `src/core/dream/validate.js`, ADR-0020 (an amendment); Erratum 10 gains F5 on row B2; AC4–AC5 and RED proofs P8–P11 added; **size re-derived: M**; owner item 4 added (accept the amendment, and the session-level choice with its cost) |
+
+**How §0 applies, stated.** Rule 0: the finding is band A — a trust decision
+the design claimed to protect could be made on content flagged as external —
+so it is HEAVY. Rule 1 (the no-net rule) does not fire: the fix adds no
+detector, counter, quarantine, halt or retry — it carries the same exact label
+one step further, raises only, and degrades exactly as N4 does (no label → the
+key is absent → today's ledger verdict). Rule 1(b) needs round 3. Rule 2 needs
+two consecutive rounds on Table N; this is the first. Rule 3 does not apply:
+the honest fix needed no measurement this repository cannot make and argues
+against no owner recommendation — the narrow-the-claim route would have been
+an owner question, and the code route made it unnecessary. Rule 4: fix,
+re-run the mechanical checks (§8), one fresh round.
+
+**Mirrors found while applying it, registered in the same pass:** ADR-0020's
+2026-09-17 amendment sentence "A user message is `false` by role regardless
+of what preceded it" (now narrowed by the new amendment, not edited in place)
+and the Done spec's row B2 (the gate extract's shape, marked by F5). Round
+zero missed both.
+
+**ADR-0031 circuit-breaker, noted for round 2:** round 1 landed on Table N.
+If round 2 lands on Table N again, §0 rule 2 fires: no third patch; a
+re-decision is recorded here first.
+
+### STOP CRITERION — restated at the head of round 2
+
+§0 unchanged in order and outcomes, with these updates. **Band A** also
+covers a learnings-ledger window read clean for a session whose gate extract
+carries the key, and a ledger verdict moved toward acceptance. **HEAVY** also
+covers Table N rows N6–N7, the gate key's name, presence or value, the
+validator line and its refusal text, and the ADR-0020 amendment's claims.
+**The no-net rule (rule 1(a)) is unchanged and binds the ledger half too:** a
+finding whose fix is a detector, counter or retry on the ledger path re-cuts
+to the fallback. **Fallback level 1** (flag the message only) still applies
+only when every firing finding lands on row N2 alone, and it leaves rows N6–N7
+in place. A HEAVY finding on N6–N7 whose honest fix is positional is not
+patched: it becomes input to owner item 4 (rule 3(b)), whose positional
+variant is already priced. **The
+frozen verification surface** (rule 6) is now: tests under the five tags
+`[NT-AC1]`–`[NT-AC5]`, the eleven RED proofs P1–P11 in one declaration file,
+and the commands in the spec's Verification steps. LIGHT closure (rule 5)
+re-verifies with §8.3's checks.
+
+## 8. Revision 1 — after round 1
+
+### 8.1 Measurements
+
+The committed script
+`docs/specs/logbook/2026-09-27-projection-notification-taint-ledger-measure.js`
+(counts only; it reads only the text-free gate extract) runs the tree's
+`parsePrimaryWithOutcome` over the local Claude transcripts and, for every
+(session, invoked skill) pair — the unit rule (h) derives trust for — reports
+whether the pair's invocation windows hold an external `tool_result` and
+whether the session's gate extract carries the key. `--days 0`, back to back:
+
+```text
+== shipped tree (67359a5e's src/)
+sessions 334 | carrying task_notification in the gate value 0
+(session, invoked skill) pairs 42 | in sessions carrying it 0
+pairs clean before this package (no external tool_result in any window) 0
+  of them tainted by row N7 0
+
+== simulated tree (revision 1)
+sessions 334 | carrying task_notification in the gate value 54
+(session, invoked skill) pairs 42 | in sessions carrying it 32
+pairs clean before this package (no external tool_result in any window) 0
+  of them tainted by row N7 0
+```
+
+Readings: 54 of 334 sessions hold a labelled notification; 32 of the 42
+(session, skill) pairs are in such sessions; **none of the 42 is clean today**
+— every skill window on the corpus already holds an external `tool_result` —
+so rows N6–N7 move no ledger verdict on the owner's data. They close the path
+round 1 found for a tool-free skill window, which ADR-0020 calls "genuinely
+revisable". The same numbers price owner item 4: if tool-free skills come
+into use, a session-level rule bars 32 of 42 pair-shaped opportunities where a
+positional one would bar only those whose window holds the notification.
+
+The projection measurement re-run on the revision-1 tree (the predicate is now
+decided before step 2) reproduces §2's properties at a later point in time
+(the corpus grew by two assistant messages): shipped exit 1 (1,107 of 1,107
+`false`); simulated exit 0 (1,107 flagged); the assistant digest equal on
+both (`7af53fdb95323bda`, 1,997 messages); the simulated tree with
+`--strip-origin` reproduces the shipped whole-projection digest
+(`414bfee659bd66eb`, 3,963 messages). The shipped-tree run was repeated after
+the others with identical output.
+
+### 8.2 The route, and why session-level
+
+The reviewer offered two routes: carry notification provenance into the
+ledger's code-derived check, or narrow the Tier-3 claim and put the path to
+the owner. The code route was taken: it closes the path without reading
+content and without a net, and a package parked on a ruling does not ship.
+
+Two shapes of the code route were drafted on the simulated tree:
+
+- **Positional** (drafted first, then set aside): the raw parser passes its
+  message count to the observer (`claude.js:141`), the projection records the
+  raw position of each labelled record, `parsePrimaryWithOutcome` rebases the
+  positions under the 2,000-message cap as `capExtract` rebases invocation
+  indices, and the validator taints a window whose `[index, end]` holds a
+  position. It needs a fourth source file, a rebase, and a tie rule for a
+  position on a window boundary (a notification with no raw message of its
+  own — an array-content record — sits at the next message's position); it
+  measured the same 0 moved verdicts.
+- **Session-level** (taken): one constant key on the gate extract, one line
+  in the validator. No positions, no rebase, no ties; a notification the cap
+  drops still counts. Its cost — over-tainting a tool-free window elsewhere in
+  a session that ran a background task — is stated in owner item 4 with the
+  32-of-42 number.
+
+The simpler shape was taken because the precision it gives up moved nothing
+measured, and the geometry it avoids is the class of bug ADR-0020's round 6
+found exploitable.
+
+### 8.3 Mechanical checks re-run
+
+All on the simulated tree, rebuilt from `89b77eb3` plus the revision-1 draft
+(`primary-dialogue.js`, `index.js`, `validate.js`, the fixture, the test file,
+the declaration file), Node v25.9.0.
+
+- **`npm test`** → 3,088 tests (3,083 + the five `[NT-AC*]`), **0 fail**, with
+  no existing test or fixture edited. The Done suite's worked example, which
+  deep-equals a gate extract, holds no label and is unchanged.
+- **The new ACs, reproducing the finding.** `[NT-AC5]`'s "no label" case keeps
+  a `false` declaration for the gate worked example — the round-1 path, which
+  is still what an unlabelled session does — and the labelled case refuses it.
+- **RED proofs, derived.** `validateProof` accepts all eleven; every `find`
+  occurs exactly once; `npm run red-proofs -- --wp
+  WP-dream-projection-notification-taint` → **P1–P11 `PROVEN`; criteria
+  NT-AC1–NT-AC5 `PROVEN`**, `RUN: FILTERED`. Derivation corrected three first
+  guesses: P4 (content heuristic) now also reddens `[NT-AC3]`, `[NT-AC4]` and
+  `[NT-AC5]` (with the label stripped, a text-prefix rule still sets the gate
+  key); P8 (gate key dropped) also reddens `[NT-AC5]`; P11's first mutation
+  (`notified` gated on `claudeShape(obj).classified`) left a block-type reject
+  green because `claudeShape` does not check block types — `[NT-AC4]` now
+  tests a schema reject (content `7`) and a block reject separately, and P11
+  reddens the schema one.
+- **Every RED lane whose proofs mutate a file this package edits** (the
+  spec's Verification list): `WP-dream-primary-dialogue-projection`,
+  `WP-dream-primary-dialogue-collection`,
+  `WP-dream-collect-parse-throw-quarantine`,
+  `WP-transcript-parsers-harden-text-values`,
+  `WP-audit-e-ledger-parser-corpus`, `WP-dream-git-env-validate-seam`,
+  `WP-ep2-prune-once-per-run-test`,
+  `WP-quarantine-failed-preserve-disposal-flush`,
+  `WP-quarantine-only-copy-shelf`, `WP-quarantine-preserve-durability` — every
+  one only `PROVEN` lines, no `FAILED`. All 193 declared `find` strings in the
+  repository occur exactly as declared.
+- **The spec's texts are the draft's texts** (`coherence.js`, scratch, 74
+  checks, all PASS): the projection fixture byte-equal; the gate example's
+  five lines verbatim in the test; the predicate body, the four
+  `createPrimaryProjection` edits, the `index.js` line and the `validate.js`
+  line verbatim; the refusal text verbatim; the gate literal equal to the
+  test's expectation; every register row's id, trimmed `find`, derived tags
+  and signals.
+- **Erratum 10 and the amendment, applied from the spec's own text.** E0–E4
+  (the errata package) then F0–F5 on the Done spec at `67359a5e`: F adds
+  `@@ -145,0 +146,29 @@` and inline markers on three lines (row A5: F1, F2;
+  row A5e: F3, F4; row B2: F5). The amendment inserted before `## Future work
+  (parked, not specced)` in ADR-0020. `npm run lint` over both results: 0
+  errors. The spec's check (its `node - <<'EOF'` block with `base(f)` reading
+  files instead of git, its only change): compliant → `erratum 10 and the
+  ADR-0020 amendment: exact`; Done spec without F → exit 1 (`inline marker not
+  exactly once`); ADR without the amendment → exit 1 (`the ADR-0020 amendment
+  is not directly before Future work`); ADR with the amendment and one byte
+  changed elsewhere → exit 1 (`other bytes changed in ADR-0020`).
+- **The Current-state greps, three states each:** the `origin` grep as in §4;
+  the new `task_notification` grep → `67359a5e` prints `current-state: no gate
+  key yet`; the simulated tree → exit 1; no `src/`/`tests/` → exit 1.
+- **The boundary check** over the eight Deliverables paths plus the spec →
+  exit 0; over `src/core/transcripts/claude.js` and
+  `docs/specs/done/WP-dream-primary-dialogue-collection.md` → exit 1.
+- **Citations added in revision 1**, both ends: `primary-dialogue.js:142-154`,
+  `:153`, `:168`, `:254-262`, `:309`; `index.js:223`, `:274`;
+  `validate.js:497-509`, `:506`, `:516`, `:520`, `:521-524`, `:647`;
+  `SKILL.md:119-121` (**corrected from a first-drafted `:117-122`**, which
+  began two lines early); ADR-0020 `:88-100` (the rule begins at `:88`'s last
+  words), `:400-471`, `:469-471`, `:473`; Done spec `:476`.
