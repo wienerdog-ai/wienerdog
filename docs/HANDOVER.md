@@ -60,7 +60,17 @@ resuming it.
 > record). Record:
 > `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`
 > (identities, counts, verdicts — no transcript or note substance; the repo is
-> public). The result block at the spec's entry condition points to it. The
+> public). The result block at the spec's entry condition points to it. **MERGE DECISION FOR THE
+> OWNER (PR #319 is not merged):** its first commit (`97e45ff0`) carried
+> category-level descriptions of what the sampled sessions were about
+> (subject headings, no transcript text); the gates caught it and the text is
+> gone from the tip. The session's permission layer refused a history
+> rewrite, so the commit is still in the branch. **Squash-merge** keeps it out
+> of `main` (it then stays reachable only by SHA and through the PR ref, until
+> GitHub drops it; the two Codex raw commits the round record cites become
+> reachable the same way); a **merge commit** carries it into `main` for
+> good; a rewrite and force-push is the owner's own act. Recommended:
+> squash-merge. The
 > evaluation's own two harness transcripts were moved out of
 > `~/.claude/projects/` into `~/wd-eval/harness-transcripts/` so tonight's
 > live dream does not consolidate evaluation artefacts; the live ledger was not
@@ -74,20 +84,24 @@ resuming it.
 > 16.4 % of the characters (35 of 132 messages) are harness task notifications
 > and local-command echoes passing through as `user` records — a fixed rule
 > removes them against the projection's Done contract with nothing kept lost;
-> the filter's remaining target is 20.8 %, interim replies that left no trace
-> in the notes plus machine-authored prompts, and no positional rule removes
-> those safely (two were measured). The 16 remaining losses are consolidation
-> behaviour on a session whose earlier pass was already on record — an artefact
-> of the evaluation's empty ledger, not a production re-feed — and a filter
-> cannot touch them. Codex rollouts whose header is not `thread_source: "user"`
-> project to zero by design (row A4 of the projection).
+> the filter's remaining target is 20.8 %: the three machine-authored sessions
+> whole (11.1 %, behind two of the four mild dilutions) and interim replies
+> inside the human-driven sessions (9.6 %) that left no trace in the notes; no
+> positional rule removes the interim replies safely (two were measured). The 16 remaining losses (0 high) are all
+> one first-pass defect — totals and to-dos recorded, the rest scored
+> near-zero novelty on an unchecked assumption that it is written elsewhere:
+> 12 made by the live 09-24 dream (re-exposed by the evaluation's empty
+> ledger; production never re-feeds an unchanged session) and 4 (three medium,
+> one low) made by this run on two new sessions; none sits in a low-value
+> block, so a filter cannot touch them. Codex rollouts whose header carries a `thread_source` other than `"user"`
+> (an absent key is also eligible) project to zero by design (row A4).
 >
 > **OWNER RULING NEEDED (one line):** the evidence leans to the spec's *not
 > material* branch, but the number is not negligible and the parking was the
 > owner's. Recommended: **supersede `WP-dream-primary-dialogue-filter`;
 > wd-architect files the deterministic strip (task-notification and
 > local-command `user` records) as a fix against the projection's Done
-> contract, and a candidate package for the consolidation finding.** Until the
+> contract, and a candidate package for the first-pass novelty finding.** Until the
 > ruling the spec stays `Draft`, parked as before.
 >
 > **DO NEXT (unblocked): `WP-vault-write-cas-window` design round** —

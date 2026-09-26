@@ -262,12 +262,14 @@ a newly found mirror is registered here on the spot.
 > messages) are harness task notifications and local-command echoes passing
 > through as `user` records — removable by a fixed rule against the
 > projection's Done contract, nothing kept lost; the filter's remaining
-> target is **20.8 %**, interim replies that left no trace in the notes plus
-> machine-authored prompts. The evidence leans to the *not material* branch but
+> target is **20.8 %**: the three machine-authored sessions whole (11.1 %,
+> behind two of the four mild dilutions) and interim replies inside the
+> human-driven sessions (9.6 %) that left no trace in the notes. The evidence leans to the *not material* branch but
 > the number is not negligible, so this spec **stays `Draft`**; the record
 > proposes *Superseded* plus the deterministic strip as a projection fix, and
-> registers a consolidation finding (a session whose earlier pass is on record
-> is scored against the earlier report's claim, not the notes). Nothing below
+> registers a consolidation finding (a first pass records totals and to-dos and
+> scores the rest near-zero novelty on an unchecked assumption that the
+> material is already written elsewhere; all 16 remaining losses, none high). Nothing below
 > this block was changed.
 
 The ruling the evaluation ran under:

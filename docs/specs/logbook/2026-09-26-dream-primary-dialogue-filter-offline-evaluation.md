@@ -133,9 +133,13 @@ with the baseline visible, revised them to **0 high, 9 medium, 7 low, 4 none**
 — the two sessions the baseline had already consolidated — and 4 from sessions
 new to the baseline. **None of the 16 sits in a block the judge marked
 LOW-VALUE.** Round 2's stated cause, in its own words in substance: the earlier
-pass had kept totals and to-dos and scored the rest near-zero novelty on the
-assumption that the sessions had written their own entries; the notes it pointed
-to did not contain them; and this run accepted that claim without checking.
+pass — the **live** 2026-09-24 dream, whose commit is the baseline — had kept
+totals and to-dos and scored the rest near-zero novelty on the assumption that
+the sessions had written their own entries; the notes it pointed to did not
+contain them; and this run accepted that claim without checking. So the 12 are
+the live first pass's own omissions, re-exposed by the empty-ledger setup, and
+the 4 are first-pass omissions on new sessions: both groups are production
+behaviour of a first pass.
 
 **B. Unsupported claims — 8 listed: 0 high, 1 medium, 7 low.** The medium one is
 a date attached to an event the dialogue leaves undated. The rest are inferences
@@ -160,8 +164,8 @@ Mostly worth reading: the judge said *no* at 34.5 %, which is a 65 % majority
 worth reading — the record notes the arithmetic. Would a block-selection stage
 removing exactly the LOW-VALUE blocks have improved the memory: **MARGINAL** —
 it would have removed the four dilutions and about 34 k characters of reading,
-lost nothing from A, and *not fixed the losses, whose cause is how an
-already-recorded session was handled*.
+lost nothing from A, and *not fixed the losses, whose causes are how an
+already-recorded session was handled and what a first pass chose to omit*.
 
 ## What the low-value volume is made of (code-derived, exact)
 
@@ -192,16 +196,22 @@ being notifications the judge had grouped with a kept reply, so nothing kept is
 lost. It closes 39.9 % of the low-value characters with no model call.
 
 **What it leaves:** 20,397 low-value characters — **20.8 % of the original
-input, 24.9 % of what remains** — made of 38 interim assistant replies (17,220
-characters) and 3,177 characters of machine-authored prompts (rows 4, 6, 7).
+input, 24.9 % of what remains** — in two distinct kinds. **(a)** The three
+machine-authored sessions (rows 4, 6, 7) whole: 4 prompts (2,657 characters)
+and their 4 concluding replies (8,273), 10,930 characters = 11.1 % — these are
+the material behind two of the four dilutions the judge found. **(b)** Inside
+the human-driven sessions: 34 interim assistant replies (8,947 characters) and
+3 short user lines (520), 9,467 characters = 9.6 % — the material the judge
+found *left no trace in the notes*.
 Two positional rules for the interim replies were tried and are **unsafe**:
 "keep only the last reply before the next real user message" removes 27,509
 characters but 6,441 of them from KEEP blocks, including replies that carry a
 ruling; "drop every reply whose nearest preceding user record is a
 notification" removes 43,840 with 23,430 from KEEP blocks, because the reply
 after a notification is often the synthesis. The interim replies are therefore
-the filter's genuine target — and the judge found they *left no trace in the
-notes*; the dilution it did find came from the machine-authored sessions.
+the filter's genuine target — and the judge found the interim replies *left no
+trace in the notes*; the dilution it did find came from the machine-authored
+sessions in kind (a).
 
 ## Applying the decision rule
 
@@ -209,9 +219,15 @@ The spec's rule: *not material* (output faithful, surviving input mostly worth
 reading) → `Superseded`; *material* → the number justifies the filter. Read
 against the measurements:
 
-1. **Faithful:** after round 2, no high-severity loss and no high-severity
-   unsupported claim. The 16 remaining losses are consolidation behaviour on a
-   session whose earlier pass is on record, and a filter cannot touch them.
+1. **Faithful, with gaps — the judge's own phrase:** after round 2, no
+   high-severity loss and no high-severity unsupported claim. The 16 remaining
+   losses split two ways: **12** (rows 1 and 5) are the repeat-pass behaviour
+   described above, an artefact of this setup; **4** (three medium, one low)
+   come from sessions new to the baseline — rows 2 and 3 — and are ordinary
+   first-pass omissions: the dream read a ruling or an open commitment and did
+   not write it. Those four are the live exposure this evaluation measured.
+   None of the 16 sits in a low-value block, so a filter cannot touch either
+   group; both are one consolidation-quality observation, not an input one.
 2. **Mostly worth reading:** 65 % by the judge's own count; harm from the rest
    is mild dilution in four places, none of it from the interim replies.
 3. **The filter's real target** after the safe deterministic strip is 20.8 % of
@@ -235,12 +251,14 @@ this package was the owner's.
   this sample, nothing kept lost. Whether the interim replies those records
   created should also go is a design question for that package, with the two
   failed positional rules above as its first evidence.
-- **Register a consolidation finding** for the architect: when a session's
-  earlier pass is on record, the dream should consolidate against the notes,
-  not against the earlier report's claim of what was written. (Production does
-  not re-feed an unchanged session — the ledger fingerprint prevents it — so
-  the live exposure is the first pass's own omissions, which this evaluation
-  also measured: 12 of 16 remaining losses.)
+- **Register one consolidation finding** for the architect, the production
+  defect round 2 named: **a first pass records totals and to-dos and scores
+  the rest near-zero novelty on an unchecked assumption that the material is
+  already written elsewhere.** All 16 remaining losses are instances of it —
+  12 made by the live 09-24 dream on rows 1 and 5 (re-exposed here because the
+  empty ledger fed those sessions in again against that dream's own commit;
+  production never re-feeds an unchanged session) and 4 made by this run on
+  rows 2 and 3. Not a filter question: none sits in a low-value block.
 - Owner items 1–2 of the spec stay as written; item 2 is moot if the first
   bullet is accepted.
 

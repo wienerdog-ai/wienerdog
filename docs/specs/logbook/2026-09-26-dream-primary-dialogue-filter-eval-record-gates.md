@@ -30,6 +30,19 @@ strip and a **20.8 %** residual; the "re-fed session" story became an
 evaluation-design artefact (the live ledger holds both sessions at their
 present sizes).
 
-## Round 2 — tip (filled after the round)
+## Round 2 — tip `bedfbaa0`
 
-_pending_
+| gate | raw | verdict | findings (band → disposition) |
+|---|---|---|---|
+| Codex Astra | `…-eval-record-r2-astra-raw.json`, committed `f3a12438` | needs-attention | 1 **B** the decision analysis attributed all 16 remaining losses to the repeat-pass artefact although 4 came from sessions new to the baseline → **fix**: the two groups separated (12 repeat-pass; 4 first-pass omissions, 3 medium + 1 low), faithfulness restated as "faithful, with gaps", a second consolidation finding registered; handover aligned |
+| wd-reviewer | report in the session | REQUEST-CHANGES | round-1 items 1–6 verified fixed (7 pending in the PR body); new: 1 **B** `npm run lint` failed on this record's own placeholder (MD036) → **fix**; 2 **B** the same misattribution the Codex gate found, plus the registered finding framed around the setup instead of the production defect → **fix**: one finding, "a first pass records totals and to-dos and scores the rest near-zero novelty on an unchecked assumption"; 3 **B** the round-1 paraphrases remain in branch history and this repo merges with merge commits → **owner**: the session's permission layer refused a history rewrite (`reset --hard` + force-push), so the branch keeps `97e45ff0`; the maintainer chooses at merge time — squash-merge keeps that commit out of `main` (the PR ref still reaches it), a rewrite is his own act; stated in the handover; 4 **C** the 20.8 % residual mislabelled machine-session concluding replies as interim replies → **fix**: split 11.1 % machine sessions whole / 9.6 % interim replies, exact; nit: "or none" for `thread_source` → **fix** |
+
+**No history rewrite was made.** The raw commits cited above (`bdb17bba`,
+`f3a12438`) were made before adjudication, as the runbook requires, and stay
+where they are. A squash-merge would leave them reachable only through the
+PR's ref; a merge commit would carry `97e45ff0` into `main`. That trade is
+the maintainer's.
+
+## Round 3 — tip filled after the round
+
+Pending.
