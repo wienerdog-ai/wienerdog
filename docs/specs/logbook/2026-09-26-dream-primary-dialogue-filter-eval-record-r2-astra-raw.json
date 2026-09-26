@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c58869bb05f620b034a8e438ebf91d24a5bb8389",
+    "baseRef": "c58869bb05f620b034a8e438ebf91d24a5bb8389",
+    "explicit": true
+  },
+  "threadId": "01a0ddf9-2bae-7f92-ae08-8973dbd74c39",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c58869bb05f620b034a8e438ebf91d24a5bb8389 from merge-base c58869bb05f620b034a8e438ebf91d24a5bb8389."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship: the disposition treats all remaining losses as an evaluation artefact, but four came from sessions new to the baseline.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[B] Four fresh-session losses are attributed to the repeat-pass artefact\",\n      \"body\": \"The record says 12 of the 16 remaining losses came from sessions already consolidated at the baseline and four came from new sessions (lines 130–134). The decision analysis then attributes all 16 to handling a session whose earlier pass was on record. Those four losses occurred in the normal first-pass scenario, so the artefact cannot explain them. This weakens the claim that the output is faithful, which is part of the spec’s decision rule for superseding the filter. The same overstatement appears in the handover.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 212,\n      \"line_end\": 214,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Separate the four fresh-session losses from the 12 repeat-pass losses, state their severities and causes, then reassess the spec’s faithfulness condition and proposed disposition. Correct the handover accordingly.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Reconcile the fresh-session losses before requesting the owner’s ruling.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No ship: the disposition treats all remaining losses as an evaluation artefact, but four came from sessions new to the baseline.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "[B] Four fresh-session losses are attributed to the repeat-pass artefact",
+        "body": "The record says 12 of the 16 remaining losses came from sessions already consolidated at the baseline and four came from new sessions (lines 130–134). The decision analysis then attributes all 16 to handling a session whose earlier pass was on record. Those four losses occurred in the normal first-pass scenario, so the artefact cannot explain them. This weakens the claim that the output is faithful, which is part of the spec’s decision rule for superseding the filter. The same overstatement appears in the handover.",
+        "file": "docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md",
+        "line_start": 212,
+        "line_end": 214,
+        "confidence": 0.97,
+        "recommendation": "Separate the four fresh-session losses from the 12 repeat-pass losses, state their severities and causes, then reassess the spec’s faithfulness condition and proposed disposition. Correct the handover accordingly."
+      }
+    ],
+    "next_steps": [
+      "Reconcile the fresh-session losses before requesting the owner’s ruling."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship: the disposition treats all remaining losses as an evaluation artefact, but four came from sessions new to the baseline.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[B] Four fresh-session losses are attributed to the repeat-pass artefact\",\n      \"body\": \"The record says 12 of the 16 remaining losses came from sessions already consolidated at the baseline and four came from new sessions (lines 130–134). The decision analysis then attributes all 16 to handling a session whose earlier pass was on record. Those four losses occurred in the normal first-pass scenario, so the artefact cannot explain them. This weakens the claim that the output is faithful, which is part of the spec’s decision rule for superseding the filter. The same overstatement appears in the handover.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 212,\n      \"line_end\": 214,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Separate the four fresh-session losses from the 12 repeat-pass losses, state their severities and causes, then reassess the spec’s faithfulness condition and proposed disposition. Correct the handover accordingly.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Reconcile the fresh-session losses before requesting the owner’s ruling.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
