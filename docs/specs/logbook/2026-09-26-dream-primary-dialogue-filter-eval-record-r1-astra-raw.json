@@ -1,0 +1,74 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c58869bb05f620b034a8e438ebf91d24a5bb8389",
+    "baseRef": "c58869bb05f620b034a8e438ebf91d24a5bb8389",
+    "explicit": true
+  },
+  "threadId": "01a0ddee-e94d-7910-8b40-f30ee7ea405b",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c58869bb05f620b034a8e438ebf91d24a5bb8389 from merge-base c58869bb05f620b034a8e438ebf91d24a5bb8389."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship: the evaluation omits a baseline note central to its loss findings, and its proposed disposition relies on an unverified comparison. The committed record also discloses private session details.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[B] Judge lacked the baseline note used to explain the important losses\",\n      \"body\": \"The judge received only the five changed notes and explicitly could not see the unchanged 09-24 daily log. The record then uses that log to assert which losses were real and to attribute all three high-severity losses to re-fed-session consolidation. A later keyword check cannot establish whether the baseline already captured those decisions in other wording. This leaves the entry condition’s important-loss assessment unresolved.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 101,\n      \"line_end\": 108,\n      \"confidence\": 0.96,\n      \"recommendation\": \"Give the judge the complete relevant pre-run notes, including the 09-24 log, then reconcile the loss list and disposition.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[B] The deterministic rule’s claimed benefit is not traced to judge verdicts\",\n      \"body\": \"The 27,509-character simulation is counted by prefix, but the record does not cross-tab its removed messages against the judge’s LOW-VALUE blocks. Therefore it cannot establish that four fifths of the 35,013 low-value characters are safely removable. If all 27,509 were low-value, the residual would be 7,504 characters, not the stated roughly 12,000. This unverified overlap is central to the recommendation to supersede the filter.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 160,\n      \"line_end\": 170,\n      \"confidence\": 0.91,\n      \"recommendation\": \"Report the exact intersection of simulated removals and judge block verdicts, check retained important material, and recompute the residual on one denominator before proposing disposition.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[B] Committed findings disclose private session substance\",\n      \"body\": \"The record names specific project issues, purchasing preferences, a contract-signature issue, and what an earlier daily log contains. These are details learned from the owner’s private transcripts and notes, beyond the session IDs, sizes, and verdict needed for the committed evaluation record. The statement that no transcript or note text was committed addresses verbatim text but not this disclosure.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 112,\n      \"line_end\": 127,\n      \"confidence\": 0.88,\n      \"recommendation\": \"Replace the private examples with numbered loss and claim categories; keep the detailed evidence in the owner-only evaluation root.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[C] Codex worker explanation contradicts the projection code\",\n      \"body\": \"The record says the projection keeps `user` and `developer` roles and that worker tasks arrive in neither. The code accepts eligible `user` messages and `assistant` final answers, rejects `developer`, and excludes subagent rollouts through the first `session_meta.thread_source` gate. The same incorrect role explanation appears in the handover. It misidentifies why worker sessions can project to zero and could misdirect the proposed projection follow-up.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 77,\n      \"line_end\": 82,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Correct both documents to describe the `thread_source` eligibility gate and the roles the projection actually retains.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Complete the baseline-aware judge review and reconcile its findings.\",\n    \"Validate the simulated removals against block verdicts, then revise the disposition and sanitize the committed record.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No ship: the evaluation omits a baseline note central to its loss findings, and its proposed disposition relies on an unverified comparison. The committed record also discloses private session details.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "[B] Judge lacked the baseline note used to explain the important losses",
+        "body": "The judge received only the five changed notes and explicitly could not see the unchanged 09-24 daily log. The record then uses that log to assert which losses were real and to attribute all three high-severity losses to re-fed-session consolidation. A later keyword check cannot establish whether the baseline already captured those decisions in other wording. This leaves the entry condition’s important-loss assessment unresolved.",
+        "file": "docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md",
+        "line_start": 101,
+        "line_end": 108,
+        "confidence": 0.96,
+        "recommendation": "Give the judge the complete relevant pre-run notes, including the 09-24 log, then reconcile the loss list and disposition."
+      },
+      {
+        "severity": "medium",
+        "title": "[B] The deterministic rule’s claimed benefit is not traced to judge verdicts",
+        "body": "The 27,509-character simulation is counted by prefix, but the record does not cross-tab its removed messages against the judge’s LOW-VALUE blocks. Therefore it cannot establish that four fifths of the 35,013 low-value characters are safely removable. If all 27,509 were low-value, the residual would be 7,504 characters, not the stated roughly 12,000. This unverified overlap is central to the recommendation to supersede the filter.",
+        "file": "docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md",
+        "line_start": 160,
+        "line_end": 170,
+        "confidence": 0.91,
+        "recommendation": "Report the exact intersection of simulated removals and judge block verdicts, check retained important material, and recompute the residual on one denominator before proposing disposition."
+      },
+      {
+        "severity": "medium",
+        "title": "[B] Committed findings disclose private session substance",
+        "body": "The record names specific project issues, purchasing preferences, a contract-signature issue, and what an earlier daily log contains. These are details learned from the owner’s private transcripts and notes, beyond the session IDs, sizes, and verdict needed for the committed evaluation record. The statement that no transcript or note text was committed addresses verbatim text but not this disclosure.",
+        "file": "docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md",
+        "line_start": 112,
+        "line_end": 127,
+        "confidence": 0.88,
+        "recommendation": "Replace the private examples with numbered loss and claim categories; keep the detailed evidence in the owner-only evaluation root."
+      },
+      {
+        "severity": "medium",
+        "title": "[C] Codex worker explanation contradicts the projection code",
+        "body": "The record says the projection keeps `user` and `developer` roles and that worker tasks arrive in neither. The code accepts eligible `user` messages and `assistant` final answers, rejects `developer`, and excludes subagent rollouts through the first `session_meta.thread_source` gate. The same incorrect role explanation appears in the handover. It misidentifies why worker sessions can project to zero and could misdirect the proposed projection follow-up.",
+        "file": "docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md",
+        "line_start": 77,
+        "line_end": 82,
+        "confidence": 0.99,
+        "recommendation": "Correct both documents to describe the `thread_source` eligibility gate and the roles the projection actually retains."
+      }
+    ],
+    "next_steps": [
+      "Complete the baseline-aware judge review and reconcile its findings.",
+      "Validate the simulated removals against block verdicts, then revise the disposition and sanitize the committed record."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship: the evaluation omits a baseline note central to its loss findings, and its proposed disposition relies on an unverified comparison. The committed record also discloses private session details.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"[B] Judge lacked the baseline note used to explain the important losses\",\n      \"body\": \"The judge received only the five changed notes and explicitly could not see the unchanged 09-24 daily log. The record then uses that log to assert which losses were real and to attribute all three high-severity losses to re-fed-session consolidation. A later keyword check cannot establish whether the baseline already captured those decisions in other wording. This leaves the entry condition’s important-loss assessment unresolved.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 101,\n      \"line_end\": 108,\n      \"confidence\": 0.96,\n      \"recommendation\": \"Give the judge the complete relevant pre-run notes, including the 09-24 log, then reconcile the loss list and disposition.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[B] The deterministic rule’s claimed benefit is not traced to judge verdicts\",\n      \"body\": \"The 27,509-character simulation is counted by prefix, but the record does not cross-tab its removed messages against the judge’s LOW-VALUE blocks. Therefore it cannot establish that four fifths of the 35,013 low-value characters are safely removable. If all 27,509 were low-value, the residual would be 7,504 characters, not the stated roughly 12,000. This unverified overlap is central to the recommendation to supersede the filter.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 160,\n      \"line_end\": 170,\n      \"confidence\": 0.91,\n      \"recommendation\": \"Report the exact intersection of simulated removals and judge block verdicts, check retained important material, and recompute the residual on one denominator before proposing disposition.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[B] Committed findings disclose private session substance\",\n      \"body\": \"The record names specific project issues, purchasing preferences, a contract-signature issue, and what an earlier daily log contains. These are details learned from the owner’s private transcripts and notes, beyond the session IDs, sizes, and verdict needed for the committed evaluation record. The statement that no transcript or note text was committed addresses verbatim text but not this disclosure.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 112,\n      \"line_end\": 127,\n      \"confidence\": 0.88,\n      \"recommendation\": \"Replace the private examples with numbered loss and claim categories; keep the detailed evidence in the owner-only evaluation root.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"[C] Codex worker explanation contradicts the projection code\",\n      \"body\": \"The record says the projection keeps `user` and `developer` roles and that worker tasks arrive in neither. The code accepts eligible `user` messages and `assistant` final answers, rejects `developer`, and excludes subagent rollouts through the first `session_meta.thread_source` gate. The same incorrect role explanation appears in the handover. It misidentifies why worker sessions can project to zero and could misdirect the proposed projection follow-up.\",\n      \"file\": \"docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md\",\n      \"line_start\": 77,\n      \"line_end\": 82,\n      \"confidence\": 0.99,\n      \"recommendation\": \"Correct both documents to describe the `thread_source` eligibility gate and the roles the projection actually retains.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Complete the baseline-aware judge review and reconcile its findings.\",\n    \"Validate the simulated removals against block verdicts, then revise the disposition and sanitize the committed record.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

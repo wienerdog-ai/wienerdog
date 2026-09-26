@@ -43,7 +43,86 @@ resuming it.
 
 ## The remaining work, in recommended order
 
-> **▶ START HERE — session close 2026-09-26, written for a cold start.**
+> **▶ START HERE — 2026-09-26 evening: the filter's offline evaluation is DONE; one owner ruling is open.**
+> Measured on `main` at `c58869bb` plus PR #319. No agent running, no
+> worktree of this session left. The disposable evaluation root `~/wd-eval/`
+> (0700, owner's machine only) is left in place for inspection — the judge
+> verdicts are `~/wd-eval/judge/verdict.md` and `verdict-r2.md`; deleting
+> the root is the owner's act.
+>
+> **WHAT WAS DONE.** Nine of the owner's own sessions (six Claude, three
+> Codex; 857,445 intake bytes → 120,652 projected bytes) went through the
+> installed 0.15.0 dream against a clone of the live vault at `b817b12`
+> (204 s, brain `claude-opus-5-5`, 5 notes), and a separate
+> `claude-opus-5-5` judge at high effort read the projected dialogue, the
+> pre-run notes and the diff in two rounds (383 s + 96 s; the second round,
+> with the baseline daily logs visible, was owed to the Codex gate on the
+> record). Record:
+> `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`
+> (identities, counts, verdicts — no transcript or note substance; the repo is
+> public). The result block at the spec's entry condition points to it. **MERGED BY SQUASH under this
+> session's merge authorization; one residual decision is the owner's.** PR
+> #319's first commit (`97e45ff0`) carried
+> item-level topic phrases from the sampled sessions and the 09-24 daily log
+> (about a dozen; no verbatim transcript or note text); the gates caught it
+> and the text is gone from the tip. The session's permission layer refused a history
+> rewrite, so the commit is still in the branch, **and it is already
+> published**: it is reachable through the remote branch
+> `docs/filter-offline-evaluation-2026-09-26` and through the PR's ref.
+> **Squash-merge** only keeps it out of `main`; it retracts nothing: the
+> branch reaches it until deleted, and the PR ref persists for the life of
+> the repository (only GitHub Support purges it). Its cost: the three Codex
+> raw commits the round record cites as proof-before-adjudication are then
+> provable only off `main` (the raw files still land in the squash commit).
+> A **merge commit** carries `97e45ff0` into `main` as well. The branch was
+> deleted at merge, so the PR ref is the remaining path. Removing the
+> published material is a separate decision — a Support request — and the
+> owner's own act: **decide whether the exposure warrants it.** The
+> evaluation's own two harness transcripts were moved out of
+> `~/.claude/projects/` into `~/wd-eval/harness-transcripts/` so tonight's
+> live dream does not consolidate evaluation artefacts; the live ledger was not
+> edited.
+>
+> **RESULT IN ONE PARAGRAPH.** The judge marked 41 of 71 blocks (34.6 % of the
+> projected characters, exact) not worth remembering, found that this material
+> caused mild dilution plus one low-severity error (five instances in four
+> notes; the record's Findings C), that no loss sits inside it, and rated a
+> block-selection filter **MARGINAL**; with the baseline visible, no
+> high-severity loss or unsupported claim remained. A prefix count shows
+> 16.4 % of the characters (35 of 132 messages) are harness task notifications
+> and local-command echoes passing through as `user` records — a fixed rule
+> removes them against the projection's Done contract with nothing kept lost;
+> the filter's remaining target is 20.8 %: the three machine-authored sessions
+> whole (11.1 %, the source of all five harm instances) and interim replies
+> inside the human-driven sessions (9.6 %) that left no trace in the notes; no
+> positional rule removes the interim replies safely (two were measured). The 16 remaining losses (0 high) are all
+> one first-pass defect — totals and to-dos recorded, the rest scored
+> near-zero novelty on an unchecked assumption that it is written elsewhere:
+> 12 made by the live 09-24 dream (re-exposed by the evaluation's empty
+> ledger; production never re-feeds an unchanged session) and 4 (three medium,
+> one low) made by this run on two new sessions; none sits in a low-value
+> block, so a filter cannot touch them. Codex rollouts whose header carries a `thread_source` other than `"user"`
+> (an absent key is also eligible) project to zero by design (row A4).
+>
+> **OWNER RULING NEEDED (one line):** the evidence leans to the spec's *not
+> material* branch, but the number is not negligible and the parking was the
+> owner's. Recommended: **supersede `WP-dream-primary-dialogue-filter`;
+> wd-architect files the deterministic strip (task-notification and
+> local-command `user` records) as a fix against the projection's Done
+> contract, and a candidate package for the first-pass novelty finding.** Until the
+> ruling the spec stays `Draft`, parked as before.
+>
+> **DO NEXT (unblocked): `WP-vault-write-cas-window` design round** —
+> wd-architect (Opus, high) → Codex design gate → `Ready` → dispatch-time
+> re-verification → implementer on Opus-high → both PR gates. The block below
+> still describes it correctly.
+>
+> **Housekeeping noticed, not done:** two `Superseded` stubs sit in the specs
+> root (`WP-adr-0019-quarantine-uninstall-export`,
+> `WP-ep2-atomic-withhold-handoff`) although `docs/specs/README.md` says a
+> Superseded spec moves to `done/`; the earlier block below counted one.
+>
+> **Session close 2026-09-26 (earlier block, kept as the record of how the day got here).**
 > Measured on `main` at `6f66ce7f`. No PR open, no agent running, no worktree of
 > this session left (the `prunable` worktrees under an older session's
 > scratchpad and the `wienerdog-a9a10/` and `wienerdog-felho/` checkouts predate

@@ -1,0 +1,30 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c58869bb05f620b034a8e438ebf91d24a5bb8389",
+    "baseRef": "c58869bb05f620b034a8e438ebf91d24a5bb8389",
+    "explicit": true
+  },
+  "threadId": "01a0de0f-7cad-7980-bf01-8804b10e630b",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against c58869bb05f620b034a8e438ebf91d24a5bb8389 from merge-base c58869bb05f620b034a8e438ebf91d24a5bb8389."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\"verdict\":\"approve\",\"summary\":\"Ship: the round-4 harm finding is fixed. The round-4 gate row matches the committed raw review, and the final sweep found no material inconsistency or owner-only decision applied.\",\"findings\":[],\"next_steps\":[]}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "approve",
+    "summary": "Ship: the round-4 harm finding is fixed. The round-4 gate row matches the committed raw review, and the final sweep found no material inconsistency or owner-only decision applied.",
+    "findings": [],
+    "next_steps": []
+  },
+  "rawOutput": "{\"verdict\":\"approve\",\"summary\":\"Ship: the round-4 harm finding is fixed. The round-4 gate row matches the committed raw review, and the final sweep found no material inconsistency or owner-only decision applied.\",\"findings\":[],\"next_steps\":[]}",
+  "parseError": null,
+  "reasoningSummary": []
+}
