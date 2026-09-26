@@ -1,0 +1,65 @@
+{
+  "suite": "tests/unit/dream-vault-write.test.js",
+  "proofs": [
+    {
+      "id": "cas-create-arm-recheck-after-barrier",
+      "wp": "WP-vault-write-cas-window",
+      "criterion": "AC1",
+      "why": "AC1 is not vacuously green: a second existence check after the barrier, on the create arm only, narrows the create-arm window, so the concurrent create is no longer overwritten and the residual test must go red",
+      "file": "src/core/dream/vault-write.js",
+      "find": "    if (opts.beforePublish !== undefined) {\n      try {\n        opts.beforePublish();\n      } catch (e) {\n        return refuse(`the write failed unexpectedly (${(e && e.code) || (e && e.message)})`);\n      }\n    }\n",
+      "replace": "    if (opts.beforePublish !== undefined) {\n      try {\n        opts.beforePublish();\n      } catch (e) {\n        return refuse(`the write failed unexpectedly (${(e && e.code) || (e && e.message)})`);\n      }\n    }\n    if (!conditional && lstatOrNull(targetLexical)) { /* RP_MUT_CAS_P1 */\n      return refuse(`${resolvedRel} already exists and this write asserted it would not`);\n    }\n",
+      "marker": "RP_MUT_CAS_P1",
+      "occurrences": 1,
+      "testNamePattern": "\\[CAS-",
+      "expectRed": [
+        {
+          "test": [
+            "dream-vault-write: [CAS-1] RESIDUAL — on the create arm, a file created inside the window is overwritten (W1)"
+          ],
+          "signal": "CAS-1 residual: the concurrent create is overwritten"
+        }
+      ]
+    },
+    {
+      "id": "cas-overwrite-recompare-after-barrier",
+      "wp": "WP-vault-write-cas-window",
+      "criterion": "AC2",
+      "why": "AC2 is not vacuously green: a second compare against `expect` after the barrier narrows the overwrite-arm window, so the in-place save is no longer overwritten and the residual test must go red",
+      "file": "src/core/dream/vault-write.js",
+      "find": "    if (opts.beforePublish !== undefined) {\n      try {\n        opts.beforePublish();\n      } catch (e) {\n        return refuse(`the write failed unexpectedly (${(e && e.code) || (e && e.message)})`);\n      }\n    }\n",
+      "replace": "    if (opts.beforePublish !== undefined) {\n      try {\n        opts.beforePublish();\n      } catch (e) {\n        return refuse(`the write failed unexpectedly (${(e && e.code) || (e && e.message)})`);\n      }\n    }\n    if (conditional && (!lstatOrNull(targetLexical) || Buffer.compare(fs.readFileSync(targetLexical), opts.expect) !== 0)) { /* RP_MUT_CAS_P2 */\n      return refuse(`${resolvedRel} no longer holds the bytes this write was decided against`);\n    }\n",
+      "marker": "RP_MUT_CAS_P2",
+      "occurrences": 1,
+      "testNamePattern": "\\[CAS-",
+      "expectRed": [
+        {
+          "test": [
+            "dream-vault-write: [CAS-2] RESIDUAL — on the overwrite arm, a save inside the window is overwritten, in place or by rename (W2)"
+          ],
+          "signal": "CAS-2 residual: the in-place save is overwritten"
+        }
+      ]
+    },
+    {
+      "id": "cas-barrier-throw-escapes",
+      "wp": "WP-vault-write-cas-window",
+      "criterion": "AC3",
+      "why": "AC3 is not vacuously green: with the barrier call no longer wrapped, a WienerdogError it throws escapes past the unwind instead of becoming a refusal, and the barrier contract test must go red",
+      "file": "src/core/dream/vault-write.js",
+      "find": "    if (opts.beforePublish !== undefined) {\n      try {\n        opts.beforePublish();\n      } catch (e) {\n        return refuse(`the write failed unexpectedly (${(e && e.code) || (e && e.message)})`);\n      }\n    }\n",
+      "replace": "    if (opts.beforePublish !== undefined) opts.beforePublish(); /* RP_MUT_CAS_P3 */\n",
+      "marker": "RP_MUT_CAS_P3",
+      "occurrences": 1,
+      "testNamePattern": "\\[CAS-",
+      "expectRed": [
+        {
+          "test": [
+            "dream-vault-write: [CAS-3] the `beforePublish` barrier — once per publish, never on a refusal, a throw is a refusal (W3)"
+          ],
+          "signal": "CAS-3 a throw from the barrier is a refusal"
+        }
+      ]
+    }
+  ]
+}

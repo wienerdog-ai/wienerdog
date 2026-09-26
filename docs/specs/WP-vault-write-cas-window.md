@@ -1,7 +1,7 @@
 ---
 id: WP-vault-write-cas-window
 title: Pin the vault write's check-to-publish window as a tested residual on both arms, and say why it stays open
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: [WP-dream-vault-write-primitive]

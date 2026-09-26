@@ -1598,10 +1598,12 @@ function promote(o) {
 
     const res = writeFile(call);
     if (!res || res.written !== true) {
-      // The compare→promote window is NARROWED, not closed: a vault change
-      // visible at the re-read abandons the write and the path is refused, and
-      // a save landing between the re-read and the `rename` is the primitive's
-      // stated residual, inherited here unchanged.
+      // The compare→promote window is NARROWED, not closed, on both arms (the
+      // primitive's limit B, WP-vault-write-cas-window): a vault change visible
+      // at the primitive's last check abandons the write and the path is
+      // refused, and a save landing between that check and the `rename` — an
+      // existing note edited, or a new note's path created — is the
+      // primitive's stated residual, inherited here unchanged.
       // A redaction refused HERE — after the gate already preserved its copy —
       // still names that copy (Table Q, row Q3), exactly as the decision-phase
       // refusals do.
