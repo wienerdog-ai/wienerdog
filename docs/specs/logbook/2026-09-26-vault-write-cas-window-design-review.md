@@ -86,6 +86,23 @@ contradict. It does not replace that read.
 | *(extra)* `## Dispatch precondition — owner items` | present | not a template section; the shape the current pipeline expects; five items |
 | *(extra)* package note and size paragraph under the title | present | not a template section |
 
+### Clean-context executor, round zero (orchestrator-run, 2026-09-26)
+
+Per the runbook, a separate executor that took no part in drafting — a fresh
+general-purpose agent on Sonnet, given exactly two inputs, `docs/specs/_TEMPLATE.md`
+and this spec at `9b40d3cc` — walked the template's section list and
+frontmatter keys. Result: **conformant** — every template section PRESENT
+verbatim at the same level and in template order (H1 at :12, Context :41,
+Current state :143, Deliverables :221, Exact contracts :239, Contract
+reference :387, Contract table(s) :399, Mirrored Surface Checklist :423,
+Implementation notes :464, Security checklist :544, Acceptance criteria :564,
+Verification steps :617, Out of scope :654, Definition of done :723); every
+frontmatter key present (`epic` set, not commented). Extra headings, all
+allowed: `### Open questions, answered` (:122), Tables K and X as H4 under
+Contract table(s) (:401, :411), `## Dispatch precondition — owner items`
+(:673). The executor noted that `## Erratum 1` at :331 is literal text inside
+a fenced block, not a heading of this document.
+
 ## 2. Measurements added by this design round
 
 These were run by the architect on this machine (darwin 25.5.0, Node v25.9.0,
