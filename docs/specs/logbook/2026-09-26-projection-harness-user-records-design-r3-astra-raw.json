@@ -1,0 +1,43 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 8117e221",
+    "baseRef": "8117e221",
+    "explicit": true
+  },
+  "threadId": "01a0df81-871a-7631-9568-fed8d66272c5",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate-hur",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 8117e221 from merge-base 8117e221d46e20028f50f54bc8031806d101626c."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship. The per-session quarantine closes the three round-2 halt failures, but its trigger still misses a valid request shape and can permanently mark a request-less projection as processed.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"A/HEAVY — Table G misses array-content requests\",\n      \"body\": \"G1 treats a `user` role in `gateExtract.messages` as proof that the raw session contained a request. For Claude array-content records, the raw parser emits only `tool_result` messages, not a `user` message (`src/core/transcripts/claude.js:153-171`). If such a record contains the person's text and a later Claude Code version changes `promptSource`, Table H declines it; G1 then sees a reply but no user role in either extract. The collector admits the session and can mark it processed, permanently losing that request from the dream. The spec acknowledges array-content prompts but relies on the measured files also having string-content records; that does not hold for an array-only session.\",\n      \"file\": \"docs/specs/WP-dream-projection-harness-user-records.md\",\n      \"line_start\": 548,\n      \"line_end\": 549,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Carry a text-free, pre-cap indication that a parsed Claude record contained a request-shaped string or text block, and use it for G1. Add an array-only request with a declined source field to the collector and mixed-night tests. This changes Table G and its Deliverables.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Apply the pinned round-3 HEAVY-finding rule: re-cut to candidate 0 and take Tables H and G together to the owner.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No ship. The per-session quarantine closes the three round-2 halt failures, but its trigger still misses a valid request shape and can permanently mark a request-less projection as processed.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "A/HEAVY — Table G misses array-content requests",
+        "body": "G1 treats a `user` role in `gateExtract.messages` as proof that the raw session contained a request. For Claude array-content records, the raw parser emits only `tool_result` messages, not a `user` message (`src/core/transcripts/claude.js:153-171`). If such a record contains the person's text and a later Claude Code version changes `promptSource`, Table H declines it; G1 then sees a reply but no user role in either extract. The collector admits the session and can mark it processed, permanently losing that request from the dream. The spec acknowledges array-content prompts but relies on the measured files also having string-content records; that does not hold for an array-only session.",
+        "file": "docs/specs/WP-dream-projection-harness-user-records.md",
+        "line_start": 548,
+        "line_end": 549,
+        "confidence": 0.97,
+        "recommendation": "Carry a text-free, pre-cap indication that a parsed Claude record contained a request-shaped string or text block, and use it for G1. Add an array-only request with a declined source field to the collector and mixed-night tests. This changes Table G and its Deliverables."
+      }
+    ],
+    "next_steps": [
+      "Apply the pinned round-3 HEAVY-finding rule: re-cut to candidate 0 and take Tables H and G together to the owner."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship. The per-session quarantine closes the three round-2 halt failures, but its trigger still misses a valid request shape and can permanently mark a request-less projection as processed.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"A/HEAVY — Table G misses array-content requests\",\n      \"body\": \"G1 treats a `user` role in `gateExtract.messages` as proof that the raw session contained a request. For Claude array-content records, the raw parser emits only `tool_result` messages, not a `user` message (`src/core/transcripts/claude.js:153-171`). If such a record contains the person's text and a later Claude Code version changes `promptSource`, Table H declines it; G1 then sees a reply but no user role in either extract. The collector admits the session and can mark it processed, permanently losing that request from the dream. The spec acknowledges array-content prompts but relies on the measured files also having string-content records; that does not hold for an array-only session.\",\n      \"file\": \"docs/specs/WP-dream-projection-harness-user-records.md\",\n      \"line_start\": 548,\n      \"line_end\": 549,\n      \"confidence\": 0.97,\n      \"recommendation\": \"Carry a text-free, pre-cap indication that a parsed Claude record contained a request-shaped string or text block, and use it for G1. Add an array-only request with a declined source field to the collector and mixed-night tests. This changes Table G and its Deliverables.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Apply the pinned round-3 HEAVY-finding rule: re-cut to candidate 0 and take Tables H and G together to the owner.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}

@@ -1,0 +1,53 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 8117e221",
+    "baseRef": "8117e221",
+    "explicit": true
+  },
+  "threadId": "01a0df43-8aea-7b92-a597-702c675383dd",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate-hur",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 8117e221 from merge-base 8117e221d46e20028f50f54bc8031806d101626c."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\"verdict\":\"needs-attention\",\"summary\":\"No ship: the design permits silent loss of all Claude user dialogue after a harness field change, and Table H overstates the taint behavior of declined records.\",\"findings\":[{\"severity\":\"high\",\"title\":\"[A, HEAVY] Harness field drift can silently erase user dialogue\",\"body\":\"Owner item 2 recommends no fallback or diagnostic even though it states that renaming `promptSource` or changing `typed` would decline every Claude user record. The dream would retain assistant replies without their requests. The committed measurement script reports only accepted messages, and the verification filter also passes when there are zero accepted user messages, so the proposed check would not detect this failure. The 25 measured versions do not establish safety for a later release.\",\"file\":\"docs/specs/WP-dream-projection-harness-user-records.md\",\"line_start\":675,\"line_end\":684,\"confidence\":0.98,\"recommendation\":\"Require a visible per-file or per-run signal when parsed Claude user records exist but none are accepted; make the re-measurement fail on that state. Put the diagnostic decision before dispatch.\"},{\"severity\":\"medium\",\"title\":\"[B, HEAVY] H3 conflicts with the existing taint scan\",\"body\":\"H3 says a declined record has 'no taint' and its content is never read. In `primary-dialogue.js`, step 2 inspects content blocks and step 3 scans for `tool_result` before `acceptClaude` decides the decline. A read-only probe with an `sdk` task notification containing a `tool_result` produced no message but left `tainted: true`. The conflicting contract could lead an implementer to skip that scan for declined notifications, allowing a later assistant reply to be flagged false.\",\"file\":\"docs/specs/WP-dream-projection-harness-user-records.md\",\"line_start\":397,\"line_end\":397,\"confidence\":0.94,\"recommendation\":\"State in Table H and Erratum 7 that declining adds no taint beyond steps 2–3, and that only the predicate avoids reading content. Add a declined notification carrying a `tool_result` to AC3.\"}],\"next_steps\":[\"Resolve the diagnostic owner item and correct the H3 wording and test before dispatch.\"]}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No ship: the design permits silent loss of all Claude user dialogue after a harness field change, and Table H overstates the taint behavior of declined records.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "[A, HEAVY] Harness field drift can silently erase user dialogue",
+        "body": "Owner item 2 recommends no fallback or diagnostic even though it states that renaming `promptSource` or changing `typed` would decline every Claude user record. The dream would retain assistant replies without their requests. The committed measurement script reports only accepted messages, and the verification filter also passes when there are zero accepted user messages, so the proposed check would not detect this failure. The 25 measured versions do not establish safety for a later release.",
+        "file": "docs/specs/WP-dream-projection-harness-user-records.md",
+        "line_start": 675,
+        "line_end": 684,
+        "confidence": 0.98,
+        "recommendation": "Require a visible per-file or per-run signal when parsed Claude user records exist but none are accepted; make the re-measurement fail on that state. Put the diagnostic decision before dispatch."
+      },
+      {
+        "severity": "medium",
+        "title": "[B, HEAVY] H3 conflicts with the existing taint scan",
+        "body": "H3 says a declined record has 'no taint' and its content is never read. In `primary-dialogue.js`, step 2 inspects content blocks and step 3 scans for `tool_result` before `acceptClaude` decides the decline. A read-only probe with an `sdk` task notification containing a `tool_result` produced no message but left `tainted: true`. The conflicting contract could lead an implementer to skip that scan for declined notifications, allowing a later assistant reply to be flagged false.",
+        "file": "docs/specs/WP-dream-projection-harness-user-records.md",
+        "line_start": 397,
+        "line_end": 397,
+        "confidence": 0.94,
+        "recommendation": "State in Table H and Erratum 7 that declining adds no taint beyond steps 2–3, and that only the predicate avoids reading content. Add a declined notification carrying a `tool_result` to AC3."
+      }
+    ],
+    "next_steps": [
+      "Resolve the diagnostic owner item and correct the H3 wording and test before dispatch."
+    ]
+  },
+  "rawOutput": "{\"verdict\":\"needs-attention\",\"summary\":\"No ship: the design permits silent loss of all Claude user dialogue after a harness field change, and Table H overstates the taint behavior of declined records.\",\"findings\":[{\"severity\":\"high\",\"title\":\"[A, HEAVY] Harness field drift can silently erase user dialogue\",\"body\":\"Owner item 2 recommends no fallback or diagnostic even though it states that renaming `promptSource` or changing `typed` would decline every Claude user record. The dream would retain assistant replies without their requests. The committed measurement script reports only accepted messages, and the verification filter also passes when there are zero accepted user messages, so the proposed check would not detect this failure. The 25 measured versions do not establish safety for a later release.\",\"file\":\"docs/specs/WP-dream-projection-harness-user-records.md\",\"line_start\":675,\"line_end\":684,\"confidence\":0.98,\"recommendation\":\"Require a visible per-file or per-run signal when parsed Claude user records exist but none are accepted; make the re-measurement fail on that state. Put the diagnostic decision before dispatch.\"},{\"severity\":\"medium\",\"title\":\"[B, HEAVY] H3 conflicts with the existing taint scan\",\"body\":\"H3 says a declined record has 'no taint' and its content is never read. In `primary-dialogue.js`, step 2 inspects content blocks and step 3 scans for `tool_result` before `acceptClaude` decides the decline. A read-only probe with an `sdk` task notification containing a `tool_result` produced no message but left `tainted: true`. The conflicting contract could lead an implementer to skip that scan for declined notifications, allowing a later assistant reply to be flagged false.\",\"file\":\"docs/specs/WP-dream-projection-harness-user-records.md\",\"line_start\":397,\"line_end\":397,\"confidence\":0.94,\"recommendation\":\"State in Table H and Erratum 7 that declining adds no taint beyond steps 2–3, and that only the predicate avoids reading content. Add a declined notification carrying a `tool_result` to AC3.\"}],\"next_steps\":[\"Resolve the diagnostic owner item and correct the H3 wording and test before dispatch.\"]}",
+  "parseError": null,
+  "reasoningSummary": []
+}

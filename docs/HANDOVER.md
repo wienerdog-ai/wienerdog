@@ -43,7 +43,35 @@ resuming it.
 
 ## The remaining work, in recommended order
 
-> **▶ START HERE — 2026-09-26, last rulings: no design round for `WP-dream-first-pass-novelty` (parked, Draft); GO on the `WP-dream-projection-harness-user-records` design round (wd-architect running on branch `docs/wp-projection-harness-user-records`; gates next); the two Superseded stubs moved to `done/` (this PR). Structural fact measured for that round, field names only: task notifications carry `origin.kind: "task-notification"` + `promptSource: "system"` (203/203), typed human messages `origin.kind: "human"`, slash-command echoes no marker, `claude -p` prompts `promptSource: "sdk"`; 3 of 94 human records carry no marker. Specs root now: two Drafts (harness-records, novelty), the Windows reap, the template, README, MILESTONES.**
+> **▶ START HERE — 2026-09-27, session end: the harness-records design round ESCALATED under its pinned circuit-breaker; ONE OWNER PRODUCT QUESTION is open; nothing is dispatchable.**
+> `WP-dream-projection-harness-user-records` (Draft, docs-only re-cut) went
+> through round zero (conformant) and three Codex Astra rounds: r1 1A+1B
+> (silent loss on a harness field rename; H3 taint wording) → a run-level halt;
+> r2 1A+2B on the halt → a per-session `no-request` quarantine with ADR-0023
+> Amendment 5 drafted; r3 1A on that trigger (array-content requests invisible
+> without a parser change) → the pin fired: Tables H and G kept as RECORDED
+> DESIGN, the last implementable contract cited as `f051e24a`, the product
+> question written into the spec's Dispatch precondition with three priced
+> options — (i) rule + net together, M; (ii) net first on both harnesses then
+> the rule, M + S; (iii) build nothing — and the architect's recommendation:
+> **(iii), plus commission a narrower, unreviewed design that FLAGS
+> task-notification records untrusted instead of declining them** (no drift
+> cliff: a renamed field falls back to today's behaviour). Facts that
+> survive whatever the owner rules: Table H itself is sound (predicate on
+> `promptSource`; the three "unmarked human" records were compaction
+> summaries and an interruption marker, so fail-closed costs zero); the Done
+> projection spec's claim that no field separates a `claude -p` prompt from
+> a human one is false by value (Erratum 8, lands alone as an S docs package);
+> **240 of the owner's 408 local Codex rollouts already project replies with
+> no request (pre-0.151 Codex wrote no `content_item_kinds`) and all 240 are
+> marked processed on this install** — the same failure, already shipped on
+> the other arm, with no net. Records: the round record
+> `…-projection-harness-user-records-design-review.md` (raws `8c02cf0c`,
+> `7d9b95ee`, `e15cb581`), the measurement script beside it.
+> **Specs root:** three Drafts (harness-records, first-pass-novelty, Windows
+> reap). **Ready queue: empty.** Standing owner items unchanged.
+>
+> > **▶ START HERE — 2026-09-26, last rulings: no design round for `WP-dream-first-pass-novelty` (parked, Draft); GO on the `WP-dream-projection-harness-user-records` design round (wd-architect running on branch `docs/wp-projection-harness-user-records`; gates next); the two Superseded stubs moved to `done/` (this PR). Structural fact measured for that round, field names only: task notifications carry `origin.kind: "task-notification"` + `promptSource: "system"` (203/203), typed human messages `origin.kind: "human"`, slash-command echoes no marker, `claude -p` prompts `promptSource: "sdk"`; 3 of 94 human records carry no marker. Specs root now: two Drafts (harness-records, novelty), the Windows reap, the template, README, MILESTONES.**
 >
 > > **▶ START HERE — 2026-09-26, very late: the paired pilot for `WP-dream-first-pass-novelty` ran and OVERTURNED the finding behind it; one owner call is open (keep the stub parked, or supersede it).**
 > Rulings tonight, verbatim in the logbook: "no purge needed" (`97e45ff0`
