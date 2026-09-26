@@ -66,9 +66,24 @@ resuming it.
 > are closed); `WP-ep2-retention-prune-timing-test` filed **Superseded** by its
 > two Done successors (item 3 closed). Still open from that list: item 2 is now
 > the evaluation itself, item 4 needs its design round, item 5 the Windows
-> runner, item 7 unchanged. **Next: the 0.15.0 release** (`chore/release-0.15.0`,
-> stacked on this PR), then the filter's offline evaluation and the cas-window
-> design round.
+> runner, item 7 unchanged.
+>
+> **0.15.0 RELEASED 2026-09-26.** #314 → #315 → #316 merged in order on the
+> owner's instruction; `main` = `dfc03cd5`; tag `v0.15.0` on that commit;
+> published by the owner from the tag (`+ wienerdog@0.15.0`, `latest` =
+> 0.15.0); the published tarball's 123 files match `npm pack --dry-run` on the
+> tag exactly; GitHub release created from the CHANGELOG section; CI on
+> `dfc03cd5` green; local suite 3080 / 3068 / 0 / 12. The owner's install is on
+> 0.15.0 (`~/.wienerdog/app/current → 0.15.0`, `doctor` clean apart from the
+> standing oversize-transcript warning), so tonight's dream is the first to run
+> the nine-package wave. **Two things learned, unspecced:** (a) the first
+> `npm publish` failed with `E404` on PUT because the Sep-18 granular token had
+> expired — `npm whoami` returned 401 — and `npm login` (browser flow) fixed it;
+> the runbook's step 7 could say "check `npm whoami` first". (b) `wienerdog sync`
+> run from the vendored shim re-vendors the copy it runs from (0.14.0 stayed
+> 0.14.0); the update path is `npx wienerdog@latest sync`, which the runbook
+> does not list as a post-release step. **Next: the filter's offline
+> evaluation, then the cas-window design round.**
 >
 > **Status pass, 2026-09-22 #20 (the 2026-09-19 "go" ruling, executed end to end — all NINE Ready specs implemented, gated and merged; the backlog of Ready work is EMPTY.)**
 > Measured on `main` at `032696f7`, not transcribed.
