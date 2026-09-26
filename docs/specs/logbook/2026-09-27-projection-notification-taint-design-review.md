@@ -131,6 +131,24 @@ confirm or contradict.
 | *(extra)* `## Dispatch precondition — owner items` | present | three items, placed before Definition of done |
 | *(extra)* status banner under the title | present | not a template section |
 
+### Clean-context executor, round zero (orchestrator-run, 2026-09-27)
+
+A fresh general-purpose agent on Sonnet, given exactly `docs/specs/_TEMPLATE.md`
+and the two specs at `89b77eb3`, walked the template's section list and
+frontmatter keys. **`WP-dream-projection-notification-taint`: conformant** —
+every template section PRESENT verbatim in order (H1 :12, Context :26, Current
+state :144, Deliverables :201, Exact contracts :214, Contract reference :353,
+Contract table(s) :363, Mirrored Surface Checklist :375, Implementation notes
+:407, Security checklist :459, Acceptance criteria :474, Verification steps
+:507, Out of scope :571, Definition of done :630); frontmatter complete; extra
+headings all allowed (Table N :365, two H3s under Verification steps, the
+Dispatch precondition :589). **`WP-dream-projection-done-spec-errata`:
+conformant under the template's own rule** — the executor reported the two
+H3s under Contract reference ABSENT, and the template (`_TEMPLATE.md:68`)
+instructs "replace this whole section with `N/A — …`" when fewer than two
+triggers fire, which is what the spec did (:197-199); Security checklist is
+N/A-marked (:216-218); frontmatter complete; no extra headings.
+
 ## 2. Measurements added by this design round
 
 Run by the architect on the owner's machine (darwin 25.5.0, Node v25.9.0),
