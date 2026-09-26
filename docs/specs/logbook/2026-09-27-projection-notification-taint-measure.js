@@ -76,7 +76,8 @@ for (const d of dirs) {
   for (const f of entries) {
     if (!f.isFile() || !f.name.endsWith('.jsonl')) continue;
     const p = path.join(projectsDir, d.name, f.name);
-    const st = fs.statSync(p);
+    let st;
+    try { st = fs.statSync(p); } catch { continue; } // vanished mid-scan: skip, never print its path
     if (since === null || st.mtimeMs > since) files.push({ p, size: st.size });
   }
 }

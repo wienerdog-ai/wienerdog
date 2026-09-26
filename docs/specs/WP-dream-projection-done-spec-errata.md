@@ -17,8 +17,8 @@ epic: dream-primary-dialogue
 > **A docs-only package.** It changes one Markdown file and no code, test or
 > fixture. Anyone can implement it as an ordinary docs PR; it needs no design
 > round of its own, because every sentence it adds is a measured fact already
-> recorded in a committed logbook entry, cited in the text. Filed on
-> 2026-09-27 under the owner's ruling
+> recorded in a committed logbook entry, cited in the text. Filed under the
+> owner's ruling of 2026-09-26,
 > `docs/specs/logbook/2026-09-27-owner-ruling-harness-records-option-iii.md`.
 
 ## Context (read this, nothing else)
@@ -39,7 +39,7 @@ facts that make three sentences of the Done spec wrong. Its round record is
 `docs/specs/logbook/2026-09-26-projection-harness-user-records-design-review.md`
 (**the round record**); every count below is from its §2, taken on the owner's
 local corpus (334 Claude transcript files, Claude Code 2.1.232–2.1.283,
-counts only, no transcript text read). The owner then ruled (2026-09-27,
+counts only, no transcript text read). The owner then ruled (2026-09-26,
 option (iii)) that **no decline rule is built**, so the three facts are filed
 as they stand:
 
@@ -136,7 +136,7 @@ E0:
 > is true:* the sentence holds for Codex (row A3 accepts only
 > `content_item_kinds` `"user.text"`) and for Claude `isMeta` records; for the
 > Claude records above it is a **named gap**, kept by the owner's ruling of
-> 2026-09-27 (`docs/specs/logbook/2026-09-27-owner-ruling-harness-records-option-iii.md`),
+> 2026-09-26 (`docs/specs/logbook/2026-09-27-owner-ruling-harness-records-option-iii.md`),
 > which builds no decline rule. *Found:* the filter's offline evaluation,
 > `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`.
 > **Class: a contract sentence the shipped rule does not implement, kept as a
@@ -147,8 +147,8 @@ E0:
 > Implementation note and row A5b compared top-level field sets, which are
 > identical. *What is true:* the VALUE of the top-level `promptSource` field
 > differs — `"sdk"` on a `claude -p` prompt; `"typed"`, `"queued"` or
-> `"suggestion_accepted"` on a person's — on every Claude Code version in the
-> corpus. No shipped code reads `promptSource`, so row A5b's contract is
+> `"suggestion_accepted"` on a person's — across the corpus's 25 Claude Code
+> versions. No shipped code reads `promptSource`, so row A5b's contract is
 > unchanged: `false` does not mean a human wrote the words. *Found:* the
 > design round above, §2.3 and §5. **Class: a measurement that answered a
 > narrower question than the sentence built on it.**
@@ -197,9 +197,9 @@ E4 — after the anchor
 ## Contract reference (optional — mark N/A if this WP is not contract-dense)
 
 N/A — one of seven triggers fires ((vii): E1–E4 restate E0), and the
-verification script below enforces every fact exhaustively: each inserted
-string occurs exactly once, and removing E0–E4 from the file yields the base
-file byte for byte.
+verification script below enforces every fact exhaustively: it rebuilds the
+expected file from the base and this spec's own blocks and anchors, and
+requires byte equality.
 
 ## Implementation notes & constraints
 
@@ -222,46 +222,53 @@ N/A — docs only; no code reads untrusted input.
 - [ ] **AC1** — E0 continues the errata blockquote directly after `:102`
       (through a line that is exactly `>`), and E1–E4 each sit directly after
       their anchor; `<DATE>` is replaced everywhere.
-- [ ] **AC2** — removing E0 (with its leading `>` line) and the four inline
-      strings E1–E4 from the modified file yields the base file byte for
-      byte: no other change.
+- [ ] **AC2** — the modified file equals the base file with exactly E0–E4
+      inserted, each verbatim from this spec's blocks (`<DATE>` replaced):
+      no other change.
 - [ ] **AC3** — `npm run lint` passes (markdownlint over the modified file).
 - [ ] Idempotence: `N/A — the package ships a docs edit, no command`.
 
 ## Verification steps (run these; paste output in the PR)
 
-The first command checks AC1 and AC2 together. Observed at drafting, with
-E0–E4 applied from this spec's own blocks to the file at `67359a5e`: applied →
-`errata: exact`; the base file (deliverable absent) → exit 1 (`inline marker
-not exactly once`); applied plus one byte changed elsewhere → exit 1 (`other
-bytes changed`).
+The first command checks AC1 and AC2 together. It rebuilds the expected file
+from the base and **this spec's own fenced blocks** — E0 after its head line,
+each of E1–E4 after its anchor as the prose above names it, `<DATE>` taken
+from E0's header in the modified file — and requires the modified file to
+equal that rebuild byte for byte. So a changed word inside a block, a marker
+placed after another anchor, or any other byte changed all fail. Observed at
+drafting, with E0–E4 applied to the file at `67359a5e` (round record
+`docs/specs/logbook/2026-09-27-projection-notification-taint-design-review.md`
+§10): applied → `errata: exact`; the base file (deliverable absent) → exit 1
+(`E0 not found`); applied with "0 of 11,884" changed to "5 of 11,884" inside
+E0 → exit 1; applied with one byte changed elsewhere → exit 1.
 
 ```bash
 node - <<'EOF'
 const fs = require('fs');
 const { execSync } = require('child_process');
+const fail = (m) => { console.error(m); process.exit(1); };
+const S = fs.readFileSync('docs/specs/WP-dream-projection-done-spec-errata.md', 'utf8');
 const F = 'docs/specs/done/WP-dream-primary-dialogue-projection.md';
 const base = execSync(`git show "$(git merge-base HEAD main)":${F}`).toString();
-let cur = fs.readFileSync(F, 'utf8');
-const fail = (m) => { console.error(m); process.exit(1); };
-if (cur.includes('<DATE>')) fail('a <DATE> placeholder remains');
-const inline = [
-  " (**Not true of Claude `user` records the harness writes — a named gap; see Erratum 7.**)",
-  " (**By field set; the `promptSource` value distinguishes them — see Erratum 8.**)",
-  ' (**By field NAMES only — see Erratum 8.**)',
-  " (**The third record's shape is constructed — see Erratum 9.**)",
-];
-for (const s of inline) {
-  if (cur.split(s).length !== 2) fail(`inline marker not exactly once: ${s}`);
-  cur = cur.replace(s, '');
+const cur = fs.readFileSync(F, 'utf8');
+const dm = /^> \*\*Errata, (\d{4}-\d{2}-\d{2}) — filed by `WP-dream-projection-done-spec-errata`\.\*\*$/m.exec(cur);
+if (!dm) fail('E0 not found');
+const block = (label) => {
+  const m = new RegExp('\\n' + label + '(?::| — ([\\s\\S]*?):)\\n\\n```text\\n([\\s\\S]*?)\\n```\\n').exec(S);
+  if (!m) fail(`${label} not found in the spec`);
+  const a = m[1] && /after the anchor\s+(?:``\s?([\s\S]*?)\s?``|`([^`]*)`)/.exec(m[1]);
+  return { body: m[2].replace(/<DATE>/g, dm[1]), anchor: a ? (a[1] ?? a[2]).replace(/\n/g, ' ') : null };
+};
+const insertAfter = (text, anchor, add) => {
+  if (text.split(anchor).length !== 2) fail(`anchor not exactly once: ${anchor}`);
+  return text.replace(anchor, () => anchor + add);
+};
+let want = insertAfter(base, '> the more complete reference.\n', '>\n' + block('E0').body + '\n');
+for (const n of [1, 2, 3, 4]) {
+  const { body, anchor } = block('E' + n);
+  want = insertAfter(want, anchor, ' ' + body);
 }
-const head = '> the more complete reference.\n';
-const a = cur.indexOf(head) + head.length;
-const b = cur.indexOf('\n\n<!-- errata above; the spec as it shipped follows -->');
-const e0 = cur.slice(a, b + 1);
-if (!/^>\n> \*\*Errata, \d{4}-\d{2}-\d{2} — filed by `WP-dream-projection-done-spec-errata`\.\*\*\n/.test(e0)) fail('E0 not found');
-cur = cur.slice(0, a) + cur.slice(b + 1);
-if (cur !== base) fail('other bytes changed');
+if (cur !== want) fail('the file is not the base plus E0-E4 verbatim');
 console.log('errata: exact');
 EOF
 npm run lint

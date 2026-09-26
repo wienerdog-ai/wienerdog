@@ -4,7 +4,15 @@ title: "Ruling: harness-authored Claude records — option (iii), and commission
 related_wps: [WP-dream-projection-harness-user-records, WP-dream-projection-notification-taint, WP-dream-projection-done-spec-errata]
 ---
 
-# Ruling of 2026-09-27 — harness-authored Claude user records
+# Ruling of 2026-09-26 — harness-authored Claude user records
+
+**Dates, stated once.** The ruling is dated **2026-09-26**, the owner's local
+date (Budapest, CEST): this record was first committed at 2026-09-26 23:34
++0200 (`620962aa`), so the message arrived before local midnight. The file
+name and the `date:` above carry **2026-09-27**, the session date on which
+this record family was written up; they are kept as identifiers, because
+other records and the design gate's raw files already cite them. Every
+statement of *when the owner ruled* in this family says 2026-09-26.
 
 Quoted verbatim so this record stands on its own. **Transcribed by the
 orchestrator, not owner-typed.** It answers the one product question in the

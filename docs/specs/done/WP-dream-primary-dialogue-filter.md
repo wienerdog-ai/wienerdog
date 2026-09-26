@@ -27,7 +27,10 @@ epic: dream-primary-dialogue
 >
 > - `docs/specs/done/WP-dream-projection-harness-user-records.md` — the
 >   deterministic strip, as a fix against the Done contract of
->   `docs/specs/done/WP-dream-primary-dialogue-projection.md`;
+>   `docs/specs/done/WP-dream-primary-dialogue-projection.md` (2026-09-26:
+>   itself Superseded — the owner chose to build no decline rule and
+>   commissioned `WP-dream-projection-notification-taint` instead; see its
+>   banner);
 > - `docs/specs/WP-dream-first-pass-novelty.md` — the first-pass novelty
 >   finding, as a candidate package on the dream skill's consolidation.
 >

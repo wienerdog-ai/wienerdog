@@ -46,7 +46,8 @@ for (const d of dirs) {
   for (const f of entries) {
     if (!f.isFile() || !f.name.endsWith('.jsonl')) continue;
     const p = path.join(projectsDir, d.name, f.name);
-    const st = fs.statSync(p);
+    let st;
+    try { st = fs.statSync(p); } catch { continue; } // vanished mid-scan: skip, never print its path
     if (since === null || st.mtimeMs > since) files.push({ path: p, size: st.size });
   }
 }
@@ -78,7 +79,7 @@ for (const f of files) {
   const { gateExtract: gate, parse } = parsePrimaryWithOutcome({ harness: 'claude', path: f.path, size: f.size }, newRunBudget());
   if (parse.outcome !== 'ok') continue;
   sessions += 1;
-  const noted = gate.task_notification !== undefined;
+  const noted = 'task_notification' in Object(gate); // row N7's own presence test
   if (noted) withNotes += 1;
   for (const skill of new Set((gate.skill_invocations || []).map((si) => si.skill))) {
     pairs += 1;

@@ -11,7 +11,7 @@ epic: dream-primary-dialogue
 
 # WP-dream-projection-harness-user-records: Keep harness-authored Claude user records out of the primary dialogue — design recorded, one product question to the owner
 
-> **SUPERSEDED, 2026-09-27.** The owner answered the product question below
+> **SUPERSEDED.** On 2026-09-26 the owner answered the product question below
 > with option **(iii)** — build nothing on the decline rule — and commissioned
 > the narrower flag-not-decline design (ruling record:
 > `docs/specs/logbook/2026-09-27-owner-ruling-harness-records-option-iii.md`).

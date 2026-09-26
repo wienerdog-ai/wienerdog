@@ -5,7 +5,7 @@ related_wps: [WP-dream-projection-notification-taint, WP-dream-primary-dialogue-
 
 # WP-dream-projection-notification-taint — design round record
 
-The design round for the package the owner commissioned on 2026-09-27
+The design round for the package the owner commissioned on 2026-09-26
 (`2026-09-27-owner-ruling-harness-records-option-iii.md`: "option 3, and
 commission the flag-not-decline design"). Written by wd-architect on branch
 `docs/wp-projection-notification-taint`, based on `main` at `67359a5e`. This
@@ -352,6 +352,11 @@ All on the simulated tree (§2) in the session scratchpad, Node v25.9.0.
   unfamiliar top-level type without validating it, so a Codex line
   `{"type":"user","origin":{…}}` with no `message` would make the predicate
   throw; with a `message` it would taint the rollout. P6 pins it.
+  **(Corrected in §10, C10: that was true of round zero's predicate. From
+  revision 1 the predicate is decided before step 2 and guards
+  `isPlainObject(obj)` and `isPlainObject(obj.message)` itself, so it no
+  longer throws on any value; the guard stays because without it a labelled
+  Codex record would taint the rollout, which is what P6 pins.)**
 - **A comparison against the tree's own output is not a fail-open test.** The
   first `[NT-AC2]` compared each variant with the same tree's unlabelled
   projection, which a content heuristic moves in lockstep; the literal
@@ -567,6 +572,44 @@ residual and wording). The frozen verification surface is final: tags
 next, and the architect flips the spec to `Ready` after it. Dispatch then
 still waits for the owner's rulings on owner items 1–4.
 
+### Round 3 — addendum (after the wd-reviewer gate, B4)
+
+Recorded after the fact, because the round-3 adjudication above was
+incomplete against §0, and the omission is itself the record.
+
+- **Rule 2 matched and was not evaluated.** Rounds 2 and 3 both landed on
+  Table N (R2-1 on row N7's predicate; R3-1 on the relation between rows N4
+  and N7), so §0 rule 2 — two consecutive rounds on Table N — matched at
+  round 3 before rule 5 was reached. Its prescribed step, a re-decision
+  recorded before any edit, is what the round-3 wording is in substance:
+  **the re-decision is the scoping of row N4 to the harness label** (N4
+  promises fail-open against an absent, malformed or renamed *label*; the
+  runtime state of the process is outside it, and N7 states that case as
+  intended fail-closed). The re-decision changed no outcome of any row.
+- **The ordering discipline was not kept.** Unlike round 2 (`a36b3b78`
+  before `1fecd230`), the round-3 adjudication and the Table N edit share one
+  commit, `ac2519cb`; the re-decision did not precede the edit in history.
+- **The weight, stated with its tension.** The round-2 restatement of the
+  criterion made **the ADR-0020 amendment's claims** HEAVY, and the round-3
+  wording did change the amendment's "Fail-open by construction" paragraph
+  (it now names the one deliberate fail-closed exception). It was still
+  judged **LIGHT** because the edit changes no `src/` behaviour, no Table N
+  outcome, no field read and no Deliverables row — it makes the amendment
+  describe the behaviour row N7 already had. That is **a defensible judgment
+  call, not a consequence of §0's definition**, and it is recorded as the
+  **orchestrator's**, made under the owner's standing authority for the night
+  of 2026-09-26 to 27, and **reversible by the owner**. The wd-reviewer gate
+  agreed with band B and called the LIGHT weight exactly that.
+- **The owner's ruling covers the residual.** Owner item 4 now names the
+  prototype-pollution fail-closed residual, so a ruling on item 4 is a ruling
+  on it.
+
+### wd-reviewer on PR #329 — the second gate
+
+| Gate | Tip | Verdict | Findings | Disposition |
+|---|---|---|---|---|
+| wd-reviewer | `ac2519cb` | REQUEST-CHANGES | B1 governance, B2–B3 criteria, B4 process; C5–C12 wording and record | all applied in revision 3 (§10), none reopening Table N's behaviour; C5 (the banner) is rewritten when the spec is flipped. A second wd-reviewer pass runs before the flip to `Ready` |
+
 ## 8. Revision 1 — after round 1
 
 ### 8.1 Measurements
@@ -744,3 +787,98 @@ the N7 line, the AC5 assertions and the two declarations changed):
   run lint` over both results → 0 errors. The check's body is unchanged since
   §8.3, whose absent and violating states stand.
 - `npm run lint` on the branch → passes.
+
+## 10. Revision 3 — the wd-reviewer gate's findings (machinery, record, wording)
+
+None of these changes a Table N outcome, a field read or a Deliverables row.
+
+- **B1 (governance) — the ADR-0020 amendment's Status line.** It read
+  "ACCEPTED by the owner's rulings of <RULING-DATE> …". No work package may
+  write that the owner accepted, ratified or signed anything; every
+  WP-drafted amendment lands with owner signature pending. It now reads
+  `Status: **PROPOSED by WP-dream-projection-notification-taint — owner
+  signature pending.**`, and `<RULING-DATE>` is gone from the spec (the
+  amendment prose, AC6, the check's placeholder test, the owner-items
+  preamble). **LIGHT, and not a claim about the decision:** the line
+  records who has done what — a package proposed, the owner has not yet
+  signed — and changes nothing the amendment decides; the owner's ruling on
+  owner item 4 and the owner's signature remain the owner's acts.
+- **B2 (criteria) — both byte-exact checks now rebuild the file.** The old
+  checks matched only the first line of E0/F0 and the amendment heading and
+  then stripped the whole block, so a changed number inside a block still
+  printed `exact`. Both scripts now read the spec's own fenced blocks and the
+  anchors its prose names, take `<DATE>` from the header in the modified
+  file, rebuild the expected file from the base, and require byte equality.
+  Observed on scratch copies (the scripts with the base read from files
+  instead of git, their only change; the drafted files from `67359a5e`):
+
+  ```text
+  errata    | absent (base)                          -> exit 1: E0 not found
+  errata    | compliant                              -> exit 0: errata: exact
+  errata    | E0 body "0 of 11,884" -> "5 of 11,884" -> exit 1: the file is not the base plus E0-E4 verbatim
+  errata    | an E marker changed                    -> exit 1: the file is not the base plus E0-E4 verbatim
+  errata    | one byte changed elsewhere             -> exit 1: the file is not the base plus E0-E4 verbatim
+  erratum10 | absent (no F, no amendment)            -> exit 1: F0 not found
+  erratum10 | compliant                              -> exit 0: erratum 10 and the ADR-0020 amendment: exact
+  erratum10 | F0 body "1,107 of 1,107" -> "9 of 9"   -> exit 1: the Done spec is not its base plus F0-F5 verbatim
+  erratum10 | an F marker changed                    -> exit 1: the Done spec is not its base plus F0-F5 verbatim
+  erratum10 | amendment absent                       -> exit 1: the ADR-0020 amendment not found
+  erratum10 | amendment "0 of 42" -> "1 of 42"       -> exit 1: ADR-0020 is not its base plus the amendment verbatim
+  erratum10 | one ADR byte changed elsewhere         -> exit 1: ADR-0020 is not its base plus the amendment verbatim
+  ```
+
+  The errata spec's `N/A` justification now says what the check does. Both
+  modified files lint clean.
+- **B3 (criteria) — the lane greps count every non-`PROVEN` verdict.** The
+  old `grep -E '^(PROVEN|FAILED) ' | grep -c '^FAILED'` could not see
+  `UNSUPPORTED`, `ERROR`, `VACUOUS` or `UNCONTROLLED` (`VACUOUS` and the
+  rest are in `scripts/red-proofs.js`'s `VERDICT_ORDER`). Now: the package's
+  own lane prints every verdict line (expected sixteen, all `PROVEN`), and a
+  loop over all eleven lanes prints `grep -cE
+  '^(UNSUPPORTED|ERROR|VACUOUS|FAILED|UNCONTROLLED) '`, expected `0`.
+  Observed: compliant → 16 lines, count `0`; a declaration with a wrong
+  `occurrences` (an `ERROR` run) → new count `2`, **old grep `0`**; a
+  declaration with a wrong signal (a `FAILED` run) → both `2`.
+- **B4 (process)** — the round-3 addendum in §7.
+- **C5** — the status banner is rewritten at the flip to `Ready`.
+- **C6** — the ledger measurement script now uses row N7's own presence test
+  (`'task_notification' in Object(gate)`), not the rejected value test.
+  Re-run: shipped tree `carrying task_notification … 0`; drafted tree 54 of
+  334 sessions, 32 of 42 pairs, 0 clean, 0 moved — as in §8.1.
+- **C7** — the RED register now states that `expectRed[].test` is a
+  one-element array holding the full title, and gives each proof's
+  `criterion`; AC4 and AC5 now say the gate extract is obtained by running
+  `parsePrimaryWithOutcome` on the inline records, never a literal (P4 and P8
+  reach the tests only through the producer).
+- **C8** — the errata spec's Erratum 8 says "across the corpus's 25 Claude
+  Code versions" (the field is present on all 25; not every version shows
+  both value classes).
+- **C9 — dates, one rule.** The owner's ruling is dated **2026-09-26**, the
+  owner's local date: `620962aa`, the ruling record's commit, is 2026-09-26
+  23:34 +0200. Every statement of *when the owner ruled or commissioned* in
+  this family now says 2026-09-26 — the ruling record's heading and a
+  "Dates, stated once" paragraph, the superseded spec's banner, the errata
+  spec (banner, Context, E0 — which carries it into the Done spec), this
+  spec (banner, Context, owner item 2) and this record's first paragraph.
+  File names and `date:` fields keep **2026-09-27**, the session date on
+  which the family was written up, because other records and the gate's raw
+  files cite them.
+- **C10** — §5's claim that a message-less Codex line "would make the
+  predicate throw" is corrected in place with a dated note: the final
+  predicate guards `isPlainObject(obj.message)` and throws on nothing.
+- **C11** — both measurement scripts skip a file that vanishes between the
+  directory listing and `statSync`, so no error can print a path.
+- **C12** — the superseded filter spec's list entry for the harness-records
+  spec gains a dated parenthetical saying it is itself superseded; this
+  spec's implementation note inlines the whole `makeGates().ledger(o)`
+  argument shape instead of pointing at `dream-validate.test.js`.
+
+**Re-verification.** The scratch simulated tree used in §8–§9 was altered by
+another session during this pass, so the drafted code, fixture, test file and
+declarations were rebuilt in a separate scratch directory from a fresh copy
+of the branch, this spec's Exact contracts and the recorded drafts. On that
+rebuilt tree:
+`npm test` → 3,088 tests, 0 fail; the package's lane → sixteen lines, all
+`PROVEN`, count of non-`PROVEN` verdicts `0`, `RUN: FILTERED`;
+`coherence.js` → 74 checks, all PASS. The byte-exact checks as above; `npm
+run lint` on the branch → passes.

@@ -15,7 +15,7 @@ epic: dream-primary-dialogue
   template gives the skeleton, the runbook the rules. Read both.
 
 > **DRAFT — IN ITS DESIGN ROUND (revision 2, after round 2).** Commissioned
-> by the owner on 2026-09-27
+> by the owner on 2026-09-26
 > (`docs/specs/logbook/2026-09-27-owner-ruling-harness-records-option-iii.md`:
 > "option 3, and commission the flag-not-decline design"). The round record is
 > `docs/specs/logbook/2026-09-27-projection-notification-taint-design-review.md`
@@ -110,7 +110,7 @@ carries the gate key's name — also fails closed; row N7). If Claude Code drops
 the record falls out of the class: the projection emits exactly what the Done
 contract emits today, the gate extract carries no new key, and the ledger gate
 decides exactly as today (Table N row N4). That degraded state is the state
-the owner accepted on 2026-09-27 as option (iii)'s baseline, and `false` never
+the owner chose on 2026-09-26 as option (iii)'s baseline, and `false` never
 claimed human authorship (the Done spec's row A5b, `:462`), so the fallback
 breaks no promise and loses nothing. No detector, counter, quarantine, halt or
 retry exists or is needed; the round record's §0 treats any finding that asks
@@ -509,13 +509,14 @@ F5 — in row B2, after the anchor
 
 **The ADR-0020 amendment — copy verbatim.** Insert it directly before the
 line `## Future work (parked, not specced)` (`:473`), followed by one blank
-line. `<DATE>` is as above; `<RULING-DATE>` is the date of the owner's
-rulings on this package's owner items, from their logbook record.
+line. `<DATE>` is as above. The Status line is written exactly as below: no
+work package writes that the owner accepted, ratified or signed anything; the
+owner's signature is a separate act, applied by the owner.
 
 ```text
 ## Amendment (<DATE>): a task notification Claude Code labels is untrusted — WP-dream-projection-notification-taint
 
-Status: **ACCEPTED by the owner's rulings of <RULING-DATE> on that package's owner items.**
+Status: **PROPOSED by WP-dream-projection-notification-taint — owner signature pending.**
 
 **Decision.** A `user` record that Claude Code labels as a task notification — its top-level `origin.kind` is exactly `"task-notification"` — carries a subagent's or background task's result, which is external content. From <DATE>: (1) the primary-dialogue message projected from it carries `derived_from_untrusted: true`, and it sets the session's taint state as an external `tool_result` does; the 2026-09-17 amendment's "A user message is `false` by role regardless of what preceded it" holds for every other user message. (2) The text-free gate projection carries `task_notification: true` when the session holds such a record, and the learnings-ledger validator derives every invocation window of that session as untrusted, exactly as it derives a window holding an external `tool_result`; the one clean state is that no property of that name is reachable on the gate projection — a key present with any value, `undefined` included, taints. So a notification can no longer help a session count as a trusted confirmation of a skill learning, and the "Accepted residual after round-5" above now also requires that none of the three sessions held a labelled task notification.
 
@@ -635,9 +636,23 @@ every mirror in the same commit:
   fixture file is also picked up by `primary-dialogue.test.js`'s `[AC4]`
   return-value invariants, which loop over every committed `.jsonl` fixture
   in the directory; they must stay green. The ledger test calls
-  `makeGates().ledger({...})` directly on values (no git repository), with a
-  registry entry and paired `SKILL.md` for `05-Skills/packing-list/`, exactly
-  as `dream-validate.test.js`'s ledger-corpus tests do.
+  `makeGates().ledger(o)` (`makeGates` from `src/core/dream/validate.js`)
+  directly on values, with no repository, where `o` is:
+  `rel: '05-Skills/packing-list/LEARNINGS.md'`; `candidateBytes`: a UTF-8
+  buffer of one entry — the lines `## sort.order`, a blank line,
+  ``- Pattern-Key: `sort.order` ``, `- Status: open`, `- Recurrence: 1`,
+  `- Session-IDs: claude:nt-gate`, `- First-Seen: 2026-09-27`,
+  `- Last-Seen: 2026-09-27`, `- derived_from_untrusted: <false|true>`,
+  `- Observation: a recurring pattern.` and a final blank line;
+  `baselineLedgerBytes: null`; `pairedSkillBytes`: a UTF-8 buffer of a
+  `SKILL.md` whose frontmatter is `id: packing-list`, `type: skill`,
+  `created: 2026-08-01`, `updated: 2026-08-01`, `origin: dream`,
+  `confidence: 0.9`, `recurrence: 3`, `derived_from_untrusted: false`,
+  followed by one body line; `registry:
+  { skills: { '05-Skills/packing-list/SKILL.md': { id: 'packing-list', created: '2026-08-01' } } }`;
+  `extractsBySession: new Map([['claude:nt-gate', gateExtract]])`; and
+  `layout: defaultLayout()` from `src/core/layout`. It returns `null` to keep
+  the write, or the refusal string.
 - **RED-proof register (ADR-0042).** One declaration file, suite
   `tests/unit/primary-dialogue-notification.test.js`, every `testNamePattern`
   `\[NT-AC`, every `occurrences` 1. The `find` strings below name the drafted
@@ -648,24 +663,26 @@ every mirror in the same commit:
   `expectRed` by running the lane, and record that under "Decisions made".
   Each `find` is the whole drafted line **including its leading indentation**
   (the Indent column, as in the Exact-contracts blocks), shown here without
-  it.
+  it. Every proof's `wp` is `WP-dream-projection-notification-taint`; its
+  `criterion` is the Criterion column's value.
 
-  | Id | Pins | Mutation (meaning) | `find` (drafted) | Indent | Derived `expectRed` (test tag → signal substring) |
-  |----|------|--------------------|------------------|--------|------------------------------------------------|
-  | `nt-p1-notification-flag-removed` | N3 | step 5 back to `false` by role | `derived_from_untrusted: accepted.role === 'user' ? notification : tainted,` | 6 | NT-AC1 → `nt-ac1 :: flags` |
-  | `nt-p2-notification-taint-removed` | N2 | the step-3 taint line removed | `if (notification) tainted = true;` | 4 | NT-AC1 → `nt-ac1 :: flags` |
-  | `nt-p3-label-not-exact` | N1 | `kind` any string | `&& obj.origin.kind === 'task-notification';` | 4 | NT-AC1 → `nt-ac1 :: flags`; NT-AC2 → `:: equals the unlabelled projection` |
-  | `nt-p4-content-heuristic` | N1, N4 | the two `origin` clauses replaced by a `<task-notification` text-prefix test | the two lines `&& isPlainObject(obj.origin)` and `&& obj.origin.kind === 'task-notification';`, with the newline between them | 4 | NT-AC1 → `nt-ac1 :: array flags`; NT-AC2 → `nt-ac2 no label :: the Done contract flags`; NT-AC3 → `nt-ac3 :: gate extract, apart from row N6`; NT-AC4 → `nt-ac4 no label :: key absent`; NT-AC5 → `nt-ac5 no label :: false kept` |
-  | `nt-p5-ismeta-gate-dropped` | N1 | the `isMeta` clause made `true` | `&& obj.isMeta !== true` and its newline | 4 | NT-AC2 → `nt-ac2 labelled but isMeta :: equals the unlabelled projection` |
-  | `nt-p6-codex-guard-dropped` | N1 | `!codex &&` removed | `const notification = !codex && isTaskNotification(obj);` | 4 | NT-AC2 → `nt-ac2 codex` |
-  | `nt-p7-notification-declined` | N5 | row A2's user half declines a labelled record | `if (obj.isMeta === true) return null;` | 6 | NT-AC1 → `nt-ac1 :: texts`; NT-AC3 → `nt-ac3 :: roles, texts and timestamps` |
-  | `nt-p8-gate-key-dropped` | N6 | the `index.js` line removed | `if (projection.notified()) gateExtract.task_notification = true;` | 2 | NT-AC4 → `nt-ac4 :: gate example`; NT-AC5 → `nt-ac5 labelled false :: refused` |
-  | `nt-p9-ledger-ignores-notification` | N7 | the `validate.js` line removed | `if ('task_notification' in Object(extract)) return true;` | 4 | NT-AC5 → `nt-ac5 labelled false :: refused` |
-  | `nt-p10-ledger-reads-value-not-presence` | N7 | the presence test replaced by the value test `extract.task_notification !== undefined` (round 2's defect) | the same line | 4 | NT-AC5 → `nt-ac5 malformed undefined` |
-  | `nt-p11-notified-after-step-2` | N6 | `notified` set only for a record step 2's schema check accepts (`claudeShape(obj).classified`) | `if (notification) notified = true;` | 4 | NT-AC4 → `nt-ac4 step-2 reject (schema)` |
+  | Id | Criterion | Pins | Mutation (meaning) | `find` (drafted) | Indent | Derived `expectRed` (test tag → signal substring) |
+  |----|-----------|------|--------------------|------------------|--------|------------------------------------------------|
+  | `nt-p1-notification-flag-removed` | `NT-AC1` | N3 | step 5 back to `false` by role | `derived_from_untrusted: accepted.role === 'user' ? notification : tainted,` | 6 | NT-AC1 → `nt-ac1 :: flags` |
+  | `nt-p2-notification-taint-removed` | `NT-AC1` | N2 | the step-3 taint line removed | `if (notification) tainted = true;` | 4 | NT-AC1 → `nt-ac1 :: flags` |
+  | `nt-p3-label-not-exact` | `NT-AC2` | N1 | `kind` any string | `&& obj.origin.kind === 'task-notification';` | 4 | NT-AC1 → `nt-ac1 :: flags`; NT-AC2 → `:: equals the unlabelled projection` |
+  | `nt-p4-content-heuristic` | `NT-AC2` | N1, N4 | the two `origin` clauses replaced by a `<task-notification` text-prefix test | the two lines `&& isPlainObject(obj.origin)` and `&& obj.origin.kind === 'task-notification';`, with the newline between them | 4 | NT-AC1 → `nt-ac1 :: array flags`; NT-AC2 → `nt-ac2 no label :: the Done contract flags`; NT-AC3 → `nt-ac3 :: gate extract, apart from row N6`; NT-AC4 → `nt-ac4 no label :: key absent`; NT-AC5 → `nt-ac5 no label :: false kept` |
+  | `nt-p5-ismeta-gate-dropped` | `NT-AC2` | N1 | the `isMeta` clause made `true` | `&& obj.isMeta !== true` and its newline | 4 | NT-AC2 → `nt-ac2 labelled but isMeta :: equals the unlabelled projection` |
+  | `nt-p6-codex-guard-dropped` | `NT-AC2` | N1 | `!codex &&` removed | `const notification = !codex && isTaskNotification(obj);` | 4 | NT-AC2 → `nt-ac2 codex` |
+  | `nt-p7-notification-declined` | `NT-AC3` | N5 | row A2's user half declines a labelled record | `if (obj.isMeta === true) return null;` | 6 | NT-AC1 → `nt-ac1 :: texts`; NT-AC3 → `nt-ac3 :: roles, texts and timestamps` |
+  | `nt-p8-gate-key-dropped` | `NT-AC4` | N6 | the `index.js` line removed | `if (projection.notified()) gateExtract.task_notification = true;` | 2 | NT-AC4 → `nt-ac4 :: gate example`; NT-AC5 → `nt-ac5 labelled false :: refused` |
+  | `nt-p9-ledger-ignores-notification` | `NT-AC5` | N7 | the `validate.js` line removed | `if ('task_notification' in Object(extract)) return true;` | 4 | NT-AC5 → `nt-ac5 labelled false :: refused` |
+  | `nt-p10-ledger-reads-value-not-presence` | `NT-AC5` | N7 | the presence test replaced by the value test `extract.task_notification !== undefined` (round 2's defect) | the same line | 4 | NT-AC5 → `nt-ac5 malformed undefined` |
+  | `nt-p11-notified-after-step-2` | `NT-AC4` | N6 | `notified` set only for a record step 2's schema check accepts (`claudeShape(obj).classified`) | `if (notification) notified = true;` | 4 | NT-AC4 → `nt-ac4 step-2 reject (schema)` |
 
-  Each `expectRed[].test` is the full test title, e.g.
-  `primary-dialogue: [NT-AC1] a record Claude Code labels as a task notification is flagged, and taints what follows`;
+  Each `expectRed[].test` is **a one-element array holding the full test
+  title** (the runner refuses a bare string), e.g.
+  `["primary-dialogue: [NT-AC1] a record Claude Code labels as a task notification is flagged, and taints what follows"]`;
   the assertion messages carry the signal substrings above.
 - **When uncertain:** choose the simpler option and record it under
   "Decisions made". Do not add a diagnostic, counter or fallback to resolve an
@@ -716,23 +733,30 @@ every mirror in the same commit:
       extracts are deep-equal once `task_notification` is removed from the
       labelled one; and no flag is `false` where the unlabelled projection's
       is `true`.
-- [ ] **AC4 — the gate key** (`[NT-AC4]`): the gate worked example's
-      `gateExtract` deep-equals the literal above; without the label it has
+- [ ] **AC4 — the gate key** (`[NT-AC4]`): the `gateExtract` obtained by
+      running `parsePrimaryWithOutcome` on the gate worked example's five
+      inline records (written to a scratch file — never a hand-written
+      literal) deep-equals the literal above; without the label it has
       no `task_notification` key; with the labelled record's content replaced
       by `7` (a schema step 2 rejects) or by `[{"type":"mystery"}]` (a block
       type step 2 rejects), the key is still `true`.
-- [ ] **AC5 — the ledger** (`[NT-AC5]`): with the gate worked example's
-      `gateExtract` as the session's evidence, the ledger gate refuses the
+- [ ] **AC5 — the ledger** (`[NT-AC5]`): with the `gateExtract` obtained by
+      running `parsePrimaryWithOutcome` on the gate worked example's inline
+      records (and, for the unlabelled cases, on the same records with
+      `origin` removed from every line) as the session's evidence — never a
+      hand-written literal, because RED proofs P4 and P8 mutate the producer
+      and must reach this test through it — the ledger gate refuses the
       entry declaring `false` (the refusal matches `asserted lower than
       derived`) and keeps the one declaring `true`; with the unlabelled gate
       extract it keeps `false`; with `task_notification` present and set to
       `undefined`, `false`, `"yes"`, `0` or `null` it refuses `false`; and
       with the unlabelled gate extract given a prototype that carries
       `task_notification: true` it refuses `false`.
-- [ ] **AC6 — Erratum 10 and the amendment:** F0–F5 are in the Done spec
-      verbatim, and the amendment is in ADR-0020 directly before `## Future
-      work (parked, not specced)`, with `<DATE>` and `<RULING-DATE>`
-      replaced; removing them yields each base file byte for byte.
+- [ ] **AC6 — Erratum 10 and the amendment:** the Done spec equals its base
+      with exactly F0–F5 inserted, verbatim from this spec's blocks at their
+      anchors, and ADR-0020 equals its base with exactly the amendment block
+      inserted directly before `## Future work (parked, not specced)`;
+      `<DATE>` replaced in both, no other byte changed.
 - [ ] **AC7 — nothing else moved:** `npm test` passes with no existing test
       or fixture edited; `npm run red-proofs -- --wp WP-dream-projection-notification-taint`
       reports all eleven proofs `PROVEN`; and the lanes of every work package
@@ -760,8 +784,8 @@ node docs/specs/logbook/2026-09-27-projection-notification-taint-measure.js --da
 ```bash
 npm test
 npm test -- --test-name-pattern '\[NT-AC'
-npm run red-proofs -- --wp WP-dream-projection-notification-taint 2>&1 | grep -E '^(PROVEN|FAILED) '
-for wp in WP-dream-primary-dialogue-projection WP-dream-primary-dialogue-collection WP-dream-collect-parse-throw-quarantine WP-transcript-parsers-harden-text-values WP-audit-e-ledger-parser-corpus WP-dream-git-env-validate-seam WP-ep2-prune-once-per-run-test WP-quarantine-failed-preserve-disposal-flush WP-quarantine-only-copy-shelf WP-quarantine-preserve-durability; do echo "== $wp"; npm run red-proofs -- --wp "$wp" 2>&1 | grep -E '^(PROVEN|FAILED) ' | grep -c '^FAILED'; done
+npm run red-proofs -- --wp WP-dream-projection-notification-taint 2>&1 | grep -E '^(UNSUPPORTED|ERROR|VACUOUS|FAILED|UNCONTROLLED|PROVEN) '
+for wp in WP-dream-projection-notification-taint WP-dream-primary-dialogue-projection WP-dream-primary-dialogue-collection WP-dream-collect-parse-throw-quarantine WP-transcript-parsers-harden-text-values WP-audit-e-ledger-parser-corpus WP-dream-git-env-validate-seam WP-ep2-prune-once-per-run-test WP-quarantine-failed-preserve-disposal-flush WP-quarantine-only-copy-shelf WP-quarantine-preserve-durability; do echo "== $wp"; npm run red-proofs -- --wp "$wp" 2>&1 | grep -cE '^(UNSUPPORTED|ERROR|VACUOUS|FAILED|UNCONTROLLED) '; done
 node docs/specs/logbook/2026-09-27-projection-notification-taint-measure.js --days 5; echo "exit $?"
 node docs/specs/logbook/2026-09-27-projection-notification-taint-measure.js --days 5 --strip-origin | grep -q 'user messages flagged true 0 ' && echo "fail-open: with the label gone, no user message is flagged"
 node docs/specs/logbook/2026-09-27-projection-notification-taint-ledger-measure.js --days 0
@@ -770,49 +794,58 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 const base = (f) => execSync(`git show "$(git merge-base HEAD main)":${f}`).toString();
 const fail = (m) => { console.error(m); process.exit(1); };
+const S = fs.readFileSync('docs/specs/WP-dream-projection-notification-taint.md', 'utf8');
+const insertAfter = (text, anchor, add) => {
+  if (text.split(anchor).length !== 2) fail(`anchor not exactly once: ${anchor}`);
+  return text.replace(anchor, () => anchor + add);
+};
+// The Done spec: rebuilt from its base and this spec's F0-F5 blocks and anchors.
 const F = 'docs/specs/done/WP-dream-primary-dialogue-projection.md';
-let cur = fs.readFileSync(F, 'utf8');
-if (cur.includes('<DATE>')) fail('a <DATE> placeholder remains in the Done spec');
-const inline = [
-  / \(\*\*Except one from a record Claude Code labels as a task notification, which is `true` from \d{4}-\d{2}-\d{2} — see Erratum 10\.\*\*\)/g,
-  / \(\*\*A labelled task notification sets it too, from \d{4}-\d{2}-\d{2} — see Erratum 10\.\*\*\)/g,
-  / \(\*\*A labelled task notification also taints here, from \d{4}-\d{2}-\d{2} — see Erratum 10\.\*\*\)/g,
-  / \(\*\*Except a labelled task notification's, which is `true` from \d{4}-\d{2}-\d{2} — see Erratum 10\.\*\*\)/g,
-  / \(\*\*From \d{4}-\d{2}-\d{2} it also carries `task_notification: true` when the session holds a labelled task notification — see Erratum 10\.\*\*\)/g,
-];
-for (const re of inline) {
-  if ((cur.match(re) || []).length !== 1) fail(`inline marker not exactly once: ${re}`);
-  cur = cur.replace(re, '');
+const cur = fs.readFileSync(F, 'utf8');
+const dm = /^> \*\*Errata, (\d{4}-\d{2}-\d{2}) — filed by `WP-dream-projection-notification-taint`,$/m.exec(cur);
+if (!dm) fail('F0 not found');
+const block = (label) => {
+  const m = new RegExp('\\n' + label + '(?::| — ([\\s\\S]*?):)\\n\\n```text\\n([\\s\\S]*?)\\n```\\n').exec(S);
+  if (!m) fail(`${label} not found in the spec`);
+  const a = m[1] && /after the anchor\s+(?:``\s?([\s\S]*?)\s?``|`([^`]*)`)/.exec(m[1]);
+  return { body: m[2].replace(/<DATE>/g, dm[1]), anchor: a ? (a[1] ?? a[2]).replace(/\n/g, ' ') : null };
+};
+let want = insertAfter(base(F), '> shape not observed in the wild.**\n', '>\n' + block('F0').body + '\n');
+for (const n of [1, 2, 3, 4, 5]) {
+  const { body, anchor } = block('F' + n);
+  want = insertAfter(want, anchor, ' ' + body);
 }
-const head = '> shape not observed in the wild.**\n';
-if (cur.split(head).length !== 2) fail('the Erratum 9 anchor is not exactly once');
-const a = cur.indexOf(head) + head.length;
-const b = cur.indexOf('\n\n<!-- errata above; the spec as it shipped follows -->');
-const f0 = cur.slice(a, b + 1);
-if (!/^>\n> \*\*Errata, \d{4}-\d{2}-\d{2} — filed by `WP-dream-projection-notification-taint`,\n/.test(f0)) fail('F0 not found');
-cur = cur.slice(0, a) + cur.slice(b + 1);
-if (cur !== base(F)) fail('other bytes changed in the Done spec');
+if (cur !== want) fail('the Done spec is not its base plus F0-F5 verbatim');
+// ADR-0020: its base plus this spec's amendment block, directly before Future work.
 const A = 'docs/adr/0020-skill-revision-lifecycle.md';
-let adr = fs.readFileSync(A, 'utf8');
-if (/<DATE>|<RULING-DATE>/.test(adr)) fail('a placeholder remains in ADR-0020');
-const am = /\n## Amendment \(\d{4}-\d{2}-\d{2}\): a task notification Claude Code labels is untrusted — WP-dream-projection-notification-taint\n[\s\S]*?\n(?=## Future work \(parked, not specced\)\n)/.exec(adr);
-if (!am) fail('the ADR-0020 amendment is not directly before Future work');
-adr = adr.slice(0, am.index + 1) + adr.slice(am.index + am[0].length);
-if (adr !== base(A)) fail('other bytes changed in ADR-0020');
+const adr = fs.readFileSync(A, 'utf8');
+const am = /\*\*The ADR-0020 amendment — copy verbatim\.\*\*[\s\S]*?\n```text\n([\s\S]*?)\n```\n/.exec(S);
+const ad = /^## Amendment \((\d{4}-\d{2}-\d{2})\): a task notification Claude Code labels is untrusted/m.exec(adr);
+if (!am || !ad) fail('the ADR-0020 amendment not found');
+const future = '## Future work (parked, not specced)\n';
+const wantAdr = base(A).replace(future, () => am[1].replace(/<DATE>/g, ad[1]) + '\n\n' + future);
+if (adr !== wantAdr) fail('ADR-0020 is not its base plus the amendment verbatim');
 console.log('erratum 10 and the ADR-0020 amendment: exact');
 EOF
 node scripts/boundary-check.js docs/specs/WP-dream-projection-notification-taint.md $(git diff --name-only "$(git merge-base HEAD main)" | grep -v '^docs/specs/logbook/')
 npm run lint
 ```
 
-Expected: `npm test` 0 fail; the package's red-proof grep prints only
-`PROVEN` lines (eleven proofs and five criteria), the run ending
-`RUN: FILTERED`, as a `--wp` run does; each other lane prints `0` (no
-`FAILED` line); the projection measurement exits 0 with the last line
+Expected: `npm test` 0 fail; the package's red-proof grep prints exactly
+sixteen lines, all `PROVEN` (eleven proofs and five criteria), the run itself
+ending `RUN: FILTERED`, as a `--wp` run does; the loop prints `0` under every
+lane, its own included — the count of lines carrying any non-`PROVEN`
+verdict of the runner's taxonomy (`UNSUPPORTED`, `ERROR`, `VACUOUS`,
+`FAILED`, `UNCONTROLLED`; `scripts/red-proofs.js`, `VERDICT_ORDER`; a `--wp`
+run's `FILTERED` lines are expected and not counted); the projection
+measurement exits 0 with the last line
 `in effect: N emitted task notifications, none flagged false`; the fail-open
 line prints; the ledger measurement prints its four lines (paste them —
 it is a count, not a gate); `erratum 10 and the ADR-0020 amendment: exact`;
-the boundary check exits 0; lint passes. The measurement lines are **local
+the boundary check exits 0; lint passes. The erratum/amendment check rebuilds
+both files from their base and this spec's own fenced blocks and anchors and
+requires byte equality, so a changed word inside F0–F5 or the amendment, a
+marker after the wrong anchor, or any other byte fails it. The measurement lines are **local
 re-measurements**, not gates: on a machine with no task notifications they
 pass vacuously, so paste their output. Each check was observed on both sides
 at drafting (round record §4 and §8).
@@ -842,9 +875,9 @@ citation, at both ends, before dispatch (`docs/runbooks/codex-review.md`,
 have landed first (F0's anchor is its last line).
 
 Each item is a recommendation with its cost; nothing here records an owner
-decision. **Dispatch waits for the owner's rulings on all four — item 4's
-ruling date is the ADR amendment's `<RULING-DATE>`; the design gate and
-`Ready` do not.**
+decision. **Dispatch waits for the owner's rulings on all four; the design
+gate and `Ready` do not.** The ADR-0020 amendment lands as "owner signature
+pending"; the owner signs it separately.
 
 1. **Should a task notification also taint what follows (row N2), or only be
    flagged itself?** *Recommendation:* taint. A notification is a subagent's
@@ -860,7 +893,7 @@ ruling date is the ADR amendment's `<RULING-DATE>`; the design gate and
    renames `origin.kind: "task-notification"`, notifications silently return
    to `false` and the ledger to today's derivation. *Recommendation:* accept
    that. The degraded state is option (iii)'s baseline, which the owner
-   accepted on 2026-09-27; the measurement scripts show the class count on
+   chose on 2026-09-26; the measurement scripts show the class count on
    demand. *Cost of overruling:* a counter or warning is a net — the
    mechanism three harness-records rounds could not close — and would need
    its own package, a surface (`reports/warnings.md` or `doctor`) and a
@@ -892,7 +925,14 @@ ruling date is the ADR amendment's `<RULING-DATE>`; the design gate and
    boundaries need a tie rule — about one more source file, two more RED
    proofs and the index-geometry class of bug ADR-0020's round 6 found; size
    M either way. *Cost of rejecting both:* the package must narrow its
-   Tier-3 claim, and the path round 1 found stays open by ruling.
+   Tier-3 claim, and the path round 1 found stays open by ruling. *The
+   accepted residual this item also covers:* row N7's presence test reads an
+   inherited property, so if the process's `Object.prototype` ever carried
+   the name `task_notification`, every session — labelled or not — would
+   derive untrusted and the ledger would refuse every `false` declaration.
+   That fails closed, costs only skill-revision availability in an already
+   compromised process, and was accepted by the orchestrator at round 3
+   (round record §7); ruling on this item rules on that residual too.
 
 ## Definition of done
 
