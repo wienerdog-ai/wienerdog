@@ -43,7 +43,55 @@ resuming it.
 
 ## The remaining work, in recommended order
 
-> **▶ START HERE — 2026-09-26 evening: the filter's offline evaluation is DONE; one owner ruling is open.**
+> **▶ START HERE — 2026-09-26 night: both queue items are done; TWO OWNER RULINGS and ONE RESIDUAL DECISION are open; nothing is dispatchable without them.**
+> Measured on `main` at `45e667da`. No agent running, no worktree of this
+> session left. `grep '^status: Ready' docs/specs/*.md` returns exactly one
+> spec, `WP-vault-write-cas-window`, parked on its owner item 1.
+>
+> **DONE TONIGHT.** (1) **The filter's offline evaluation** — PR #319, squash
+> `41c2baf1` (see the block below for the record and numbers). (2) **The
+> `WP-vault-write-cas-window` design round** — PR #320, merge `45e667da`:
+> wd-researcher measured the platform facts (hard links atomic create-or-fail
+> on APFS/HFS+/NTFS, `ENOTSUP` on FAT32/exFAT, no inode-conditional rename
+> reachable from Node, Obsidian and VS Code save IN PLACE, vim/TextEdit/Syncthing
+> replace-by-rename); wd-architect matured the stub; the Codex Astra design
+> gate ran three rounds with a pre-pinned stop criterion — round 1: two band-A
+> on the link publish (unreported duplicate after a failed unlink; a symlink
+> planted at the staging name publishes the referent's contents), round 2: two
+> band-A again on the bound-link revision (readers see substituted bytes before
+> the identity check; the published-but-refused state has no cleanup path) →
+> the circuit-breaker fired and the pre-pinned fallback was taken: **candidate 0,
+> disclose-only on both arms, size S** (a `beforePublish` test seam, three
+> disclosure texts, three tests with RED proofs, a four-part erratum to the Done
+> primitive spec); round 3: approve, no findings. wd-reviewer approved with
+> LIGHT machinery fixes, folded. **The measured reason the create arm stays
+> open** is in the round record so nobody reopens it without new platform facts:
+> portable Node cannot bind a hard link's source to the staged object.
+> Records: `docs/specs/logbook/2026-09-26-vault-write-cas-window-design-review.md`
+> (rounds, raws `f14c60af`/`a9167c2e`/`e0fe2f7e`), `…-cas-window-platform-facts.md`.
+>
+> **OWNER RULINGS NEEDED (each one line):**
+> 1. **`WP-vault-write-cas-window` owner item 1** — keep the re-cut
+>    (disclose-only, S; recommended) or overrule and retain a link publish with
+>    the two round-2 residuals accepted (then the package is replaced, not
+>    refined). The spec is `Ready` and parked on this; dispatch follows the
+>    ruling: dispatch-time re-verification → implementer on Opus-high → both PR
+>    gates.
+> 2. **`WP-dream-primary-dialogue-filter` disposition** — recommended:
+>    supersede; wd-architect files the deterministic strip (task-notification
+>    and local-command `user` records) as a fix against the projection's Done
+>    contract, and a candidate package for the first-pass novelty finding
+>    (block below).
+> 3. **Residual decision:** whether to ask GitHub Support to purge PR #319's
+>    first commit `97e45ff0` (item-level topic phrases from private sessions;
+>    reachable only through the PR ref now).
+>
+> **STANDING ITEMS, unchanged:** gate package 2–3, scheduler package 1–3,
+> deletion guards 4 (pass #20 item 7); the Windows runner purchase; the
+> `red-proofs`-in-CI gap; the two runbook lessons from the 0.15.0 release; the
+> two `Superseded` stubs still in the specs root.
+>
+> **Session block, 2026-09-26 evening (kept as the record): the filter's offline evaluation is DONE; one owner ruling is open.**
 > Measured on `main` at `c58869bb` plus PR #319. No agent running, no
 > worktree of this session left. The disposable evaluation root `~/wd-eval/`
 > (0700, owner's machine only) is left in place for inspection — the judge
