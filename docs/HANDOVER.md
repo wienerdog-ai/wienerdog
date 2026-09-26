@@ -43,7 +43,56 @@ resuming it.
 
 ## The remaining work, in recommended order
 
-> **▶ START HERE — session close 2026-09-26, written for a cold start.**
+> **▶ START HERE — 2026-09-26 evening: the filter's offline evaluation is DONE; one owner ruling is open.**
+> Measured on `main` at `c58869bb` plus this PR. No agent running, no
+> worktree of this session left. The disposable evaluation root `~/wd-eval/`
+> (0700, owner's machine only) is left in place for inspection — the full judge
+> verdict is `~/wd-eval/judge/verdict.md`; deleting the root is the owner's act.
+>
+> **WHAT WAS DONE.** Nine of the owner's own sessions (six Claude, three
+> Codex; 857,445 intake bytes → 120,652 projected bytes) went through the
+> installed 0.15.0 dream against a clone of the live vault at `b817b12`
+> (204 s, brain `claude-opus-5-5`, 5 notes), and a separate
+> `claude-opus-5-5` judge at high effort read the projected dialogue, the
+> pre-run notes and the diff (383 s). Record:
+> `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`
+> (identities, counts, verdicts — no transcript text). The result block at the
+> spec's entry condition points to it. The evaluation's own two harness
+> transcripts were moved out of `~/.claude/projects/` into
+> `~/wd-eval/harness-transcripts/` so tonight's live dream does not consolidate
+> evaluation artefacts; the live ledger was not edited.
+>
+> **RESULT IN ONE PARAGRAPH.** The judge marked 34.5 % of the projected
+> characters (41 of 71 blocks) not worth remembering, found that this material
+> caused only mild dilution (four places), that no important loss sits inside
+> it, and rated a block-selection filter **MARGINAL**. A prefix count shows
+> 28.0 % of the characters (74 of 132 messages) are harness task notifications
+> and local-command echoes passing through as `user` records, plus the interim
+> replies they create — removable by a fixed rule in the projection. The one
+> real quality defect (3 high-severity losses) is consolidation: a session
+> re-fed after growing across a dream boundary was scored zero novelty against
+> the earlier daily log. Five of nine measured Codex sessions project to zero
+> messages (worker sessions carry neither `user` nor `developer` role).
+>
+> **OWNER RULING NEEDED (one line):** the spec's decision rule fits neither
+> branch — material by share, immaterial by effect, four fifths deterministic.
+> Recommended: **supersede `WP-dream-primary-dialogue-filter`; wd-architect
+> files a Draft stub for the deterministic strip (task-notification and
+> local-command `user` records, concluding reply re-derived) and a candidate
+> package for the re-fed-session consolidation finding.** Until the ruling the
+> spec stays `Draft`, parked as before.
+>
+> **DO NEXT (unblocked): `WP-vault-write-cas-window` design round** —
+> wd-architect (Opus, high) → Codex design gate → `Ready` → dispatch-time
+> re-verification → implementer on Opus-high → both PR gates. The block below
+> still describes it correctly.
+>
+> **Housekeeping noticed, not done:** two `Superseded` stubs sit in the specs
+> root (`WP-adr-0019-quarantine-uninstall-export`,
+> `WP-ep2-atomic-withhold-handoff`) although `docs/specs/README.md` says a
+> Superseded spec moves to `done/`; the earlier block below counted one.
+>
+> **Session close 2026-09-26 (earlier block, kept as the record of how the day got here).**
 > Measured on `main` at `6f66ce7f`. No PR open, no agent running, no worktree of
 > this session left (the `prunable` worktrees under an older session's
 > scratchpad and the `wienerdog-a9a10/` and `wienerdog-felho/` checkouts predate

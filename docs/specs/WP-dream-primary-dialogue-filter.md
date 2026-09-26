@@ -247,6 +247,27 @@ a newly found mirror is registered here on the spot.
 
 ## Entry condition — the offline evaluation
 
+> **Evaluation result, 2026-09-26 — done; disposition awaiting the owner's
+> ruling.** The evaluation below was run on nine of the owner's own sessions
+> (six Claude, three Codex; 857,445 intake bytes, 120,652 projected bytes)
+> through the installed 0.15.0 dream against a disposable vault, and judged by
+> `claude-opus-5-5` at high effort. Record, with identities, counts and the
+> verdict: `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`.
+> Measured: the judge marked **34.5 %** of the projected characters (41 of 71
+> blocks) not worth remembering, found its harm to be mild dilution only, found
+> no important loss inside that material, and rated a block-selection stage
+> **MARGINAL**; a prefix count shows **28.0 %** of the characters (74 of 132
+> messages) are harness task notifications and local-command echoes passing
+> through as `user` records plus the interim replies they create — removable
+> by a fixed rule in the projection, no model call. The decision rule below
+> fits neither branch cleanly, so this spec **stays `Draft`**; the record
+> proposes *Superseded* plus a deterministic projection follow-up, and names a
+> consolidation finding (a session re-fed after growing across a dream boundary
+> is scored as zero novelty) for the architect. Nothing below this block was
+> changed.
+
+The ruling the evaluation ran under:
+
 > **Owner ruling, 2026-09-26 — the evaluation may use real transcripts.** Asked
 > whether real transcripts may be projected into a disposable vault and judged,
 > the owner answered **yes, on one condition: the disposable vault lives only on
