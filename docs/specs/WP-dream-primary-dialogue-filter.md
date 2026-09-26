@@ -250,21 +250,25 @@ a newly found mirror is registered here on the spot.
 > **Evaluation result, 2026-09-26 — done; disposition awaiting the owner's
 > ruling.** The evaluation below was run on nine of the owner's own sessions
 > (six Claude, three Codex; 857,445 intake bytes, 120,652 projected bytes)
-> through the installed 0.15.0 dream against a disposable vault, and judged by
-> `claude-opus-5-5` at high effort. Record, with identities, counts and the
-> verdict: `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`.
-> Measured: the judge marked **34.5 %** of the projected characters (41 of 71
-> blocks) not worth remembering, found its harm to be mild dilution only, found
-> no important loss inside that material, and rated a block-selection stage
-> **MARGINAL**; a prefix count shows **28.0 %** of the characters (74 of 132
+> through the installed 0.15.0 dream against a disposable vault, and judged in
+> two rounds by `claude-opus-5-5` at high effort. Record, with identities,
+> counts and the verdicts — no transcript or note substance:
+> `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`.
+> Measured: the judge marked **41 of 71 blocks, 34.6 %** of the projected
+> characters not worth remembering, found its harm to be mild dilution only,
+> found no loss inside it, and rated a block-selection stage **MARGINAL**;
+> after the baseline was shown to it, no high-severity loss or unsupported
+> claim remained. A prefix count shows **16.4 %** of the characters (35 of 132
 > messages) are harness task notifications and local-command echoes passing
-> through as `user` records plus the interim replies they create — removable
-> by a fixed rule in the projection, no model call. The decision rule below
-> fits neither branch cleanly, so this spec **stays `Draft`**; the record
-> proposes *Superseded* plus a deterministic projection follow-up, and names a
-> consolidation finding (a session re-fed after growing across a dream boundary
-> is scored as zero novelty) for the architect. Nothing below this block was
-> changed.
+> through as `user` records — removable by a fixed rule against the
+> projection's Done contract, nothing kept lost; the filter's remaining
+> target is **20.8 %**, interim replies that left no trace in the notes plus
+> machine-authored prompts. The evidence leans to the *not material* branch but
+> the number is not negligible, so this spec **stays `Draft`**; the record
+> proposes *Superseded* plus the deterministic strip as a projection fix, and
+> registers a consolidation finding (a session whose earlier pass is on record
+> is scored against the earlier report's claim, not the notes). Nothing below
+> this block was changed.
 
 The ruling the evaluation ran under:
 

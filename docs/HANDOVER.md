@@ -44,43 +44,51 @@ resuming it.
 ## The remaining work, in recommended order
 
 > **▶ START HERE — 2026-09-26 evening: the filter's offline evaluation is DONE; one owner ruling is open.**
-> Measured on `main` at `c58869bb` plus this PR. No agent running, no
+> Measured on `main` at `c58869bb` plus PR #319. No agent running, no
 > worktree of this session left. The disposable evaluation root `~/wd-eval/`
-> (0700, owner's machine only) is left in place for inspection — the full judge
-> verdict is `~/wd-eval/judge/verdict.md`; deleting the root is the owner's act.
+> (0700, owner's machine only) is left in place for inspection — the judge
+> verdicts are `~/wd-eval/judge/verdict.md` and `verdict-r2.md`; deleting
+> the root is the owner's act.
 >
 > **WHAT WAS DONE.** Nine of the owner's own sessions (six Claude, three
 > Codex; 857,445 intake bytes → 120,652 projected bytes) went through the
 > installed 0.15.0 dream against a clone of the live vault at `b817b12`
 > (204 s, brain `claude-opus-5-5`, 5 notes), and a separate
 > `claude-opus-5-5` judge at high effort read the projected dialogue, the
-> pre-run notes and the diff (383 s). Record:
+> pre-run notes and the diff in two rounds (383 s + 96 s; the second round,
+> with the baseline daily logs visible, was owed to the Codex gate on the
+> record). Record:
 > `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`
-> (identities, counts, verdicts — no transcript text). The result block at the
-> spec's entry condition points to it. The evaluation's own two harness
-> transcripts were moved out of `~/.claude/projects/` into
-> `~/wd-eval/harness-transcripts/` so tonight's live dream does not consolidate
-> evaluation artefacts; the live ledger was not edited.
+> (identities, counts, verdicts — no transcript or note substance; the repo is
+> public). The result block at the spec's entry condition points to it. The
+> evaluation's own two harness transcripts were moved out of
+> `~/.claude/projects/` into `~/wd-eval/harness-transcripts/` so tonight's
+> live dream does not consolidate evaluation artefacts; the live ledger was not
+> edited.
 >
-> **RESULT IN ONE PARAGRAPH.** The judge marked 34.5 % of the projected
-> characters (41 of 71 blocks) not worth remembering, found that this material
-> caused only mild dilution (four places), that no important loss sits inside
-> it, and rated a block-selection filter **MARGINAL**. A prefix count shows
-> 28.0 % of the characters (74 of 132 messages) are harness task notifications
-> and local-command echoes passing through as `user` records, plus the interim
-> replies they create — removable by a fixed rule in the projection. The one
-> real quality defect (3 high-severity losses) is consolidation: a session
-> re-fed after growing across a dream boundary was scored zero novelty against
-> the earlier daily log. Five of nine measured Codex sessions project to zero
-> messages (worker sessions carry neither `user` nor `developer` role).
+> **RESULT IN ONE PARAGRAPH.** The judge marked 41 of 71 blocks (34.6 % of the
+> projected characters, exact) not worth remembering, found that this material
+> caused only mild dilution (four places), that no loss sits inside it, and
+> rated a block-selection filter **MARGINAL**; with the baseline visible, no
+> high-severity loss or unsupported claim remained. A prefix count shows
+> 16.4 % of the characters (35 of 132 messages) are harness task notifications
+> and local-command echoes passing through as `user` records — a fixed rule
+> removes them against the projection's Done contract with nothing kept lost;
+> the filter's remaining target is 20.8 %, interim replies that left no trace
+> in the notes plus machine-authored prompts, and no positional rule removes
+> those safely (two were measured). The 16 remaining losses are consolidation
+> behaviour on a session whose earlier pass was already on record — an artefact
+> of the evaluation's empty ledger, not a production re-feed — and a filter
+> cannot touch them. Codex rollouts whose header is not `thread_source: "user"`
+> project to zero by design (row A4 of the projection).
 >
-> **OWNER RULING NEEDED (one line):** the spec's decision rule fits neither
-> branch — material by share, immaterial by effect, four fifths deterministic.
-> Recommended: **supersede `WP-dream-primary-dialogue-filter`; wd-architect
-> files a Draft stub for the deterministic strip (task-notification and
-> local-command `user` records, concluding reply re-derived) and a candidate
-> package for the re-fed-session consolidation finding.** Until the ruling the
-> spec stays `Draft`, parked as before.
+> **OWNER RULING NEEDED (one line):** the evidence leans to the spec's *not
+> material* branch, but the number is not negligible and the parking was the
+> owner's. Recommended: **supersede `WP-dream-primary-dialogue-filter`;
+> wd-architect files the deterministic strip (task-notification and
+> local-command `user` records) as a fix against the projection's Done
+> contract, and a candidate package for the consolidation finding.** Until the
+> ruling the spec stays `Draft`, parked as before.
 >
 > **DO NEXT (unblocked): `WP-vault-write-cas-window` design round** —
 > wd-architect (Opus, high) → Codex design gate → `Ready` → dispatch-time
