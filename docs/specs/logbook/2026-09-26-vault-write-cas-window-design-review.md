@@ -470,8 +470,10 @@ The spec was rewritten as a **docs-and-tests package, size S**.
   `@@ -1601,4`. The simulated Done spec passes markdownlint with 0 errors.
 - **RED declarations parse.** A draft of P1–P3 run through `validateProof`
   gives `parsed 3 proofs, 3 valid, unique ids: true`.
-- **Both-ends ranges** for the re-cut's new citations: `vault-write.js:175-204`
-  (the JSDoc), `:207-221` (argument validation), `:451-452` (the rename),
+- **Both-ends ranges** for the re-cut's new citations: `vault-write.js:166-204`
+  (the JSDoc, `/**` to `*/`; this record first said `:175-204`, which is only
+  its `@param`…`*/` portion — corrected 2026-09-26 at dispatch-time
+  re-verification), `:207-221` (argument validation), `:451-452` (the rename),
   `:476` (the `WienerdogError` re-throw); the Done spec's `:155-199` (Exact
   contracts through the closing fence) and `:248-256`. All resolve.
 - **Template conformance**, re-walked by the author: every template section is

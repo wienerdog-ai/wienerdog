@@ -1,7 +1,7 @@
 ---
 id: WP-dream-primary-dialogue-filter
 title: Filter primary dialogue with a bounded relevance stage before consolidation
-status: Draft
+status: Superseded
 model: opus
 size: M
 depends_on: [WP-dream-primary-dialogue-projection, WP-dream-primary-dialogue-collection]
@@ -10,6 +10,30 @@ epic: dream-primary-dialogue
 ---
 
 # WP-dream-primary-dialogue-filter: Filter primary dialogue with a bounded relevance stage before consolidation
+
+> **SUPERSEDED 2026-09-26 — do not implement, do not re-aim this file.**
+>
+> Superseded by the owner's ruling of 2026-09-26
+> (`docs/specs/logbook/2026-09-26-owner-rulings-cas-window-and-filter.md`, item
+> 2: *"supersede"*), on the evidence of this spec's own entry condition — the
+> offline evaluation, recorded in
+> `docs/specs/logbook/2026-09-26-dream-primary-dialogue-filter-offline-evaluation.md`.
+> In short: the judge rated a block-selection stage **MARGINAL**; 16.4 % of
+> the projected characters are harness task notifications and local-command
+> echoes a fixed rule can remove with nothing kept lost; and all 16 remaining
+> losses (none high) come from how a first pass scores novelty, which no input
+> filter reaches. **No relevance stage is built.** Its two replacements, both
+> `Draft` stubs that have been through no design round:
+>
+> - `docs/specs/WP-dream-projection-harness-user-records.md` — the
+>   deterministic strip, as a fix against the Done contract of
+>   `docs/specs/done/WP-dream-primary-dialogue-projection.md`;
+> - `docs/specs/WP-dream-first-pass-novelty.md` — the first-pass novelty
+>   finding, as a candidate package on the dream skill's consolidation.
+>
+> Everything below this banner is unedited history, including the
+> 2026-09-26 evaluation-result block under "Entry condition — the offline
+> evaluation". Its owner items 1–2 lapse with it.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
