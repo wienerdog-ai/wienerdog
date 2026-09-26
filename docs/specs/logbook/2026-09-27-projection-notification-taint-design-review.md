@@ -507,6 +507,66 @@ under rule 5 with §8.3's and §9's checks. The frozen verification surface is
 unchanged: tags `[NT-AC1]`–`[NT-AC5]`, RED proofs P1–P11 in one declaration
 file, and the spec's Verification steps.
 
+### Round 3 — adjudication and closure
+
+The raw was committed before adjudication (`300046f4`). The reviewer verified
+R2-1 closed.
+
+| Round | Tip | Raw file | Raw commit | Product findings | Outcome under §0 |
+|---|---|---|---|---|---|
+| 3 | `1fecd230` | `docs/specs/logbook/2026-09-27-projection-notification-taint-design-r3-astra-raw.json` | `300046f4` | 1 (R3-1; reviewer A/HEAVY, adjudicated **B/LIGHT**); R2-1 verified closed | **rule 5: all findings LIGHT → the loop closes with no further external round** |
+
+| # | Finding | Band | Weight | Disposition |
+|---|---|---|---|---|
+| R3-1 | Row N7's presence test (`'task_notification' in Object(extract)`) reads an inherited property too, so if `Object.prototype` ever acquires `task_notification`, every gate extract reads tainted, unlabelled sessions included — in tension with N4's promise that an unlabelled record changes no ledger verdict. The reviewer called it a conditional in-process prototype-pollution scenario and established no pollution source; it recommended a null-prototype gate extract and a test of an unlabelled session under a polluted prototype | reviewer **A**; adjudicated **B** | reviewer HEAVY; adjudicated **LIGHT** | **Accepted residual, named, plus LIGHT wording.** Row N4 is scoped to the harness label ("an absent, malformed or renamed label projects as today"; runtime prototype state is outside its scope); row N7 gains one sentence stating the fail-closed behaviour under a polluted prototype as intended, citing AC5's inherited case as its pin. Mirrors: the Context's "central property" paragraph, the "Enumerate our own good" implementation note (and "do not give the gate extract a null prototype"), the ADR-0020 amendment's "Fail-open by construction" paragraph. No `src/` contract changes; the surface stays at five tags and eleven proofs |
+
+**Who adjudicated, and on what authority.** The band and weight above are the
+**orchestrator's**, made under the owner's standing authority for the night of
+2026-09-27 and recorded here so that **the owner can reverse them**. The
+architect applied them and records that they agree with §0 as pinned:
+
+- **Band B by §0's own definitions.** §0's band A names four consequences —
+  a flagged record reaching the dream `false`; a message removed, re-worded
+  or a flag lowered; a ledger or Tier-3 verdict **lowered**; and an absent,
+  malformed or renamed *field* producing anything but today's projection. A
+  polluted prototype is none of them: it makes the ledger *refuse* more
+  (every window tainted, `false` declarations refused loudly and reported),
+  lowers nothing, promotes nothing untrusted and loses no note. What it costs
+  is skill-revision availability, under a precondition — in-process prototype
+  pollution — that already compromises the whole process. That is §0's band
+  B, "costing quality rather than safety".
+- **The direction was chosen on purpose.** Round 2's re-decision (above)
+  took `in` over `Object.hasOwn` precisely so an inherited property cannot
+  read clean; the two predicates are mirror images — `in` fails closed under
+  pollution, `hasOwn` fails open — and AC5's inherited-only case already pins
+  the closed direction. The repository's stated preference on an unanswerable
+  question is the same (ADR-0023's direction).
+- **N4's promise is about the harness label, not process state**, so scoping
+  its wording is the honest fix, not a behaviour change.
+- **The reviewer's fix would be HEAVY for no measured benefit.** A
+  null-prototype gate extract changes the value's shape for every consumer
+  (`assert.deepStrictEqual` compares prototypes), which would re-open Table N
+  at the pinned round-3 boundary.
+- **LIGHT by §0's definition:** the change touches wording only — no `src/`
+  behaviour, no Table N outcome, no field read, no Deliverables row.
+
+**Mechanical re-verification (rule 5)**, after the wording edits:
+`coherence.js` → 74 checks, all PASS (no code block changed); Erratum 10 and
+the ADR-0020 amendment re-applied from the spec's own text → the spec's check
+prints `erratum 10 and the ADR-0020 amendment: exact`, and `npm run lint` over
+both results → 0 errors; `npm run lint` on the branch → passes. No code,
+test or declaration changed since §9, so §9's `npm test` and RED-lane results
+stand.
+
+**CLOSED — the design gate closes at round 3 under §0 rule 5.** Three external
+rounds: R1-1 (A/HEAVY, a missing ledger path — fixed in code), R2-1 (A/HEAVY,
+N7 tested a value — re-decided under rule 2, fixed), R3-1 (B/LIGHT, accepted
+residual and wording). The frozen verification surface is final: tags
+`[NT-AC1]`–`[NT-AC5]`, RED proofs P1–P11, the spec's Verification steps.
+**`status:` stays `Draft`**: the second gate (wd-reviewer) runs on the PR
+next, and the architect flips the spec to `Ready` after it. Dispatch then
+still waits for the owner's rulings on owner items 1–4.
+
 ## 8. Revision 1 — after round 1
 
 ### 8.1 Measurements

@@ -105,7 +105,8 @@ notification stays, with its text, flagged.
 
 **The central property: fail-open by construction, so there is no net.** Every
 rule here only ever *raises* a flag or a taint, and only because of a record
-carrying one exact label. If Claude Code drops, renames or re-cases that label,
+carrying one exact label (the one exception — a process whose object prototype
+carries the gate key's name — also fails closed; row N7). If Claude Code drops, renames or re-cases that label,
 the record falls out of the class: the projection emits exactly what the Done
 contract emits today, the gate extract carries no new key, and the ledger gate
 decides exactly as today (Table N row N4). That degraded state is the state
@@ -520,7 +521,7 @@ Status: **ACCEPTED by the owner's rulings of <RULING-DATE> on that package's own
 
 **Why session-level.** A positional marker would have needed the raw parser to report positions, rebased under the message cap — the index geometry round 6 of this ADR's review found exploitable — for a precision that moved no verdict on the owner's corpus: 0 of 42 (session, invoked skill) pairs were clean before this amendment, and 32 of the 42 were in sessions holding a notification.
 
-**Fail-open by construction.** Every effect above is triggered only by the exact label. If Claude Code drops or renames it, the projection, the gate projection and the ledger's derivation are exactly what they were before this amendment; nothing is lost and nothing needs a detector. No command, flag, runtime dependency or daemon is introduced. ADR-0004 remains intact.
+**Fail-open by construction.** Every effect above is triggered only by the exact label, with one deliberate fail-closed exception: if the process's object prototype ever carries the name `task_notification`, every session's windows derive as untrusted. If Claude Code drops or renames the label, the projection, the gate projection and the ledger's derivation are exactly what they were before this amendment; nothing is lost and nothing needs a detector. No command, flag, runtime dependency or daemon is introduced. ADR-0004 remains intact.
 ```
 
 ## Contract reference (optional — mark N/A if this WP is not contract-dense)
@@ -545,10 +546,10 @@ every other surface cites it.
 | N1 | The class — **what we accept, enumerated** | A **Claude** record (any parsed JSON value is tested) for which **all** hold: it is a plain object; top-level `type` is exactly `"user"`; `isMeta` is not `true`; `isSidechain` is not `true`; `message` is a plain object whose `role` is exactly `"user"`; top-level `origin` is a plain object; `origin.kind` is exactly the string `"task-notification"`. One label, one value, exact and case-sensitive. Reads no other field and never `message.content`. Decided once per record, **before** row A5e step 2. Never applied to a Codex rollout. |
 | N2 | Taint | At row A5e **step 3**, after the existing `tool_result` check and before step 4, a record in N1 that passed step 2 sets the monotonic taint state, whether or not step 4 then accepts it. (A record step 2 rejects has already tainted.) Execution continues. |
 | N3 | Emission | At **step 5**, a user message emitted from a record in N1 carries `derived_from_untrusted: true`. Every other user message is `false` by role (the Done spec's row A5(a), unchanged). An assistant message carries the current state (row A5(b), unchanged; N2 may have raised it). |
-| N4 | Fail-open — the central property | A record **not** in N1 — `origin` absent, `null`, a string, an array, an object without `kind`, `kind` any other value (including `"human"`, a re-cased or renamed label), or a labelled record with `isMeta`, `isSidechain` or another `message.role` — is projected **exactly** as the Done contract projects it, adds nothing to the gate extract, and changes no ledger verdict. There is no detector, counter, diagnostic, quarantine, halt or retry, and none may be added under this package. |
+| N4 | Fail-open — the central property | A record **not** in N1 — `origin` absent, `null`, a string, an array, an object without `kind`, `kind` any other value (including `"human"`, a re-cased or renamed label), or a labelled record with `isMeta`, `isSidechain` or another `message.role` — is projected **exactly** as the Done contract projects it, adds nothing to the gate extract, and changes no ledger verdict. There is no detector, counter, diagnostic, quarantine, halt or retry, and none may be added under this package. **N4 is a promise about the harness label only**: an absent, malformed or renamed label projects as today. The runtime state of the process — a polluted `Object.prototype` — is outside its scope; row N7 states that case. |
 | N5 | Raise-only | The rule never removes, adds, reorders or re-words a message, never changes a `ts`, never lowers a flag, and never changes `intakeBytes`, `parse` or the extract's metadata. The only values it may change are `derived_from_untrusted` values, only from `false` to `true`, and the gate extract, only by row N6's key. |
 | N6 | The gate projection | `parsePrimaryWithOutcome`'s `gateExtract` carries `task_notification: true` exactly when at least one record of the read was in N1 — including one step 2 rejected and one the message cap dropped — and the key is **absent** otherwise. Text-free: it records that a labelled record was seen, never where or what. |
-| N7 | The ledger | `invocationWindowTainted` returns `true` for every invocation of the skill in a gate extract on which a property named `task_notification` is **reachable at all** — its own or inherited, with any value, `undefined` included. **The one clean state, enumerated: no property of that name is reachable on the extract.** The test is presence, never a value. Rule (h) then refuses a newly counted Claude session's `false` declaration exactly as for an external `tool_result`. The Codex path and every other ledger rule are unchanged. |
+| N7 | The ledger | `invocationWindowTainted` returns `true` for every invocation of the skill in a gate extract on which a property named `task_notification` is **reachable at all** — its own or inherited, with any value, `undefined` included. **The one clean state, enumerated: no property of that name is reachable on the extract.** The test is presence, never a value. If the process's `Object.prototype` ever carries the name, every gate extract reads tainted, labelled or not — **intended, fail-closed**: the ledger refuses `false` declarations loudly and nothing untrusted is promoted; AC5's inherited case pins the direction (an accepted residual, round record §7, round 3). Rule (h) then refuses a newly counted Claude session's `false` declaration exactly as for an external `tool_result`. The Codex path and every other ledger rule are unchanged. |
 
 ### Mirrored Surface Checklist
 
@@ -608,7 +609,11 @@ every mirror in the same commit:
   replace N7's presence test with any value test — `!== undefined` reads a
   present-`undefined` key clean (P10), `=== true` reads every non-`true` value
   clean — nor with `Object.hasOwn`, which reads an inherited key clean: each
-  is against the validator's fail-closed posture.
+  is against the validator's fail-closed posture. The inherited case is
+  deliberate: under a polluted prototype every session reads tainted, which
+  costs only skill-revision availability in a process that is already
+  compromised; `Object.hasOwn` would fail open there instead. Do not give the
+  gate extract a null prototype to avoid it (round record §7, round 3).
 - **Do not read the content.** A text-prefix test (`<task-notification`)
   would find the same records today (round record §2) but defeats N4: with the
   label gone, a record whose text merely looks like a notification — including
