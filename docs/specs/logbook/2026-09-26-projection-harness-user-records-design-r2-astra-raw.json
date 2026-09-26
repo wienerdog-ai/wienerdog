@@ -1,0 +1,64 @@
+{
+  "review": "Adversarial Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 8117e221",
+    "baseRef": "8117e221",
+    "explicit": true
+  },
+  "threadId": "01a0df63-b8f7-78b0-8d5f-ca6bd1636c73",
+  "context": {
+    "repoRoot": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/6118b0cd-99a4-4caf-8bcf-7315f159aa7b/scratchpad/wt-gate-hur",
+    "branch": "HEAD",
+    "summary": "Reviewing branch HEAD against 8117e221 from merge-base 8117e221d46e20028f50f54bc8031806d101626c."
+  },
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship yet. Both round 1 findings are closed, but Table G still permits permanent request loss on mixed nights and overstates what the scheduled alert tells the owner.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"A / HEAVY — A healthy session disables the halt for broken sessions\",\n      \"body\": \"G4 halts only when G2 equals G1; G6 lets a partial state consolidate. After a Claude field change, one older session with an accepted request alongside newer sessions whose requests are all declined makes G2 < G1. The newer sessions are then marked processed and will not be retried after an update. G3's count is only in the job log. The whole-corpus rename simulation does not test this mixed-version nightly state.\",\n      \"file\": \"docs/specs/WP-dream-projection-harness-user-records.md\",\n      \"line_start\": 494,\n      \"line_end\": 499,\n      \"confidence\": 0.94,\n      \"recommendation\": \"Prevent sessions counted by G2 from being marked processed, or halt whenever G2 is nonzero. Add a mixed old/new session test that checks ledger state after the run.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"B / HEAVY — The digest banner loses the halt's diagnosis\",\n      \"body\": \"The proposed WienerdogError is printed by the dream child, but scheduled `run-job` turns a nonzero child exit into the generic alert reason `job \\\"dream\\\" exited 1`. The digest banner renders that reason and a log hint, not Table G's message. Thus the claimed nightly alert does not say that Claude labels changed or that Wienerdog needs updating; G3 and G4's actionable text remains in the job log.\",\n      \"file\": \"docs/specs/WP-dream-projection-harness-user-records.md\",\n      \"line_start\": 343,\n      \"line_end\": 355,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Provide a code-owned, specific failure reason through the scheduled alert path, or state and test that the banner is generic and the owner must inspect the log.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"B / HEAVY — One legitimate request-less session can halt every night\",\n      \"body\": \"With G1 = G2 = 1, a Claude session containing only a task notification and a concluding reply triggers G4 even if the harness fields are healthy. The halt writes no ledger outcome, so the same unchanged session is selected on every subsequent night; Codex sessions admitted with it are also deferred. The measurement shows this shape was absent from 321 historical reply-bearing files, but does not establish it cannot occur.\",\n      \"file\": \"docs/specs/WP-dream-projection-harness-user-records.md\",\n      \"line_start\": 494,\n      \"line_end\": 499,\n      \"confidence\": 0.77,\n      \"recommendation\": \"Distinguish an all-declined user-record session from a session with no request record, and specify a recoverable disposition for a legitimate request-less session. Test repeated nightly selection.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise Table G and its mirrored tests and owner item before dispatch.\",\n    \"Recheck the scheduled alert end to end, including the text shown in the digest banner.\"\n  ]\n}",
+    "reasoning": []
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "No ship yet. Both round 1 findings are closed, but Table G still permits permanent request loss on mixed nights and overstates what the scheduled alert tells the owner.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "A / HEAVY — A healthy session disables the halt for broken sessions",
+        "body": "G4 halts only when G2 equals G1; G6 lets a partial state consolidate. After a Claude field change, one older session with an accepted request alongside newer sessions whose requests are all declined makes G2 < G1. The newer sessions are then marked processed and will not be retried after an update. G3's count is only in the job log. The whole-corpus rename simulation does not test this mixed-version nightly state.",
+        "file": "docs/specs/WP-dream-projection-harness-user-records.md",
+        "line_start": 494,
+        "line_end": 499,
+        "confidence": 0.94,
+        "recommendation": "Prevent sessions counted by G2 from being marked processed, or halt whenever G2 is nonzero. Add a mixed old/new session test that checks ledger state after the run."
+      },
+      {
+        "severity": "medium",
+        "title": "B / HEAVY — The digest banner loses the halt's diagnosis",
+        "body": "The proposed WienerdogError is printed by the dream child, but scheduled `run-job` turns a nonzero child exit into the generic alert reason `job \"dream\" exited 1`. The digest banner renders that reason and a log hint, not Table G's message. Thus the claimed nightly alert does not say that Claude labels changed or that Wienerdog needs updating; G3 and G4's actionable text remains in the job log.",
+        "file": "docs/specs/WP-dream-projection-harness-user-records.md",
+        "line_start": 343,
+        "line_end": 355,
+        "confidence": 0.98,
+        "recommendation": "Provide a code-owned, specific failure reason through the scheduled alert path, or state and test that the banner is generic and the owner must inspect the log."
+      },
+      {
+        "severity": "medium",
+        "title": "B / HEAVY — One legitimate request-less session can halt every night",
+        "body": "With G1 = G2 = 1, a Claude session containing only a task notification and a concluding reply triggers G4 even if the harness fields are healthy. The halt writes no ledger outcome, so the same unchanged session is selected on every subsequent night; Codex sessions admitted with it are also deferred. The measurement shows this shape was absent from 321 historical reply-bearing files, but does not establish it cannot occur.",
+        "file": "docs/specs/WP-dream-projection-harness-user-records.md",
+        "line_start": 494,
+        "line_end": 499,
+        "confidence": 0.77,
+        "recommendation": "Distinguish an all-declined user-record session from a session with no request record, and specify a recoverable disposition for a legitimate request-less session. Test repeated nightly selection."
+      }
+    ],
+    "next_steps": [
+      "Revise Table G and its mirrored tests and owner item before dispatch.",
+      "Recheck the scheduled alert end to end, including the text shown in the digest banner."
+    ]
+  },
+  "rawOutput": "{\n  \"verdict\": \"needs-attention\",\n  \"summary\": \"No ship yet. Both round 1 findings are closed, but Table G still permits permanent request loss on mixed nights and overstates what the scheduled alert tells the owner.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"title\": \"A / HEAVY — A healthy session disables the halt for broken sessions\",\n      \"body\": \"G4 halts only when G2 equals G1; G6 lets a partial state consolidate. After a Claude field change, one older session with an accepted request alongside newer sessions whose requests are all declined makes G2 < G1. The newer sessions are then marked processed and will not be retried after an update. G3's count is only in the job log. The whole-corpus rename simulation does not test this mixed-version nightly state.\",\n      \"file\": \"docs/specs/WP-dream-projection-harness-user-records.md\",\n      \"line_start\": 494,\n      \"line_end\": 499,\n      \"confidence\": 0.94,\n      \"recommendation\": \"Prevent sessions counted by G2 from being marked processed, or halt whenever G2 is nonzero. Add a mixed old/new session test that checks ledger state after the run.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"B / HEAVY — The digest banner loses the halt's diagnosis\",\n      \"body\": \"The proposed WienerdogError is printed by the dream child, but scheduled `run-job` turns a nonzero child exit into the generic alert reason `job \\\"dream\\\" exited 1`. The digest banner renders that reason and a log hint, not Table G's message. Thus the claimed nightly alert does not say that Claude labels changed or that Wienerdog needs updating; G3 and G4's actionable text remains in the job log.\",\n      \"file\": \"docs/specs/WP-dream-projection-harness-user-records.md\",\n      \"line_start\": 343,\n      \"line_end\": 355,\n      \"confidence\": 0.98,\n      \"recommendation\": \"Provide a code-owned, specific failure reason through the scheduled alert path, or state and test that the banner is generic and the owner must inspect the log.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"title\": \"B / HEAVY — One legitimate request-less session can halt every night\",\n      \"body\": \"With G1 = G2 = 1, a Claude session containing only a task notification and a concluding reply triggers G4 even if the harness fields are healthy. The halt writes no ledger outcome, so the same unchanged session is selected on every subsequent night; Codex sessions admitted with it are also deferred. The measurement shows this shape was absent from 321 historical reply-bearing files, but does not establish it cannot occur.\",\n      \"file\": \"docs/specs/WP-dream-projection-harness-user-records.md\",\n      \"line_start\": 494,\n      \"line_end\": 499,\n      \"confidence\": 0.77,\n      \"recommendation\": \"Distinguish an all-declined user-record session from a session with no request record, and specify a recoverable disposition for a legitimate request-less session. Test repeated nightly selection.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Revise Table G and its mirrored tests and owner item before dispatch.\",\n    \"Recheck the scheduled alert end to end, including the text shown in the digest banner.\"\n  ]\n}",
+  "parseError": null,
+  "reasoningSummary": []
+}
