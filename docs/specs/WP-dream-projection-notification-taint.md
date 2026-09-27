@@ -1,7 +1,7 @@
 ---
 id: WP-dream-projection-notification-taint
 title: Flag the records Claude Code labels as task notifications as untrusted, in the primary dialogue and the learnings-ledger gate
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-dream-primary-dialogue-projection, WP-dream-projection-done-spec-errata]
