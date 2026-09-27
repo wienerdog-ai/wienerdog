@@ -1,7 +1,7 @@
 ---
 id: WP-dream-projection-notification-taint
 title: Flag the records Claude Code labels as task notifications as untrusted, in the primary dialogue and the learnings-ledger gate
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-dream-primary-dialogue-projection, WP-dream-projection-done-spec-errata]
@@ -10,6 +10,15 @@ epic: dream-primary-dialogue
 ---
 
 # WP-dream-projection-notification-taint: Flag the records Claude Code labels as task notifications as untrusted, in the primary dialogue and the learnings-ledger gate
+
+> Implemented in PR #331 (merge `f2940cdc`, 2026-09-27), tip `93d1dd11`. Both PR
+> gates clean on that tip (Codex Astra `review`: no actionable defects; wd-reviewer:
+> APPROVE, band C only). All eleven RED proofs PROVEN at the declared sets; no
+> sentence below was corrected. Dispatched under the owner's standing authority
+> of 2026-09-26/27 with owner items 1–4 taken as recommended — each reversible by
+> dated amendment — and the ADR-0020 amendment landed "owner signature pending".
+> Table N's line numbers are those of `main` at `abf0c72f`; re-derive on the
+> tree you read.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.

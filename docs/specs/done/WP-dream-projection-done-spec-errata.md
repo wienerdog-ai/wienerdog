@@ -1,7 +1,7 @@
 ---
 id: WP-dream-projection-done-spec-errata
 title: File Errata 7–9 against the Done primary-dialogue projection spec
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: [WP-dream-primary-dialogue-projection]
@@ -10,6 +10,10 @@ epic: dream-primary-dialogue
 ---
 
 # WP-dream-projection-done-spec-errata: File Errata 7–9 against the Done primary-dialogue projection spec
+
+> Implemented in PR #330 (merge `abf0c72f`, 2026-09-27), tip `82fbdf67`. Both PR
+> gates clean (Codex Astra `review`: no actionable defect; wd-reviewer: APPROVE).
+> `<DATE>` = 2026-09-27, the commit date, as this spec defines it.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
