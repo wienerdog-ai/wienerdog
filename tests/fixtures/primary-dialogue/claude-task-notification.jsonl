@@ -1,0 +1,6 @@
+{"type":"user","sessionId":"nt-demo","cwd":"/w","timestamp":"2026-09-27T09:00:00.000Z","promptSource":"typed","origin":{"kind":"human"},"message":{"role":"user","content":"Start the background check."}}
+{"type":"assistant","timestamp":"2026-09-27T09:00:05.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Started it in the background."}]}}
+{"type":"user","timestamp":"2026-09-27T09:01:00.000Z","promptSource":"system","origin":{"kind":"task-notification"},"message":{"role":"user","content":"<task-notification>The background check finished: SYNTHETIC SUBAGENT RESULT</task-notification>"}}
+{"type":"assistant","timestamp":"2026-09-27T09:01:05.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"The check finished."}]}}
+{"type":"user","timestamp":"2026-09-27T09:02:00.000Z","promptSource":"typed","origin":{"kind":"human"},"message":{"role":"user","content":"Thanks. Summarize it."}}
+{"type":"assistant","timestamp":"2026-09-27T09:02:05.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Summary."}]}}
