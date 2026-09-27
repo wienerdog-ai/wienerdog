@@ -116,6 +116,26 @@ function claudeShape(obj) {
   return NO_BLOCKS;
 }
 
+/** Table N row N1 (WP-dream-projection-notification-taint).
+ *  A Claude `user` record that Claude Code itself labels as a task
+ *  notification — a subagent's or background task's result, which is external
+ *  content. One harness-written label compared for exact equality; never reads
+ *  `message.content` or `promptSource`. Safe on any parsed JSON value, because
+ *  it runs BEFORE step 2. An absent, malformed or renamed label is simply not in
+ *  the class (row N4, fail-open).
+ *  @param {*} obj any parsed JSON value
+ *  @returns {boolean} */
+function isTaskNotification(obj) {
+  return isPlainObject(obj)
+    && obj.type === 'user'
+    && obj.isMeta !== true
+    && obj.isSidechain !== true
+    && isPlainObject(obj.message)
+    && obj.message.role === 'user'
+    && isPlainObject(obj.origin)
+    && obj.origin.kind === 'task-notification';
+}
+
 /**
  * Row A5c for Codex. `session_meta` owes no `payload.type` at all — the shipped
  * fixture's header has exactly `id`, `timestamp`, `cwd` — so demanding one
@@ -150,7 +170,7 @@ function codexShape(obj) {
  * @param {'claude'|'codex'} harness
  * @returns {{lost:()=>void, record:(obj:*)=>void,
  *            messages:Array<{role:'user'|'assistant', text:string, ts:string|null, derived_from_untrusted:boolean}>,
- *            tainted:()=>boolean}}
+ *            tainted:()=>boolean, notified:()=>boolean}}
  */
 function createPrimaryProjection(harness) {
   const codex = harness === 'codex';
@@ -166,6 +186,9 @@ function createPrimaryProjection(harness) {
   // schema check, so a rollout whose first header is unreadable stays
   // ineligible for the rest of the file whatever a later header says.
   let codexHeaderSeen = false;
+  // Table N row N6: whether ANY record of this read was a labelled task
+  // notification (row N1) — including one step 2 rejects.
+  let notified = false;
 
   /** Row A5a: a line that did not reach the parser intact (G1-G4). There is no
    *  record to examine, so the only thing code can say is that something was
@@ -261,6 +284,12 @@ function createPrimaryProjection(harness) {
         && (payload.thread_source === undefined || payload.thread_source === 'user');
     }
 
+    // TABLE N ROW N1, DECIDED ONCE, BEFORE STEP 2 — so a labelled record whose
+    // schema step 2 rejects still reaches the gate extract (row N6). Claude only:
+    // a Codex rollout never carries the label.
+    const notification = !codex && isTaskNotification(obj);
+    if (notification) notified = true;
+
     // STEP 2 — both schema checks: the one this record's own type owes (row
     // A5c) and a decided-type discriminator on every element of any
     // array-valued content, in this envelope whether it is accepted or
@@ -292,21 +321,26 @@ function createPrimaryProjection(harness) {
     } else if (blocks !== null && blocks.some((block) => block.type === 'tool_result')) {
       tainted = true;
     }
+    // Table N row N2: a labelled task notification is external content, as a
+    // `tool_result` is, so it raises the taint state too — whether or not step 4
+    // then accepts it.
+    if (notification) tainted = true;
 
     // STEP 4 — does A2/A3/A4 accept it? A classified-and-declined record never
     // taints. STEP 5 — a user message is `false` BY ROLE, whatever the state
-    // is; an assistant message carries the current state.
+    // is, unless it is a labelled task notification (Table N row N3), which is
+    // `true`; an assistant message carries the current state.
     const accepted = codex ? acceptCodex(obj) : acceptClaude(obj);
     if (accepted === null) return;
     messages.push({
       role: accepted.role,
       text: accepted.text,
       ts: accepted.ts,
-      derived_from_untrusted: accepted.role === 'user' ? false : tainted,
+      derived_from_untrusted: accepted.role === 'user' ? notification : tainted,
     });
   };
 
-  return { lost, record, messages, tainted: () => tainted };
+  return { lost, record, messages, tainted: () => tainted, notified: () => notified };
 }
 
 module.exports = { createPrimaryProjection };

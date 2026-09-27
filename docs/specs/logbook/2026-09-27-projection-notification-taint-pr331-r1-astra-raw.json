@@ -1,0 +1,17 @@
+{
+  "review": "Review",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against abf0c72f",
+    "baseRef": "abf0c72f",
+    "explicit": true
+  },
+  "threadId": "01a0e032-8941-7b71-b805-5974acb5f946",
+  "sourceThreadId": "01a0e032-8941-7b71-b805-5974acb5f946",
+  "codex": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "I found no actionable defects in the diff. I could not run the new test in this read-only environment because its temporary-directory creation was denied.",
+    "reasoning": []
+  }
+}

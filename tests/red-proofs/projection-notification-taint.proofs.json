@@ -1,0 +1,267 @@
+{
+  "suite": "tests/unit/primary-dialogue-notification.test.js",
+  "proofs": [
+    {
+      "id": "nt-p1-notification-flag-removed",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC1",
+      "why": "Table N row N3: a user message emitted from a labelled task notification carries `true`. Putting step 5 back to `false` by role makes the notification read as the person's own words again — exactly the gap this package closes — while row N2 still taints the reply after it",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "      derived_from_untrusted: accepted.role === 'user' ? notification : tainted,",
+      "replace": "      derived_from_untrusted: accepted.role === 'user' ? false : tainted, /* RP_MUT_NT_P1_FLAG_REMOVED */",
+      "marker": "RP_MUT_NT_P1_FLAG_REMOVED",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC1] a record Claude Code labels as a task notification is flagged, and taints what follows"
+          ],
+          "signal": "nt-ac1 :: flags"
+        }
+      ]
+    },
+    {
+      "id": "nt-p2-notification-taint-removed",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC1",
+      "why": "Table N row N2: the notification raises the monotonic taint state as a `tool_result` does. In the worked example no tool output precedes it, so without the step-3 line the reply restating the subagent's result reads `false`",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    if (notification) tainted = true;",
+      "replace": "    /* RP_MUT_NT_P2_TAINT_REMOVED */",
+      "marker": "RP_MUT_NT_P2_TAINT_REMOVED",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC1] a record Claude Code labels as a task notification is flagged, and taints what follows"
+          ],
+          "signal": "nt-ac1 :: flags"
+        }
+      ]
+    },
+    {
+      "id": "nt-p3-label-not-exact",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC2",
+      "why": "Table N row N1 names exactly one label value. Accepting any string `kind` flags the person's own `kind: \"human\"` prompts and every re-cased or renamed label — the negative rule owner item 3 prices",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    && obj.origin.kind === 'task-notification';",
+      "replace": "    && typeof obj.origin.kind === 'string'; /* RP_MUT_NT_P3_LABEL_NOT_EXACT */",
+      "marker": "RP_MUT_NT_P3_LABEL_NOT_EXACT",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC1] a record Claude Code labels as a task notification is flagged, and taints what follows"
+          ],
+          "signal": "nt-ac1 :: flags"
+        },
+        {
+          "test": [
+            "primary-dialogue: [NT-AC2] an absent, malformed or renamed label projects exactly as the Done contract does"
+          ],
+          "signal": ":: equals the unlabelled projection"
+        }
+      ]
+    },
+    {
+      "id": "nt-p4-content-heuristic",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC2",
+      "why": "Table N rows N1 and N4: the decision reads the harness label, never `message.content`. A `<task-notification` text-prefix test finds the same records today but defeats fail-open — with the label gone a record that merely looks like a notification is still flagged — and misses array-valued content",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    && isPlainObject(obj.origin)\n    && obj.origin.kind === 'task-notification';",
+      "replace": "    && typeof obj.message.content === 'string' && obj.message.content.startsWith('<task-notification'); /* RP_MUT_NT_P4_CONTENT_HEURISTIC */",
+      "marker": "RP_MUT_NT_P4_CONTENT_HEURISTIC",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC1] a record Claude Code labels as a task notification is flagged, and taints what follows"
+          ],
+          "signal": "nt-ac1 :: array flags"
+        },
+        {
+          "test": [
+            "primary-dialogue: [NT-AC2] an absent, malformed or renamed label projects exactly as the Done contract does"
+          ],
+          "signal": "nt-ac2 no label :: the Done contract flags"
+        },
+        {
+          "test": [
+            "primary-dialogue: [NT-AC3] the rule only raises flags and adds one gate key"
+          ],
+          "signal": "nt-ac3 :: gate extract, apart from row N6"
+        },
+        {
+          "test": [
+            "primary-dialogue: [NT-AC4] the gate extract says the session held a labelled task notification"
+          ],
+          "signal": "nt-ac4 no label :: key absent"
+        },
+        {
+          "test": [
+            "primary-dialogue: [NT-AC5] a session holding a labelled task notification cannot confirm a skill learning as trusted"
+          ],
+          "signal": "nt-ac5 no label :: false kept"
+        }
+      ]
+    },
+    {
+      "id": "nt-p5-ismeta-gate-dropped",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC2",
+      "why": "Table N row N1 excludes a record carrying `isMeta: true`, as row A2's user half does. Dropping that clause lets a labelled meta record taint the session although it projects nothing",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    && obj.isMeta !== true\n",
+      "replace": "    && true /* RP_MUT_NT_P5_ISMETA_GATE_DROPPED */\n",
+      "marker": "RP_MUT_NT_P5_ISMETA_GATE_DROPPED",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC2] an absent, malformed or renamed label projects exactly as the Done contract does"
+          ],
+          "signal": "nt-ac2 labelled but isMeta :: equals the unlabelled projection"
+        }
+      ]
+    },
+    {
+      "id": "nt-p6-codex-guard-dropped",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC2",
+      "why": "Table N row N1 is never applied to a Codex rollout. Without the `!codex` guard a Codex record shaped like the label taints the rollout's final answer",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    const notification = !codex && isTaskNotification(obj);",
+      "replace": "    const notification = isTaskNotification(obj); /* RP_MUT_NT_P6_CODEX_GUARD_DROPPED */",
+      "marker": "RP_MUT_NT_P6_CODEX_GUARD_DROPPED",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC2] an absent, malformed or renamed label projects exactly as the Done contract does"
+          ],
+          "signal": "nt-ac2 codex"
+        }
+      ]
+    },
+    {
+      "id": "nt-p7-notification-declined",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC3",
+      "why": "Table N row N5 and the owner's flag-not-decline ruling: the notification stays in the projection with its text, flagged. Declining it at row A2's user half removes a message",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "      if (obj.isMeta === true) return null;",
+      "replace": "      if (obj.isMeta === true || isTaskNotification(obj)) return null; /* RP_MUT_NT_P7_DECLINED */",
+      "marker": "RP_MUT_NT_P7_DECLINED",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC1] a record Claude Code labels as a task notification is flagged, and taints what follows"
+          ],
+          "signal": "nt-ac1 :: texts"
+        },
+        {
+          "test": [
+            "primary-dialogue: [NT-AC3] the rule only raises flags and adds one gate key"
+          ],
+          "signal": "nt-ac3 :: roles, texts and timestamps"
+        }
+      ]
+    },
+    {
+      "id": "nt-p8-gate-key-dropped",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC4",
+      "why": "Table N row N6: the gate extract carries `task_notification: true` when the session held a labelled record. Without it the ledger gate cannot see the notification and a `false` ledger declaration stands — round 1's finding",
+      "file": "src/core/transcripts/index.js",
+      "find": "  if (projection.notified()) gateExtract.task_notification = true;",
+      "replace": "  /* RP_MUT_NT_P8_GATE_KEY_DROPPED */",
+      "marker": "RP_MUT_NT_P8_GATE_KEY_DROPPED",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC4] the gate extract says the session held a labelled task notification"
+          ],
+          "signal": "nt-ac4 :: gate example"
+        },
+        {
+          "test": [
+            "primary-dialogue: [NT-AC5] a session holding a labelled task notification cannot confirm a skill learning as trusted"
+          ],
+          "signal": "nt-ac5 labelled false :: refused"
+        }
+      ]
+    },
+    {
+      "id": "nt-p9-ledger-ignores-notification",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC5",
+      "why": "Table N row N7: the ledger derives every invocation window of a session holding a labelled notification as untrusted. Without the line a tool-free skill window stays clean and rule (h) keeps a `false` declaration",
+      "file": "src/core/dream/validate.js",
+      "find": "    if ('task_notification' in Object(extract)) return true;",
+      "replace": "    /* RP_MUT_NT_P9_LEDGER_IGNORES */",
+      "marker": "RP_MUT_NT_P9_LEDGER_IGNORES",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC5] a session holding a labelled task notification cannot confirm a skill learning as trusted"
+          ],
+          "signal": "nt-ac5 labelled false :: refused"
+        }
+      ]
+    },
+    {
+      "id": "nt-p10-ledger-reads-value-not-presence",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC5",
+      "why": "Table N row N7 is a presence test: the one clean state is that the name is not reachable at all. The value test `!== undefined` reads a key present with the value `undefined` as clean — round 2's defect",
+      "file": "src/core/dream/validate.js",
+      "find": "    if ('task_notification' in Object(extract)) return true;",
+      "replace": "    if (extract.task_notification !== undefined) return true; /* RP_MUT_NT_P10_VALUE_NOT_PRESENCE */",
+      "marker": "RP_MUT_NT_P10_VALUE_NOT_PRESENCE",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC5] a session holding a labelled task notification cannot confirm a skill learning as trusted"
+          ],
+          "signal": "nt-ac5 malformed undefined"
+        }
+      ]
+    },
+    {
+      "id": "nt-p11-notified-after-step-2",
+      "wp": "WP-dream-projection-notification-taint",
+      "criterion": "NT-AC4",
+      "why": "Table N row N6 counts a labelled record even when step 2 rejects its schema: the class is decided before step 2. Setting `notified` only for a record step 2 classifies loses a labelled record with unreadable content",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    if (notification) notified = true;",
+      "replace": "    if (notification && claudeShape(obj).classified) notified = true; /* RP_MUT_NT_P11_NOTIFIED_AFTER_STEP_2 */",
+      "marker": "RP_MUT_NT_P11_NOTIFIED_AFTER_STEP_2",
+      "occurrences": 1,
+      "testNamePattern": "\\[NT-AC",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [NT-AC4] the gate extract says the session held a labelled task notification"
+          ],
+          "signal": "nt-ac4 step-2 reject (schema)"
+        }
+      ]
+    }
+  ]
+}

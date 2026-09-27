@@ -470,6 +470,16 @@ session, and that state, once set, is never cleared. **A user message is `false`
 by role regardless of what preceded it**, which is the rule this amendment
 carries forward from the role-based one it replaces rather than a new one.
 
+## Amendment (2026-09-27): a task notification Claude Code labels is untrusted — WP-dream-projection-notification-taint
+
+Status: **PROPOSED by WP-dream-projection-notification-taint — owner signature pending.**
+
+**Decision.** A `user` record that Claude Code labels as a task notification — its top-level `origin.kind` is exactly `"task-notification"` — carries a subagent's or background task's result, which is external content. From 2026-09-27: (1) the primary-dialogue message projected from it carries `derived_from_untrusted: true`, and it sets the session's taint state as an external `tool_result` does; the 2026-09-17 amendment's "A user message is `false` by role regardless of what preceded it" holds for every other user message. (2) The text-free gate projection carries `task_notification: true` when the session holds such a record, and the learnings-ledger validator derives every invocation window of that session as untrusted, exactly as it derives a window holding an external `tool_result`; the one clean state is that no property of that name is reachable on the gate projection — a key present with any value, `undefined` included, taints. So a notification can no longer help a session count as a trusted confirmation of a skill learning, and the "Accepted residual after round-5" above now also requires that none of the three sessions held a labelled task notification.
+
+**Why session-level.** A positional marker would have needed the raw parser to report positions, rebased under the message cap — the index geometry round 6 of this ADR's review found exploitable — for a precision that moved no verdict on the owner's corpus: 0 of 42 (session, invoked skill) pairs were clean before this amendment, and 32 of the 42 were in sessions holding a notification.
+
+**Fail-open by construction.** Every effect above is triggered only by the exact label, with one deliberate fail-closed exception: if the process's object prototype ever carries the name `task_notification`, every session's windows derive as untrusted. If Claude Code drops or renames the label, the projection, the gate projection and the ledger's derivation are exactly what they were before this amendment; nothing is lost and nothing needs a detector. No command, flag, runtime dependency or daemon is introduced. ADR-0004 remains intact.
+
 ## Future work (parked, not specced)
 
 - **Dormancy / staleness aging.** Hermes's curator auto-archives skills unused
