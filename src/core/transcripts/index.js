@@ -220,7 +220,8 @@ function parse(entry) {
 
 /** @typedef {{harness:'claude'|'codex', session_id:string,
  *             messages:Array<{role:'user'|'assistant'|'tool_result'}>,
- *             skill_invocations?:Array<{skill:string, index:number, resultIndex:number|null, errored:boolean}>}} GateExtract
+ *             skill_invocations?:Array<{skill:string, index:number, resultIndex:number|null, errored:boolean}>,
+ *             task_notification?:true}} GateExtract
  *  A TEXT-FREE projection of the ORIGINAL capped timeline: same length, same
  *  positions, roles verbatim, indices NOT renumbered. This is the whole of what
  *  `src/core/dream/validate.js`'s learnings-ledger gate reads, so deriving it
@@ -272,6 +273,10 @@ function parsePrimaryWithOutcome(entry, budget) {
   // Verbatim, already rebased by the capping path above — or absent for Codex,
   // exactly as today.
   if (Array.isArray(rawCapped.skill_invocations)) gateExtract.skill_invocations = rawCapped.skill_invocations;
+  // Table N row N6: text-free and positionless — the session held a labelled
+  // task notification. Set whatever the outcome, and even when the cap dropped
+  // the record; absent otherwise.
+  if (projection.notified()) gateExtract.task_notification = true;
 
   // Row A5e step 6: a non-'ok' outcome is TOTAL rather than partial — the raw
   // extract is empty and carries no flags at all, so the projection is too.

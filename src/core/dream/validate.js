@@ -503,7 +503,10 @@ function ledgerEntrySchemaViolation(key, e) {
  * the window (Bash output, web content, file reads) taints. FAILS CLOSED (returns
  * true = tainted) on any malformed geometry: index out of range, or resultIndex
  * null / non-integer / outside the window.
- * @param {{messages?:Array, skill_invocations?:Array}} extract
+ * Table N row N7 (WP-dream-projection-notification-taint): every window of a
+ * session whose gate extract has a `task_notification` property reachable at all
+ * — own or inherited, any value — is tainted; that presence test is deliberate.
+ * @param {{messages?:Array, skill_invocations?:Array, task_notification?:true}} extract
  * @param {string} parentSkill
  * @returns {boolean}
  */
@@ -518,6 +521,10 @@ function invocationWindowTainted(extract, parentSkill) {
     const end = next === undefined ? msgs.length : next;
     const ri = inv.resultIndex;
     if (!Number.isInteger(ri) || ri < inv.index || ri >= end) return true; // null/out-of-window own result → fail closed
+    // Table N row N7: the session held a labelled task notification. A PRESENCE
+    // test, never a value test — the one clean state is that the name is not
+    // reachable on the extract at all (own or inherited, `undefined` included).
+    if ('task_notification' in Object(extract)) return true;
     for (let i = inv.index; i < end; i++) {
       if (i === ri) continue;                                    // the invocation's own paired result — excluded
       if (msgs[i] && msgs[i].role === 'tool_result') return true; // any OTHER tool_result → taint
@@ -644,7 +651,7 @@ function ledgerViolation(o) {
       if (invocationWindowTainted(extract, parentSkill)) derivedUntrusted = true;
     }
     if (derivedUntrusted && ce.untrusted !== true) {
-      return `learnings ledger entry ${key}: derived_from_untrusted asserted lower than derived (an invocation window contains a tool_result)`;
+      return `learnings ledger entry ${key}: derived_from_untrusted asserted lower than derived (an invocation window contains a tool_result, or the session a task notification)`;
     }
   }
   return null;
